@@ -64,12 +64,12 @@ def test_write_coverage_refuses_non_current_schema(tmp_path: Path):
     path = tmp_path / "future.json"
     data = PolicyCoverageData()
     data.schema = CURRENT_SCHEMA + 1
-    with pytest.raises(ValueError, match="refusing to write schema"):
+    with pytest.raises(ValueError, match="non-current"):
         write_coverage(path, data)
     assert not path.exists()
     assert not path.with_suffix(".tmp").exists()
     future = PolicyCoverageData(schema=3)
-    with pytest.raises(ValueError, match="refusing to write schema"):
+    with pytest.raises(ValueError, match="non-current"):
         write_coverage(path, future)
 
 
@@ -86,7 +86,7 @@ def test_from_json_migrates_then_refuses_policy_set():
 
 
 def test_refuse_missing_schema():
-    with pytest.raises(ValueError, match="missing coverage schema"):
+    with pytest.raises(ValueError, match="invalid schema"):
         PolicyCoverageData.from_json({"policy_set": "field_lanes", "hits": {}})
 
 
@@ -377,9 +377,9 @@ def test_migrate_deepcopy_rejects_non_object_and_bad_schema():
     assert raw == snapshot
     with pytest.raises(ValueError, match="object"):
         migrate(["not", "an", "object"])
-    with pytest.raises(ValueError, match="missing coverage schema"):
+    with pytest.raises(ValueError, match="invalid schema"):
         migrate({"policy_set": "field_lanes", "hits": {}})
-    with pytest.raises(ValueError, match="invalid coverage schema"):
+    with pytest.raises(ValueError, match="invalid schema"):
         migrate({"schema": "2", "hits": {}})
     with pytest.raises(ValueError, match="upgrade the test runner"):
         migrate({"schema": 99, "hits": {}})

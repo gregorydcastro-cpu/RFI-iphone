@@ -145,10 +145,8 @@ def migrate(raw: Any) -> dict[str, Any]:
     """Schema walk is law. deepcopy first. Steps must land on schema+1."""
     out = _copy(raw)
     schema = out.get("schema", None)
-    if schema is None:
-        raise ValueError("missing coverage schema")
-    if type(schema) is not int:
-        raise ValueError("invalid coverage schema")
+    if schema is None or type(schema) is not int:
+        raise CoverageSchemaError("invalid schema")
     if schema > CURRENT_SCHEMA:
         raise CoverageSchemaError("newer than code; upgrade the test runner")
     while schema < CURRENT_SCHEMA:
@@ -169,7 +167,12 @@ def migrate(raw: Any) -> dict[str, Any]:
 def write_coverage(path: Path, data: PolicyCoverageData) -> None:
     if data.schema != CURRENT_SCHEMA:
         raise CoverageSchemaError(
-            f"refusing to write schema {data.schema}, current is {CURRENT_SCHEMA}"
+            f"refusing to write non-current schema {data.schema}, "
+            f"current is {CURRENT_SCHEMA}"
+        )
+    if data.policy_set != "field_lanes":
+        raise CoverageSchemaError(
+            f"refusing to write policy_set {data.policy_set} as field_lanes"
         )
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
