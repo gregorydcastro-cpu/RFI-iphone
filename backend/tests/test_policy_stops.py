@@ -18,6 +18,7 @@ from abac import (
     Role,
     Subject,
     evaluate,
+    reject_frozen_env_now,
     require_access,
 )
 from app.policy_coverage import EXPECTED_ORDER, PolicyCoverage, _traces
@@ -81,6 +82,25 @@ def first_stop(walk) -> EvaluationTrace:
 
 def test_policy_set_rank_is_fixed():
     assert tuple(policy.name for policy in FIELD_POLICY_SET.ranked()) == EXPECTED_ORDER
+
+
+def test_env_now_is_factory_not_import_stamp():
+    from dataclasses import MISSING, dataclass, fields
+    from datetime import datetime, timezone
+
+    now_field = next(item for item in fields(Env) if item.name == "now")
+    assert now_field.default is MISSING
+    assert now_field.default_factory is not MISSING
+    assert isinstance(now_field.default_factory(), datetime)
+    reject_frozen_env_now(Env)
+
+    @dataclass(frozen=True)
+    class FrozenNow:
+        now: datetime = datetime.now(timezone.utc)
+        on_site: bool = True
+
+    with pytest.raises(TypeError, match="class-body"):
+        reject_frozen_env_now(FrozenNow)
 
 
 def test_wrong_job_stops_at_same_project(cov: PolicyCoverage):

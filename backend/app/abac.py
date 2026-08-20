@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import inspect
-from dataclasses import dataclass, field
+from dataclasses import MISSING, dataclass, field, fields
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable
@@ -106,6 +106,18 @@ class Env:
     on_site: bool = True
     project_id: UUID | None = None
     area_id: UUID | None = None
+
+
+def reject_frozen_env_now(cls: type) -> None:
+    """Env.now is a factory. A class-body datetime.now() is a process-lifetime stamp."""
+    now_field = next(item for item in fields(cls) if item.name == "now")
+    if now_field.default is not MISSING:
+        raise TypeError("Env.now must not freeze now at class-body time")
+    if now_field.default_factory is MISSING:
+        raise TypeError("Env.now must use field(default_factory=...)")
+
+
+reject_frozen_env_now(Env)
 
 
 @dataclass(frozen=True)
