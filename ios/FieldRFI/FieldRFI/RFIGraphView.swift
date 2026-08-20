@@ -16,7 +16,7 @@ struct RFIGraphView: View {
                         .font(.footnote)
                         .foregroundStyle(FieldTheme.muted)
                     ForEach(graph.open) { row in
-                        peLink(row)
+                        actorLink(row)
                     }
                     if graph.open.isEmpty {
                         Text("No open RFIs.")
@@ -30,7 +30,7 @@ struct RFIGraphView: View {
                         .font(.footnote)
                         .foregroundStyle(FieldTheme.muted)
                     ForEach(graph.drafts) { row in
-                        peLink(row, draft: true)
+                        actorLink(row, draft: true)
                     }
                     Text("Closed / void excluded from the open list: \(graph.closed_or_void_count)")
                         .font(.caption)
@@ -121,12 +121,18 @@ struct RFIGraphView: View {
         }
     }
 
-    private func peLink(_ row: GraphRowDTO, draft: Bool = false) -> some View {
-        let submittable = ["draft", "internal_review", "needs_clarification"].contains(row.status)
-        return Group {
-            if submittable {
+    private func actorLink(_ row: GraphRowDTO, draft: Bool = false) -> some View {
+        Group {
+            if ["draft", "internal_review", "needs_clarification"].contains(row.status) {
                 NavigationLink {
                     PESubmitView(rfiID: row.id)
+                } label: {
+                    graphRow(row, draft: draft)
+                }
+                .buttonStyle(.plain)
+            } else if ["submitted", "ball_in_court", "answered"].contains(row.status) {
+                NavigationLink {
+                    AnswerRFIView(rfiID: row.id)
                 } label: {
                     graphRow(row, draft: draft)
                 }
@@ -143,13 +149,31 @@ struct RFIGraphView: View {
                 Text(row.rfi_display ?? "no number")
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(draft ? FieldTheme.muted : FieldTheme.ink)
-                if draft || ["draft", "internal_review"].contains(row.status) {
+                if draft || ["draft", "internal_review", "needs_clarification"].contains(row.status) {
                     Text("PE Submit")
                         .font(.caption2.weight(.bold))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(FieldTheme.steel.opacity(0.12))
                         .foregroundStyle(FieldTheme.steel)
+                        .clipShape(Capsule())
+                }
+                if ["submitted", "ball_in_court"].contains(row.status) {
+                    Text("Answer")
+                        .font(.caption2.weight(.bold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(FieldTheme.orange.opacity(0.14))
+                        .foregroundStyle(FieldTheme.orange)
+                        .clipShape(Capsule())
+                }
+                if row.status == "answered" {
+                    Text("Impact")
+                        .font(.caption2.weight(.bold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color(red: 0.25, green: 0.40, blue: 0.70).opacity(0.14))
+                        .foregroundStyle(Color(red: 0.25, green: 0.40, blue: 0.70))
                         .clipShape(Capsule())
                 }
                 if row.is_sample {

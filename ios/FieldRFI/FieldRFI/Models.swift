@@ -116,6 +116,8 @@ struct RFIDTO: Codable, Identifiable {
     let assigned_to_company_id: String?
     let due_at: String?
     let submitted_at: String?
+    let official_response: String?
+    let responded_at: String?
     let pins: [RFIPinDetailDTO]?
     let refs: [RFIRefDetailDTO]?
     let missing_for_submit: [String]?
@@ -176,6 +178,28 @@ struct PESubmitBody: Codable {
     let assigned_to_company_id: String?
     let assignee: String?
     let comment: String?
+}
+
+struct DesignAnswerBody: Codable {
+    let official_response: String
+}
+
+struct DesignClarifyBody: Codable {
+    let note: String
+}
+
+struct DesignActionResultDTO: Codable {
+    let ok: Bool
+    let rfi_id: String
+    let status: String
+    let rfi_display: String?
+    let official_response: String?
+    let responded_at: String?
+    let assigned: String?
+    let priority: String?
+    let work_stopped: Bool
+    let message: String
+    let disclaimer: String
 }
 
 struct PESubmitResultDTO: Codable {

@@ -41,11 +41,15 @@ from app.models import (
     User,
 )
 from app.pe import (
+    ANSWER_DISCLAIMER,
     DUE_AT_RULE,
     PEError,
     approve_internal_review,
     last_event_is_internal_approve,
     missing_for_submit,
+    record_official_response,
+    request_clarification,
+    start_impact_review,
     submit_for_design,
 )
 from app.rules import DraftValidationError, is_open_status, validate_draft_payload
@@ -57,6 +61,9 @@ from app.schemas import (
     AssigneeCompanyOut,
     AssigneeRosterOut,
     AssigneeUserOut,
+    DesignActionResult,
+    DesignAnswerBody,
+    DesignClarifyBody,
     DraftResult,
     GraphResponse,
     GraphRow,
@@ -96,6 +103,8 @@ app.add_middleware(
 )
 
 DEFAULT_PE_TOKEN = "pe-demo"
+DEFAULT_DESIGN_TOKEN = "design-demo"
+DEFAULT_GC_TOKEN = "gc-demo"
 
 
 def require_pe(
@@ -106,6 +115,26 @@ def require_pe(
     if (x_field_actor or "").strip().lower() != "pe" or (x_pe_token or "") != expected:
         raise HTTPException(403, "PE credentials required. Submit is PE-only.")
     return "pe"
+
+
+def require_design(
+    x_field_actor: str | None = Header(default=None, alias="X-Field-Actor"),
+    x_design_token: str | None = Header(default=None, alias="X-Design-Token"),
+) -> str:
+    expected = os.environ.get("RFI_DESIGN_TOKEN", DEFAULT_DESIGN_TOKEN)
+    if (x_field_actor or "").strip().lower() != "design" or (x_design_token or "") != expected:
+        raise HTTPException(403, "Design credentials required. Official response is design-only.")
+    return "design"
+
+
+def require_gc(
+    x_field_actor: str | None = Header(default=None, alias="X-Field-Actor"),
+    x_gc_token: str | None = Header(default=None, alias="X-GC-Token"),
+) -> str:
+    expected = os.environ.get("RFI_GC_TOKEN", DEFAULT_GC_TOKEN)
+    if (x_field_actor or "").strip().lower() != "gc" or (x_gc_token or "") != expected:
+        raise HTTPException(403, "GC credentials required. Impact review is GC-only.")
+    return "gc"
 
 
 @app.get("/health")
@@ -785,3 +814,76 @@ def pe_submit_rfi(
         due_at_rule=DUE_AT_RULE,
         message=result.message,
     )
+
+
+def _action_result(result, db: Session, message: str | None = None) -> DesignActionResult:
+    rfi = db.get(RFI, result.rfi_id)
+    return DesignActionResult(
+        ok=True,
+        rfi_id=result.rfi_id,
+        status=result.status,
+        rfi_display=result.rfi_display,
+        official_response=rfi.official_response if rfi else None,
+        responded_at=_iso(rfi.responded_at) if rfi and rfi.responded_at else None,
+        assigned=result.assigned or (rfi.assigned if rfi else None),
+        priority=result.priority or (rfi.priority if rfi else None),
+        work_stopped=result.work_stopped,
+        message=message or result.message,
+        disclaimer=ANSWER_DISCLAIMER,
+    )
+
+
+@app.post("/design/rfis/{rfi_id}/official_response", response_model=DesignActionResult)
+def design_official_response(
+    rfi_id: str,
+    body: DesignAnswerBody,
+    _: str = Depends(require_design),
+    db: Session = Depends(get_db),
+) -> DesignActionResult:
+    try:
+        result = record_official_response(
+            db,
+            rfi_id,
+            body.official_response,
+            source="design_http",
+            actor="design",
+        )
+    except PEError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return _action_result(result, db)
+
+
+@app.post("/design/rfis/{rfi_id}/request_clarification", response_model=DesignActionResult)
+def design_request_clarification(
+    rfi_id: str,
+    body: DesignClarifyBody,
+    _: str = Depends(require_design),
+    db: Session = Depends(get_db),
+) -> DesignActionResult:
+    try:
+        result = request_clarification(
+            db,
+            rfi_id,
+            body.note,
+            source="design_http",
+            actor="design",
+            from_statuses={"submitted", "ball_in_court"},
+        )
+    except PEError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return _action_result(result, db)
+
+
+@app.post("/gc/rfis/{rfi_id}/start_impact_review", response_model=DesignActionResult)
+def gc_start_impact_review(
+    rfi_id: str,
+    _: str = Depends(require_gc),
+    db: Session = Depends(get_db),
+) -> DesignActionResult:
+    try:
+        result = start_impact_review(
+            db, rfi_id, source="gc_http", actor="gc"
+        )
+    except PEError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return _action_result(result, db)

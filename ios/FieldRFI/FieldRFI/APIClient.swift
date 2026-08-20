@@ -11,10 +11,18 @@ struct APIClient {
         URL(string: "http://127.0.0.1:8000")!
     }
 
-    /// PE Submit screen only. Grok / New RFI never send these headers.
+    /// Actor screens only. Grok / New RFI never send these headers.
     static let peHeaders = [
         "X-Field-Actor": "pe",
         "X-PE-Token": "pe-demo",
+    ]
+    static let designHeaders = [
+        "X-Field-Actor": "design",
+        "X-Design-Token": "design-demo",
+    ]
+    static let gcHeaders = [
+        "X-Field-Actor": "gc",
+        "X-GC-Token": "gc-demo",
     ]
 
     func projects() async throws -> [ProjectDTO] {
@@ -75,6 +83,30 @@ struct APIClient {
 
     func peSubmit(rfiID: String, body: PESubmitBody) async throws -> PESubmitResultDTO {
         try await post("/pe/rfis/\(rfiID)/submit", body: body, headers: Self.peHeaders)
+    }
+
+    func designOfficialResponse(rfiID: String, text: String) async throws -> DesignActionResultDTO {
+        try await post(
+            "/design/rfis/\(rfiID)/official_response",
+            body: DesignAnswerBody(official_response: text),
+            headers: Self.designHeaders
+        )
+    }
+
+    func designRequestClarification(rfiID: String, note: String) async throws -> DesignActionResultDTO {
+        try await post(
+            "/design/rfis/\(rfiID)/request_clarification",
+            body: DesignClarifyBody(note: note),
+            headers: Self.designHeaders
+        )
+    }
+
+    func gcStartImpactReview(rfiID: String) async throws -> DesignActionResultDTO {
+        try await post(
+            "/gc/rfis/\(rfiID)/start_impact_review",
+            body: EmptyBody(),
+            headers: Self.gcHeaders
+        )
     }
 
     func rfiGraph(projectID: String? = nil) async throws -> GraphResponseDTO {

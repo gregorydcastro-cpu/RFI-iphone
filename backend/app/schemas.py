@@ -321,3 +321,39 @@ class AssigneeRosterOut(BaseModel):
     ok: bool
     users: list[AssigneeUserOut]
     companies: list[AssigneeCompanyOut]
+
+
+class DesignAnswerBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    official_response: str
+
+    @field_validator("official_response")
+    @classmethod
+    def strip_response(cls, value: str) -> str:
+        return value.strip()
+
+
+class DesignClarifyBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    note: str
+
+    @field_validator("note")
+    @classmethod
+    def strip_note(cls, value: str) -> str:
+        return value.strip()
+
+
+class DesignActionResult(BaseModel):
+    ok: bool
+    rfi_id: str
+    status: str
+    rfi_display: Optional[str]
+    official_response: Optional[str] = None
+    responded_at: Optional[str] = None
+    assigned: Optional[str] = None
+    priority: Optional[str] = None
+    work_stopped: bool = False
+    message: str
+    disclaimer: str

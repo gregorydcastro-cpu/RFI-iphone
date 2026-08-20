@@ -86,14 +86,25 @@ def _rfi(db: Session, rfi_id: str) -> RFI:
     return row
 
 
-def _event(db: Session, rfi: RFI, to_status: str, **payload) -> None:
+def _event(
+    db: Session,
+    rfi: RFI,
+    to_status: str,
+    *,
+    actor: str = "pe",
+    source: str = "pe_helper",
+    **payload,
+) -> None:
+    extra = dict(payload)
+    actor = extra.pop("actor", actor)
+    source = extra.pop("source", source)
     db.add(
         RFIEvent(
             rfi_id=rfi.id,
             event_type="status_change",
             from_status=rfi.status,
             to_status=to_status,
-            payload={"actor": "pe", "source": "pe_helper", **payload},
+            payload={"actor": actor, "source": source, **extra},
         )
     )
     rfi.status = to_status
@@ -339,35 +350,119 @@ def submit_for_design(
     )
 
 
-def record_official_response(db: Session, rfi_id: str, response: str) -> PEResult:
+def record_official_response(
+    db: Session,
+    rfi_id: str,
+    response: str,
+    *,
+    source: str = "pe_helper",
+    actor: str = "pe",
+) -> PEResult:
     rfi = _rfi(db, rfi_id)
-    _require(rfi, {"ball_in_court"}, "record official_response")
+    _require(rfi, {"submitted", "ball_in_court"}, "record official_response")
     text_body = response.strip()
+    if not text_body:
+        raise PEError("Official response text is required.")
     if ANSWER_DISCLAIMER.lower() not in text_body.lower():
         text_body = f"{text_body} {ANSWER_DISCLAIMER}"
+    prior_priority = rfi.priority
     rfi.official_response = text_body
     rfi.responded_at = utc_now()
-    _event(db, rfi, "answered")
+    _event(
+        db,
+        rfi,
+        "answered",
+        actor=actor,
+        source=source,
+        action="official_response",
+        priority_unchanged=prior_priority,
+    )
     db.commit()
-    return PEResult(True, rfi.id, rfi.status, rfi.rfi_display, message="Answer recorded.")
+    return PEResult(
+        True,
+        rfi.id,
+        rfi.status,
+        rfi.rfi_display,
+        message="Answer recorded.",
+        assigned=rfi.assigned,
+        priority=rfi.priority,
+        work_stopped=work_stopped(rfi.priority),
+        due_at=rfi.due_at,
+        submitted_at=rfi.submitted_at,
+    )
 
 
-def request_clarification(db: Session, rfi_id: str, note: str) -> PEResult:
+def request_clarification(
+    db: Session,
+    rfi_id: str,
+    note: str,
+    *,
+    source: str = "pe_helper",
+    actor: str = "pe",
+    from_statuses: set[str] | None = None,
+) -> PEResult:
     rfi = _rfi(db, rfi_id)
-    _require(rfi, {"ball_in_court", "answered"}, "request clarification")
-    _event(db, rfi, "needs_clarification", note=note)
+    allowed = from_statuses or {"submitted", "ball_in_court", "answered"}
+    _require(rfi, allowed, "request clarification")
+    text_body = (note or "").strip()
+    if not text_body:
+        raise PEError("A clarification note is required.")
+    _event(
+        db,
+        rfi,
+        "needs_clarification",
+        actor=actor,
+        source=source,
+        note=text_body,
+        action="request_clarification",
+        priority_unchanged=rfi.priority,
+    )
     rfi.assigned = "Castro GC (aging owner)"
     db.commit()
-    return PEResult(True, rfi.id, rfi.status, rfi.rfi_display, message="GC holding.")
+    return PEResult(
+        True,
+        rfi.id,
+        rfi.status,
+        rfi.rfi_display,
+        message="GC holding.",
+        assigned=rfi.assigned,
+        priority=rfi.priority,
+        work_stopped=work_stopped(rfi.priority),
+    )
 
 
-def start_impact_review(db: Session, rfi_id: str) -> PEResult:
+def start_impact_review(
+    db: Session,
+    rfi_id: str,
+    *,
+    source: str = "pe_helper",
+    actor: str = "pe",
+) -> PEResult:
     rfi = _rfi(db, rfi_id)
     _require(rfi, {"answered", "needs_clarification"}, "start impact_review")
-    _event(db, rfi, "impact_review")
+    if not (rfi.official_response or "").strip():
+        raise PEError("Official response is required before impact review.")
+    _event(
+        db,
+        rfi,
+        "impact_review",
+        actor=actor,
+        source=source,
+        action="start_impact_review",
+        priority_unchanged=rfi.priority,
+    )
     rfi.assigned = "Castro GC"
     db.commit()
-    return PEResult(True, rfi.id, rfi.status, rfi.rfi_display, message="GC impact review.")
+    return PEResult(
+        True,
+        rfi.id,
+        rfi.status,
+        rfi.rfi_display,
+        message="GC impact review.",
+        assigned=rfi.assigned,
+        priority=rfi.priority,
+        work_stopped=work_stopped(rfi.priority),
+    )
 
 
 def draft_change_order(db: Session, rfi_id: str, summary: str) -> DraftChangeOrder:
