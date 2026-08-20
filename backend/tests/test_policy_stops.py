@@ -18,9 +18,11 @@ from abac import (
     Resource,
     Role,
     Subject,
+    SUBJECT_FIELD_ORDER,
     evaluate,
     reject_env_field_order,
     reject_frozen_env_now,
+    reject_subject_actor_type,
     reject_subject_crew_ids,
     require_access,
 )
@@ -164,6 +166,45 @@ def test_subject_crew_ids_is_per_instance_frozenset():
 
     with pytest.raises(TypeError, match="frozen"):
         reject_subject_crew_ids(Thawed)
+
+
+def test_subject_actor_type_is_required():
+    from dataclasses import MISSING, dataclass, field, fields
+
+    actor = next(item for item in fields(Subject) if item.name == "actor_type")
+    assert actor.default is MISSING
+    assert actor.default_factory is MISSING
+    assert tuple(item.name for item in fields(Subject)) == SUBJECT_FIELD_ORDER
+    reject_subject_actor_type(Subject)
+    with pytest.raises(TypeError):
+        Subject(
+            user_id=USER,
+            company_id=COMPANY,
+            project_id=JOB,
+            role=Role.JOURNEYMAN,
+        )
+    grok = Subject(
+        user_id=USER,
+        company_id=COMPANY,
+        project_id=JOB,
+        role=Role.GENERAL_FOREMAN,
+        actor_type=ActorType.GROKBOT,
+    )
+    assert grok.actor_type is ActorType.GROKBOT
+
+    @dataclass(frozen=True, kw_only=True)
+    class SoftHuman:
+        user_id: UUID
+        company_id: UUID
+        project_id: UUID
+        role: Role
+        actor_type: ActorType = ActorType.HUMAN
+        area_id: UUID | None = None
+        reports_to_id: UUID | None = None
+        crew_ids: frozenset[UUID] = field(default_factory=frozenset)
+
+    with pytest.raises(TypeError, match="required"):
+        reject_subject_actor_type(SoftHuman)
 
 
 def test_wrong_job_stops_at_same_project(cov: PolicyCoverage):

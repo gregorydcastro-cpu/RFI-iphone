@@ -340,7 +340,7 @@ def subject_for(
     db: Session,
     actor: Actor,
     *,
-    actor_type: ActorType = ActorType.HUMAN,
+    actor_type: ActorType,
     project_id: str | None = None,
 ):
     if actor.kind == "office_pe":

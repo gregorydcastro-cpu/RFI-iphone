@@ -1088,7 +1088,9 @@ def pe_submit_rfi(
     if not rfi:
         raise HTTPException(404, "RFI not found.")
     actor = _actor_on_rfi(db, rfi, x_user_id, x_field_role)
-    subject = subject_for(db, actor, project_id=rfi.project_id)
+    subject = subject_for(
+        db, actor, actor_type=ActorType.HUMAN, project_id=rfi.project_id
+    )
     loaded, mapped = load_rfi(db, rfi.id)
     try:
         require_access(
@@ -1169,7 +1171,9 @@ def pe_set_priority(
     if not rfi:
         raise HTTPException(404, "RFI not found.")
     actor = _actor_on_rfi(db, rfi, x_user_id, x_field_role)
-    subject = subject_for(db, actor, project_id=rfi.project_id)
+    subject = subject_for(
+        db, actor, actor_type=ActorType.HUMAN, project_id=rfi.project_id
+    )
     loaded, _ = load_rfi(db, rfi.id)
     try:
         require_access(
@@ -1392,7 +1396,9 @@ def field_handle_ticket(
         raise HTTPException(404, "Ticket not found.")
     rfi = db.get(RFI, row.rfi_id)
     actor = _field_actor(db, rfi.project_id, x_user_id, x_field_role)
-    subject = subject_for(db, actor, project_id=rfi.project_id)
+    subject = subject_for(
+        db, actor, actor_type=ActorType.HUMAN, project_id=rfi.project_id
+    )
     try:
         handle_material(db, subject, must_uuid(ticket_id))
     except AccessDenied as exc:
@@ -1420,7 +1426,9 @@ def field_flag_ticket(
         raise HTTPException(404, "Ticket not found.")
     rfi = db.get(RFI, row.rfi_id)
     actor = _field_actor(db, rfi.project_id, x_user_id, x_field_role)
-    subject = subject_for(db, actor, project_id=rfi.project_id)
+    subject = subject_for(
+        db, actor, actor_type=ActorType.HUMAN, project_id=rfi.project_id
+    )
     try:
         flag_up(db, subject, must_uuid(ticket_id))
     except AccessDenied as exc:

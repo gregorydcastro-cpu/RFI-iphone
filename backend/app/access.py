@@ -242,7 +242,7 @@ def subject_from_assignment(
     db: Session,
     assignment: ProjectAssignment,
     *,
-    actor_type: ActorType = ActorType.HUMAN,
+    actor_type: ActorType,
 ) -> Subject:
     user = db.get(User, assignment.user_id)
     company_id = as_uuid(user.company_id) if user and user.company_id else UUID(int=0)

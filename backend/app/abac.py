@@ -76,15 +76,27 @@ ROLE_ACTIONS: dict[Role, frozenset[Action]] = {
 }
 
 
+SUBJECT_FIELD_ORDER = (
+    "user_id",
+    "company_id",
+    "project_id",
+    "role",
+    "actor_type",
+    "area_id",
+    "reports_to_id",
+    "crew_ids",
+)
+
+
 @dataclass(frozen=True, kw_only=True)
 class Subject:
     user_id: UUID
     company_id: UUID
     project_id: UUID
     role: Role
-    area_id: UUID | None
-    reports_to_id: UUID | None
-    actor_type: ActorType
+    actor_type: ActorType  # required — default HUMAN makes Grokbot a person by omission
+    area_id: UUID | None = None
+    reports_to_id: UUID | None = None
     crew_ids: frozenset[UUID] = field(default_factory=frozenset)
 
 
@@ -105,7 +117,25 @@ def reject_subject_crew_ids(cls: type) -> None:
         raise TypeError("Subject.crew_ids factory must produce a frozenset")
 
 
-reject_subject_crew_ids(Subject)
+def reject_subject_actor_type(cls: type) -> None:
+    """actor_type is required. Default HUMAN makes Grokbot a person by omission."""
+    params = getattr(cls, "__dataclass_params__", None)
+    if params is None or not params.frozen:
+        raise TypeError("Subject must be frozen")
+    if not params.kw_only:
+        raise TypeError("Subject must be kw_only")
+    names = tuple(item.name for item in fields(cls))
+    if names != SUBJECT_FIELD_ORDER:
+        raise TypeError(f"Subject field order is law: {SUBJECT_FIELD_ORDER}")
+    actor = next(item for item in fields(cls) if item.name == "actor_type")
+    if actor.default is not MISSING or actor.default_factory is not MISSING:
+        raise TypeError(
+            "Subject.actor_type must be required; default HUMAN makes Grokbot a person by omission"
+        )
+    reject_subject_crew_ids(cls)
+
+
+reject_subject_actor_type(Subject)
 
 
 @dataclass(frozen=True)
