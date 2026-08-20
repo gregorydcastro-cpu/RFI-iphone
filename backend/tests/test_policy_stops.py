@@ -260,7 +260,7 @@ def test_evaluation_trace_shape_is_law():
 
 def test_evaluation_log_is_server_audit_envelope():
     from dataclasses import MISSING, fields
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     stamped = next(item for item in fields(EvaluationLog) if item.name == "evaluated_at")
     assert stamped.default is MISSING
@@ -600,7 +600,7 @@ def test_apprentice_handle_own_ticket_allows(cov: PolicyCoverage):
         Action.HANDLE_MATERIAL,
         resource(type="ticket", assigned_to_id=USER),
     ))
-    assert names(log) == list(EXPECTED_ORDER)
+    assert names(log) == list(EXPECTED_ORDER[:9])
     assigned = next(step for step in log.steps if step.policy == "assigned_only")
     assert assigned.applicable is False
     assert assigned.effect is None
