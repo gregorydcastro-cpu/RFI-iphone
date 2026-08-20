@@ -371,6 +371,84 @@ def test_policy_set_rank_is_fixed():
     assert "default_deny" not in FIELD_SET_NAMES
 
 
+def test_evaluate_algorithm_is_law():
+    from abac import Policy, PolicySet, evaluate as engine
+
+    doc = engine.__doc__ or ""
+    assert "None  → n/a, continue" in doc
+    assert "DENY  → return immediately" in doc
+    assert "ALLOW → remember it, continue" in doc
+    assert "if an ALLOW was remembered → return that ALLOW" in doc
+    assert "else → DENY policy=default_deny" in doc
+
+    def na(*_args, **_kwargs):
+        return None
+
+    def halt(*_args, **_kwargs):
+        return Decision(Effect.DENY, "stop", policy="early")
+
+    def permit(*_args, **_kwargs):
+        return Decision(Effect.ALLOW, "ok", policy="role_allows")
+
+    def extra(*_args, **_kwargs):
+        return Decision(Effect.ALLOW, "second", policy="other")
+
+    denied = PolicySet(
+        name="law",
+        combining=Combining.DENY_OVERRIDES,
+        policies=(
+            Policy(name="same_project", rule=na, order=10),
+            Policy(name="early", rule=halt, order=20),
+            Policy(name="role_allows", rule=permit, order=40),
+        ),
+    )
+    decision, steps = evaluate(subject(), Action.SUBMIT_RFI, resource(), policy_set=denied)
+    assert [step.policy for step in steps] == ["same_project", "early"]
+    assert decision.allowed is False
+    assert decision.policy == "early"
+    assert steps[-1].stopped is True
+    assert "role_allows" not in [step.policy for step in steps]
+
+    remembered = PolicySet(
+        name="law",
+        combining=Combining.DENY_OVERRIDES,
+        policies=(
+            Policy(name="same_project", rule=na, order=10),
+            Policy(name="role_allows", rule=permit, order=40),
+            Policy(name="area_scope", rule=na, order=50),
+        ),
+    )
+    decision, steps = evaluate(
+        subject(), Action.CREATE_RFI_DRAFT, resource(), policy_set=remembered
+    )
+    assert decision.allowed is True
+    assert decision.policy == "role_allows"
+    assert [step.effect for step in steps] == [None, "allow", None]
+    assert not any(step.stopped for step in steps)
+
+    empty = PolicySet(
+        name="law",
+        combining=Combining.DENY_OVERRIDES,
+        policies=(Policy(name="same_project", rule=na, order=10),),
+    )
+    decision, steps = evaluate(subject(), Action.VIEW_PRINT, resource(), policy_set=empty)
+    assert decision.allowed is False
+    assert decision.policy == "default_deny"
+    assert [step.effect for step in steps] == [None]
+    assert not any(step.stopped for step in steps)
+
+    two = PolicySet(
+        name="law",
+        combining=Combining.DENY_OVERRIDES,
+        policies=(
+            Policy(name="role_allows", rule=permit, order=40),
+            Policy(name="other", rule=extra, order=50),
+        ),
+    )
+    with pytest.raises(TypeError, match="second allow"):
+        evaluate(subject(), Action.CREATE_RFI_DRAFT, resource(), policy_set=two)
+
+
 def test_env_now_is_factory_not_import_stamp():
     from dataclasses import MISSING, dataclass, fields
     from datetime import datetime, timezone

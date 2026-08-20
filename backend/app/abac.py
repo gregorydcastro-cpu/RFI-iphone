@@ -601,15 +601,19 @@ def evaluate(
     *,
     policy_set: PolicySet = FIELD_POLICY_SET,
 ) -> Evaluation:
-    """DENY_OVERRIDES. First deny stops. ALLOW does not stop; remaining emit n/a."""
+    """This algorithm is law. Nothing else.
+
+    walk ranked policies
+      None  → n/a, continue
+      DENY  → return immediately
+      ALLOW → remember it, continue
+    if an ALLOW was remembered → return that ALLOW
+    else → DENY policy=default_deny
+    """
     env = env or Env()
     traces: list[EvaluationTrace] = []
     allow: Decision | None = None
-    seq = 0
-    for policy in policy_set.ranked():
-        if policy.name == "default_deny" and allow is not None:
-            continue
-        seq += 1
+    for seq, policy in enumerate(policy_set.ranked(), start=1):
         result = invoke_rule(policy.rule, subject, action, resource, env, ctx)
         if result is None:
             traces.append(
@@ -621,14 +625,15 @@ def evaluate(
                 _step(seq, policy, applicable=True, decision=result, stopped=True)
             )
             return Evaluation(result, tuple(traces))
+        if allow is not None:
+            raise TypeError("evaluate does not invent a second allow")
         allow = result
         traces.append(
             _step(seq, policy, applicable=True, decision=result, stopped=False)
         )
-    if allow is None:
-        # Fail closed. default_deny is not a set member. Full n/a walk.
-        return Evaluation(_deny("default_deny", "denied"), tuple(traces))
-    return Evaluation(allow, tuple(traces))
+    if allow is not None:
+        return Evaluation(allow, tuple(traces))
+    return Evaluation(_deny("default_deny", "denied"), tuple(traces))
 
 
 rfi_abac_deny_total: dict[str, int] = {}
