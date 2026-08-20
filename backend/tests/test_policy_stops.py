@@ -26,6 +26,7 @@ from abac import (
     EvaluationLog,
     EvaluationTrace,
     FIELD_POLICY_SET,
+    PolicySet,
     LOG_FIELD_ORDER,
     Resource,
     Role,
@@ -230,7 +231,12 @@ def assert_walk_invariants(
     assert seqs == list(range(1, len(rows) + 1)), f"seq not contiguous from 1: {seqs}"
     names = [step.policy for step in rows]
     ranked = tuple(policy.name for policy in policy_set.ranked())
-    space = EXPECTED_ORDER if policy_set is FIELD_POLICY_SET else ranked
+    if policy_set is FIELD_POLICY_SET:
+        space = EXPECTED_ORDER
+    elif "default_deny" in ranked:
+        space = ranked
+    else:
+        space = ranked + ("default_deny",)
     assert names == list(space[: len(names)]), (
         f"names are a prefix of the ranked set, never a reshuffle: {names}"
     )
@@ -477,8 +483,10 @@ def test_evaluate_algorithm_is_law():
     decision, steps = evaluate(subject(), Action.VIEW_PRINT, resource(), policy_set=empty)
     assert decision.allowed is False
     assert decision.policy == "default_deny"
-    assert [step.effect for step in steps] == [None]
-    assert not any(step.stopped for step in steps)
+    assert [step.effect for step in steps] == [None, "deny"]
+    assert steps[-1].policy == "default_deny"
+    assert steps[-1].effect == "deny"
+    assert steps[-1].stopped is True
 
     two = PolicySet(
         name="law",
@@ -1161,6 +1169,24 @@ def test_default_deny_is_deny_only_when_nothing_permitted():
     assert default_deny(subject(), Action.VIEW_PRINT, resource(), Env()).effect is Effect.DENY
 
 
+def test_default_deny_on_permitless_set() -> None:
+    stripped = PolicySet(
+        name="no_permit",
+        combining=Combining.DENY_OVERRIDES,
+        policies=tuple(p for p in FIELD_POLICY_SET.policies if p.name != "role_allows"),
+    )
+    decision, steps = evaluate(
+        subject(),
+        Action.CREATE_RFI_DRAFT,
+        resource(),
+        policy_set=stripped,
+    )
+    assert decision.policy == "default_deny"
+    assert decision.allowed is False
+    assert steps[-1].policy == "default_deny"
+    assert steps[-1].effect == "deny"
+
+
 def test_default_deny_hole_when_role_allows_returns_none(caplog):
     import logging
 
@@ -1195,10 +1221,13 @@ def test_default_deny_hole_when_role_allows_returns_none(caplog):
                 resource(),
                 policy_set=hole,
             )
-    assert [step.policy for step in steps] == list(FIELD_LANES)
-    assert all(step.applicable is False for step in steps)
-    assert all(step.effect is None for step in steps)
-    assert not any(step.stopped for step in steps)
+    assert [step.policy for step in steps] == [*FIELD_LANES, "default_deny"]
+    assert all(step.applicable is False for step in steps[:-1])
+    assert all(step.effect is None for step in steps[:-1])
+    assert not any(step.stopped for step in steps[:-1])
+    assert steps[-1].policy == "default_deny"
+    assert steps[-1].effect == "deny"
+    assert steps[-1].stopped is True
     assert decision.allowed is False
     assert as_decision_policy(decision) == "default_deny"
     assert decision.policy not in FIELD_SET_NAMES

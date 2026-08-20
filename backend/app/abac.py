@@ -636,7 +636,17 @@ def evaluate(
         )
     if allow is not None:
         return Evaluation(allow, tuple(traces))
-    return Evaluation(_deny("default_deny", "denied"), tuple(traces))
+    denied = _deny("default_deny", "denied")
+    traces.append(
+        _step(
+            len(traces) + 1,
+            Policy(name="default_deny", rule=default_deny, order=99),
+            applicable=True,
+            decision=denied,
+            stopped=True,
+        )
+    )
+    return Evaluation(denied, tuple(traces))
 
 
 rfi_abac_deny_total: dict[str, int] = {}
