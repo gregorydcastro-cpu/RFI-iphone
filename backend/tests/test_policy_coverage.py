@@ -10,6 +10,7 @@ import pytest
 
 from app.policy_coverage import (
     CURRENT_SCHEMA,
+    FIELD_LANES,
     MIGRATIONS,
     REQUIRED_STOPS,
     SCHEMA,
@@ -93,11 +94,18 @@ def test_merge_hits_unions_worker_bags():
 
 def test_default_deny_stop_is_off_the_production_bag():
     assert "default_deny" not in REQUIRED_STOPS
+    assert "default_deny" not in FIELD_LANES
     coverage = PolicyCoverage()
-    coverage.seen.update(REQUIRED_STOPS | {"default_deny"})
+    coverage.seen.update(REQUIRED_STOPS)
     coverage.stops.update(REQUIRED_STOPS)
-    coverage.na.add("default_deny")
     assert_policy_coverage(coverage)
+    assert "default_deny" not in coverage.seen
+    assert "default_deny" not in coverage.stops
+    stray = PolicyCoverage()
+    stray.seen.update(REQUIRED_STOPS | {"default_deny"})
+    stray.stops.update(REQUIRED_STOPS)
+    stray.na.add("default_deny")
+    assert_policy_coverage(stray)
 
 
 def test_line_coverage_is_not_assigned_only_denied():

@@ -450,11 +450,14 @@ def work_stop_writer(
     return None
 
 
+DEFAULT_DENY_REASON = "set incomplete, not a field overstep"
+
+
 def default_deny(
     s: Subject, action: Action, r: Resource, env: Env, ctx: Any = None
-) -> Decision | None:
-    """Deny-only. Applies only when nothing permitted."""
-    return _deny("default_deny", "denied")
+) -> Decision:
+    """Handler. Set incomplete, not a field overstep. Never None. Never ALLOW."""
+    return _deny("default_deny", DEFAULT_DENY_REASON)
 
 
 class Combining(str, Enum):
@@ -617,6 +620,11 @@ def evaluate(
     traces: list[EvaluationTrace] = []
     allow: Decision | None = None
     for seq, policy in enumerate(policy_set.ranked(), start=1):
+        if policy.name == "default_deny" and allow is not None:
+            traces.append(
+                _step(seq, policy, applicable=False, decision=None, stopped=False)
+            )
+            continue
         result = invoke_rule(policy.rule, subject, action, resource, env, ctx)
         if result is None:
             traces.append(
@@ -636,17 +644,19 @@ def evaluate(
         )
     if allow is not None:
         return Evaluation(allow, tuple(traces))
-    denied = _deny("default_deny", "denied")
+    result = invoke_rule(default_deny, subject, action, resource, env, ctx)
+    if result is None or result.effect is not Effect.DENY:
+        result = _deny("default_deny", DEFAULT_DENY_REASON)
     traces.append(
         _step(
             len(traces) + 1,
             Policy(name="default_deny", rule=default_deny, order=99),
             applicable=True,
-            decision=denied,
+            decision=result,
             stopped=True,
         )
     )
-    return Evaluation(denied, tuple(traces))
+    return Evaluation(result, tuple(traces))
 
 
 rfi_abac_deny_total: dict[str, int] = {}
@@ -799,7 +809,10 @@ def emit_audit_line(log: EvaluationLog) -> str:
         _LOG.info(line)
         return line
     extras = deny_log_fields(log) if log.action in HUNG_WRITES else {}
-    _LOG.info(line, extra=extras)
+    if as_decision_policy(log.decision) == "default_deny":
+        _LOG.error(line, extra=extras)
+    else:
+        _LOG.info(line, extra=extras)
     return line
 
 
@@ -886,6 +899,7 @@ def require_access(
 
 
 def raise_http(exc: AccessDenied) -> None:
+    """Phone/PE 403. default_deny included. Never map default_deny to 500."""
     from fastapi import HTTPException
 
     raise HTTPException(

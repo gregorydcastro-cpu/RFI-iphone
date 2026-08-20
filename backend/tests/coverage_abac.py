@@ -20,6 +20,10 @@ DENY_ONLY = (
 )
 ALLOW_POLICIES = ("role_allows",)
 COVERED = DENY_ONLY + ALLOW_POLICIES
+# Production FIELD_POLICY_SET coverage must not require a default_deny hit.
+# The only honest hit is test_default_deny_on_permitless_set.
+if "default_deny" in COVERED:
+    raise TypeError("walk coverage must not require a default_deny hit")
 
 
 @dataclass

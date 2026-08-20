@@ -28,7 +28,8 @@ FIELD_LANES = (
 )
 EXPECTED_ORDER = FIELD_LANES + ("default_deny",)
 
-# default_deny deny/stop is off this bag — tested with bare evaluate.
+# default_deny deny/stop is off this bag. The only honest hit is
+# test_default_deny_on_permitless_set. Do not require a default_deny hit.
 REQUIRED_STOPS = {
     "same_project",
     "grokbot_lane",
@@ -125,6 +126,8 @@ class PolicyCoverage:
 
     def record(self, walk):
         for step in _traces(walk):
+            if step.policy == "default_deny":
+                continue
             self.seen.add(step.policy)
             if step.stopped:
                 self.stops.add(step.policy)
@@ -188,5 +191,8 @@ def assert_policy_coverage(coverage: PolicyCoverage) -> None:
     assert missing == [], f"policies never walked: {missing}"
     missing_stops = sorted(REQUIRED_STOPS - coverage.stops)
     assert missing_stops == [], f"policies never stopped: {missing_stops}"
+    assert "default_deny" not in REQUIRED_STOPS
+    assert "default_deny" not in FIELD_LANES
     assert "default_deny" not in coverage.allows
-    # default_deny deny is off this bag. Line coverage is not assigned_only denied.
+    # default_deny deny/stop is off this bag. Do not require a hit.
+    # The only honest hit is test_default_deny_on_permitless_set.
