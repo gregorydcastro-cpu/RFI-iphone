@@ -1,4 +1,13 @@
-"""Coverage file schema walker. Not policy-stop tests. Not pytest-cov."""
+"""Coverage file schema walker. Strategy A only. Not Grafana.
+
+Monotonic integer. migrate_vN_to_vN+1. Writer dumps CURRENT_SCHEMA only.
+No semver, date schemas, dual-write, or down-migrations.
+Additive field → bump + setdefault. Rename → bump, copy old→new.
+Counter meaning change → bump, do not reuse stop.
+New policy name under hits is data, not a bump.
+New policy_set value is reject on read, not a bump.
+Keep every step from 1. file>code refuse. file<code migrate then merge.
+"""
 
 from __future__ import annotations
 
@@ -135,10 +144,19 @@ def migrate_v2_to_v3(raw: dict) -> dict:
     return out
 
 
-# stay on 2 — v2→v3 (stop→stopped) is not registered yet
+# stay on 2 — v2→v3 (stop→stopped rename) is not registered yet.
+# Counter meaning change must bump and must not reuse "stop".
 MIGRATIONS: dict[int, Callable[[dict], dict]] = {
     1: migrate_v1_to_v2,
 }
+
+if type(CURRENT_SCHEMA) is not int or CURRENT_SCHEMA < 1:
+    raise TypeError("CURRENT_SCHEMA is a monotonic integer")
+if set(MIGRATIONS) != set(range(1, CURRENT_SCHEMA)):
+    raise TypeError("keep every migrate_vN_to_vN+1 step from 1")
+for _n, _step in MIGRATIONS.items():
+    if getattr(_step, "__name__", "") != f"migrate_v{_n}_to_v{_n + 1}":
+        raise TypeError("steps are migrate_vN_to_vN+1")
 
 
 def migrate(raw: Any) -> dict[str, Any]:

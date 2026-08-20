@@ -10,10 +10,13 @@ import pytest
 
 from coverage_schema import (
     CURRENT_SCHEMA,
+    MIGRATIONS,
     CoverageSchemaError,
     PolicyCoverageData,
     merge_coverage,
     migrate,
+    migrate_v1_to_v2,
+    migrate_v2_to_v3,
     read_coverage,
     write_coverage,
 )
@@ -146,6 +149,58 @@ def test_v1_step_does_not_overwrite_existing_stop() -> None:
     raw["hits"]["same_project"]["stop"] = 9
     out = migrate(raw)
     assert out["hits"]["same_project"]["stop"] == 9
+
+
+def test_strategy_a_is_monotonic_int_with_every_step_from_1() -> None:
+    assert type(CURRENT_SCHEMA) is int
+    assert CURRENT_SCHEMA >= 1
+    assert set(MIGRATIONS) == set(range(1, CURRENT_SCHEMA))
+    assert MIGRATIONS[1] is migrate_v1_to_v2
+    assert MIGRATIONS[1].__name__ == "migrate_v1_to_v2"
+    assert 2 not in MIGRATIONS
+    assert migrate_v2_to_v3 not in MIGRATIONS.values()
+
+
+def test_strategy_a_refuses_semver_and_date_schema() -> None:
+    with pytest.raises(CoverageSchemaError, match="invalid schema"):
+        migrate({"schema": "2.0.0", "hits": {}})
+    with pytest.raises(CoverageSchemaError, match="invalid schema"):
+        migrate({"schema": "2026-08-20", "hits": {}})
+
+
+def test_strategy_a_file_newer_than_code_refused() -> None:
+    with pytest.raises(CoverageSchemaError, match="newer than code"):
+        migrate({"schema": CURRENT_SCHEMA + 1, "hits": {}})
+
+
+def test_strategy_a_file_older_migrates_then_merge() -> None:
+    merged = merge_coverage([deepcopy(V1), deepcopy(V2)])
+    assert merged.schema == CURRENT_SCHEMA
+    assert merged.hits["same_project"]["deny"] == 2
+
+
+def test_strategy_a_new_policy_name_is_data_not_a_bump() -> None:
+    raw = deepcopy(V2)
+    raw["hits"]["mystery_lane"] = {"deny": 1}
+    out = migrate(raw)
+    assert out["schema"] == CURRENT_SCHEMA
+    assert out["hits"]["mystery_lane"]["deny"] == 1
+
+
+def test_strategy_a_rename_copies_stop_and_does_not_reuse_it() -> None:
+    raw = deepcopy(V2)
+    out = migrate_v2_to_v3(raw)
+    assert out["schema"] == 3
+    assert out["hits"]["same_project"]["stopped"] == raw["hits"]["same_project"]["stop"]
+    assert "stop" not in out["hits"]["same_project"]
+    assert raw["hits"]["same_project"]["stop"] == 1
+
+
+def test_strategy_a_schema_has_no_grafana() -> None:
+    dumped = PolicyCoverageData.from_json(deepcopy(V2)).to_json()
+    keys = {str(key).lower() for key in dumped}
+    assert "grafana" not in keys
+    assert "prometheus" not in keys
 
 
 def test_stripped_set_never_written_as_field_lanes(tmp_path: Path) -> None:
