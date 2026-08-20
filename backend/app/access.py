@@ -153,6 +153,7 @@ def resource_from_rfi(db: Session, rfi: RFI) -> Resource:
         assigned_to_id=as_uuid(rfi.assigned_to_user_id),
         crew_foreman_id=_crew_foreman_id(db, rfi.project_id, rfi.created_by_user_id),
         requires_internal_review=False,
+        id=must_uuid(rfi.id),
     )
 
 
@@ -172,6 +173,7 @@ def resource_from_ticket(
         crew_foreman_id=_crew_foreman_id(
             db, row.project_id, ticket.requested_by_user_id
         ),
+        id=must_uuid(ticket.id),
     )
 
 
@@ -187,6 +189,7 @@ def resource_from_order(
         created_by_id=ticket.created_by_id,
         assigned_to_id=ticket.assigned_to_id,
         crew_foreman_id=ticket.crew_foreman_id,
+        id=ticket.id,
     )
 
 
@@ -217,6 +220,7 @@ def handle_material(db: Session, actor: Subject, ticket_id: UUID) -> DraftMateri
             area_id=mapped.area_id,
             assigned_to_id=mapped.assigned_to_id,
             status=mapped.status,
+            id=mapped.id,
         ),
     )
     return ticket
@@ -233,6 +237,7 @@ def flag_up(db: Session, actor: Subject, ticket_id: UUID) -> DraftMaterialOrder:
             area_id=mapped.area_id,
             assigned_to_id=mapped.assigned_to_id,
             status=mapped.status,
+            id=mapped.id,
         ),
     )
     return ticket

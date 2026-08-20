@@ -76,9 +76,11 @@ def read_coverage(path: Path) -> PolicyCoverageData:
 
 def _traces(walk) -> tuple[EvaluationTrace, ...]:
     if isinstance(walk, EvaluationLog):
-        return walk.traces
+        return walk.steps
     if isinstance(walk, AccessDenied):
         return walk.trace
+    if hasattr(walk, "steps"):
+        return walk.steps
     if hasattr(walk, "traces"):
         return walk.traces
     if hasattr(walk, "trace"):

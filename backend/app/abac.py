@@ -151,6 +151,7 @@ class Resource:
     assigned_to_id: UUID | None = None
     crew_foreman_id: UUID | None = None
     requires_internal_review: bool = False
+    id: UUID | None = None
 
 
 ENV_FIELD_ORDER = (
@@ -254,16 +255,50 @@ def reject_evaluation_trace_shape(cls: type) -> None:
 reject_evaluation_trace_shape(EvaluationTrace)
 
 
+LOG_FIELD_ORDER = (
+    "evaluated_at",
+    "combining",
+    "subject_id",
+    "actor_type",
+    "role",
+    "action",
+    "resource_type",
+    "resource_project_id",
+    "resource_id",
+    "decision",
+    "steps",
+)
+
+
 @dataclass(frozen=True)
 class EvaluationLog:
-    subject_user_id: UUID
-    role: Role
-    actor_type: ActorType
-    project_id: UUID
-    action: Action
+    evaluated_at: datetime
+    combining: str
+    subject_id: UUID
+    actor_type: str
+    role: str
+    action: str
     resource_type: str
-    traces: tuple[EvaluationTrace, ...]
+    resource_project_id: UUID
+    resource_id: UUID | None
     decision: Decision
+    steps: tuple[EvaluationTrace, ...]
+
+
+def reject_evaluation_log_shape(cls: type) -> None:
+    """evaluated_at is passed in (Env.now). A field default is a process-lifetime stamp."""
+    params = getattr(cls, "__dataclass_params__", None)
+    if params is None or not params.frozen:
+        raise TypeError("EvaluationLog must be frozen")
+    names = tuple(item.name for item in fields(cls))
+    if names != LOG_FIELD_ORDER:
+        raise TypeError(f"EvaluationLog field order is law: {LOG_FIELD_ORDER}")
+    stamped = next(item for item in fields(cls) if item.name == "evaluated_at")
+    if stamped.default is not MISSING or stamped.default_factory is not MISSING:
+        raise TypeError("EvaluationLog.evaluated_at must be passed in (use Env.now)")
+
+
+reject_evaluation_log_shape(EvaluationLog)
 
 
 @dataclass(frozen=True)
@@ -484,16 +519,27 @@ def _log(
     resource: Resource,
     traces: list[EvaluationTrace],
     decision: Decision,
+    *,
+    env: Env,
+    policy_set: PolicySet,
 ) -> EvaluationLog:
+    combining = (
+        policy_set.combining.value
+        if hasattr(policy_set.combining, "value")
+        else str(policy_set.combining)
+    )
     return EvaluationLog(
-        subject_user_id=subject.user_id,
-        role=subject.role,
-        actor_type=subject.actor_type,
-        project_id=subject.project_id,
-        action=action,
+        evaluated_at=env.now,
+        combining=combining,
+        subject_id=subject.user_id,
+        actor_type=subject.actor_type.value,
+        role=subject.role.value,
+        action=action.value,
         resource_type=resource.type,
-        traces=tuple(traces),
+        resource_project_id=resource.project_id,
+        resource_id=resource.id,
         decision=decision,
+        steps=tuple(traces),
     )
 
 
@@ -553,7 +599,9 @@ def evaluate(
             traces.append(
                 _step(seq, policy, applicable=True, decision=result, stopped=True)
             )
-            return _log(subject, action, resource, traces, result)
+            return _log(
+                subject, action, resource, traces, result, env=env, policy_set=policy_set
+            )
         allow = result
         traces.append(
             _step(seq, policy, applicable=True, decision=result, stopped=False)
@@ -572,8 +620,12 @@ def evaluate(
                 stopped=True,
             )
         )
-        return _log(subject, action, resource, traces, decision)
-    return _log(subject, action, resource, traces, allow)
+        return _log(
+            subject, action, resource, traces, decision, env=env, policy_set=policy_set
+        )
+    return _log(
+        subject, action, resource, traces, allow, env=env, policy_set=policy_set
+    )
 
 
 rfi_abac_deny_total: dict[str, int] = {}
@@ -609,7 +661,7 @@ def check_access(
 ) -> Decision:
     log = evaluate(subject, action, resource, env=env, ctx=ctx, policy_set=policy_set)
     if audit is not None:
-        audit.extend(log.traces)
+        audit.extend(log.steps)
     return log.decision
 
 
@@ -626,11 +678,11 @@ def require_access(
     """Fail closed. First deny wins. No implicit allow from a missing role."""
     log = evaluate(subject, action, resource, env=env, ctx=ctx, policy_set=policy_set)
     if audit is not None:
-        audit.extend(log.traces)
+        audit.extend(log.steps)
     if not log.decision.allowed:
         _count_deny(log.decision.policy)
         record_audit(log)
-        raise AccessDenied(decision=log.decision, trace=log.traces)
+        raise AccessDenied(decision=log.decision, trace=log.steps)
     _count_allow(action)
     if action in {Action.SUBMIT_RFI, Action.SET_PRIORITY}:
         record_audit(log)

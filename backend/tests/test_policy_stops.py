@@ -13,8 +13,10 @@ from abac import (
     Effect,
     Env,
     ENV_FIELD_ORDER,
+    EvaluationLog,
     EvaluationTrace,
     FIELD_POLICY_SET,
+    LOG_FIELD_ORDER,
     Resource,
     Role,
     Subject,
@@ -23,6 +25,7 @@ from abac import (
     evaluate,
     raise_http,
     reject_env_field_order,
+    reject_evaluation_log_shape,
     reject_evaluation_trace_shape,
     reject_frozen_env_now,
     reject_subject_actor_type,
@@ -230,6 +233,34 @@ def test_evaluation_trace_shape_is_law():
     assert step.stopped is True
 
 
+def test_evaluation_log_is_server_audit_envelope():
+    from dataclasses import MISSING, fields
+    from datetime import datetime, timezone
+
+    stamped = next(item for item in fields(EvaluationLog) if item.name == "evaluated_at")
+    assert stamped.default is MISSING
+    assert stamped.default_factory is MISSING
+    assert tuple(item.name for item in fields(EvaluationLog)) == LOG_FIELD_ORDER
+    reject_evaluation_log_shape(EvaluationLog)
+    now = datetime(2026, 8, 20, 17, 0, tzinfo=timezone.utc)
+    log = evaluate(
+        subject(project_id=JOB),
+        Action.SUBMIT_RFI,
+        resource(project_id=OTHER_JOB),
+        env=Env(now=now),
+    )
+    assert log.evaluated_at is now
+    assert log.combining == "deny_overrides"
+    assert log.subject_id == USER
+    assert log.actor_type == "human"
+    assert log.role == "journeyman"
+    assert log.action == "submit_rfi"
+    assert log.resource_type == "rfi"
+    assert log.resource_project_id == OTHER_JOB
+    assert log.resource_id is None
+    assert log.steps[0].policy == "same_project"
+
+
 def test_wrong_job_stops_at_same_project(cov: PolicyCoverage):
     log = cov.record(evaluate(
         subject(project_id=JOB),
@@ -263,7 +294,7 @@ def test_apprentice_submit_stops_at_role(cov: PolicyCoverage):
 def test_journeyman_draft_allow_walks_full_set(cov: PolicyCoverage):
     log = cov.record(evaluate(subject(role=Role.JOURNEYMAN), Action.CREATE_RFI_DRAFT, resource()))
     assert names(log) == list(EXPECTED_ORDER)
-    assert [step.applicable for step in log.traces] == [
+    assert [step.applicable for step in log.steps] == [
         False,
         False,
         False,
@@ -275,14 +306,14 @@ def test_journeyman_draft_allow_walks_full_set(cov: PolicyCoverage):
         False,
         False,
     ]
-    assert log.traces[-1].policy == "default_deny"
-    assert log.traces[-1].applicable is False
-    allows = [step for step in log.traces if step.effect == "allow"]
-    assert [step.seq for step in log.traces] == list(range(1, 11))
-    assert [step.order for step in log.traces] == [10, 20, 30, 40, 50, 60, 70, 80, 90, 99]
-    assert log.traces[-1].effect is None
-    assert log.traces[-1].reason is None
-    assert log.traces[-1].stopped is False
+    assert log.steps[-1].policy == "default_deny"
+    assert log.steps[-1].applicable is False
+    allows = [step for step in log.steps if step.effect == "allow"]
+    assert [step.seq for step in log.steps] == list(range(1, 11))
+    assert [step.order for step in log.steps] == [10, 20, 30, 40, 50, 60, 70, 80, 90, 99]
+    assert log.steps[-1].effect is None
+    assert log.steps[-1].reason is None
+    assert log.steps[-1].stopped is False
     assert len(allows) == 1
     assert allows[0].policy == "role_allows"
     assert log.decision.allowed is True
@@ -297,14 +328,14 @@ def test_area_foreman_other_area_stops_after_role(cov: PolicyCoverage):
     ))
     assert names(log) == list(EXPECTED_ORDER[:5])
     assert first_stop(log).policy == "area_scope"
-    assert log.traces[3].policy == "role_allows"
-    assert log.traces[3].effect == "allow"
+    assert log.steps[3].policy == "role_allows"
+    assert log.steps[3].effect == "allow"
 
 
 def test_gf_skips_area_and_still_walks(cov: PolicyCoverage):
     log = cov.record(evaluate(subject(role=Role.GENERAL_FOREMAN, area_id=None), Action.SUBMIT_RFI, resource()))
     assert names(log) == list(EXPECTED_ORDER)
-    area = next(step for step in log.traces if step.policy == "area_scope")
+    area = next(step for step in log.steps if step.policy == "area_scope")
     assert area.applicable is False
     assert log.decision.allowed is True
 
@@ -340,7 +371,7 @@ def test_work_stopped_demote_without_flag(cov: PolicyCoverage):
     ))
     assert names(log) == list(EXPECTED_ORDER[:9])
     assert first_stop(log).policy == "work_stop_writer"
-    assert log.traces[-1].effect == "deny"
+    assert log.steps[-1].effect == "deny"
     assert log.decision.policy == "work_stop_writer"
     assert "default_deny" not in names(log)
 
@@ -415,9 +446,9 @@ def test_journeyman_create_other_area_later_deny_wins(cov: PolicyCoverage):
     assert names(log) == list(EXPECTED_ORDER[:5])
     assert first_stop(log).policy == "area_scope"
     assert "assigned_only" not in names(log)
-    assert log.traces[3].policy == "role_allows"
-    assert log.traces[3].effect == "allow"
-    assert log.traces[3].reason == "journeyman may create_rfi_draft"
+    assert log.steps[3].policy == "role_allows"
+    assert log.steps[3].effect == "allow"
+    assert log.steps[3].reason == "journeyman may create_rfi_draft"
     assert first_stop(log).reason == "outside your area"
 
 
@@ -430,9 +461,9 @@ def test_apprentice_handle_unassigned_stops_at_assigned_only(cov: PolicyCoverage
     assert names(log) == list(EXPECTED_ORDER[:6])
     assert first_stop(log).policy == "assigned_only"
     assert first_stop(log).reason == "not your ticket"
-    assert log.traces[3].policy == "role_allows"
-    assert log.traces[3].effect == "allow"
-    assert log.traces[3].reason == "apprentice may handle_material"
+    assert log.steps[3].policy == "role_allows"
+    assert log.steps[3].effect == "allow"
+    assert log.steps[3].reason == "apprentice may handle_material"
 
 
 def test_apprentice_handle_other_ticket_stops_at_assigned_only(cov: PolicyCoverage):
@@ -478,7 +509,7 @@ def test_apprentice_handle_own_ticket_allows(cov: PolicyCoverage):
         resource(type="ticket", assigned_to_id=USER),
     ))
     assert names(log) == list(EXPECTED_ORDER)
-    assigned = next(step for step in log.traces if step.policy == "assigned_only")
+    assigned = next(step for step in log.steps if step.policy == "assigned_only")
     assert assigned.applicable is False
     assert assigned.effect is None
     assert assigned.reason is None
