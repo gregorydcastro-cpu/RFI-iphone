@@ -27,6 +27,17 @@ def main() -> int:
         facts["rfi"].id in facts["carry"],
         facts["leftover_draft"].id in facts["search_open_ids"],
         facts["rfi"].id in facts["search_open_ids"],
+        facts["grok_enter"] == "grokbot_lane",
+        facts["grok_close"] == "grokbot_lane",
+        facts["work_stopped_after_enter"] is True,
+        facts["close_while_stopped"] is not None,
+        facts["mo_status"] == "draft",
+        facts["mo_asked"] == facts["rev_a"].id,
+        facts["mo_current"] == facts["rev_b"].id,
+        facts["closed_status"] == "closed",
+        facts["due_unchanged"] is True,
+        facts["number_unchanged"] is True,
+        facts["leftover_still_draft"] is True,
     )
     print("journeyman drafted on pin A-3 status=draft number=None")
     print(f"grokbot submit blocked policy={facts['grokbot_policy']}")
@@ -39,6 +50,10 @@ def main() -> int:
     print(
         f"compare carried {facts['carried_pins']} pin; "
         f"leftover drafts stay on rev 27; pin_carried x2 is no-op"
+    )
+    print(
+        f"impact_review: grok MO draft {facts['mo_status']}; "
+        f"AF cleared stop and closed; leftover still draft"
     )
     if not all(checks):
         raise SystemExit("demo path failed")

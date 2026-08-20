@@ -42,6 +42,11 @@ def test_demo_path() -> None:
     assert facts["leftover_still_on_old"] is True
     assert facts["carried_has_both_revs"] is True
     assert facts["leftover_draft"].id in facts["search_open_ids"]
+    assert facts["grok_enter"] == "grokbot_lane"
+    assert facts["grok_close"] == "grokbot_lane"
+    assert facts["mo_status"] == "draft"
+    assert facts["closed_status"] == "closed"
+    assert facts["leftover_still_draft"] is True
 
 
 def test_grokbot_can_only_draft() -> None:
@@ -112,7 +117,7 @@ def test_age_rfis_once_per_due_and_work_stopped_queue() -> None:
     facts = run_demo()
     store = facts["store"]
     rfi = facts["rfi"]
-    assert rfi.work_stopped is True
+    assert facts["work_stopped"] is True
     later = rfi.due_at + timedelta(hours=1)
     assert age_rfis(store, now=later) == []
     cycles = [e for e in store.events if e.event_type == "cycle"]

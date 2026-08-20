@@ -1,4 +1,4 @@
-"""Runnable in-memory RFI package. Grokbot can still only draft."""
+"""Runnable in-memory RFI package. Grokbot drafts RFIs and CO/MO. Cannot close."""
 
 from rfi.access import (
     AccessDenied,
@@ -16,6 +16,14 @@ from rfi.compare import (
     apply_carry_forward,
     compare_revisions,
     search_open_on_sheet,
+)
+from rfi.impact import (
+    close_rfi,
+    draft_change_order,
+    draft_material_order,
+    enter_impact_review,
+    record_answer,
+    suggest_impact_none,
 )
 from rfi.core import (
     RFI,
@@ -47,8 +55,14 @@ __all__ = (
     "WriteError",
     "age_rfis",
     "apply_carry_forward",
+    "close_rfi",
     "compare_revisions",
     "create_rfi_draft",
+    "draft_change_order",
+    "draft_material_order",
+    "enter_impact_review",
+    "record_answer",
+    "suggest_impact_none",
     "evaluate",
     "pair_holds",
     "require_access",

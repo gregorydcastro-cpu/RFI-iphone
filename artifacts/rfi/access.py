@@ -35,6 +35,10 @@ class Action(str, Enum):
     VOID_RFI = "void_rfi"
     ALLOW_DEMOTE = "allow_demote"
     DRAFT_MATERIAL = "draft_material"
+    DRAFT_CHANGE_ORDER = "draft_change_order"
+    DRAFT_MATERIAL_ORDER = "draft_material_order"
+    ENTER_IMPACT_REVIEW = "enter_impact_review"
+    CLOSE_RFI = "close_rfi"
     APPROVE_MATERIAL = "approve_material"
     ASSIGN_MATERIAL = "assign_material"
     HANDLE_MATERIAL = "handle_material"
@@ -59,10 +63,21 @@ _JOURNEYMAN_ACTIONS = frozenset(
     }
 )
 _FOREMAN_ACTIONS = _JOURNEYMAN_ACTIONS | frozenset(
-    {Action.SUBMIT_RFI, Action.ASSIGN_MATERIAL}
+    {
+        Action.SUBMIT_RFI,
+        Action.ASSIGN_MATERIAL,
+        Action.ENTER_IMPACT_REVIEW,
+        Action.DRAFT_CHANGE_ORDER,
+        Action.DRAFT_MATERIAL_ORDER,
+    }
 )
 _AREA_FOREMAN_ACTIONS = _FOREMAN_ACTIONS | frozenset(
-    {Action.SET_PRIORITY, Action.WORK_STOP, Action.APPROVE_MATERIAL}
+    {
+        Action.SET_PRIORITY,
+        Action.WORK_STOP,
+        Action.APPROVE_MATERIAL,
+        Action.CLOSE_RFI,
+    }
 )
 
 ROLE_ACTIONS: dict[Role, frozenset[Action]] = {
@@ -180,8 +195,17 @@ def same_project(s: Subject, r: Resource) -> Decision | None:
     return None
 
 
+GROK_TOOLS = frozenset(
+    {
+        Action.CREATE_RFI_DRAFT,
+        Action.DRAFT_CHANGE_ORDER,
+        Action.DRAFT_MATERIAL_ORDER,
+    }
+)
+
+
 def grokbot_lane(s: Subject, action: Action) -> Decision | None:
-    if s.actor_type is ActorType.GROKBOT and action is not Action.CREATE_RFI_DRAFT:
+    if s.actor_type is ActorType.GROKBOT and action not in GROK_TOOLS:
         return _deny("grokbot_lane", "Grokbot may only create_rfi_draft")
     return None
 
@@ -237,7 +261,13 @@ def chain_owns(
 ) -> Decision | None:
     if s.role is not Role.FOREMAN:
         return None
-    if action not in {Action.SUBMIT_RFI, Action.ASSIGN_MATERIAL}:
+    if action not in {
+        Action.SUBMIT_RFI,
+        Action.ASSIGN_MATERIAL,
+        Action.ENTER_IMPACT_REVIEW,
+        Action.DRAFT_CHANGE_ORDER,
+        Action.DRAFT_MATERIAL_ORDER,
+    }:
         return None
     if r.created_by_id is None and r.crew_foreman_id is None:
         return None
@@ -257,6 +287,18 @@ def status_guard(
         return _deny("status_guard", "submit_rfi is for draftish RFIs only")
     if action is Action.VOID_RFI and r.status in {"void", "closed"}:
         return _deny("status_guard", "already closed or void")
+    if action is Action.ENTER_IMPACT_REVIEW and r.status != "answered":
+        return _deny("status_guard", "enter_impact_review is for answered RFIs only")
+    if action in {Action.DRAFT_CHANGE_ORDER, Action.DRAFT_MATERIAL_ORDER} and r.status not in {
+        "answered",
+        "impact_review",
+    }:
+        return _deny(
+            "status_guard",
+            "draft_change_order / draft_material_order only while impact_review",
+        )
+    if action is Action.CLOSE_RFI and r.status != "impact_review":
+        return _deny("status_guard", "close_rfi is for impact_review only")
     return None
 
 

@@ -28,6 +28,7 @@ SLA = {
 }
 SUBMITTABLE = frozenset({"draft", "internal_review", "needs_clarification"})
 WAITING_ON_DESIGN = frozenset({"submitted", "ball_in_court"})
+GC_HOLDING = frozenset({"answered", "impact_review", "needs_clarification"})
 ESCALATE_AFTER_HOURS = {"standard": 48, "urgent": 12, WORK_STOPPED: 0}
 
 
@@ -81,6 +82,31 @@ class SheetRevision:
 
 
 @dataclass
+class ChangeOrder:
+    id: str
+    rfi_id: str
+    description: str
+    qty: float | None = None
+    status: str = "draft"
+    sheet_revision_id: UUID | None = None
+    current_revision_id: UUID | None = None
+    pin_id: str | None = None
+
+
+@dataclass
+class MaterialOrder:
+    id: str
+    rfi_id: str
+    sku: str
+    qty: float
+    status: str = "draft"
+    area_id: UUID | None = None
+    sheet_revision_id: UUID | None = None
+    current_revision_id: UUID | None = None
+    pin_id: str | None = None
+
+
+@dataclass
 class Pin:
     sheet_revision_id: UUID
     x: float
@@ -109,6 +135,9 @@ class RFI:
     submitted_at: datetime | None = None
     first_submitted_at: datetime | None = None
     cycle_due_at: datetime | None = None
+    official_response: str | None = None
+    impact: str | None = None
+    impact_none_suggested: bool = False
 
 
 def as_uuid(value: UUID | str) -> UUID:
@@ -124,6 +153,8 @@ class Store:
         self.sheets: dict[UUID, Sheet] = {}
         self.revisions: dict[UUID, SheetRevision] = {}
         self.rfis: dict[str, RFI] = {}
+        self.change_orders: dict[str, ChangeOrder] = {}
+        self.material_orders: dict[str, MaterialOrder] = {}
         self.events: list[Event] = []
 
     def add_job(self, job: Job) -> Job:
@@ -424,12 +455,16 @@ def _cycled_for_due(store: Store, rfi: RFI) -> bool:
 
 
 def age_rfis(store: Store, *, now: datetime | None = None) -> list[Event]:
-    """Work-stopped is its own queue. One reminder/escalated per due_at. Silent on replay."""
+    """Work-stopped is its own queue. impact_review is gc_holding, not design-overdue."""
     moment = now or store.now
     written: list[Event] = []
     rows = list(store.rfis.values())
-    stopped = [row for row in rows if row.work_stopped]
-    rest = [row for row in rows if not row.work_stopped]
+    holding = [row for row in rows if row.status in GC_HOLDING]
+    design = [row for row in rows if row.status in WAITING_ON_DESIGN]
+    if any(row.status in WAITING_ON_DESIGN for row in holding):
+        raise WriteError("gc_holding is not the design queue")
+    stopped = [row for row in design if row.work_stopped]
+    rest = [row for row in design if not row.work_stopped]
     for row in stopped + rest:
         if _cycled_for_due(store, row):
             continue
@@ -527,30 +562,28 @@ def run_demo() -> dict:
     except AccessDenied as exc:
         grok_policy = exc.decision.policy
 
-    submitted = submit_rfi(
-        store,
-        Subject(
-            user_id=foreman,
-            company_id=company,
-            project_id=job_id,
-            role=Role.FOREMAN,
-            actor_type=ActorType.HUMAN,
-            area_id=area,
-            crew_ids=frozenset({jman}),
-        ),
-        draft.id,
+    fm = Subject(
+        user_id=foreman,
+        company_id=company,
+        project_id=job_id,
+        role=Role.FOREMAN,
+        actor_type=ActorType.HUMAN,
+        area_id=area,
+        crew_ids=frozenset({jman}),
     )
+    submitted = submit_rfi(store, fm, draft.id)
 
+    af = Subject(
+        user_id=area_fm,
+        company_id=company,
+        project_id=job_id,
+        role=Role.AREA_FOREMAN,
+        actor_type=ActorType.HUMAN,
+        area_id=area,
+    )
     stopped = set_priority(
         store,
-        Subject(
-            user_id=area_fm,
-            company_id=company,
-            project_id=job_id,
-            role=Role.AREA_FOREMAN,
-            actor_type=ActorType.HUMAN,
-            area_id=area,
-        ),
+        af,
         submitted.id,
         WORK_STOPPED,
         work_stopped=True,
@@ -570,6 +603,43 @@ def run_demo() -> dict:
     carried = apply_carry_forward(store, diff, actor_id=foreman)
     apply_carry_forward(store, diff, actor_id=foreman)
     open_on_sheet = search_open_on_sheet(store, sheet.id)
+    ball_status = stopped.status
+    stopped_flag = stopped.work_stopped
+    due_at = stopped.due_at
+    number = stopped.rfi_number
+
+    from rfi.impact import (
+        close_rfi,
+        draft_material_order,
+        enter_impact_review,
+        record_answer,
+    )
+
+    record_answer(store, stopped.id, "Same panel, use 225A.")
+    grok_enter = None
+    try:
+        enter_impact_review(store, grok, stopped.id)
+    except AccessDenied as exc:
+        grok_enter = exc.decision.policy
+    enter_impact_review(store, fm, stopped.id)
+    work_stopped_after_enter = stopped.work_stopped
+    mo = draft_material_order(
+        store, grok, stopped.id, sku="225A", qty=1, area_id=area
+    )
+    grok_close = None
+    try:
+        close_rfi(store, grok, stopped.id)
+    except AccessDenied as exc:
+        grok_close = exc.decision.policy
+    close_while_stopped = None
+    try:
+        close_rfi(store, af, stopped.id)
+    except WriteError as exc:
+        close_while_stopped = str(exc)
+    set_priority(
+        store, af, stopped.id, "standard", work_stopped=False, allow_demote=True
+    )
+    closed = close_rfi(store, af, stopped.id)
     return {
         "draft_status": created_status,
         "draft_number": created_number,
@@ -577,12 +647,12 @@ def run_demo() -> dict:
         "pin": created_pin,
         "grokbot_policy": grok_policy,
         "display": submitted.rfi_display,
-        "status": submitted.status,
+        "status": ball_status,
         "internal_review": any(
             e.to_status == "internal_review" for e in store.events
         ),
-        "priority": stopped.priority,
-        "work_stopped": stopped.work_stopped,
+        "priority": "work_stopped",
+        "work_stopped": stopped_flag,
         "pair_holds": pair_holds(stopped.priority, stopped.work_stopped),
         "cycle_kind": first[0].kind if first else None,
         "cycle_events": len(first),
@@ -605,4 +675,16 @@ def run_demo() -> dict:
         "rev_b": rev28,
         "leftover_draft": leftover_draft,
         "foreman_id": foreman,
+        "grok_enter": grok_enter,
+        "grok_close": grok_close,
+        "work_stopped_after_enter": work_stopped_after_enter,
+        "close_while_stopped": close_while_stopped,
+        "mo_status": mo.status,
+        "mo_asked": mo.sheet_revision_id,
+        "mo_current": mo.current_revision_id,
+        "closed_status": closed.status,
+        "closed_number": closed.rfi_number,
+        "due_unchanged": closed.due_at == due_at,
+        "number_unchanged": closed.rfi_number == number,
+        "leftover_still_draft": leftover_draft.status == "draft",
     }
