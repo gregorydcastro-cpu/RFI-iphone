@@ -309,12 +309,16 @@ def pytest_runtest_makereport(item, call):
     setattr(item, f"rep_{report.when}", report)
 
 
-def _module_had_skips(request: pytest.FixtureRequest) -> bool:
-    """Skipped outcomes on this module’s items only. Not the whole session."""
+def _module_items(request: pytest.FixtureRequest):
     module = request.module
     for item in getattr(request.session, "items", ()):
-        if getattr(item, "module", None) is not module:
-            continue
+        if getattr(item, "module", None) is module:
+            yield item
+
+
+def _module_had_skips(request: pytest.FixtureRequest) -> bool:
+    """Skipped outcomes on this module’s items only. Not the whole session."""
+    for item in _module_items(request):
         for when in ("setup", "call", "teardown"):
             report = getattr(item, f"rep_{when}", None)
             if report is not None and report.skipped:
@@ -322,16 +326,33 @@ def _module_had_skips(request: pytest.FixtureRequest) -> bool:
     return False
 
 
+def _module_was_subset(request: pytest.FixtureRequest) -> bool:
+    """-k / nodeid collected fewer tests than this module defines."""
+    defined = [
+        name
+        for name, obj in vars(request.module).items()
+        if name.startswith("test_") and callable(obj)
+    ]
+    collected = list(_module_items(request))
+    return len(collected) < len(defined)
+
+
 @pytest.fixture(scope="module")
 def cov(request: pytest.FixtureRequest) -> PolicyCoverage:
-    """One bag per test module. Teardown fails if a rule never applied."""
+    """Completeness bag. Teardown must not hide a failed stop or a -k subset."""
     coverage = PolicyCoverage()
     failed_before = request.session.testsfailed
     yield coverage
+    coverage.seal()
     failed_here = request.session.testsfailed - failed_before
     if failed_here:
         return
-    if coverage.report().never_applicable() and _module_had_skips(request):
+    incomplete = coverage.report().never_applicable()
+    if incomplete and (
+        _module_had_skips(request)
+        or _module_was_subset(request)
+        or _is_subset_run(request.config)
+    ):
         pytest.skip("coverage incomplete because tests were skipped")
     bags = getattr(request.config, "_rfi_cov_bags", None)
     if bags is None:

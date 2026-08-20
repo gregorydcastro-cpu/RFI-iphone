@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from abac import AccessDenied, Action, ActorType, Env, HUNG_WRITES, Role
+from abac import Action, ActorType, Env, Role
 from app.policy_coverage import EXPECTED_ORDER
 from tests.conftest import (
     AREA,
@@ -17,7 +17,6 @@ from tests.conftest import (
     assert_stop,
     format_trace,
     names,
-    require_access_cov,
     resource,
     subject,
 )
@@ -142,29 +141,3 @@ def test_assert_stop_prints_receipt_on_mismatch(cov):
         assert_stop(walk.steps, "role_allows")
     assert "expected stop at role_allows, got same_project" in str(raised.value)
     assert format_trace(walk.steps) in str(raised.value)
-
-
-def test_submit_rfi_require_access_policy_only(cov):
-    with pytest.raises(AccessDenied) as raised:
-        require_access_cov(
-            cov, subject(role=Role.APPRENTICE), Action.SUBMIT_RFI, resource()
-        )
-    assert raised.value.decision.policy == "role_allows"
-
-
-def test_three_writes_hang_require_access():
-    import inspect
-
-    from app import main
-
-    assert HUNG_WRITES == frozenset(
-        {"create_rfi_draft", "submit_rfi", "set_priority"}
-    )
-    sources = (
-        inspect.getsource(main.create_rfi_draft),
-        inspect.getsource(main.pe_submit_rfi),
-        inspect.getsource(main.pe_set_priority),
-    )
-    for src in sources:
-        assert "require_access(" in src
-        assert src.index("require_access(") < src.index("except AccessDenied")

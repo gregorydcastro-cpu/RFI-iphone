@@ -141,8 +141,15 @@ class PolicyCoverage:
         self.hit_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
         self.stop_counts: dict[str, int] = defaultdict(int)
         self.decision_counts: dict[str, int] = defaultdict(int)
+        self._sealed = False
+
+    def seal(self) -> None:
+        """Teardown may format/assert. It must not record or evaluate."""
+        self._sealed = True
 
     def record(self, walk):
+        if self._sealed:
+            raise RuntimeError("do not record after yield")
         stopped_at: str | None = None
         for step in _traces(walk):
             if step.policy == "default_deny":
@@ -180,12 +187,26 @@ class PolicyCoverage:
 
     def evaluate(self, *args, **kwargs):
         """Drop-in for evaluate(); same return, recorded for coverage."""
+        if self._sealed:
+            raise RuntimeError("do not evaluate after yield")
         from tests.conftest import evaluate as walk_evaluate
 
         return self.record(walk_evaluate(*args, **kwargs))
 
     def report(self) -> "PolicyCoverageReport":
         return PolicyCoverageReport(self)
+
+    def format(self) -> str:
+        lines = ["combining=deny_overrides"]
+        width = max((len(name) for name in FIELD_LANES), default=20)
+        for name in FIELD_LANES:
+            counts = self.hit_counts[name]
+            lines.append(
+                f"{name:<{width}}  allow={counts.get('allow', 0)}  "
+                f"deny={counts.get('deny', 0)}  n/a={counts.get('n/a', 0)}  "
+                f"skipped_after_stop={counts.get('skipped_after_stop', 0)}"
+            )
+        return "\n".join(lines)
 
 
 class PolicyCoverageReport:
@@ -240,13 +261,16 @@ def _merge_hits(bags: list[dict[str, Any]]) -> PolicyCoverage:
 
 
 def assert_policy_coverage(coverage: PolicyCoverage) -> None:
+    receipt = coverage.format()
     leaked = [
         name for name in DENY_ONLY if coverage.hit_counts[name].get("allow", 0) > 0
     ]
-    assert leaked == [], f"DENY_ONLY leaked allow: {leaked}"
+    assert leaked == [], f"DENY_ONLY leaked allow: {leaked}\n{receipt}"
     assert "default_deny" not in REQUIRED_STOPS
     assert "default_deny" not in FIELD_LANES
     assert "default_deny" not in coverage.allows
+    if not coverage.seen:
+        raise AssertionError(f"never_applicable: {list(FIELD_LANES)}\n{receipt}")
     if not set(FIELD_LANES) <= coverage.seen:
         return
     never_applied = [
@@ -257,9 +281,9 @@ def assert_policy_coverage(coverage: PolicyCoverage) -> None:
         + coverage.hit_counts[name].get("deny", 0)
         == 0
     ]
-    assert never_applied == [], f"never applied: {never_applied}"
+    assert never_applied == [], f"never applied: {never_applied}\n{receipt}"
     missing_stops = sorted(REQUIRED_STOPS - coverage.stops)
-    assert missing_stops == [], f"policies never stopped: {missing_stops}"
+    assert missing_stops == [], f"policies never stopped: {missing_stops}\n{receipt}"
     never_app = [
         name
         for name in FIELD_LANES
@@ -267,13 +291,13 @@ def assert_policy_coverage(coverage: PolicyCoverage) -> None:
         + coverage.hit_counts[name].get("deny", 0)
         == 0
     ]
-    assert never_app == [], f"never_applicable: {never_app}"
+    assert never_app == [], f"never_applicable: {never_app}\n{receipt}"
     deny_zero = [
         name for name in DENY_ONLY if coverage.hit_counts[name].get("deny", 0) == 0
     ]
-    assert deny_zero == [], f"DENY_ONLY deny==0: {deny_zero}"
+    assert deny_zero == [], f"DENY_ONLY deny==0: {deny_zero}\n{receipt}"
     if coverage.hit_counts["role_allows"].get("allow", 0) == 0:
-        raise AssertionError("role_allows allow==0")
+        raise AssertionError(f"role_allows allow==0\n{receipt}")
     if coverage.hit_counts["role_allows"].get("deny", 0) == 0:
-        raise AssertionError("role_allows deny==0")
+        raise AssertionError(f"role_allows deny==0\n{receipt}")
     # skipped_after_stop is expected. Do not require a default_deny hit.

@@ -147,6 +147,60 @@ def test_module_had_skips_looks_at_this_module_only():
     assert _module_had_skips(request) is True
 
 
+def test_module_was_subset_compares_collected_to_defined():
+    from types import SimpleNamespace
+
+    from tests.conftest import _module_was_subset
+
+    def test_same_project():
+        return None
+
+    def test_assigned_only():
+        return None
+
+    module = SimpleNamespace(
+        test_same_project=test_same_project,
+        test_assigned_only=test_assigned_only,
+    )
+    request = SimpleNamespace(
+        module=module,
+        session=SimpleNamespace(
+            items=[SimpleNamespace(module=module, name="test_same_project")]
+        ),
+    )
+    assert _module_was_subset(request) is True
+    request.session.items.append(
+        SimpleNamespace(module=module, name="test_assigned_only")
+    )
+    assert _module_was_subset(request) is False
+
+
+def test_empty_bag_fails_completeness_and_includes_format():
+    coverage = PolicyCoverage()
+    with pytest.raises(AssertionError, match="never_applicable") as raised:
+        assert_policy_coverage(coverage)
+    assert coverage.format() in str(raised.value)
+    assert "assigned_only" in str(raised.value)
+
+
+def test_deleted_assigned_only_stop_fails_completeness_with_format():
+    coverage = _green_bag()
+    coverage.stops.discard("assigned_only")
+    coverage.hit_counts["assigned_only"]["deny"] = 0
+    with pytest.raises(AssertionError, match="assigned_only") as raised:
+        assert_policy_coverage(coverage)
+    assert coverage.format() in str(raised.value)
+
+
+def test_seal_blocks_record_and_evaluate():
+    coverage = PolicyCoverage()
+    coverage.seal()
+    with pytest.raises(RuntimeError, match="do not record after yield"):
+        coverage.record([])
+    with pytest.raises(RuntimeError, match="do not evaluate after yield"):
+        coverage.evaluate()
+
+
 def test_line_coverage_is_not_assigned_only_denied():
     coverage = _green_bag()
     coverage.stops.discard("assigned_only")
