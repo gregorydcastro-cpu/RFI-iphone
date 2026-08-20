@@ -4,7 +4,7 @@ import os
 from collections.abc import Generator
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.models import Base
@@ -38,11 +38,57 @@ def configure(url: str) -> None:
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
 
+def apply_rfis_work_stopped_law(bind=None) -> None:
+    """Add work_stopped + index. CHECK is NOT VALID — do not VALIDATE here."""
+    bind = bind or engine
+    insp = inspect(bind)
+    if "rfis" not in insp.get_table_names():
+        return
+    columns = {col["name"] for col in insp.get_columns("rfis")}
+    indexes = {idx["name"] for idx in insp.get_indexes("rfis")}
+    with bind.begin() as conn:
+        if "work_stopped" not in columns:
+            conn.execute(
+                text(
+                    "ALTER TABLE rfis ADD COLUMN work_stopped "
+                    "BOOLEAN NOT NULL DEFAULT false"
+                )
+            )
+        if "rfis_project_status_idx" not in indexes:
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS rfis_project_status_idx "
+                    "ON rfis (project_id, status)"
+                )
+            )
+        if bind.dialect.name == "postgresql":
+            already = conn.execute(
+                text(
+                    "SELECT 1 FROM pg_constraint "
+                    "WHERE conname = 'rfis_work_stopped_priority_chk'"
+                )
+            ).scalar()
+            if not already:
+                conn.execute(
+                    text(
+                        """
+                        ALTER TABLE rfis
+                          ADD CONSTRAINT rfis_work_stopped_priority_chk
+                          CHECK (
+                            (work_stopped AND priority = 'work_stopped')
+                            OR (NOT work_stopped AND priority IS DISTINCT FROM 'work_stopped')
+                          ) NOT VALID
+                        """
+                    )
+                )
+
+
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     ATTACHMENTS_DIR.mkdir(parents=True, exist_ok=True)
     ASSETS_DIR.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
+    apply_rfis_work_stopped_law(engine)
 
 
 def get_db() -> Generator[Session, None, None]:

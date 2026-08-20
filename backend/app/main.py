@@ -846,6 +846,7 @@ def create_rfi_draft(
         subject=drafted.subject,
         question=drafted.question,
         priority=drafted.priority,
+        work_stopped=False,
         cost_impact=drafted.cost_impact,
         schedule_impact=drafted.schedule_impact,
         proposed_solution=drafted.proposed_solution,

@@ -292,6 +292,7 @@ def ingest_ilsb_draft(db: Session) -> RFI | None:
         subject=ILSB_SUBJECT,
         question=ILSB_QUESTION,
         priority="standard",
+        work_stopped=False,
         cost_impact="possible",
         schedule_impact="possible",
         proposed_solution=ILSB_PROPOSED,

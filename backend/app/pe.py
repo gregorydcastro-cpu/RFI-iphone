@@ -156,6 +156,12 @@ def normalize_priority(
     return value
 
 
+def write_priority_pair(rfi: RFI, priority: str) -> None:
+    """Persist work_stopped iff priority is work_stopped. Public writer is set_priority."""
+    rfi.priority = priority
+    rfi.work_stopped = priority == "work_stopped"
+
+
 def _settings(db: Session, project_id: str) -> ProjectRFISettings | None:
     return db.scalar(
         select(ProjectRFISettings).where(ProjectRFISettings.project_id == project_id)
@@ -316,7 +322,7 @@ def set_priority(
     new_rank = PRIORITY_RANK.get(new, 0)
     if new_rank < old_rank and not allow_demote:
         raise PEError("Lowering priority requires allow_demote.")
-    rfi.priority = new
+    write_priority_pair(rfi, new)
     reminted = False
     if new_rank > old_rank and rfi.status in {"submitted", "ball_in_court"}:
         rfi.due_at = compute_due_at(
@@ -411,8 +417,9 @@ def submit_for_design(
         if work_stopped_flag is not None
         else work_stopped(chosen_priority)
     )
-    rfi.priority = normalize_priority(
-        chosen_priority, chosen_stopped, allow_demote=True
+    write_priority_pair(
+        rfi,
+        normalize_priority(chosen_priority, chosen_stopped, allow_demote=True),
     )
     assigned_name, user_id, company_id = resolve_assignment(
         db,
@@ -740,7 +747,7 @@ def close_rfi(
     if ANSWER_DISCLAIMER.lower() not in text_body.lower():
         text_body = f"{text_body} {ANSWER_DISCLAIMER}"
     rfi.official_response = text_body
-    rfi.priority = "standard"
+    write_priority_pair(rfi, "standard")
     rfi.closed_at = utc_now()
     _event(db, rfi, "closed", actor=actor, source=source, action="close")
     db.commit()
@@ -766,7 +773,7 @@ def void_rfi(
     rfi = _rfi(db, rfi_id)
     if rfi.status in {"void", "closed"}:
         raise PEError(f"Cannot void from status {rfi.status}.")
-    rfi.priority = "standard"
+    write_priority_pair(rfi, "standard")
     _event(db, rfi, "void", actor=actor, source=source, action="void")
     db.commit()
     return PEResult(

@@ -5,6 +5,8 @@ from datetime import date, datetime
 from typing import Optional
 
 from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     Float,
@@ -14,6 +16,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     func,
 )
 from sqlalchemy.dialects.sqlite import JSON
@@ -316,7 +319,12 @@ class RFI(Base):
     __tablename__ = "rfis"
     __table_args__ = (
         UniqueConstraint("project_id", "rfi_display", name="uq_project_rfi_display"),
-        Index("ix_rfis_project_status", "project_id", "status"),
+        Index("rfis_project_status_idx", "project_id", "status"),
+        CheckConstraint(
+            "(work_stopped AND priority = 'work_stopped') "
+            "OR (NOT work_stopped AND priority IS DISTINCT FROM 'work_stopped')",
+            name="rfis_work_stopped_priority_chk",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
@@ -329,6 +337,9 @@ class RFI(Base):
     subject: Mapped[str] = mapped_column(String(240), nullable=False)
     question: Mapped[str] = mapped_column(Text, nullable=False)
     priority: Mapped[str] = mapped_column(String(32), nullable=False)
+    work_stopped: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
     cost_impact: Mapped[str] = mapped_column(String(32), nullable=False)
     schedule_impact: Mapped[str] = mapped_column(String(32), nullable=False)
     proposed_solution: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

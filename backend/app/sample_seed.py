@@ -91,6 +91,7 @@ def _rfi(
         subject=f"[SAMPLE] {subject}",
         question=question,
         priority=priority,
+        work_stopped=priority == "work_stopped",
         cost_impact="possible",
         schedule_impact="possible",
         proposed_solution="SAMPLE PE row for the weekly graph. Not a live field RFI.",
