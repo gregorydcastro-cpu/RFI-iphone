@@ -754,3 +754,28 @@ def close_rfi(
         priority=rfi.priority,
         work_stopped=False,
     )
+
+
+def void_rfi(
+    db: Session,
+    rfi_id: str,
+    *,
+    source: str = "pe_helper",
+    actor: str = "pe",
+) -> PEResult:
+    rfi = _rfi(db, rfi_id)
+    if rfi.status in {"void", "closed"}:
+        raise PEError(f"Cannot void from status {rfi.status}.")
+    rfi.priority = "standard"
+    _event(db, rfi, "void", actor=actor, source=source, action="void")
+    db.commit()
+    return PEResult(
+        True,
+        rfi.id,
+        rfi.status,
+        rfi.rfi_display,
+        message="Voided.",
+        assigned=rfi.assigned,
+        priority=rfi.priority,
+        work_stopped=False,
+    )

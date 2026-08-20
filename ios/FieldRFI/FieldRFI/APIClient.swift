@@ -69,6 +69,46 @@ struct APIClient {
         try await post("/create_rfi_draft", body: envelope)
     }
 
+    func crew(projectID: String) async throws -> CrewDTO {
+        try await get("/projects/\(projectID)/crew")
+    }
+
+    func assignment(projectID: String, userID: String) async throws -> AssignmentDTO {
+        try await get(
+            "/me/assignment",
+            query: [
+                URLQueryItem(name: "project_id", value: projectID),
+                URLQueryItem(name: "user_id", value: userID),
+            ]
+        )
+    }
+
+    func fieldTickets(projectID: String, userID: String) async throws -> MaterialTicketsDTO {
+        try await get(
+            "/field/tickets",
+            query: [
+                URLQueryItem(name: "project_id", value: projectID),
+                URLQueryItem(name: "user_id", value: userID),
+            ]
+        )
+    }
+
+    func handleTicket(id: String, headers: [String: String]) async throws -> MaterialTicketDTO {
+        try await post("/field/material_orders/\(id)/handle", body: EmptyBody(), headers: headers)
+    }
+
+    func flagTicket(id: String, note: String, kind: String, headers: [String: String]) async throws {
+        struct FlagBody: Encodable {
+            let note: String
+            let kind: String
+        }
+        let _: [String: Bool] = try await post(
+            "/field/material_orders/\(id)/flag",
+            body: FlagBody(note: note, kind: kind),
+            headers: headers
+        )
+    }
+
     func rfi(id: String) async throws -> RFIDTO {
         try await get("/rfis/\(id)")
     }
@@ -77,12 +117,16 @@ struct APIClient {
         try await get("/pe/assignees", headers: Self.peHeaders)
     }
 
-    func peApproveInternalReview(rfiID: String) async throws -> PEApproveResultDTO {
-        try await post("/pe/rfis/\(rfiID)/approve_internal_review", body: EmptyBody(), headers: Self.peHeaders)
+    func peApproveInternalReview(rfiID: String, extraHeaders: [String: String] = [:]) async throws -> PEApproveResultDTO {
+        var headers = Self.peHeaders
+        extraHeaders.forEach { headers[$0] = $1 }
+        return try await post("/pe/rfis/\(rfiID)/approve_internal_review", body: EmptyBody(), headers: headers)
     }
 
-    func peSubmit(rfiID: String, body: PESubmitBody) async throws -> PESubmitResultDTO {
-        try await post("/pe/rfis/\(rfiID)/submit", body: body, headers: Self.peHeaders)
+    func peSubmit(rfiID: String, body: PESubmitBody, extraHeaders: [String: String] = [:]) async throws -> PESubmitResultDTO {
+        var headers = Self.peHeaders
+        extraHeaders.forEach { headers[$0] = $1 }
+        return try await post("/pe/rfis/\(rfiID)/submit", body: body, headers: headers)
     }
 
     func designOfficialResponse(rfiID: String, text: String) async throws -> DesignActionResultDTO {

@@ -64,6 +64,7 @@ ALLOWED_TOP_LEVEL = frozenset(
         "photos",
         "open_rfis_same_sheet",
         "user_note",
+        "actor",
     }
 )
 
@@ -100,6 +101,29 @@ class PhotoInfo(BaseModel):
     data_base64: str
 
 
+class ActorInfo(BaseModel):
+    """Signed-in field assignment on a Grok/search-then-draft packet."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: UUID
+    role: str
+    action: Optional[str] = None
+
+    @field_validator("role")
+    @classmethod
+    def strip_role(cls, value: str) -> str:
+        return value.strip().lower()
+
+    @field_validator("action")
+    @classmethod
+    def strip_action(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        trimmed = value.strip().lower()
+        return trimmed or None
+
+
 class OpenRFIInfo(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -123,6 +147,7 @@ class PreflightEnvelope(BaseModel):
     photos: list[PhotoInfo] = Field(default_factory=list)
     open_rfis_same_sheet: list[OpenRFIInfo] = Field(default_factory=list)
     user_note: str = ""
+    actor: Optional[ActorInfo] = None
 
     @field_validator("user_note")
     @classmethod
@@ -433,6 +458,81 @@ class GCDraftResult(BaseModel):
     line_count: Optional[int] = None
     message: str
     disclaimer: str
+
+
+class AssignmentOut(BaseModel):
+    ok: bool
+    user_id: str
+    name: str
+    role: str
+    project_id: str
+    area_id: Optional[str] = None
+    area_name: Optional[str] = None
+    reports_to_user_id: Optional[str] = None
+    boss_name: Optional[str] = None
+    boss_role: Optional[str] = None
+    capabilities: dict[str, bool]
+    chain: list[str]
+
+
+class CrewMemberOut(BaseModel):
+    user_id: str
+    name: str
+    role: str
+    area_id: Optional[str] = None
+    area_name: Optional[str] = None
+    reports_to_user_id: Optional[str] = None
+    boss_name: Optional[str] = None
+    active: bool = True
+
+
+class CrewOut(BaseModel):
+    ok: bool
+    project_id: str
+    members: list[CrewMemberOut]
+
+
+class MaterialTicketOut(BaseModel):
+    id: str
+    rfi_id: str
+    status: str
+    summary: str
+    assigned_to_user_id: Optional[str] = None
+    handled_at: Optional[str] = None
+    approved_at: Optional[str] = None
+    line_count: int = 0
+
+
+class MaterialTicketsOut(BaseModel):
+    ok: bool
+    tickets: list[MaterialTicketOut]
+
+
+class MaterialAssignBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: UUID
+
+
+class MaterialRequestBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    summary: Optional[str] = None
+    lines: list[GCMaterialLine] = Field(min_length=1)
+
+
+class MaterialFlagBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    note: str
+    kind: str = "missing"
+
+
+class WorkStopGrantBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    grantee_user_id: UUID
+    rfi_id: Optional[UUID] = None
 
 
 class DesignActionResult(BaseModel):

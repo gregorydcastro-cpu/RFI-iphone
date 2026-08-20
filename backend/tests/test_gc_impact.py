@@ -34,6 +34,10 @@ def _answered(client) -> str:
             "photos": [],
             "open_rfis_same_sheet": [],
             "user_note": note,
+            "actor": {
+                "user_id": "aaaaaaaa-0000-4000-8000-000000000323",
+                "role": "journeyman",
+            },
         },
     )
     assert created.json()["ok"] is True

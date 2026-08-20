@@ -1,4 +1,5 @@
 from app.ids import PROJECT_ID, REV_S301_C_ID
+from tests.actors import actor_payload
 
 
 def _draft(client, note: str, label: str = "B-4"):
@@ -17,6 +18,7 @@ def _draft(client, note: str, label: str = "B-4"):
             "photos": [],
             "open_rfis_same_sheet": [],
             "user_note": note,
+            "actor": actor_payload("journeyman"),
         },
     )
 

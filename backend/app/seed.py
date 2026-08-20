@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.drawings import ensure_demo_drawings, png_size
 from app.holiday_cache import holiday_cache
+from app.field_chain import assign_person
 from app.ids import (
     COMPANY_CASTRO_ID,
     COMPANY_SAMPLE_AE_ID,
@@ -53,7 +54,21 @@ from app.ids import (
     SETTINGS_ID,
     SHEET_S301_ID,
     SHEET_S302_ID,
+    HARBOR_AREA_ROOF_ID,
+    HARBOR_AREA_YARD_ID,
+    HARBOR_TICKET_ID,
+    ILSB_AREA_L07_ID,
+    SAMPLE_ON_CYCLE_ID,
     USER_GREG_PE_ID,
+    USER_HARBOR_AF_ID,
+    USER_HARBOR_AF_ROOF_ID,
+    USER_HARBOR_AP_ID,
+    USER_HARBOR_FM_ID,
+    USER_HARBOR_JM_ID,
+    USER_ILSB_AF_ID,
+    USER_ILSB_AP_ID,
+    USER_ILSB_FM_ID,
+    USER_ILSB_JM_ID,
     USER_SAMPLE_AE_ID,
     USER_SAMPLE_PE_ID,
 )
@@ -61,10 +76,12 @@ from app.db import ASSETS_DIR
 from app.sample_seed import seed_sample_graph_rfis
 from app.models import (
     Company,
+    DraftMaterialOrder,
     DrawingSet,
     Location,
     Organization,
     Project,
+    ProjectArea,
     ProjectCalendar,
     ProjectHoliday,
     ProjectRFISettings,
@@ -372,6 +389,78 @@ def seed_pe_roster(db: Session) -> None:
     db.commit()
 
 
+def seed_field_people(db: Session) -> None:
+    rows = [
+        User(
+            id=str(USER_HARBOR_AF_ID),
+            project_id=str(PROJECT_ID),
+            company_id=str(COMPANY_CASTRO_ID),
+            name="Harbor Area Foreman",
+            role="area_foreman",
+        ),
+        User(
+            id=str(USER_HARBOR_FM_ID),
+            project_id=str(PROJECT_ID),
+            company_id=str(COMPANY_CASTRO_ID),
+            name="Harbor Foreman",
+            role="foreman",
+        ),
+        User(
+            id=str(USER_HARBOR_JM_ID),
+            project_id=str(PROJECT_ID),
+            company_id=str(COMPANY_CASTRO_ID),
+            name="Harbor Journeyman",
+            role="journeyman",
+        ),
+        User(
+            id=str(USER_HARBOR_AP_ID),
+            project_id=str(PROJECT_ID),
+            company_id=str(COMPANY_CASTRO_ID),
+            name="Harbor Apprentice",
+            role="apprentice",
+        ),
+        User(
+            id=str(USER_HARBOR_AF_ROOF_ID),
+            project_id=str(PROJECT_ID),
+            company_id=str(COMPANY_CASTRO_ID),
+            name="Harbor Roof Area Foreman",
+            role="area_foreman",
+        ),
+        User(
+            id=str(USER_ILSB_AF_ID),
+            project_id=str(ILSB_PROJECT_ID),
+            company_id=str(COMPANY_CASTRO_ID),
+            name="ILSB Area Foreman",
+            role="area_foreman",
+        ),
+        User(
+            id=str(USER_ILSB_FM_ID),
+            project_id=str(ILSB_PROJECT_ID),
+            company_id=str(COMPANY_CASTRO_ID),
+            name="ILSB Foreman",
+            role="foreman",
+        ),
+        User(
+            id=str(USER_ILSB_JM_ID),
+            project_id=str(ILSB_PROJECT_ID),
+            company_id=str(COMPANY_CASTRO_ID),
+            name="ILSB Journeyman",
+            role="journeyman",
+        ),
+        User(
+            id=str(USER_ILSB_AP_ID),
+            project_id=str(ILSB_PROJECT_ID),
+            company_id=str(COMPANY_CASTRO_ID),
+            name="ILSB Apprentice",
+            role="apprentice",
+        ),
+    ]
+    for row in rows:
+        if not db.get(User, row.id):
+            db.add(row)
+    db.commit()
+
+
 _SEEDED_HOLIDAYS = (
     (date(2026, 9, 7), "Labor Day"),
     (date(2026, 11, 11), "Veterans Day"),
@@ -449,6 +538,131 @@ def seed_project_calendars(db: Session) -> None:
             holiday_cache.refresh(db, str(project_id))
 
 
+def _ensure_area(db: Session, area_id, project_id, name: str) -> None:
+    if db.get(ProjectArea, str(area_id)):
+        return
+    db.add(ProjectArea(id=str(area_id), project_id=str(project_id), name=name))
+    db.commit()
+
+
+def seed_field_crews(db: Session) -> None:
+    """Harbor Yard + ILSB field chain. Greg is GF on both jobs."""
+    seed_field_people(db)
+    if not db.get(User, str(USER_HARBOR_JM_ID)):
+        return
+    _ensure_area(db, HARBOR_AREA_YARD_ID, PROJECT_ID, "Yard / docks")
+    _ensure_area(db, HARBOR_AREA_ROOF_ID, PROJECT_ID, "Roof")
+    _ensure_area(db, ILSB_AREA_L07_ID, ILSB_PROJECT_ID, "Level 07 North")
+
+    assign_person(
+        db,
+        project_id=str(PROJECT_ID),
+        user_id=str(USER_GREG_PE_ID),
+        role="general_foreman",
+        reports_to_user_id=None,
+        area_id=None,
+    )
+    assign_person(
+        db,
+        project_id=str(ILSB_PROJECT_ID),
+        user_id=str(USER_GREG_PE_ID),
+        role="general_foreman",
+        reports_to_user_id=None,
+        area_id=None,
+    )
+    assign_person(
+        db,
+        project_id=str(PROJECT_ID),
+        user_id=str(USER_HARBOR_AF_ID),
+        role="area_foreman",
+        reports_to_user_id=str(USER_GREG_PE_ID),
+        area_id=str(HARBOR_AREA_YARD_ID),
+    )
+    assign_person(
+        db,
+        project_id=str(PROJECT_ID),
+        user_id=str(USER_HARBOR_AF_ROOF_ID),
+        role="area_foreman",
+        reports_to_user_id=str(USER_GREG_PE_ID),
+        area_id=str(HARBOR_AREA_ROOF_ID),
+    )
+    assign_person(
+        db,
+        project_id=str(PROJECT_ID),
+        user_id=str(USER_HARBOR_FM_ID),
+        role="foreman",
+        reports_to_user_id=str(USER_HARBOR_AF_ID),
+        area_id=str(HARBOR_AREA_YARD_ID),
+    )
+    assign_person(
+        db,
+        project_id=str(PROJECT_ID),
+        user_id=str(USER_HARBOR_JM_ID),
+        role="journeyman",
+        reports_to_user_id=str(USER_HARBOR_FM_ID),
+        area_id=str(HARBOR_AREA_YARD_ID),
+    )
+    assign_person(
+        db,
+        project_id=str(PROJECT_ID),
+        user_id=str(USER_HARBOR_AP_ID),
+        role="apprentice",
+        reports_to_user_id=str(USER_HARBOR_JM_ID),
+        area_id=str(HARBOR_AREA_YARD_ID),
+    )
+    assign_person(
+        db,
+        project_id=str(ILSB_PROJECT_ID),
+        user_id=str(USER_ILSB_AF_ID),
+        role="area_foreman",
+        reports_to_user_id=str(USER_GREG_PE_ID),
+        area_id=str(ILSB_AREA_L07_ID),
+    )
+    assign_person(
+        db,
+        project_id=str(ILSB_PROJECT_ID),
+        user_id=str(USER_ILSB_FM_ID),
+        role="foreman",
+        reports_to_user_id=str(USER_ILSB_AF_ID),
+        area_id=str(ILSB_AREA_L07_ID),
+    )
+    assign_person(
+        db,
+        project_id=str(ILSB_PROJECT_ID),
+        user_id=str(USER_ILSB_JM_ID),
+        role="journeyman",
+        reports_to_user_id=str(USER_ILSB_FM_ID),
+        area_id=str(ILSB_AREA_L07_ID),
+    )
+    assign_person(
+        db,
+        project_id=str(ILSB_PROJECT_ID),
+        user_id=str(USER_ILSB_AP_ID),
+        role="apprentice",
+        reports_to_user_id=str(USER_ILSB_JM_ID),
+        area_id=str(ILSB_AREA_L07_ID),
+    )
+
+    if db.get(RFI, str(SAMPLE_ON_CYCLE_ID)) and not db.get(
+        DraftMaterialOrder, str(HARBOR_TICKET_ID)
+    ):
+        db.add(
+            DraftMaterialOrder(
+                id=str(HARBOR_TICKET_ID),
+                rfi_id=str(SAMPLE_ON_CYCLE_ID),
+                status="assigned",
+                summary="SAMPLE hopper: embed plate at dock. Assigned to Harbor Apprentice.",
+                lines=[{"description": "Embed plate at dock", "qty": 1.0, "uom": "EA"}],
+                requested_by_user_id=str(USER_HARBOR_JM_ID),
+                assigned_to_user_id=str(USER_HARBOR_AP_ID),
+            )
+        )
+        rfi = db.get(RFI, str(SAMPLE_ON_CYCLE_ID))
+        if rfi and not rfi.area_id:
+            rfi.area_id = str(HARBOR_AREA_YARD_ID)
+        db.commit()
+
+
 def seed_demo(db: Session) -> None:
     paths = ensure_demo_drawings(ASSETS_DIR)
     sizes = {name: png_size(path) for name, path in paths.items()}
@@ -458,6 +672,7 @@ def seed_demo(db: Session) -> None:
     seed_pe_roster(db)
     ingest_ilsb_draft(db)
     seed_sample_graph_rfis(db)
+    seed_field_crews(db)
 
 
 def has_demo_project(db: Session) -> bool:

@@ -156,6 +156,10 @@ def test_create_on_el107_stops_when_open_draft_exists(client):
         "photos": [],
         "open_rfis_same_sheet": [],
         "user_note": ILSB_QUESTION,
+        "actor": {
+            "user_id": "aaaaaaaa-0000-4000-8000-000000000333",
+            "role": "journeyman",
+        },
     }
     created = client.post("/create_rfi_draft", json=payload)
     assert created.status_code == 200
@@ -196,6 +200,10 @@ def test_create_el107_draft_when_search_is_empty(client):
         "photos": [],
         "open_rfis_same_sheet": [],
         "user_note": ILSB_QUESTION,
+        "actor": {
+            "user_id": "aaaaaaaa-0000-4000-8000-000000000333",
+            "role": "journeyman",
+        },
     }
     created = client.post("/create_rfi_draft", json=payload)
     assert created.status_code == 200

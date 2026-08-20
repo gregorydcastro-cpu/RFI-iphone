@@ -3,6 +3,7 @@ from sqlalchemy import select
 from app import db as dbmod
 from app.ids import PROJECT_ID, REV_S301_C_ID
 from app.models import RFIEvent
+from tests.actors import actor_payload
 
 
 def _envelope(**overrides):
@@ -19,6 +20,7 @@ def _envelope(**overrides):
         "photos": [],
         "open_rfis_same_sheet": [],
         "user_note": "Beam at grid B-4 appears to conflict with the duct. Please confirm clearance.",
+        "actor": actor_payload("journeyman"),
     }
     payload.update(overrides)
     return payload

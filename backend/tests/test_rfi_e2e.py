@@ -59,6 +59,10 @@ def _search_then_draft(client, *, note: str, rev_id, sheet: str, revision: str, 
             "photos": [],
             "open_rfis_same_sheet": [],
             "user_note": note,
+            "actor": {
+                "user_id": "aaaaaaaa-0000-4000-8000-000000000323",
+                "role": "journeyman",
+            },
         },
     )
     assert created.status_code == 200

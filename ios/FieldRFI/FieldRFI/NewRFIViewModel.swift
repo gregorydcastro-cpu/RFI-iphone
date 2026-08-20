@@ -19,13 +19,28 @@ final class NewRFIViewModel: ObservableObject {
     @Published var duplicate: OpenRFIDTO?
     @Published var draftResult: DraftResultDTO?
     @Published var savedRFI: RFIDTO?
+    @Published var tickets: [MaterialTicketDTO] = []
+    @Published var submitResult: PESubmitResultDTO?
+    @Published var isSubmitting = false
 
     var client: APIClient {
         APIClient(baseURL: URL(string: baseURLString) ?? APIClient.defaultBaseURL)
     }
 
-    var canDraft: Bool {
-        selectedProject != nil && selectedRevision != nil && !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isDrafting
+    func canDraft(session: FieldSession) -> Bool {
+        session.canDraftRFI
+            && selectedProject != nil
+            && selectedRevision != nil
+            && !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !isDrafting
+    }
+
+    func canShowSubmit(session: FieldSession) -> Bool {
+        session.canSubmitRFI
+    }
+
+    func canHumanSubmit(session: FieldSession) -> Bool {
+        session.canSubmitRFI && savedRFI?.status == "draft" && submitResult == nil && !isSubmitting
     }
 
     func loadCatalog() async {
@@ -95,7 +110,41 @@ final class NewRFIViewModel: ObservableObject {
         photos.removeAll { $0.id == photo.id }
     }
 
-    func draftRFI() async {
+    func loadTickets(session: FieldSession) async {
+        guard let project = selectedProject, let userID = session.userID else {
+            tickets = []
+            return
+        }
+        tickets = (try? await client.fieldTickets(projectID: project.id, userID: userID).tickets) ?? []
+    }
+
+    func handleTicket(_ ticket: MaterialTicketDTO, session: FieldSession) async {
+        do {
+            _ = try await client.handleTicket(id: ticket.id, headers: session.fieldHeaders())
+            await loadTickets(session: session)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func flagTicket(_ ticket: MaterialTicketDTO, session: FieldSession) async {
+        do {
+            try await client.flagTicket(
+                id: ticket.id,
+                note: "Missing / wrong / extra on \(ticket.summary)",
+                kind: "missing",
+                headers: session.fieldHeaders()
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func draftRFI(session: FieldSession) async {
+        guard session.canDraftRFI, let actor = session.actorDTO() else {
+            errorMessage = "This seat cannot draft an RFI."
+            return
+        }
         guard let project = selectedProject, let revision = selectedRevision else { return }
         isDrafting = true
         errorMessage = nil
@@ -151,7 +200,8 @@ final class NewRFIViewModel: ObservableObject {
                     )
                 },
                 open_rfis_same_sheet: [],
-                user_note: trimmed
+                user_note: trimmed,
+                actor: actor
             )
             let result = try await client.createRFIDraft(envelope)
             draftResult = result
@@ -170,7 +220,38 @@ final class NewRFIViewModel: ObservableObject {
                 )
             } else if result.ok, let id = result.rfi_id {
                 savedRFI = try await client.rfi(id: id)
+                submitResult = nil
             }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func submitDraft(session: FieldSession) async {
+        guard session.canSubmitRFI, let rfi = savedRFI else { return }
+        isSubmitting = true
+        errorMessage = nil
+        defer { isSubmitting = false }
+        do {
+            let headers = session.fieldHeaders()
+            if rfi.status == "draft" {
+                _ = try await client.peApproveInternalReview(rfiID: rfi.id, extraHeaders: headers)
+            }
+            let result = try await client.peSubmit(
+                rfiID: rfi.id,
+                body: PESubmitBody(
+                    priority: rfi.priority,
+                    work_stopped: false,
+                    require_internal_review: true,
+                    assigned_to_user_id: rfi.assigned_to_user_id,
+                    assigned_to_company_id: rfi.assigned_to_company_id,
+                    assignee: rfi.assigned,
+                    comment: "Foreman submit from New RFI. Grokbot did not submit."
+                ),
+                extraHeaders: headers
+            )
+            submitResult = result
+            savedRFI = try await client.rfi(id: rfi.id)
         } catch {
             errorMessage = error.localizedDescription
         }

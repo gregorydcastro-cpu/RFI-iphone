@@ -2,11 +2,16 @@ import SwiftUI
 
 struct NewRFIView: View {
     @StateObject private var model = NewRFIViewModel()
+    @EnvironmentObject private var session: FieldSession
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                headerNote
+                assignmentChrome
+                if session.isApprentice {
+                    apprenticeHandleChrome
+                } else {
+                    headerNote
                 pickerBlock(
                     title: "Project",
                     value: model.selectedProject?.name ?? "Select a project"
@@ -14,7 +19,11 @@ struct NewRFIView: View {
                     ForEach(model.projects) { project in
                         Button {
                             model.selectedProject = project
-                            Task { await model.loadRevisions() }
+                            Task {
+                                await model.loadRevisions()
+                                await session.load(client: model.client, projectID: project.id)
+                                await model.loadTickets(session: session)
+                            }
                         } label: {
                             Label(project.name, systemImage: project.id == model.selectedProject?.id ? "checkmark" : "")
                         }
@@ -100,28 +109,54 @@ struct NewRFIView: View {
                         )
                 }
 
-                Button {
-                    Task { await model.draftRFI() }
-                } label: {
-                    HStack {
-                        if model.isDrafting {
-                            ProgressView()
-                                .tint(.white)
+                if session.canDraftRFI {
+                    Button {
+                        Task { await model.draftRFI(session: session) }
+                    } label: {
+                        HStack {
+                            if model.isDrafting {
+                                ProgressView()
+                                    .tint(.white)
+                            }
+                            Text(model.isDrafting ? "Searching, then drafting…" : "Draft RFI")
+                                .font(.headline)
                         }
-                        Text(model.isDrafting ? "Searching, then drafting…" : "Draft RFI")
-                            .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(model.canDraft(session: session) ? FieldTheme.orange : FieldTheme.orange.opacity(0.4))
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(model.canDraft ? FieldTheme.orange : FieldTheme.orange.opacity(0.4))
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                }
-                .disabled(!model.canDraft)
+                    .disabled(!model.canDraft(session: session))
 
-                Text("Draft only. Searches this sheet, grid, or subject first. Does not submit, number, or set work_stopped.")
-                    .font(.caption)
-                    .foregroundStyle(FieldTheme.muted)
+                    Text("Grokbot drafts only. Search first, then create_rfi_draft. It never submits.")
+                        .font(.caption)
+                        .foregroundStyle(FieldTheme.muted)
+                }
+
+                if model.canShowSubmit(session: session) {
+                    Button {
+                        Task { await model.submitDraft(session: session) }
+                    } label: {
+                        HStack {
+                            if model.isSubmitting {
+                                ProgressView()
+                                    .tint(.white)
+                            }
+                            Text(model.isSubmitting ? "Submitting…" : "Submit")
+                                .font(.headline)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(model.canHumanSubmit(session: session) ? FieldTheme.steel : FieldTheme.steel.opacity(0.35))
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                    .disabled(!model.canHumanSubmit(session: session))
+                    Text("Submit is Foreman or above. A human hits this. Grokbot never does.")
+                        .font(.caption)
+                        .foregroundStyle(FieldTheme.muted)
+                }
 
                 if let error = model.errorMessage {
                     banner(title: "Could not draft", body: error, tone: .error)
@@ -140,6 +175,14 @@ struct NewRFIView: View {
                         tone: .success
                     )
                 }
+                if let submitted = model.submitResult {
+                    banner(
+                        title: "Submitted",
+                        body: "Number: \(submitted.rfi_display ?? "none")\nStatus: \(submitted.status)",
+                        tone: .success
+                    )
+                }
+                } // journeyman+ draft/submit chrome
 
                 DisclosureGroup("Server") {
                     TextField("API base URL", text: $model.baseURLString)
@@ -162,6 +205,112 @@ struct NewRFIView: View {
         .toolbarColorScheme(.dark, for: .navigationBar)
         .task {
             await model.loadCatalog()
+            if let project = model.selectedProject {
+                await session.load(client: model.client, projectID: project.id)
+                await model.loadTickets(session: session)
+            }
+        }
+    }
+
+    private var assignmentChrome: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionLabel("Signed in")
+            Menu {
+                ForEach(session.crew) { member in
+                    Button {
+                        Task {
+                            if let project = model.selectedProject {
+                                await session.select(userID: member.user_id, client: model.client, projectID: project.id)
+                                await model.loadTickets(session: session)
+                            }
+                        }
+                    } label: {
+                        Label(
+                            "\(member.name)  ·  \(member.role.replacingOccurrences(of: "_", with: " "))",
+                            systemImage: member.user_id == session.userID ? "checkmark" : ""
+                        )
+                    }
+                }
+            } label: {
+                HStack {
+                    Text(session.assignment.map { "\($0.name)  ·  \($0.role.replacingOccurrences(of: "_", with: " "))" } ?? "Select a seat")
+                        .foregroundStyle(FieldTheme.ink)
+                    Spacer()
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(FieldTheme.muted)
+                }
+                .padding(12)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(FieldTheme.rule, lineWidth: 1))
+            }
+            Text(session.banner)
+                .font(.footnote)
+                .foregroundStyle(FieldTheme.ink)
+        }
+    }
+
+    private var apprenticeHandleChrome: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Handle material")
+                .font(.title3.weight(.semibold))
+            Text("Apprentice lane: assigned tickets only. No RFI draft. No submit. No order. No work-stop.")
+                .font(.footnote)
+                .foregroundStyle(FieldTheme.muted)
+            pickerBlock(
+                title: "Project",
+                value: model.selectedProject?.name ?? "Select a project"
+            ) {
+                ForEach(model.projects) { project in
+                    Button {
+                        model.selectedProject = project
+                        Task {
+                            await session.load(client: model.client, projectID: project.id)
+                            await model.loadTickets(session: session)
+                        }
+                    } label: {
+                        Label(project.name, systemImage: project.id == model.selectedProject?.id ? "checkmark" : "")
+                    }
+                }
+            }
+            if model.tickets.isEmpty {
+                Text("No tickets assigned to you.")
+                    .font(.subheadline)
+                    .foregroundStyle(FieldTheme.muted)
+            }
+            ForEach(model.tickets) { ticket in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(ticket.summary)
+                        .font(.subheadline)
+                    Text(ticket.status)
+                        .font(.caption)
+                        .foregroundStyle(FieldTheme.muted)
+                    if ticket.handled_at == nil {
+                        Button("Mark handled") {
+                            Task { await model.handleTicket(ticket, session: session) }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(FieldTheme.orange)
+                        Button("Flag missing / wrong / extra") {
+                            Task { await model.flagTicket(ticket, session: session) }
+                        }
+                        .font(.footnote)
+                    } else {
+                        Text("Handled")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color(red: 0.16, green: 0.45, blue: 0.28))
+                    }
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(FieldTheme.rule, lineWidth: 1))
+            }
+            if let error = model.errorMessage {
+                banner(title: "Could not handle", body: error, tone: .error)
+            }
         }
     }
 
@@ -237,5 +386,6 @@ struct NewRFIView: View {
 #Preview {
     NavigationStack {
         NewRFIView()
+            .environmentObject(FieldSession())
     }
 }

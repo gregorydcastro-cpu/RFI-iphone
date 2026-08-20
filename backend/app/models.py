@@ -60,6 +60,10 @@ class Project(Base):
     rfis: Mapped[list[RFI]] = relationship(back_populates="project")
     companies: Mapped[list["Company"]] = relationship(back_populates="project")
     users: Mapped[list["User"]] = relationship(back_populates="project")
+    areas: Mapped[list["ProjectArea"]] = relationship(back_populates="project")
+    assignments: Mapped[list["ProjectAssignment"]] = relationship(
+        back_populates="project"
+    )
 
 
 class ProjectRFISettings(Base):
@@ -181,8 +185,74 @@ class Company(Base):
     users: Mapped[list["User"]] = relationship(back_populates="company")
 
 
+class ProjectArea(Base):
+    """Named area on a job. Field chain assignments hang off this."""
+
+    __tablename__ = "project_areas"
+    __table_args__ = (
+        UniqueConstraint("project_id", "name", name="uq_project_area_name"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("projects.id"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+
+    project: Mapped[Project] = relationship(back_populates="areas")
+
+
+class ProjectAssignment(Base):
+    """One active field role per person on a project. Reuses users — not a second roster."""
+
+    __tablename__ = "project_assignments"
+    __table_args__ = (
+        UniqueConstraint("project_id", "user_id", name="uq_project_assignment_user"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("projects.id"), nullable=False
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id"), nullable=False
+    )
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    reports_to_user_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id"), nullable=True
+    )
+    area_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("project_areas.id"), nullable=True
+    )
+    active: Mapped[bool] = mapped_column(default=True)
+
+    project: Mapped[Project] = relationship(back_populates="assignments")
+
+
+class WorkStopGrant(Base):
+    """Area / GF permission for a foreman to raise work-stopped."""
+
+    __tablename__ = "work_stop_grants"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("projects.id"), nullable=False
+    )
+    grantee_user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id"), nullable=False
+    )
+    granted_by_user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id"), nullable=False
+    )
+    rfi_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("rfis.id"), nullable=True
+    )
+    active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 class User(Base):
-    """Thin project person row for PE assignment."""
+    """Thin project person row for PE assignment and the field chain."""
 
     __tablename__ = "users"
 
@@ -240,6 +310,12 @@ class RFI(Base):
     )
     assigned_to_company_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("companies.id"), nullable=True
+    )
+    created_by_user_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id"), nullable=True
+    )
+    area_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("project_areas.id"), nullable=True
     )
     is_sample: Mapped[bool] = mapped_column(default=False)
     due_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -343,6 +419,14 @@ class DraftMaterialOrder(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
     summary: Mapped[str] = mapped_column(Text, nullable=False)
     lines: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    requested_by_user_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id"), nullable=True
+    )
+    assigned_to_user_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id"), nullable=True
+    )
+    handled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

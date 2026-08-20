@@ -2,6 +2,8 @@ import SwiftUI
 
 @main
 struct FieldRFIApp: App {
+    @StateObject private var session = FieldSession()
+
     var body: some Scene {
         WindowGroup {
             TabView {
@@ -9,7 +11,7 @@ struct FieldRFIApp: App {
                     NewRFIView()
                 }
                 .tabItem {
-                    Label("New RFI", systemImage: "plus.rectangle.on.folder")
+                    Label(session.isApprentice ? "Material" : "New RFI", systemImage: "plus.rectangle.on.folder")
                 }
                 NavigationStack {
                     RFIGraphView()
@@ -18,6 +20,7 @@ struct FieldRFIApp: App {
                     Label("RFI Graph", systemImage: "list.bullet.rectangle")
                 }
             }
+            .environmentObject(session)
             .tint(FieldTheme.orange)
         }
     }

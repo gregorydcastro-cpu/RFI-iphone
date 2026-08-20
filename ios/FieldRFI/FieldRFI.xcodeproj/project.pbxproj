@@ -23,6 +23,7 @@
 		A100000000000000000017 /* AnswerRFIViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000017 /* AnswerRFIViewModel.swift */; };
 		A100000000000000000018 /* GCImpactView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000018 /* GCImpactView.swift */; };
 		A100000000000000000019 /* GCImpactViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000019 /* GCImpactViewModel.swift */; };
+		A100000000000000000020 /* FieldSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000020 /* FieldSession.swift */; };
 		A100000000000000000010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000010 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -44,6 +45,7 @@
 		B100000000000000000017 /* AnswerRFIViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerRFIViewModel.swift; sourceTree = "<group>"; };
 		B100000000000000000018 /* GCImpactView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GCImpactView.swift; sourceTree = "<group>"; };
 		B100000000000000000019 /* GCImpactViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GCImpactViewModel.swift; sourceTree = "<group>"; };
+		B100000000000000000020 /* FieldSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldSession.swift; sourceTree = "<group>"; };
 		B100000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B100000000000000000011 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -74,6 +76,7 @@
 				B100000000000000000002 /* Theme.swift */,
 				B100000000000000000003 /* Models.swift */,
 				B100000000000000000004 /* APIClient.swift */,
+				B100000000000000000020 /* FieldSession.swift */,
 				B100000000000000000005 /* NewRFIViewModel.swift */,
 				B100000000000000000006 /* NewRFIView.swift */,
 				B100000000000000000007 /* DrawingCanvasView.swift */,
@@ -173,6 +176,7 @@
 				A100000000000000000002 /* Theme.swift in Sources */,
 				A100000000000000000003 /* Models.swift in Sources */,
 				A100000000000000000004 /* APIClient.swift in Sources */,
+				A100000000000000000020 /* FieldSession.swift in Sources */,
 				A100000000000000000005 /* NewRFIViewModel.swift in Sources */,
 				A100000000000000000006 /* NewRFIView.swift in Sources */,
 				A100000000000000000007 /* DrawingCanvasView.swift in Sources */,

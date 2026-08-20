@@ -26,6 +26,15 @@ from app.aging import (
     work_stopped,
 )
 from app.calendar import DEFAULT_TZ
+from app.field_chain import (
+    FieldError,
+    assignment_payload,
+    grok_out_of_lane,
+    grant_work_stop,
+    load_actor,
+    require_can,
+    resolve_actor,
+)
 from app.holiday_cache import holiday_cache
 from app.grokbot import GrokbotError, draft_from_preflight
 from app.models import (
@@ -34,6 +43,7 @@ from app.models import (
     DraftMaterialOrder,
     Organization,
     Project,
+    ProjectAssignment,
     ProjectRFISettings,
     RFI,
     RFIAttachment,
@@ -54,11 +64,13 @@ from app.pe import (
     close_rfi,
     draft_change_order,
     draft_material_order,
+    normalize_material_lines,
     record_official_response,
     request_clarification,
     set_priority,
     start_impact_review,
     submit_for_design,
+    void_rfi,
 )
 from app.rules import DraftValidationError, is_open_status, validate_draft_payload
 from app.schemas import (
@@ -69,6 +81,9 @@ from app.schemas import (
     AssigneeCompanyOut,
     AssigneeRosterOut,
     AssigneeUserOut,
+    AssignmentOut,
+    CrewMemberOut,
+    CrewOut,
     DesignActionResult,
     DesignAnswerBody,
     DesignClarifyBody,
@@ -79,6 +94,11 @@ from app.schemas import (
     GCDraftResult,
     GraphResponse,
     GraphRow,
+    MaterialAssignBody,
+    MaterialFlagBody,
+    MaterialRequestBody,
+    MaterialTicketOut,
+    MaterialTicketsOut,
     PEApproveBody,
     PEApproveResult,
     PESetPriorityBody,
@@ -91,6 +111,7 @@ from app.schemas import (
     SearchHit,
     SearchResponse,
     SheetRevisionOut,
+    WorkStopGrantBody,
 )
 from app.seed import seed_demo
 
@@ -151,6 +172,40 @@ def require_gc(
     return "gc"
 
 
+def _http_field(exc: FieldError) -> HTTPException:
+    return HTTPException(exc.status_code, str(exc))
+
+
+def _field_actor(
+    db: Session,
+    project_id: str,
+    x_user_id: str | None,
+    x_field_role: str | None = None,
+    *,
+    office_kind: str | None = None,
+):
+    try:
+        if x_user_id:
+            return resolve_actor(
+                db,
+                project_id,
+                user_id=x_user_id.strip(),
+                claimed_role=x_field_role,
+            )
+        if office_kind:
+            return resolve_actor(db, project_id, office_kind=office_kind)
+    except FieldError as exc:
+        raise _http_field(exc) from exc
+    raise HTTPException(403, "Actor role is required.")
+
+
+def _gate(db: Session, actor, action: str, *, rfi=None, ticket=None) -> None:
+    try:
+        require_can(db, actor, action, rfi=rfi, ticket=ticket)
+    except FieldError as exc:
+        raise _http_field(exc) from exc
+
+
 @app.get("/health")
 def health() -> dict:
     return {"ok": True}
@@ -174,6 +229,55 @@ def list_projects(db: Session = Depends(get_db)) -> list[ProjectOut]:
         )
         for project, org_name in rows
     ]
+
+
+@app.get("/projects/{project_id}/crew", response_model=CrewOut)
+def project_crew(project_id: str, db: Session = Depends(get_db)) -> CrewOut:
+    if not db.get(Project, project_id):
+        raise HTTPException(404, "Project not found.")
+    rows = list(
+        db.scalars(
+            select(ProjectAssignment).where(
+                ProjectAssignment.project_id == project_id,
+                ProjectAssignment.active.is_(True),
+            )
+        )
+    )
+    members: list[CrewMemberOut] = []
+    for row in rows:
+        try:
+            actor = load_actor(db, project_id, row.user_id)
+        except FieldError:
+            continue
+        members.append(
+            CrewMemberOut(
+                user_id=actor.user_id,
+                name=actor.name,
+                role=actor.role,
+                area_id=actor.area_id,
+                area_name=actor.area_name,
+                reports_to_user_id=actor.reports_to_user_id,
+                boss_name=actor.boss_name,
+                active=True,
+            )
+        )
+    members.sort(key=lambda item: (item.role, item.name))
+    return CrewOut(ok=True, project_id=project_id, members=members)
+
+
+@app.get("/me/assignment", response_model=AssignmentOut)
+def my_assignment(
+    project_id: str,
+    user_id: str,
+    db: Session = Depends(get_db),
+) -> AssignmentOut:
+    if not db.get(Project, project_id):
+        raise HTTPException(404, "Project not found.")
+    try:
+        actor = load_actor(db, project_id, user_id)
+    except FieldError as exc:
+        raise _http_field(exc) from exc
+    return AssignmentOut(**assignment_payload(db, actor))
 
 
 @app.get("/projects/{project_id}/sheet-revisions", response_model=list[SheetRevisionOut])
@@ -513,6 +617,15 @@ def _store_photos(rfi_id: str, photos: list) -> list[RFIAttachment]:
 
 @app.post("/create_rfi_draft", response_model=DraftResult)
 def create_rfi_draft(raw: dict, db: Session = Depends(get_db)) -> DraftResult:
+    actor_raw = raw.get("actor") if isinstance(raw, dict) else None
+    if not isinstance(actor_raw, dict) or not actor_raw.get("user_id") or not actor_raw.get("role"):
+        raise HTTPException(
+            403,
+            "Actor role is required so a hopper note is never treated as a submitted RFI.",
+        )
+    lane = grok_out_of_lane(raw, str(actor_raw.get("role") or ""))
+    if lane:
+        raise HTTPException(403, lane)
     try:
         validate_draft_payload(raw)
         envelope = PreflightEnvelope.model_validate(raw)
@@ -526,6 +639,13 @@ def create_rfi_draft(raw: dict, db: Session = Depends(get_db)) -> DraftResult:
         raise HTTPException(404, "Project not found.")
     if project.name != envelope.project.name:
         raise HTTPException(422, "project.name does not match the catalog.")
+    actor = _field_actor(
+        db,
+        project.id,
+        str(envelope.actor.user_id) if envelope.actor else None,
+        envelope.actor.role if envelope.actor else None,
+    )
+    _gate(db, actor, "create_rfi_draft")
 
     sheet_rev = None
     sheet = None
@@ -627,6 +747,8 @@ def create_rfi_draft(raw: dict, db: Session = Depends(get_db)) -> DraftResult:
         schedule_impact=drafted.schedule_impact,
         proposed_solution=drafted.proposed_solution,
         grok_preflight=preflight,
+        created_by_user_id=actor.user_id or None,
+        area_id=actor.area_id,
         due_at=None,
         official_response=None,
         submitted_at=None,
@@ -807,13 +929,37 @@ def pe_assignees(_: str = Depends(require_pe), db: Session = Depends(get_db)) ->
     )
 
 
+def _actor_on_rfi(
+    db: Session,
+    rfi: RFI,
+    x_user_id: str | None,
+    x_field_role: str | None,
+    *,
+    office_kind: str = "pe",
+):
+    return _field_actor(
+        db,
+        rfi.project_id,
+        x_user_id,
+        x_field_role,
+        office_kind=office_kind if not x_user_id else None,
+    )
+
+
 @app.post("/pe/rfis/{rfi_id}/approve_internal_review", response_model=PEApproveResult)
 def pe_approve_internal_review(
     rfi_id: str,
     body: PEApproveBody = PEApproveBody(),
     _: str = Depends(require_pe),
     db: Session = Depends(get_db),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_field_role: str | None = Header(default=None, alias="X-Field-Role"),
 ) -> PEApproveResult:
+    rfi = db.get(RFI, rfi_id)
+    if not rfi:
+        raise HTTPException(404, "RFI not found.")
+    actor = _actor_on_rfi(db, rfi, x_user_id, x_field_role)
+    _gate(db, actor, "internal_review", rfi=rfi)
     try:
         result = approve_internal_review(db, rfi_id, source="pe_http")
     except PEError as exc:
@@ -833,7 +979,16 @@ def pe_submit_rfi(
     body: PESubmitBody,
     _: str = Depends(require_pe),
     db: Session = Depends(get_db),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_field_role: str | None = Header(default=None, alias="X-Field-Role"),
 ) -> PESubmitResult:
+    rfi = db.get(RFI, rfi_id)
+    if not rfi:
+        raise HTTPException(404, "RFI not found.")
+    actor = _actor_on_rfi(db, rfi, x_user_id, x_field_role)
+    _gate(db, actor, "submit_rfi", rfi=rfi)
+    if body.work_stopped or body.priority == "work_stopped":
+        _gate(db, actor, "work_stop", rfi=rfi)
     try:
         result = submit_for_design(
             db,
@@ -876,7 +1031,18 @@ def pe_set_priority(
     body: PESetPriorityBody,
     _: str = Depends(require_pe),
     db: Session = Depends(get_db),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_field_role: str | None = Header(default=None, alias="X-Field-Role"),
 ) -> PESetPriorityResult:
+    rfi = db.get(RFI, rfi_id)
+    if not rfi:
+        raise HTTPException(404, "RFI not found.")
+    actor = _actor_on_rfi(db, rfi, x_user_id, x_field_role)
+    _gate(db, actor, "set_priority", rfi=rfi)
+    if body.work_stopped or body.priority == "work_stopped":
+        _gate(db, actor, "work_stop", rfi=rfi)
+    if body.allow_demote:
+        _gate(db, actor, "allow_demote", rfi=rfi)
     try:
         result = set_priority(
             db,
@@ -900,6 +1066,236 @@ def pe_set_priority(
         reminted=result.reminted,
         message=result.message,
     )
+
+
+@app.post("/pe/rfis/{rfi_id}/void", response_model=PEApproveResult)
+def pe_void_rfi(
+    rfi_id: str,
+    _: str = Depends(require_pe),
+    db: Session = Depends(get_db),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_field_role: str | None = Header(default=None, alias="X-Field-Role"),
+) -> PEApproveResult:
+    rfi = db.get(RFI, rfi_id)
+    if not rfi:
+        raise HTTPException(404, "RFI not found.")
+    actor = _actor_on_rfi(db, rfi, x_user_id, x_field_role)
+    _gate(db, actor, "void", rfi=rfi)
+    try:
+        result = void_rfi(db, rfi_id, source="pe_http", actor="pe")
+    except PEError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return PEApproveResult(
+        ok=True,
+        rfi_id=result.rfi_id,
+        status=result.status,
+        rfi_display=result.rfi_display,
+        message=result.message,
+    )
+
+
+@app.post("/pe/work_stop_grants")
+def pe_grant_work_stop(
+    body: WorkStopGrantBody,
+    _: str = Depends(require_pe),
+    db: Session = Depends(get_db),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_field_role: str | None = Header(default=None, alias="X-Field-Role"),
+    project_id: str | None = Query(default=None),
+) -> dict:
+    rfi = db.get(RFI, str(body.rfi_id)) if body.rfi_id else None
+    pid = project_id or (rfi.project_id if rfi else None)
+    if not pid:
+        raise HTTPException(422, "project_id or rfi_id is required.")
+    actor = _field_actor(db, pid, x_user_id, x_field_role, office_kind="pe" if not x_user_id else None)
+    try:
+        row = grant_work_stop(
+            db,
+            grantor=actor,
+            grantee_user_id=str(body.grantee_user_id),
+            rfi_id=str(body.rfi_id) if body.rfi_id else None,
+        )
+    except FieldError as exc:
+        raise _http_field(exc) from exc
+    return {"ok": True, "id": row.id, "grantee_user_id": row.grantee_user_id}
+
+
+def _ticket_out(row: DraftMaterialOrder) -> MaterialTicketOut:
+    return MaterialTicketOut(
+        id=row.id,
+        rfi_id=row.rfi_id,
+        status=row.status,
+        summary=row.summary,
+        assigned_to_user_id=row.assigned_to_user_id,
+        handled_at=_iso(row.handled_at),
+        approved_at=_iso(row.approved_at),
+        line_count=len(row.lines or []),
+    )
+
+
+@app.get("/field/tickets", response_model=MaterialTicketsOut)
+def field_tickets(
+    project_id: str,
+    user_id: str,
+    db: Session = Depends(get_db),
+) -> MaterialTicketsOut:
+    actor = _field_actor(db, project_id, user_id, None)
+    rows = list(db.scalars(select(DraftMaterialOrder)))
+    tickets = []
+    for row in rows:
+        rfi = db.get(RFI, row.rfi_id)
+        if not rfi or rfi.project_id != project_id:
+            continue
+        if actor.role == "apprentice" and row.assigned_to_user_id != actor.user_id:
+            continue
+        tickets.append(_ticket_out(row))
+    return MaterialTicketsOut(ok=True, tickets=tickets)
+
+
+@app.post("/field/rfis/{rfi_id}/material_request", response_model=MaterialTicketOut)
+def field_material_request(
+    rfi_id: str,
+    body: MaterialRequestBody,
+    db: Session = Depends(get_db),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_field_role: str | None = Header(default=None, alias="X-Field-Role"),
+) -> MaterialTicketOut:
+    rfi = db.get(RFI, rfi_id)
+    if not rfi:
+        raise HTTPException(404, "RFI not found.")
+    actor = _field_actor(db, rfi.project_id, x_user_id, x_field_role)
+    _gate(db, actor, "request_material", rfi=rfi)
+    try:
+        lines = normalize_material_lines(
+            [item.model_dump() for item in body.lines], body.summary
+        )
+    except PEError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    rollup = (body.summary or "").strip() or f"{len(lines)} material line(s). Draft only."
+    row = DraftMaterialOrder(
+        rfi_id=rfi.id,
+        status="draft",
+        summary=rollup,
+        lines=lines,
+        requested_by_user_id=actor.user_id,
+    )
+    db.add(row)
+    db.add(
+        RFIEvent(
+            rfi_id=rfi.id,
+            event_type="follow_on_draft",
+            from_status=rfi.status,
+            to_status=rfi.status,
+            payload={
+                "actor": actor.role,
+                "source": "field_http",
+                "kind": "material_request",
+                "status": "draft",
+            },
+        )
+    )
+    db.commit()
+    db.refresh(row)
+    return _ticket_out(row)
+
+
+@app.post("/field/material_orders/{ticket_id}/assign", response_model=MaterialTicketOut)
+def field_assign_ticket(
+    ticket_id: str,
+    body: MaterialAssignBody,
+    db: Session = Depends(get_db),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_field_role: str | None = Header(default=None, alias="X-Field-Role"),
+) -> MaterialTicketOut:
+    row = db.get(DraftMaterialOrder, ticket_id)
+    if not row:
+        raise HTTPException(404, "Ticket not found.")
+    rfi = db.get(RFI, row.rfi_id)
+    actor = _field_actor(db, rfi.project_id, x_user_id, x_field_role)
+    _gate(db, actor, "assign_tickets", rfi=rfi, ticket=row)
+    hopper = load_actor(db, rfi.project_id, str(body.user_id))
+    if hopper.role != "apprentice":
+        raise HTTPException(422, "Tickets are assigned to an apprentice.")
+    row.assigned_to_user_id = hopper.user_id
+    row.status = "assigned"
+    db.commit()
+    db.refresh(row)
+    return _ticket_out(row)
+
+
+@app.post("/field/material_orders/{ticket_id}/handle", response_model=MaterialTicketOut)
+def field_handle_ticket(
+    ticket_id: str,
+    db: Session = Depends(get_db),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_field_role: str | None = Header(default=None, alias="X-Field-Role"),
+) -> MaterialTicketOut:
+    row = db.get(DraftMaterialOrder, ticket_id)
+    if not row:
+        raise HTTPException(404, "Ticket not found.")
+    rfi = db.get(RFI, row.rfi_id)
+    actor = _field_actor(db, rfi.project_id, x_user_id, x_field_role)
+    _gate(db, actor, "handle_material", rfi=rfi, ticket=row)
+    row.handled_at = utc_now()
+    row.status = "handled"
+    db.commit()
+    db.refresh(row)
+    return _ticket_out(row)
+
+
+@app.post("/field/material_orders/{ticket_id}/flag")
+def field_flag_ticket(
+    ticket_id: str,
+    body: MaterialFlagBody,
+    db: Session = Depends(get_db),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_field_role: str | None = Header(default=None, alias="X-Field-Role"),
+) -> dict:
+    row = db.get(DraftMaterialOrder, ticket_id)
+    if not row:
+        raise HTTPException(404, "Ticket not found.")
+    rfi = db.get(RFI, row.rfi_id)
+    actor = _field_actor(db, rfi.project_id, x_user_id, x_field_role)
+    _gate(db, actor, "flag_material", rfi=rfi, ticket=row)
+    if not (body.note or "").strip():
+        raise HTTPException(422, "A flag note is required.")
+    db.add(
+        RFIEvent(
+            rfi_id=rfi.id,
+            event_type="material_flag",
+            from_status=rfi.status,
+            to_status=rfi.status,
+            payload={
+                "actor": actor.role,
+                "user_id": actor.user_id,
+                "ticket_id": row.id,
+                "kind": body.kind,
+                "note": body.note.strip(),
+            },
+        )
+    )
+    db.commit()
+    return {"ok": True, "flagged": True}
+
+
+@app.post("/field/material_orders/{ticket_id}/approve", response_model=MaterialTicketOut)
+def field_approve_ticket(
+    ticket_id: str,
+    db: Session = Depends(get_db),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_field_role: str | None = Header(default=None, alias="X-Field-Role"),
+) -> MaterialTicketOut:
+    row = db.get(DraftMaterialOrder, ticket_id)
+    if not row:
+        raise HTTPException(404, "Ticket not found.")
+    rfi = db.get(RFI, row.rfi_id)
+    actor = _field_actor(db, rfi.project_id, x_user_id, x_field_role)
+    _gate(db, actor, "approve_material", rfi=rfi, ticket=row)
+    row.approved_at = utc_now()
+    row.status = "approved"
+    db.commit()
+    db.refresh(row)
+    return _ticket_out(row)
 
 
 def _action_result(result, db: Session, message: str | None = None) -> DesignActionResult:

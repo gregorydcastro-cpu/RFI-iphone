@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PESubmitView: View {
     @StateObject private var model: PESubmitViewModel
+    @EnvironmentObject private var session: FieldSession
 
     init(rfiID: String) {
         _model = StateObject(wrappedValue: PESubmitViewModel(rfiID: rfiID))
@@ -18,15 +19,19 @@ struct PESubmitView: View {
                 }
                 if let rfi = model.rfi {
                     draftSummary(rfi)
-                    priorityBlock
-                    reviewBlock
-                    assigneeBlock
-                    commentBlock
-                    if model.submitResult == nil {
-                        submitButton
+                    if session.canSubmitRFI {
+                        priorityBlock
                     }
-                    if let result = model.submitResult {
-                        resultBanner(result)
+                    if session.canSubmitRFI {
+                        reviewBlock
+                        assigneeBlock
+                        commentBlock
+                        if model.submitResult == nil {
+                            submitButton
+                        }
+                        if let result = model.submitResult {
+                            resultBanner(result)
+                        }
                     }
                 }
                 if let error = model.errorMessage {
@@ -46,7 +51,10 @@ struct PESubmitView: View {
         .toolbarBackground(FieldTheme.steel, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
-        .task { await model.load() }
+        .task {
+            model.extraHeaders = session.fieldHeaders()
+            await model.load()
+        }
     }
 
     private var header: some View {
@@ -107,17 +115,21 @@ struct PESubmitView: View {
             )) {
                 Text("Standard").tag("standard")
                 Text("Urgent").tag("urgent")
-                Text("Work stopped").tag("work_stopped")
+                if session.canWorkStop {
+                    Text("Work stopped").tag("work_stopped")
+                }
             }
             .pickerStyle(.segmented)
-            Toggle(
-                "Work stopped",
-                isOn: Binding(
-                    get: { model.workStopped },
-                    set: { model.syncWorkStopped($0) }
+            if session.canWorkStop {
+                Toggle(
+                    "Work stopped",
+                    isOn: Binding(
+                        get: { model.workStopped },
+                        set: { model.syncWorkStopped($0) }
+                    )
                 )
-            )
-            Text("Synced: work_stopped is true only when priority is work_stopped. Grok cannot set this; PE may.")
+            }
+            Text("Priority and work-stopped stay on set_priority. Grokbot never sets them.")
                 .font(.caption)
                 .foregroundStyle(FieldTheme.muted)
         }

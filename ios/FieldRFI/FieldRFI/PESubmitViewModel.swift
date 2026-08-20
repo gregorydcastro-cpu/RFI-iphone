@@ -17,6 +17,7 @@ final class PESubmitViewModel: ObservableObject {
     @Published var isWorking = false
     @Published var errorMessage: String?
     @Published var submitResult: PESubmitResultDTO?
+    var extraHeaders: [String: String] = [:]
 
     init(rfiID: String) {
         self.rfiID = rfiID
@@ -93,7 +94,7 @@ final class PESubmitViewModel: ObservableObject {
         errorMessage = nil
         defer { isWorking = false }
         do {
-            _ = try await client.peApproveInternalReview(rfiID: rfiID)
+            _ = try await client.peApproveInternalReview(rfiID: rfiID, extraHeaders: extraHeaders)
             rfi = try await client.rfi(id: rfiID)
         } catch {
             errorMessage = error.localizedDescription
@@ -108,6 +109,7 @@ final class PESubmitViewModel: ObservableObject {
         do {
             let result = try await client.peSubmit(
                 rfiID: rfiID,
+                extraHeaders: extraHeaders,
                 body: PESubmitBody(
                     priority: priority,
                     work_stopped: workStopped,

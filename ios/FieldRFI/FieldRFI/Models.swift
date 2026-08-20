@@ -70,6 +70,61 @@ struct PreflightSheetRevision: Codable {
     let discipline: String
 }
 
+struct ActorDTO: Codable, Hashable {
+    let user_id: String
+    let role: String
+    var action: String? = "create_rfi_draft"
+}
+
+struct AssignmentDTO: Codable {
+    let ok: Bool
+    let user_id: String
+    let name: String
+    let role: String
+    let project_id: String
+    let area_id: String?
+    let area_name: String?
+    let reports_to_user_id: String?
+    let boss_name: String?
+    let boss_role: String?
+    let capabilities: [String: Bool]
+    let chain: [String]
+}
+
+struct CrewMemberDTO: Codable, Identifiable, Hashable {
+    var id: String { user_id }
+    let user_id: String
+    let name: String
+    let role: String
+    let area_id: String?
+    let area_name: String?
+    let reports_to_user_id: String?
+    let boss_name: String?
+    let active: Bool
+}
+
+struct CrewDTO: Codable {
+    let ok: Bool
+    let project_id: String
+    let members: [CrewMemberDTO]
+}
+
+struct MaterialTicketDTO: Codable, Identifiable {
+    let id: String
+    let rfi_id: String
+    let status: String
+    let summary: String
+    let assigned_to_user_id: String?
+    let handled_at: String?
+    let approved_at: String?
+    let line_count: Int
+}
+
+struct MaterialTicketsDTO: Codable {
+    let ok: Bool
+    let tickets: [MaterialTicketDTO]
+}
+
 struct PreflightEnvelope: Codable {
     let task: String
     let project: PreflightProject
@@ -78,6 +133,7 @@ struct PreflightEnvelope: Codable {
     let photos: [PhotoDTO]
     let open_rfis_same_sheet: [OpenRFIBrief]
     let user_note: String
+    let actor: ActorDTO
 }
 
 struct OpenRFIBrief: Codable {

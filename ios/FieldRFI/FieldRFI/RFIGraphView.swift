@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RFIGraphView: View {
     @StateObject private var model = RFIGraphViewModel()
+    @EnvironmentObject private var session: FieldSession
 
     var body: some View {
         ScrollView {
@@ -38,6 +39,9 @@ struct RFIGraphView: View {
                     Text(graph.days_open_rule)
                         .font(.caption2)
                         .foregroundStyle(FieldTheme.muted)
+                    Text(session.banner)
+                        .font(.caption2)
+                        .foregroundStyle(FieldTheme.muted)
                 } else if model.isLoading {
                     ProgressView("Loading weekly log…")
                         .frame(maxWidth: .infinity)
@@ -62,7 +66,16 @@ struct RFIGraphView: View {
                 Button("Reload") { Task { await model.load() } }
             }
         }
-        .onAppear { Task { await model.load() } }
+        .onAppear {
+            Task {
+                await model.load()
+                if let projectID = model.graph?.open.first?.project_id
+                    ?? model.graph?.drafts.first?.project_id
+                {
+                    await session.load(client: APIClient(), projectID: projectID)
+                }
+            }
+        }
     }
 
     private var sampleBanner: some View {
@@ -123,7 +136,7 @@ struct RFIGraphView: View {
 
     private func actorLink(_ row: GraphRowDTO, draft: Bool = false) -> some View {
         Group {
-            if ["draft", "internal_review", "needs_clarification"].contains(row.status) {
+            if session.canSubmitRFI && ["draft", "internal_review", "needs_clarification"].contains(row.status) {
                 NavigationLink {
                     PESubmitView(rfiID: row.id)
                 } label: {
@@ -156,7 +169,7 @@ struct RFIGraphView: View {
                 Text(row.rfi_display ?? "no number")
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(draft ? FieldTheme.muted : FieldTheme.ink)
-                if draft || ["draft", "internal_review", "needs_clarification"].contains(row.status) {
+                if session.canSubmitRFI && (draft || ["draft", "internal_review", "needs_clarification"].contains(row.status)) {
                     Text("PE Submit")
                         .font(.caption2.weight(.bold))
                         .padding(.horizontal, 6)
@@ -268,5 +281,6 @@ struct FlowWrap: View {
 #Preview {
     NavigationStack {
         RFIGraphView()
+            .environmentObject(FieldSession())
     }
 }

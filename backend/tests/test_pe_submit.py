@@ -21,6 +21,7 @@ from app.ids import (
 )
 from app.models import RFI, RFIEvent, RFIPin, RFIRef
 from app.pe import DUE_AT_RULE, PRIORITY_CONFIRM_COMMENT, request_clarification
+from tests.actors import actor_payload
 
 PE_HEADERS = {"X-Field-Actor": "pe", "X-PE-Token": "pe-demo"}
 
@@ -39,6 +40,7 @@ def _envelope(note: str, **overrides):
         "photos": [],
         "open_rfis_same_sheet": [],
         "user_note": note,
+        "actor": actor_payload("journeyman"),
     }
     payload.update(overrides)
     return payload

@@ -2,6 +2,8 @@
 
 Search first, then create_rfi_draft only. This module never writes submitted,
 ball_in_court, closed, or void. It never assigns rfi_number / rfi_display.
+It never submits, sets priority, work-stops, or assigns a hopper. The HTTP
+layer reads actor.role and 403s apprentice drafts and out-of-lane actions.
 """
 
 from __future__ import annotations
