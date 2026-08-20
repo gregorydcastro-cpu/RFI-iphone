@@ -1,5 +1,5 @@
 -- Fill-holes only. Copy into a missing column. Never add onto a live value.
--- Never SET first_submitted_at = now(). Never rfi_number = rfi_number + N.
+-- Never assign first_submitted_at from now(). Never renumber.
 
 ALTER TABLE rfis
   ADD COLUMN IF NOT EXISTS first_submitted_at timestamp;

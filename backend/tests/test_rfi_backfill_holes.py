@@ -34,9 +34,8 @@ def test_sql_backfill_is_fill_holes_not_a_transform() -> None:
     assert "due_at IS NOT NULL" in sql
     assert "LIMIT 1000" in sql
     assert dbmod.BACKFILL_CYCLE_DUE_BATCH == 1000
-    assert "rfi_number +" not in sql
-    assert "rfi_number =" not in sql
-    assert "first_submitted_at = now()" not in sql.lower()
+    assert "rfi_number" not in sql
+    assert "now()" not in sql.lower()
     assert "interval" not in sql.lower()
     assert "SET cycle_due_at = due_at\nWHERE id IN" in sql
 
