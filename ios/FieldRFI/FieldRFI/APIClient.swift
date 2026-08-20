@@ -11,6 +11,12 @@ struct APIClient {
         URL(string: "http://127.0.0.1:8000")!
     }
 
+    /// PE Submit screen only. Grok / New RFI never send these headers.
+    static let peHeaders = [
+        "X-Field-Actor": "pe",
+        "X-PE-Token": "pe-demo",
+    ]
+
     func projects() async throws -> [ProjectDTO] {
         try await get("/projects")
     }
@@ -59,6 +65,18 @@ struct APIClient {
         try await get("/rfis/\(id)")
     }
 
+    func peAssignees() async throws -> AssigneeRosterDTO {
+        try await get("/pe/assignees", headers: Self.peHeaders)
+    }
+
+    func peApproveInternalReview(rfiID: String) async throws -> PEApproveResultDTO {
+        try await post("/pe/rfis/\(rfiID)/approve_internal_review", body: EmptyBody(), headers: Self.peHeaders)
+    }
+
+    func peSubmit(rfiID: String, body: PESubmitBody) async throws -> PESubmitResultDTO {
+        try await post("/pe/rfis/\(rfiID)/submit", body: body, headers: Self.peHeaders)
+    }
+
     func rfiGraph(projectID: String? = nil) async throws -> GraphResponseDTO {
         var items: [URLQueryItem] = []
         if let projectID, !projectID.isEmpty {
@@ -67,27 +85,43 @@ struct APIClient {
         return try await get("/rfi_graph", query: items)
     }
 
-    private func get<T: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
+    private func get<T: Decodable>(
+        _ path: String,
+        query: [URLQueryItem] = [],
+        headers: [String: String] = [:]
+    ) async throws -> T {
         var components = URLComponents(url: baseURL.appending(path: path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty {
             components.queryItems = query
         }
         var request = URLRequest(url: components.url!)
         request.httpMethod = "GET"
+        for (key, value) in headers {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
         let (data, response) = try await URLSession.shared.data(for: request)
         try Self.validate(response, data: data)
         return try JSONDecoder().decode(T.self, from: data)
     }
 
-    private func post<Body: Encodable, T: Decodable>(_ path: String, body: Body) async throws -> T {
+    private func post<Body: Encodable, T: Decodable>(
+        _ path: String,
+        body: Body,
+        headers: [String: String] = [:]
+    ) async throws -> T {
         var request = URLRequest(url: baseURL.appending(path: path))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        for (key, value) in headers {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
         request.httpBody = try JSONEncoder().encode(body)
         let (data, response) = try await URLSession.shared.data(for: request)
         try Self.validate(response, data: data)
         return try JSONDecoder().decode(T.self, from: data)
     }
+
+    private struct EmptyBody: Encodable {}
 
     private static func validate(_ response: URLResponse, data: Data) throws {
         guard let http = response as? HTTPURLResponse else {

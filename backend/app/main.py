@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import base64
 import binascii
+import os
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy import or_, select
@@ -25,6 +26,7 @@ from app.aging import (
 )
 from app.grokbot import GrokbotError, draft_from_preflight
 from app.models import (
+    Company,
     DraftChangeOrder,
     DraftMaterialOrder,
     Organization,
@@ -36,6 +38,15 @@ from app.models import (
     RFIRef,
     Sheet,
     SheetRevision,
+    User,
+)
+from app.pe import (
+    DUE_AT_RULE,
+    PEError,
+    approve_internal_review,
+    last_event_is_internal_approve,
+    missing_for_submit,
+    submit_for_design,
 )
 from app.rules import DraftValidationError, is_open_status, validate_draft_payload
 from app.schemas import (
@@ -43,9 +54,16 @@ from app.schemas import (
     ALL_STATUSES,
     STATUS_MACHINE_BRANCHES,
     STATUS_MACHINE_MAIN,
+    AssigneeCompanyOut,
+    AssigneeRosterOut,
+    AssigneeUserOut,
     DraftResult,
     GraphResponse,
     GraphRow,
+    PEApproveBody,
+    PEApproveResult,
+    PESubmitBody,
+    PESubmitResult,
     PreflightEnvelope,
     ProjectOut,
     RFIOut,
@@ -76,6 +94,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+DEFAULT_PE_TOKEN = "pe-demo"
+
+
+def require_pe(
+    x_field_actor: str | None = Header(default=None, alias="X-Field-Actor"),
+    x_pe_token: str | None = Header(default=None, alias="X-PE-Token"),
+) -> str:
+    expected = os.environ.get("RFI_PE_TOKEN", DEFAULT_PE_TOKEN)
+    if (x_field_actor or "").strip().lower() != "pe" or (x_pe_token or "") != expected:
+        raise HTTPException(403, "PE credentials required. Submit is PE-only.")
+    return "pe"
 
 
 @app.get("/health")
@@ -279,7 +309,9 @@ def _graph_row(rfi: RFI, project_name: str, now) -> GraphRow:
         days_open=days_open(rfi.created_at, now),
         age_bucket=bucket,
         is_sample=bool(rfi.is_sample),
-        is_draft=rfi.status == "draft",
+        is_draft=rfi.status == "draft" or (
+            rfi.status == "internal_review" and rfi.rfi_display is None
+        ),
     )
 
 
@@ -302,7 +334,9 @@ def rfi_graph(
     closed_or_void = 0
     for rfi, project_name in pairs:
         row = _graph_row(rfi, project_name, now)
-        if rfi.status == "draft":
+        if rfi.status == "draft" or (
+            rfi.status == "internal_review" and rfi.rfi_display is None
+        ):
             drafts.append(row)
         elif rfi.status in ("closed", "void"):
             closed_or_void += 1
@@ -338,8 +372,10 @@ def rfi_graph(
     )
 
 
-def _missing_for_submit() -> list[str]:
-    return ["internal_review"]
+def _missing_for_submit(rfi: RFI | None = None, db: Session | None = None) -> list[str]:
+    if rfi is None:
+        return ["internal_review"]
+    return missing_for_submit(rfi, db, require_internal_review=True)
 
 
 def _duplicate_result(rfi: RFI) -> DraftResult:
@@ -593,6 +629,17 @@ def get_rfi(rfi_id: str, db: Session = Depends(get_db)) -> RFIOut:
     ).scalar_one_or_none()
     if not rfi:
         raise HTTPException(404, "RFI not found.")
+    return _rfi_out(rfi, db)
+
+
+def _iso(value) -> str | None:
+    if value is None:
+        return None
+    text = value.isoformat()
+    return text if text.endswith("Z") else text + "Z"
+
+
+def _rfi_out(rfi: RFI, db: Session) -> RFIOut:
     return RFIOut(
         id=rfi.id,
         project_id=rfi.project_id,
@@ -602,16 +649,19 @@ def get_rfi(rfi_id: str, db: Session = Depends(get_db)) -> RFIOut:
         subject=rfi.subject,
         question=rfi.question,
         priority=rfi.priority,
+        work_stopped=work_stopped(rfi.priority),
         cost_impact=rfi.cost_impact,
         schedule_impact=rfi.schedule_impact,
         proposed_solution=rfi.proposed_solution,
         grok_preflight=rfi.grok_preflight,
         assigned=rfi.assigned,
+        assigned_to_user_id=rfi.assigned_to_user_id,
+        assigned_to_company_id=rfi.assigned_to_company_id,
         official_response=rfi.official_response,
-        responded_at=rfi.responded_at.isoformat() + "Z" if rfi.responded_at else None,
-        due_at=rfi.due_at.isoformat() + "Z" if rfi.due_at else None,
-        submitted_at=rfi.submitted_at.isoformat() + "Z" if rfi.submitted_at else None,
-        closed_at=rfi.closed_at.isoformat() + "Z" if rfi.closed_at else None,
+        responded_at=_iso(rfi.responded_at),
+        due_at=_iso(rfi.due_at),
+        submitted_at=_iso(rfi.submitted_at),
+        closed_at=_iso(rfi.closed_at),
         pins=[
             {
                 "id": pin.id,
@@ -636,7 +686,8 @@ def get_rfi(rfi_id: str, db: Session = Depends(get_db)) -> RFIOut:
             for ref in rfi.refs
         ],
         attachment_count=len(rfi.attachments),
-        missing_for_submit=_missing_for_submit() if rfi.status == "draft" else [],
+        missing_for_submit=_missing_for_submit(rfi, db),
+        last_internal_review=last_event_is_internal_approve(db, rfi.id),
         draft_change_orders=[
             {"id": row.id, "status": row.status, "summary": row.summary}
             for row in db.scalars(select(DraftChangeOrder).where(DraftChangeOrder.rfi_id == rfi.id))
@@ -647,4 +698,90 @@ def get_rfi(rfi_id: str, db: Session = Depends(get_db)) -> RFIOut:
                 select(DraftMaterialOrder).where(DraftMaterialOrder.rfi_id == rfi.id)
             )
         ],
+    )
+
+
+@app.get("/pe/assignees", response_model=AssigneeRosterOut)
+def pe_assignees(_: str = Depends(require_pe), db: Session = Depends(get_db)) -> AssigneeRosterOut:
+    companies = list(db.scalars(select(Company).order_by(Company.name)))
+    users = list(db.scalars(select(User).order_by(User.name)))
+    company_names = {row.id: row.name for row in companies}
+    return AssigneeRosterOut(
+        ok=True,
+        companies=[
+            AssigneeCompanyOut(id=row.id, name=row.name, kind=row.kind) for row in companies
+        ],
+        users=[
+            AssigneeUserOut(
+                id=row.id,
+                name=row.name,
+                role=row.role,
+                company_id=row.company_id,
+                company_name=company_names.get(row.company_id) if row.company_id else None,
+            )
+            for row in users
+        ],
+    )
+
+
+@app.post("/pe/rfis/{rfi_id}/approve_internal_review", response_model=PEApproveResult)
+def pe_approve_internal_review(
+    rfi_id: str,
+    body: PEApproveBody = PEApproveBody(),
+    _: str = Depends(require_pe),
+    db: Session = Depends(get_db),
+) -> PEApproveResult:
+    try:
+        result = approve_internal_review(db, rfi_id, source="pe_http")
+    except PEError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return PEApproveResult(
+        ok=True,
+        rfi_id=result.rfi_id,
+        status=result.status,
+        rfi_display=result.rfi_display,
+        message=result.message,
+    )
+
+
+@app.post("/pe/rfis/{rfi_id}/submit", response_model=PESubmitResult)
+def pe_submit_rfi(
+    rfi_id: str,
+    body: PESubmitBody,
+    _: str = Depends(require_pe),
+    db: Session = Depends(get_db),
+) -> PESubmitResult:
+    try:
+        result = submit_for_design(
+            db,
+            rfi_id,
+            assignee=body.assignee,
+            assigned_to_user_id=str(body.assigned_to_user_id) if body.assigned_to_user_id else None,
+            assigned_to_company_id=(
+                str(body.assigned_to_company_id) if body.assigned_to_company_id else None
+            ),
+            priority=body.priority,
+            work_stopped_flag=body.work_stopped,
+            require_internal_review=body.require_internal_review,
+            comment=body.comment,
+            source="pe_http",
+        )
+    except PEError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return PESubmitResult(
+        ok=True,
+        rfi_id=result.rfi_id,
+        status=result.status,
+        rfi_display=result.rfi_display,
+        rfi_number=result.rfi_number,
+        due_at=_iso(result.due_at),
+        submitted_at=_iso(result.submitted_at),
+        first_submit=result.first_submit,
+        assigned=result.assigned,
+        assigned_to_user_id=result.assigned_to_user_id,
+        assigned_to_company_id=result.assigned_to_company_id,
+        priority=result.priority or "",
+        work_stopped=result.work_stopped,
+        due_at_rule=DUE_AT_RULE,
+        message=result.message,
     )

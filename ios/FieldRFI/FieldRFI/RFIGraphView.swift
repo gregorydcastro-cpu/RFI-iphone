@@ -16,7 +16,7 @@ struct RFIGraphView: View {
                         .font(.footnote)
                         .foregroundStyle(FieldTheme.muted)
                     ForEach(graph.open) { row in
-                        graphRow(row)
+                        peLink(row)
                     }
                     if graph.open.isEmpty {
                         Text("No open RFIs.")
@@ -26,11 +26,11 @@ struct RFIGraphView: View {
                     Text("Drafts (no number)")
                         .font(.headline)
                         .padding(.top, 8)
-                    Text("Drafts stay off the meeting graph until a human submits.")
+                    Text("Drafts stay off the meeting graph until a PE submits. Tap a draft to open the PE Submit screen.")
                         .font(.footnote)
                         .foregroundStyle(FieldTheme.muted)
                     ForEach(graph.drafts) { row in
-                        graphRow(row, draft: true)
+                        peLink(row, draft: true)
                     }
                     Text("Closed / void excluded from the open list: \(graph.closed_or_void_count)")
                         .font(.caption)
@@ -62,7 +62,7 @@ struct RFIGraphView: View {
                 Button("Reload") { Task { await model.load() } }
             }
         }
-        .task { await model.load() }
+        .onAppear { Task { await model.load() } }
     }
 
     private var sampleBanner: some View {
@@ -121,12 +121,37 @@ struct RFIGraphView: View {
         }
     }
 
+    private func peLink(_ row: GraphRowDTO, draft: Bool = false) -> some View {
+        let submittable = ["draft", "internal_review", "needs_clarification"].contains(row.status)
+        return Group {
+            if submittable {
+                NavigationLink {
+                    PESubmitView(rfiID: row.id)
+                } label: {
+                    graphRow(row, draft: draft)
+                }
+                .buttonStyle(.plain)
+            } else {
+                graphRow(row, draft: draft)
+            }
+        }
+    }
+
     private func graphRow(_ row: GraphRowDTO, draft: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(row.rfi_display ?? "no number")
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(draft ? FieldTheme.muted : FieldTheme.ink)
+                if draft || ["draft", "internal_review"].contains(row.status) {
+                    Text("PE Submit")
+                        .font(.caption2.weight(.bold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(FieldTheme.steel.opacity(0.12))
+                        .foregroundStyle(FieldTheme.steel)
+                        .clipShape(Capsule())
+                }
                 if row.is_sample {
                     Text("SAMPLE")
                         .font(.caption2.weight(.bold))

@@ -17,6 +17,8 @@
 		A100000000000000000008 /* PhotoStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000008 /* PhotoStripView.swift */; };
 		A100000000000000000012 /* RFIGraphView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000012 /* RFIGraphView.swift */; };
 		A100000000000000000013 /* RFIGraphViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000013 /* RFIGraphViewModel.swift */; };
+		A100000000000000000014 /* PESubmitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000014 /* PESubmitView.swift */; };
+		A100000000000000000015 /* PESubmitViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000015 /* PESubmitViewModel.swift */; };
 		A100000000000000000010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000010 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -32,6 +34,8 @@
 		B100000000000000000008 /* PhotoStripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoStripView.swift; sourceTree = "<group>"; };
 		B100000000000000000012 /* RFIGraphView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RFIGraphView.swift; sourceTree = "<group>"; };
 		B100000000000000000013 /* RFIGraphViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RFIGraphViewModel.swift; sourceTree = "<group>"; };
+		B100000000000000000014 /* PESubmitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PESubmitView.swift; sourceTree = "<group>"; };
+		B100000000000000000015 /* PESubmitViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PESubmitViewModel.swift; sourceTree = "<group>"; };
 		B100000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B100000000000000000011 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -68,6 +72,8 @@
 				B100000000000000000008 /* PhotoStripView.swift */,
 				B100000000000000000012 /* RFIGraphView.swift */,
 				B100000000000000000013 /* RFIGraphViewModel.swift */,
+				B100000000000000000014 /* PESubmitView.swift */,
+				B100000000000000000015 /* PESubmitViewModel.swift */,
 				B100000000000000000010 /* Assets.xcassets */,
 				B100000000000000000011 /* Info.plist */,
 			);
@@ -161,6 +167,8 @@
 				A100000000000000000008 /* PhotoStripView.swift in Sources */,
 				A100000000000000000012 /* RFIGraphView.swift in Sources */,
 				A100000000000000000013 /* RFIGraphViewModel.swift in Sources */,
+				A100000000000000000014 /* PESubmitView.swift in Sources */,
+				A100000000000000000015 /* PESubmitViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

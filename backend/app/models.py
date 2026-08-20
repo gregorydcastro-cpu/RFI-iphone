@@ -58,6 +58,8 @@ class Project(Base):
     drawing_sets: Mapped[list[DrawingSet]] = relationship(back_populates="project")
     locations: Mapped[list[Location]] = relationship(back_populates="project")
     rfis: Mapped[list[RFI]] = relationship(back_populates="project")
+    companies: Mapped[list["Company"]] = relationship(back_populates="project")
+    users: Mapped[list["User"]] = relationship(back_populates="project")
 
 
 class ProjectRFISettings(Base):
@@ -123,6 +125,41 @@ class SheetRevision(Base):
     sheet: Mapped[Sheet] = relationship(back_populates="revisions")
 
 
+class Company(Base):
+    """Thin project company row for PE assignment. Not a full CRM."""
+
+    __tablename__ = "companies"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    project_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("projects.id"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False, default="design")
+
+    project: Mapped[Optional[Project]] = relationship(back_populates="companies")
+    users: Mapped[list["User"]] = relationship(back_populates="company")
+
+
+class User(Base):
+    """Thin project person row for PE assignment."""
+
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    project_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("projects.id"), nullable=True
+    )
+    company_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("companies.id"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False, default="ae")
+
+    project: Mapped[Optional[Project]] = relationship(back_populates="users")
+    company: Mapped[Optional[Company]] = relationship(back_populates="users")
+
+
 class Location(Base):
     __tablename__ = "locations"
 
@@ -158,6 +195,12 @@ class RFI(Base):
     proposed_solution: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     grok_preflight: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     assigned: Mapped[Optional[str]] = mapped_column(String(160), nullable=True)
+    assigned_to_user_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id"), nullable=True
+    )
+    assigned_to_company_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("companies.id"), nullable=True
+    )
     is_sample: Mapped[bool] = mapped_column(default=False)
     due_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     official_response: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

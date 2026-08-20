@@ -7,6 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.drawings import ensure_demo_drawings, png_size
 from app.ids import (
+    COMPANY_CASTRO_ID,
+    COMPANY_SAMPLE_AE_ID,
+    COMPANY_TENBERKE_ID,
     DEMO_ORG_NAME,
     DEMO_PROJECT_NAME,
     DRAWING_SET_ID,
@@ -41,10 +44,14 @@ from app.ids import (
     SETTINGS_ID,
     SHEET_S301_ID,
     SHEET_S302_ID,
+    USER_GREG_PE_ID,
+    USER_SAMPLE_AE_ID,
+    USER_SAMPLE_PE_ID,
 )
 from app.db import ASSETS_DIR
 from app.sample_seed import seed_sample_graph_rfis
 from app.models import (
+    Company,
     DrawingSet,
     Location,
     Organization,
@@ -56,6 +63,7 @@ from app.models import (
     RFIRef,
     Sheet,
     SheetRevision,
+    User,
 )
 
 
@@ -295,11 +303,62 @@ def ingest_ilsb_draft(db: Session) -> RFI | None:
     return rfi
 
 
+def seed_pe_roster(db: Session) -> None:
+    """Thin PE / design companies and users. Shared across demo projects."""
+    if db.get(Company, str(COMPANY_CASTRO_ID)):
+        return
+    db.add_all(
+        [
+            Company(
+                id=str(COMPANY_CASTRO_ID),
+                project_id=None,
+                name="Castro Construction",
+                kind="gc",
+            ),
+            Company(
+                id=str(COMPANY_TENBERKE_ID),
+                project_id=None,
+                name="TenBerke",
+                kind="architect",
+            ),
+            Company(
+                id=str(COMPANY_SAMPLE_AE_ID),
+                project_id=None,
+                name="Sample AE",
+                kind="engineer",
+            ),
+            User(
+                id=str(USER_GREG_PE_ID),
+                project_id=None,
+                company_id=str(COMPANY_CASTRO_ID),
+                name="Greg Castro",
+                role="pe",
+            ),
+            User(
+                id=str(USER_SAMPLE_AE_ID),
+                project_id=None,
+                company_id=str(COMPANY_SAMPLE_AE_ID),
+                name="Sample AE",
+                role="ae",
+            ),
+            User(
+                id=str(USER_SAMPLE_PE_ID),
+                project_id=None,
+                company_id=str(COMPANY_CASTRO_ID),
+                name="Sample PE reviewer",
+                role="pe",
+            ),
+        ]
+    )
+    db.commit()
+
+
 def seed_demo(db: Session) -> None:
     paths = ensure_demo_drawings(ASSETS_DIR)
     sizes = {name: png_size(path) for name, path in paths.items()}
     seed_harbor_yard(db, sizes)
     seed_ilsb_catalog(db, sizes)
+    seed_pe_roster(db)
     ingest_ilsb_draft(db)
     seed_sample_graph_rfis(db)
 

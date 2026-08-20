@@ -224,11 +224,14 @@ class RFIOut(BaseModel):
     subject: str
     question: str
     priority: str
+    work_stopped: bool = False
     cost_impact: str
     schedule_impact: str
     proposed_solution: Optional[str]
     grok_preflight: Optional[dict]
     assigned: Optional[str] = None
+    assigned_to_user_id: Optional[str] = None
+    assigned_to_company_id: Optional[str] = None
     official_response: Optional[str] = None
     responded_at: Optional[str] = None
     due_at: Optional[str] = None
@@ -238,5 +241,83 @@ class RFIOut(BaseModel):
     refs: list[dict]
     attachment_count: int
     missing_for_submit: list[str]
+    last_internal_review: bool = False
     draft_change_orders: list[dict] = Field(default_factory=list)
     draft_material_orders: list[dict] = Field(default_factory=list)
+
+
+class PEApproveBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    comment: Optional[str] = None
+
+
+class PESubmitBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    priority: str
+    work_stopped: bool
+    require_internal_review: bool = True
+    assigned_to_user_id: Optional[UUID] = None
+    assigned_to_company_id: Optional[UUID] = None
+    assignee: Optional[str] = None
+    comment: Optional[str] = None
+
+    @field_validator("priority")
+    @classmethod
+    def strip_priority(cls, value: str) -> str:
+        return value.strip().lower()
+
+    @field_validator("assignee")
+    @classmethod
+    def strip_assignee(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        return trimmed or None
+
+
+class PESubmitResult(BaseModel):
+    ok: bool
+    rfi_id: str
+    status: str
+    rfi_display: Optional[str]
+    rfi_number: Optional[int] = None
+    due_at: Optional[str] = None
+    submitted_at: Optional[str] = None
+    first_submit: bool
+    assigned: Optional[str] = None
+    assigned_to_user_id: Optional[str] = None
+    assigned_to_company_id: Optional[str] = None
+    priority: str
+    work_stopped: bool
+    due_at_rule: str
+    message: str
+
+
+class PEApproveResult(BaseModel):
+    ok: bool
+    rfi_id: str
+    status: str
+    rfi_display: Optional[str]
+    message: str
+
+
+class AssigneeUserOut(BaseModel):
+    id: str
+    name: str
+    role: str
+    company_id: Optional[str] = None
+    company_name: Optional[str] = None
+
+
+class AssigneeCompanyOut(BaseModel):
+    id: str
+    name: str
+    kind: str
+
+
+class AssigneeRosterOut(BaseModel):
+    ok: bool
+    users: list[AssigneeUserOut]
+    companies: list[AssigneeCompanyOut]

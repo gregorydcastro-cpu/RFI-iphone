@@ -107,9 +107,91 @@ struct RFIDTO: Codable, Identifiable {
     let subject: String
     let question: String
     let priority: String
+    let work_stopped: Bool?
     let cost_impact: String
     let schedule_impact: String
     let proposed_solution: String?
+    let assigned: String?
+    let assigned_to_user_id: String?
+    let assigned_to_company_id: String?
+    let due_at: String?
+    let submitted_at: String?
+    let pins: [RFIPinDetailDTO]?
+    let refs: [RFIRefDetailDTO]?
+    let missing_for_submit: [String]?
+    let last_internal_review: Bool?
+}
+
+struct RFIPinDetailDTO: Codable, Identifiable {
+    let id: String
+    let sheet_revision_id: String
+    let x_norm: Double
+    let y_norm: Double
+    let label: String?
+}
+
+struct RFIRefDetailDTO: Codable, Identifiable {
+    let id: String
+    let sheet_revision_id: String?
+    let sheet_number: String?
+    let revision: String?
+    let discipline: String?
+    let detail: String?
+    let grid: String?
+}
+
+struct AssigneeUserDTO: Codable, Identifiable {
+    let id: String
+    let name: String
+    let role: String
+    let company_id: String?
+    let company_name: String?
+}
+
+struct AssigneeCompanyDTO: Codable, Identifiable {
+    let id: String
+    let name: String
+    let kind: String
+}
+
+struct AssigneeRosterDTO: Codable {
+    let ok: Bool
+    let users: [AssigneeUserDTO]
+    let companies: [AssigneeCompanyDTO]
+}
+
+struct PEApproveResultDTO: Codable {
+    let ok: Bool
+    let rfi_id: String
+    let status: String
+    let rfi_display: String?
+    let message: String
+}
+
+struct PESubmitBody: Codable {
+    let priority: String
+    let work_stopped: Bool
+    let require_internal_review: Bool
+    let assigned_to_user_id: String?
+    let assigned_to_company_id: String?
+    let assignee: String?
+    let comment: String?
+}
+
+struct PESubmitResultDTO: Codable {
+    let ok: Bool
+    let rfi_id: String
+    let status: String
+    let rfi_display: String?
+    let rfi_number: Int?
+    let due_at: String?
+    let submitted_at: String?
+    let first_submit: Bool
+    let assigned: String?
+    let priority: String
+    let work_stopped: Bool
+    let due_at_rule: String
+    let message: String
 }
 
 struct GraphRowDTO: Codable, Identifiable {
