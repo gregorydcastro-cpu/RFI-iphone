@@ -122,7 +122,7 @@ class PolicyCoverageData:
 
 
 def migrate_v1_to_v2(raw: dict) -> dict:
-    """step(1)→2. step(already-2)→2 with the same counts. Input not mutated."""
+    """Fill-holes. schema is exactly 2. Never schema += 1. Never += counts."""
     out = _copy(raw)
     out["schema"] = 2
     out.setdefault("combining", "deny_overrides")
@@ -136,15 +136,15 @@ def migrate_v1_to_v2(raw: dict) -> dict:
 
 
 def migrate_v2_to_v3(raw: dict) -> dict:
-    """step(2)→3. step(already-3)→3 with the same counts. Input not mutated."""
-    out = _copy(raw)
+    """Planned later. Not shipped. Fill-holes rename stop→stopped."""
+    out = deepcopy(raw)
     hits = {}
     for name, row in out["hits"].items():
         nxt = dict(row)
         if "stopped" not in nxt and "stop" in nxt:
             nxt["stopped"] = nxt["stop"]
         nxt.setdefault("stopped", 0)
-        nxt.pop("stop", None)  # only after copy; do not reuse stop
+        nxt.pop("stop", None)  # only after copy
         hits[name] = nxt
     out["hits"] = hits
     out["schema"] = 3

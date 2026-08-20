@@ -172,27 +172,59 @@ def test_v1_step_does_not_overwrite_existing_stop() -> None:
     assert out["hits"]["same_project"]["stop"] == 9
 
 
-def test_v1_step_lands_on_n_plus_one_and_does_not_mutate() -> None:
+def test_v1_step_classic_source_gains_new_keys() -> None:
     raw = deepcopy(V1)
-    snapshot = deepcopy(raw)
-    out = migrate_v1_to_v2(raw)
-    assert raw == snapshot
-    assert out is not raw
-    assert out["schema"] == 2 == raw["schema"] + 1
+    assert "stop" not in raw["hits"]["same_project"]
+    assert "skipped_after_stop" not in raw["hits"]["same_project"]
+    nxt = migrate_v1_to_v2(raw)
+    assert nxt["hits"]["same_project"]["stop"] == raw["hits"]["same_project"]["deny"] == 1
+    assert nxt["hits"]["same_project"]["skipped_after_stop"] == 0
+    assert nxt["hits"]["same_project"]["deny"] == 1
+    assert nxt["hits"]["role_allows"]["allow"] == 1
+    assert nxt["hits"]["role_allows"]["deny"] == 1
 
 
-def test_v1_step_on_already_v2_keeps_counts() -> None:
+def test_v1_step_already_new_keys_keeps_counts() -> None:
     raw = deepcopy(V2)
-    snapshot = deepcopy(raw)
-    out = migrate_v1_to_v2(raw)
-    assert raw == snapshot
-    assert out["schema"] == 2
-    assert out["hits"]["same_project"]["deny"] == 1
-    assert out["hits"]["same_project"]["stop"] == 1
-    assert out["hits"]["same_project"]["skipped_after_stop"] == 0
-    assert out["hits"]["role_allows"]["allow"] == 1
-    assert out["hits"]["role_allows"]["deny"] == 1
-    assert out["hits"]["role_allows"]["skipped_after_stop"] == 1
+    nxt = migrate_v1_to_v2(raw)
+    assert nxt["hits"]["same_project"]["deny"] == 1
+    assert nxt["hits"]["same_project"]["stop"] == 1
+    assert nxt["hits"]["same_project"]["skipped_after_stop"] == 0
+    assert nxt["hits"]["role_allows"]["allow"] == 1
+    assert nxt["hits"]["role_allows"]["deny"] == 1
+    assert nxt["hits"]["role_allows"]["stop"] == 1
+    assert nxt["hits"]["role_allows"]["skipped_after_stop"] == 1
+
+
+def test_v1_step_mixed_row_prefers_new_key() -> None:
+    raw = {
+        "schema": 1,
+        "policy_set": "field_lanes",
+        "hits": {"same_project": {"deny": 3, "stop": 1}},
+    }
+    nxt = migrate_v1_to_v2(raw)
+    assert nxt["hits"]["same_project"]["stop"] == 1
+    assert nxt["hits"]["same_project"]["deny"] == 3
+
+
+def test_v1_step_input_identity() -> None:
+    raw = deepcopy(V1)
+    before = deepcopy(raw)
+    migrate_v1_to_v2(raw)
+    assert raw == before
+
+
+def test_v1_step_result_is_not_raw() -> None:
+    raw = deepcopy(V1)
+    nxt = migrate_v1_to_v2(raw)
+    assert nxt is not raw
+
+
+def test_v1_step_schema_is_exactly_n_plus_one() -> None:
+    nxt = migrate_v1_to_v2(deepcopy(V1))
+    assert nxt["schema"] == 2
+    again = migrate_v1_to_v2(nxt)
+    assert again["schema"] == 2
 
 
 def test_v2_step_lands_on_n_plus_one_and_does_not_mutate() -> None:
