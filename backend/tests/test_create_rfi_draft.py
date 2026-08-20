@@ -1,4 +1,8 @@
+from sqlalchemy import select
+
+from app import db as dbmod
 from app.ids import PROJECT_ID, REV_S301_C_ID
+from app.models import RFIEvent
 
 
 def _envelope(**overrides):
@@ -48,6 +52,18 @@ def test_create_draft_success_has_no_human_number(client):
     assert rfi["grok_preflight"]["envelope"]["task"] == "preflight_rfi"
     assert rfi["pins"][0]["sheet_revision_id"] == str(REV_S301_C_ID)
     assert 0 <= rfi["pins"][0]["x_norm"] <= 1
+
+    db = dbmod.SessionLocal()
+    try:
+        events = list(
+            db.scalars(select(RFIEvent).where(RFIEvent.rfi_id == body["rfi_id"]))
+        )
+        assert len(events) == 1
+        assert events[0].event_type == "status_change"
+        assert events[0].from_status is None
+        assert events[0].to_status == "draft"
+    finally:
+        db.close()
 
 
 def test_create_draft_rejects_forbidden_and_extra_keys(client):
