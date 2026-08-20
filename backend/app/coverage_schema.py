@@ -100,7 +100,7 @@ class PolicyCoverageData:
     def from_json(cls, raw: dict[str, Any]) -> PolicyCoverageData:
         raw = migrate(raw)
         if raw.get("policy_set") != "field_lanes":
-            raise ValueError(f"refusing to merge {raw.get('policy_set')}")
+            raise ValueError(f"refusing to merge policy_set {raw.get('policy_set')}")
         leaked = COVERAGE_FILE_FORBIDDEN & raw.keys()
         if leaked:
             raise ValueError(f"coverage file must not include {sorted(leaked)}")
