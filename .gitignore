@@ -5,6 +5,8 @@ __pycache__/
 .pytest_cache/
 rfi-cov-gw*.json
 rfi-cov-gw*.tmp
+.rfi-cov/gw*.json
+.rfi-cov/*.tmp
 .mypy_cache/
 *.egg-info/
 .DS_Store

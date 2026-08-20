@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sys
-import tempfile
 from collections.abc import Iterable
 from pathlib import Path
 from uuid import UUID
@@ -25,15 +24,19 @@ from abac import (
     evaluate as _engine_evaluate,
 )
 from app.policy_coverage import (
+    COV_DIR,
     EXPECTED_ORDER,
     PolicyCoverage,
     PolicyCoverageData,
     REQUIRED_STOPS,
     _hits_to_dict,
-    _merge_hits,
     _traces,
     absorb_hits,
     assert_policy_coverage,
+    coverage_from_data,
+    dump_from_bag,
+    merge_coverage,
+    read_coverage,
     write_coverage,
 )
 
@@ -287,12 +290,8 @@ def _is_subset_run(config) -> bool:
     return bool(keyword.strip())
 
 
-def _cov_dump_path(worker_id: str) -> Path:
-    return Path(tempfile.gettempdir()) / f"rfi-cov-{worker_id}.json"
-
-
 def pytest_configure(config):
-    config._rfi_cov_bags = []
+    config._rfi_cov_objs = []
     config._rfi_cov_merged = []
 
 
@@ -369,11 +368,11 @@ def cov(request: pytest.FixtureRequest, cov_summary: PolicyCoverage) -> PolicyCo
     yield coverage
     coverage.seal()
     absorb_hits(cov_summary, coverage)
-    bags = getattr(request.config, "_rfi_cov_bags", None)
-    if bags is None:
-        request.config._rfi_cov_bags = []
-        bags = request.config._rfi_cov_bags
-    bags.append(_hits_to_dict(coverage, worker=_worker_id(request.config)))
+    objs = getattr(request.config, "_rfi_cov_objs", None)
+    if objs is None:
+        request.config._rfi_cov_objs = []
+        objs = request.config._rfi_cov_objs
+    objs.append(coverage)
     failed_here = request.session.testsfailed - failed_before
     if failed_here:
         return
@@ -403,27 +402,25 @@ def pytest_testnodedown(node, error):
 def pytest_sessionfinish(session, exitstatus):
     config = session.config
     if _is_xdist_worker(config):
-        bags = getattr(config, "_rfi_cov_bags", [])
+        objs = getattr(config, "_rfi_cov_objs", [])
+        worker = _worker_id(config) or "gw?"
+        bag = PolicyCoverage()
+        for obj in objs:
+            absorb_hits(bag, obj)
+        dump_from_bag(bag, COV_DIR / f"{worker}.json", worker=worker)
         workeroutput = getattr(config, "workeroutput", None)
         if workeroutput is not None:
-            workeroutput["rfi_cov_bags"] = bags
-        worker = _worker_id(config) or "gw?"
-        if bags:
-            write_coverage(
-                _cov_dump_path(worker),
-                PolicyCoverageData.from_json(
-                    bags[0]
-                    if len(bags) == 1
-                    else _hits_to_dict(_merge_hits(bags), worker=worker)
-                ),
-            )
+            workeroutput["rfi_cov_bags"] = [_hits_to_dict(bag, worker=worker)]
         return
     if exitstatus != 0:
         return
-    bags = list(getattr(config, "_rfi_cov_merged", []) or [])
-    if not bags:
+    paths = sorted(COV_DIR.glob("gw*.json"))
+    if not paths:
         return
-    assert_policy_coverage(_merge_hits(bags))
+    bags = [read_coverage(path).to_json() for path in paths]
+    merged = merge_coverage(bags)
+    write_coverage(COV_DIR / "merged.json", PolicyCoverageData.from_json(merged))
+    assert_policy_coverage(coverage_from_data(PolicyCoverageData.from_json(merged)))
 
 
 @pytest.fixture()

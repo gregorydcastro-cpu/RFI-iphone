@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from app.policy_coverage import (
+    COVERAGE_FILE_FORBIDDEN,
     CURRENT_SCHEMA,
     DENY_ONLY,
     FIELD_LANES,
@@ -21,6 +22,9 @@ from app.policy_coverage import (
     _merge_hits,
     absorb_hits,
     assert_policy_coverage,
+    dump_from_bag,
+    merge_coverage,
+    migrate_v1_to_v2,
     migrate_v2_to_v3,
     read_coverage,
     write_coverage,
@@ -49,6 +53,11 @@ def test_write_coverage_is_atomic(tmp_path: Path):
     assert loaded.worker == "gw0"
     assert loaded.stops == {"assigned_only": 1}
     assert loaded.schema == SCHEMA
+
+
+def test_refuse_missing_schema():
+    with pytest.raises(ValueError, match="missing coverage schema"):
+        PolicyCoverageData.from_json({"policy_set": "field_lanes", "hits": {}})
 
 
 def test_refuse_schema_mismatch(tmp_path: Path):
@@ -272,6 +281,127 @@ def test_line_coverage_is_not_assigned_only_denied():
     coverage.hit_counts["assigned_only"]["deny"] = 0
     with pytest.raises(AssertionError, match="assigned_only"):
         assert_policy_coverage(coverage)
+
+
+def test_coverage_file_has_no_subject_rfi_or_traces():
+    raw = PolicyCoverageData(
+        hits={"same_project": {"deny": 1, "skipped_after_stop": 0}},
+        decisions={"deny": 1},
+        stops={"same_project": 1},
+    ).to_json()
+    assert COVERAGE_FILE_FORBIDDEN.isdisjoint(raw)
+    for row in raw["hits"].values():
+        assert COVERAGE_FILE_FORBIDDEN.isdisjoint(row)
+
+
+def test_dump_from_bag_writes_schema_2(tmp_path: Path):
+    coverage = _green_bag()
+    path = tmp_path / ".rfi-cov" / "gw0.json"
+    dump_from_bag(coverage, path, worker="gw0")
+    loaded = read_coverage(path)
+    assert loaded.schema == CURRENT_SCHEMA == 2
+    assert loaded.worker == "gw0"
+    assert loaded.policy_set == "field_lanes"
+    assert loaded.combining == "deny_overrides"
+    assert COVERAGE_FILE_FORBIDDEN.isdisjoint(loaded.to_json())
+
+
+def test_truncated_json_fails_the_merge(tmp_path: Path):
+    good = tmp_path / "gw0.json"
+    write_coverage(good, PolicyCoverageData())
+    bad = tmp_path / "gw1.json"
+    bad.write_text('{"schema": 2, "policy_set": "field_lanes"')
+    with pytest.raises(ValueError):
+        bags = [read_coverage(path).to_json() for path in sorted(tmp_path.glob("gw*.json"))]
+        merge_coverage(bags)
+
+
+def test_migrate_v1_to_v2_finishes_setdefaults_and_does_not_mutate():
+    raw = {
+        "schema": 1,
+        "policy_set": "field_lanes",
+        "hits": {"same_project": {"deny": 2}},
+    }
+    snapshot = deepcopy(raw)
+    out = migrate_v1_to_v2(raw)
+    assert raw == snapshot
+    assert out["schema"] == 2
+    assert out["combining"] == "deny_overrides"
+    assert out["decisions"] == {}
+    assert out["stops"] == {}
+    assert out["hits"]["same_project"]["deny"] == 2
+    assert out["hits"]["same_project"]["skipped_after_stop"] == 0
+    loaded = PolicyCoverageData.from_json(raw)
+    assert loaded.schema == 2
+    assert loaded.combining == "deny_overrides"
+    assert loaded.hits["same_project"]["skipped_after_stop"] == 0
+
+
+def test_migrate_v1_is_registered_v2_to_v3_is_not():
+    assert CURRENT_SCHEMA == 2
+    assert MIGRATIONS[1] is migrate_v1_to_v2
+    assert 2 not in MIGRATIONS
+    assert migrate_v2_to_v3 not in MIGRATIONS.values()
+
+
+def test_merge_coverage_adds_ints_never_average_or_max():
+    left = {
+        "schema": 2,
+        "policy_set": "field_lanes",
+        "combining": "deny_overrides",
+        "hits": {"same_project": {"deny": 2, "skipped_after_stop": 1}},
+        "decisions": {"deny": 2},
+        "stops": {"same_project": 2},
+    }
+    right = {
+        "schema": 2,
+        "policy_set": "field_lanes",
+        "combining": "deny_overrides",
+        "hits": {
+            "same_project": {"deny": 3, "skipped_after_stop": 4},
+            "mystery_lane": {"deny": 1},
+        },
+        "decisions": {"deny": 3},
+        "stops": {"same_project": 3},
+    }
+    merged = merge_coverage([left, right])
+    assert merged["hits"]["same_project"]["deny"] == 5
+    assert merged["hits"]["same_project"]["skipped_after_stop"] == 5
+    assert merged["decisions"]["deny"] == 5
+    assert merged["stops"]["same_project"] == 5
+    assert merged["hits"]["mystery_lane"]["deny"] == 1
+
+
+def test_merge_coverage_empty_hits_are_zeros():
+    empty = {
+        "schema": 2,
+        "policy_set": "field_lanes",
+        "combining": "deny_overrides",
+        "hits": {},
+        "decisions": {},
+        "stops": {},
+    }
+    merged = merge_coverage([empty, empty])
+    assert merged["hits"] == {}
+    assert merged["decisions"] == {}
+    assert merged["stops"] == {}
+    assert merge_coverage([])["hits"] == {}
+
+
+def test_merge_coverage_incompatible_combining_raises():
+    left = PolicyCoverageData().to_json()
+    right = PolicyCoverageData().to_json()
+    right["combining"] = "permit_overrides"
+    with pytest.raises(ValueError, match="incompatible combining"):
+        merge_coverage([left, right])
+
+
+def test_merge_coverage_incompatible_policy_set_raises():
+    left = PolicyCoverageData().to_json()
+    right = PolicyCoverageData().to_json()
+    right["policy_set"] = "empty"
+    with pytest.raises(ValueError, match="incompatible policy_set|refusing to merge"):
+        merge_coverage([left, right])
 
 
 def test_migrate_v2_to_v3_is_not_registered():

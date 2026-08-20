@@ -14,6 +14,20 @@ from app.abac import FIELD_POLICY_SET, AccessDenied, EvaluationLog, EvaluationTr
 
 CURRENT_SCHEMA = 2
 SCHEMA = CURRENT_SCHEMA
+COV_DIR = Path(__file__).resolve().parents[2] / ".rfi-cov"
+COVERAGE_FILE_FORBIDDEN = frozenset(
+    {
+        "subject",
+        "subject_id",
+        "user_id",
+        "rfi",
+        "rfi_id",
+        "question",
+        "trace",
+        "traces",
+        "steps",
+    }
+)
 
 FIELD_LANES = (
     "same_project",
@@ -70,11 +84,28 @@ class PolicyCoverageData:
 
     @classmethod
     def from_json(cls, raw: dict[str, Any]) -> PolicyCoverageData:
-        if raw.get("schema") != SCHEMA:
-            raise ValueError(f"unsupported coverage schema {raw.get('schema')}")
-        if raw.get("policy_set") != "field_lanes":
-            raise ValueError(f"refusing to merge {raw.get('policy_set')}")
-        return cls(**{k: raw[k] for k in cls.__dataclass_fields__})
+        raw = normalize_coverage(raw)
+        leaked = COVERAGE_FILE_FORBIDDEN & raw.keys()
+        if leaked:
+            raise ValueError(f"coverage file must not include {sorted(leaked)}")
+        return cls(**{k: raw[k] for k in cls.__dataclass_fields__ if k in raw})
+
+
+def migrate_v1_to_v2(raw: dict) -> dict:
+    """v1 → v2. His paste cut off at setdefault; finish the defaults here."""
+    out = deepcopy(raw)
+    out.setdefault("policy_set", "field_lanes")
+    out.setdefault("combining", "deny_overrides")
+    out.setdefault("decisions", {})
+    out.setdefault("stops", {})
+    hits = {}
+    for name, row in out.get("hits", {}).items():
+        nxt = dict(row) if isinstance(row, dict) else {}
+        nxt.setdefault("skipped_after_stop", 0)
+        hits[name] = nxt
+    out["hits"] = hits
+    out["schema"] = 2
+    return out
 
 
 def migrate_v2_to_v3(raw: dict) -> dict:
@@ -93,7 +124,28 @@ def migrate_v2_to_v3(raw: dict) -> dict:
 
 
 # stay on 2 — v2→v3 (stop→stopped) is not registered yet
-MIGRATIONS: dict[int, Callable[[dict], dict]] = {}
+MIGRATIONS: dict[int, Callable[[dict], dict]] = {
+    1: migrate_v1_to_v2,
+}
+
+
+def normalize_coverage(raw: dict[str, Any]) -> dict[str, Any]:
+    if "schema" not in raw:
+        raise ValueError("missing coverage schema")
+    out = deepcopy(raw)
+    seen: set[int] = set()
+    while out["schema"] != CURRENT_SCHEMA:
+        schema = out["schema"]
+        if schema in seen:
+            raise ValueError(f"unsupported coverage schema {schema}")
+        seen.add(schema)
+        migrate = MIGRATIONS.get(schema)
+        if migrate is None:
+            raise ValueError(f"unsupported coverage schema {schema}")
+        out = migrate(out)
+    if out.get("policy_set") != "field_lanes":
+        raise ValueError(f"refusing to merge {out.get('policy_set')}")
+    return out
 
 
 def write_coverage(path: Path, data: PolicyCoverageData) -> None:
@@ -105,6 +157,69 @@ def write_coverage(path: Path, data: PolicyCoverageData) -> None:
 
 def read_coverage(path: Path) -> PolicyCoverageData:
     return PolicyCoverageData.from_json(json.loads(path.read_text()))
+
+
+def dump_from_bag(
+    coverage: PolicyCoverage, path: Path, worker: str | None = None
+) -> None:
+    write_coverage(path, PolicyCoverageData.from_json(_hits_to_dict(coverage, worker=worker)))
+
+
+def merge_coverage(bags: list[dict[str, Any]]) -> dict[str, Any]:
+    """Add ints only. Never average or max. Empty hits merge as zeros."""
+    if not bags:
+        return PolicyCoverageData(hits={}, decisions={}, stops={}).to_json()
+    loaded = [normalize_coverage(bag) for bag in bags]
+    policy_set = loaded[0].get("policy_set", "field_lanes")
+    combining = loaded[0].get("combining", "deny_overrides")
+    for bag in loaded[1:]:
+        if bag.get("policy_set", "field_lanes") != policy_set:
+            raise ValueError(f"incompatible policy_set: {bag.get('policy_set')}")
+        if bag.get("combining", "deny_overrides") != combining:
+            raise ValueError(f"incompatible combining: {bag.get('combining')}")
+    hits: dict[str, dict[str, int]] = {}
+    decisions: dict[str, int] = {}
+    stops: dict[str, int] = {}
+    for bag in loaded:
+        for name, row in (bag.get("hits") or {}).items():
+            dest = hits.setdefault(name, {})
+            for key, value in (row or {}).items():
+                dest[key] = dest.get(key, 0) + int(value)
+        for key, value in (bag.get("decisions") or {}).items():
+            decisions[key] = decisions.get(key, 0) + int(value)
+        for key, value in (bag.get("stops") or {}).items():
+            stops[key] = stops.get(key, 0) + int(value)
+    return PolicyCoverageData(
+        policy_set=policy_set,
+        combining=combining,
+        hits=hits,
+        decisions=decisions,
+        stops=stops,
+    ).to_json()
+
+
+def coverage_from_data(data: PolicyCoverageData) -> PolicyCoverage:
+    coverage = PolicyCoverage()
+    for policy, effects in data.hits.items():
+        coverage.seen.add(policy)
+        for effect, count in effects.items():
+            coverage.hit_counts[policy][effect] += int(count)
+            if effect == "allow":
+                coverage.allows.add(policy)
+                coverage.effects[policy].add("allow")
+            elif effect == "deny":
+                coverage.denies.add(policy)
+                coverage.effects[policy].add("deny")
+            elif effect == "n/a":
+                coverage.na.add(policy)
+                coverage.effects[policy].add("n/a")
+    for policy, count in data.stops.items():
+        if count:
+            coverage.stops.add(policy)
+            coverage.stop_counts[policy] += int(count)
+    for key, count in data.decisions.items():
+        coverage.decision_counts[key] += int(count)
+    return coverage
 
 
 def _traces(walk) -> tuple[EvaluationTrace, ...]:
@@ -235,29 +350,7 @@ def _hits_to_dict(coverage: PolicyCoverage, worker: str | None = None) -> dict[s
 
 
 def _merge_hits(bags: list[dict[str, Any]]) -> PolicyCoverage:
-    merged = PolicyCoverage()
-    for raw in bags:
-        data = PolicyCoverageData.from_json(raw)
-        for policy, effects in data.hits.items():
-            merged.seen.add(policy)
-            for effect, count in effects.items():
-                if not count:
-                    continue
-                merged.hit_counts[policy][effect] += int(count)
-                merged.effects[policy].add(effect)
-                if effect == "allow":
-                    merged.allows.add(policy)
-                elif effect == "deny":
-                    merged.denies.add(policy)
-                else:
-                    merged.na.add(policy)
-        for policy, count in data.stops.items():
-            if count:
-                merged.stops.add(policy)
-                merged.stop_counts[policy] += int(count)
-        for key, count in data.decisions.items():
-            merged.decision_counts[key] += int(count)
-    return merged
+    return coverage_from_data(PolicyCoverageData.from_json(merge_coverage(bags)))
 
 
 def absorb_hits(dst: PolicyCoverage, src: PolicyCoverage) -> None:
