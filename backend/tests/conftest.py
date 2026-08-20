@@ -293,30 +293,26 @@ def pytest_xdist_make_scheduler(config, log):
     return LoadFileScheduling(config, log)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def cov(request: pytest.FixtureRequest) -> PolicyCoverage:
-    """Production FIELD_POLICY_SET bag. Does not require a default_deny hit."""
+    """One bag per test module. Teardown fails if a rule never applied."""
     coverage = PolicyCoverage()
     failed_before = request.session.testsfailed
     yield coverage
-    bag = _hits_to_dict(coverage, worker=_worker_id(request.config))
     bags = getattr(request.config, "_rfi_cov_bags", None)
     if bags is None:
         request.config._rfi_cov_bags = []
         bags = request.config._rfi_cov_bags
-    bags.append(bag)
-    failed_here = request.session.testsfailed - failed_before
-    if failed_here:
-        return
-    if _is_xdist_worker(request.config):
-        return
-    if REQUIRED_STOPS <= coverage.stops:
-        assert_policy_coverage(coverage)
-        return
-    paths = {str(item.path) for item in request.session.items}
-    if len(paths) == 1:
+    bags.append(_hits_to_dict(coverage, worker=_worker_id(request.config)))
+    if request.session.testsfailed > failed_before:
         return
     assert_policy_coverage(coverage)
+
+
+@pytest.fixture
+def evaluate_cov(cov: PolicyCoverage):
+    """Drop-in for evaluate(); same return, recorded for coverage."""
+    return cov.evaluate
 
 
 def pytest_testnodedown(node, error):

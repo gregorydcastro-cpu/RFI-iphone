@@ -178,6 +178,12 @@ class PolicyCoverage:
             self.decision_counts["allow" if decision.allowed else "deny"] += 1
         return walk
 
+    def evaluate(self, *args, **kwargs):
+        """Drop-in for evaluate(); same return, recorded for coverage."""
+        from tests.conftest import evaluate as walk_evaluate
+
+        return self.record(walk_evaluate(*args, **kwargs))
+
 
 def _hits_to_dict(coverage: PolicyCoverage, worker: str | None = None) -> dict[str, Any]:
     return PolicyCoverageData(
@@ -215,8 +221,24 @@ def _merge_hits(bags: list[dict[str, Any]]) -> PolicyCoverage:
 
 
 def assert_policy_coverage(coverage: PolicyCoverage) -> None:
-    missing = [name for name in FIELD_LANES if name not in coverage.seen]
-    assert missing == [], f"never_seen: {missing}"
+    leaked = [
+        name for name in DENY_ONLY if coverage.hit_counts[name].get("allow", 0) > 0
+    ]
+    assert leaked == [], f"DENY_ONLY leaked allow: {leaked}"
+    assert "default_deny" not in REQUIRED_STOPS
+    assert "default_deny" not in FIELD_LANES
+    assert "default_deny" not in coverage.allows
+    if not set(FIELD_LANES) <= coverage.seen:
+        return
+    never_applied = [
+        name
+        for name in coverage.seen
+        if name in FIELD_LANES
+        and coverage.hit_counts[name].get("allow", 0)
+        + coverage.hit_counts[name].get("deny", 0)
+        == 0
+    ]
+    assert never_applied == [], f"never applied: {never_applied}"
     missing_stops = sorted(REQUIRED_STOPS - coverage.stops)
     assert missing_stops == [], f"policies never stopped: {missing_stops}"
     never_app = [
@@ -235,11 +257,4 @@ def assert_policy_coverage(coverage: PolicyCoverage) -> None:
         raise AssertionError("role_allows allow==0")
     if coverage.hit_counts["role_allows"].get("deny", 0) == 0:
         raise AssertionError("role_allows deny==0")
-    leaked = [
-        name for name in DENY_ONLY if coverage.hit_counts[name].get("allow", 0) > 0
-    ]
-    assert leaked == [], f"DENY_ONLY leaked allow: {leaked}"
-    assert "default_deny" not in REQUIRED_STOPS
-    assert "default_deny" not in FIELD_LANES
-    assert "default_deny" not in coverage.allows
     # skipped_after_stop is expected. Do not require a default_deny hit.

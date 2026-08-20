@@ -1,4 +1,8 @@
-"""Strategy 5: permitless stripped set only. Production must not depend on this hit."""
+"""Strategy 5: permitless stripped set only. Production must not depend on this hit.
+
+Bare evaluate() only. Do not request cov / evaluate_cov — this module must
+not pollute the production FIELD_POLICY_SET coverage bag.
+"""
 
 from __future__ import annotations
 

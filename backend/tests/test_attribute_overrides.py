@@ -11,7 +11,6 @@ from tests.conftest import (
     OTHER_JOB,
     USER,
     assert_stop,
-    evaluate,
     names,
     resource,
     subject,
@@ -37,45 +36,40 @@ def _prefix_stop(walk, stop: str) -> None:
     assert names(walk) == list(EXPECTED_ORDER[: len(walk.steps)])
 
 
-def test_foreman_submit_other_job_stops_at_same_project(cov):
-    walk = evaluate(_foreman(), Action.SUBMIT_RFI, _own_rfi(project_id=OTHER_JOB))
-    cov.record(walk)
+def test_foreman_submit_other_job_stops_at_same_project(evaluate_cov):
+    walk = evaluate_cov(_foreman(), Action.SUBMIT_RFI, _own_rfi(project_id=OTHER_JOB))
     _prefix_stop(walk, "same_project")
 
 
-def test_foreman_submit_other_area_stops_at_area_scope(cov):
-    walk = evaluate(_foreman(), Action.SUBMIT_RFI, _own_rfi(area_id=OTHER_AREA))
-    cov.record(walk)
+def test_foreman_submit_other_area_stops_at_area_scope(evaluate_cov):
+    walk = evaluate_cov(_foreman(), Action.SUBMIT_RFI, _own_rfi(area_id=OTHER_AREA))
     _prefix_stop(walk, "area_scope")
     assert walk.steps[3].policy == "role_allows"
     assert walk.steps[3].effect == "allow"
 
 
-def test_foreman_submit_other_crew_stops_at_chain_owns(cov):
-    walk = evaluate(
+def test_foreman_submit_other_crew_stops_at_chain_owns(evaluate_cov):
+    walk = evaluate_cov(
         _foreman(),
         Action.SUBMIT_RFI,
         _own_rfi(created_by_id=OTHER, crew_foreman_id=OTHER),
     )
-    cov.record(walk)
     _prefix_stop(walk, "chain_owns")
     assert walk.steps[3].effect == "allow"
 
 
-def test_foreman_submit_answered_stops_at_status_guard(cov):
-    walk = evaluate(_foreman(), Action.SUBMIT_RFI, _own_rfi(status="answered"))
-    cov.record(walk)
+def test_foreman_submit_answered_stops_at_status_guard(evaluate_cov):
+    walk = evaluate_cov(_foreman(), Action.SUBMIT_RFI, _own_rfi(status="answered"))
     _prefix_stop(walk, "status_guard")
     assert walk.steps[3].effect == "allow"
 
 
-def test_apprentice_handle_other_ticket_stops_at_assigned_only(cov):
-    walk = evaluate(
+def test_apprentice_handle_other_ticket_stops_at_assigned_only(evaluate_cov):
+    walk = evaluate_cov(
         subject(role=Role.APPRENTICE, user_id=USER),
         Action.HANDLE_MATERIAL,
         resource(type="ticket", assigned_to_id=OTHER, status="draft"),
     )
-    cov.record(walk)
     _prefix_stop(walk, "assigned_only")
     assert walk.steps[3].policy == "role_allows"
     assert walk.steps[3].effect == "allow"

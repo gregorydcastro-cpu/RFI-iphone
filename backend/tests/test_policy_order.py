@@ -65,13 +65,12 @@ def test_policy_set_rank_is_fixed():
     assert "default_deny" not in FIELD_SET_NAMES
 
 
-def test_names_are_a_prefix_of_expected_order(cov):
-    decision, steps = evaluate(
+def test_names_are_a_prefix_of_expected_order(evaluate_cov):
+    decision, steps = evaluate_cov(
         subject(project_id=JOB),
         Action.SUBMIT_RFI,
         resource(project_id=OTHER_JOB),
     )
-    cov.record((decision, steps))
     walked = [step.policy for step in steps]
     assert walked == list(EXPECTED_ORDER[: len(walked)])
     assert walked == ["same_project"]
@@ -80,10 +79,10 @@ def test_names_are_a_prefix_of_expected_order(cov):
     assert "role_allows" in after
 
 
-def test_policies_after_deny_are_absent(cov):
+def test_policies_after_deny_are_absent(evaluate_cov):
     cases = (
         (
-            evaluate(
+            evaluate_cov(
                 subject(project_id=JOB),
                 Action.SUBMIT_RFI,
                 resource(project_id=OTHER_JOB),
@@ -92,7 +91,7 @@ def test_policies_after_deny_are_absent(cov):
             "same_project",
         ),
         (
-            evaluate(
+            evaluate_cov(
                 subject(role=Role.GENERAL_FOREMAN, actor_type=ActorType.GROKBOT),
                 Action.SUBMIT_RFI,
                 resource(),
@@ -101,7 +100,7 @@ def test_policies_after_deny_are_absent(cov):
             "grokbot_lane",
         ),
         (
-            evaluate(
+            evaluate_cov(
                 subject(role=Role.JOURNEYMAN),
                 Action.PIN_DRAFT,
                 resource(type="sheet"),
@@ -111,13 +110,12 @@ def test_policies_after_deny_are_absent(cov):
             "on_site",
         ),
         (
-            evaluate(subject(role=Role.APPRENTICE), Action.SUBMIT_RFI, resource()),
+            evaluate_cov(subject(role=Role.APPRENTICE), Action.SUBMIT_RFI, resource()),
             4,
             "role_allows",
         ),
     )
     for walk, seq, name in cases:
-        cov.record(walk)
         decision, steps = walk
         assert_stop(steps, name)
         assert steps[seq - 1].policy == PREFIX_DENY[seq] == name
@@ -215,12 +213,12 @@ def test_evaluate_algorithm_is_law():
         evaluate(subject(), Action.CREATE_RFI_DRAFT, resource(), policy_set=two)
 
 
-def test_no_later_allow_overrides_earlier_deny(cov):
-    log = cov.record(evaluate(
+def test_no_later_allow_overrides_earlier_deny(evaluate_cov):
+    log = evaluate_cov(
         subject(role=Role.JOURNEYMAN, project_id=JOB),
         Action.CREATE_RFI_DRAFT,
         resource(project_id=OTHER_JOB),
-    ))
+    )
     decision, steps = log
     assert names(log) == ["same_project"]
     assert_stop(steps, "same_project")
@@ -228,9 +226,9 @@ def test_no_later_allow_overrides_earlier_deny(cov):
     assert decision.allowed is False
 
 
-def test_later_allow_does_not_cancel_a_deny():
+def test_later_allow_does_not_cancel_a_deny(evaluate_cov):
     assert FIELD_POLICY_SET.combining is Combining.DENY_OVERRIDES
-    decision, steps = evaluate(
+    decision, steps = evaluate_cov(
         subject(role=Role.JOURNEYMAN, area_id=AREA),
         Action.CREATE_RFI_DRAFT,
         resource(area_id=OTHER_AREA),
@@ -243,10 +241,10 @@ def test_later_allow_does_not_cancel_a_deny():
     assert "assigned_only" not in names((decision, steps))
 
 
-def test_reading_a_deny_last_applicable_is_the_problem():
+def test_reading_a_deny_last_applicable_is_the_problem(evaluate_cov):
     cases = (
         (
-            evaluate(
+            evaluate_cov(
                 subject(role=Role.GENERAL_FOREMAN, actor_type=ActorType.GROKBOT),
                 Action.SUBMIT_RFI,
                 resource(),
@@ -254,11 +252,11 @@ def test_reading_a_deny_last_applicable_is_the_problem():
             "grokbot_lane",
         ),
         (
-            evaluate(subject(role=Role.APPRENTICE), Action.SUBMIT_RFI, resource()),
+            evaluate_cov(subject(role=Role.APPRENTICE), Action.SUBMIT_RFI, resource()),
             "role_allows",
         ),
         (
-            evaluate(
+            evaluate_cov(
                 subject(role=Role.JOURNEYMAN, area_id=AREA),
                 Action.CREATE_RFI_DRAFT,
                 resource(area_id=OTHER_AREA),
@@ -266,7 +264,7 @@ def test_reading_a_deny_last_applicable_is_the_problem():
             "area_scope",
         ),
         (
-            evaluate(
+            evaluate_cov(
                 subject(role=Role.APPRENTICE),
                 Action.HANDLE_MATERIAL,
                 resource(type="ticket", assigned_to_id=None),
@@ -274,7 +272,7 @@ def test_reading_a_deny_last_applicable_is_the_problem():
             "assigned_only",
         ),
         (
-            evaluate(
+            evaluate_cov(
                 subject(role=Role.FOREMAN, crew_ids=frozenset({CREW})),
                 Action.SUBMIT_RFI,
                 resource(created_by_id=OTHER, crew_foreman_id=OTHER),
@@ -282,7 +280,7 @@ def test_reading_a_deny_last_applicable_is_the_problem():
             "chain_owns",
         ),
         (
-            evaluate(
+            evaluate_cov(
                 subject(role=Role.GENERAL_FOREMAN),
                 Action.SUBMIT_RFI,
                 resource(status="answered"),
@@ -290,7 +288,7 @@ def test_reading_a_deny_last_applicable_is_the_problem():
             "status_guard",
         ),
         (
-            evaluate(
+            evaluate_cov(
                 subject(role=Role.GENERAL_FOREMAN),
                 Action.SET_PRIORITY,
                 resource(
@@ -301,7 +299,7 @@ def test_reading_a_deny_last_applicable_is_the_problem():
             "work_stop_writer",
         ),
         (
-            evaluate(
+            evaluate_cov(
                 subject(project_id=JOB),
                 Action.SUBMIT_RFI,
                 resource(project_id=OTHER_JOB),
@@ -535,10 +533,10 @@ def test_walk_helpers_stay_off_phone_and_grok():
             assert name not in text, f"{name} leaked into {path}"
 
 
-def test_mutation_swap_area_scope_and_role_allows_changes_stop():
+def test_mutation_swap_area_scope_and_role_allows_changes_stop(evaluate_cov):
     hopper = subject(role=Role.APPRENTICE, area_id=AREA)
     other = resource(area_id=OTHER_AREA)
-    current = evaluate(hopper, Action.CREATE_RFI_DRAFT, other)
+    current = evaluate_cov(hopper, Action.CREATE_RFI_DRAFT, other)
     assert_stop(current.steps, "role_allows")
     swapped = PolicySet(
         name="swapped",
