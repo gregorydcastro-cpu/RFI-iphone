@@ -295,7 +295,7 @@ def status_guard(
     }:
         return _deny(
             "status_guard",
-            "draft_change_order / draft_material_order only while impact_review",
+            "draft_change_order / draft_material_order only while answered or impact_review",
         )
     if action is Action.CLOSE_RFI and r.status != "impact_review":
         return _deny("status_guard", "close_rfi is for impact_review only")

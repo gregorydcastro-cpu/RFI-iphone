@@ -5,7 +5,8 @@ answered → impact_review → closed
                 ↘ draft_material_order
 
 Grokbot may draft CO/MO. Cannot enter, submit, or close.
-Work-stopped stays until set_priority. No new rfi_number. No due_at rewrite.
+Drafts are legal from answered or impact_review. work_stopped does not
+block a draft. One change per CO row; many COs may hang on one RFI.
 """
 
 from __future__ import annotations
@@ -28,6 +29,19 @@ IMPACT_NONE = "none"
 IMPACT_CHANGE = "change"
 IMPACT_MATERIAL = "material"
 IMPACT_BOTH = "both"
+DRAFTABLE = frozenset({"answered", "impact_review"})
+_CHANGE_CUES = (
+    "different ",
+    "move ",
+    "relocate ",
+    "reroute ",
+    "replace ",
+    "add ",
+    "remove ",
+    "change ",
+    "install ",
+    "new ",
+)
 
 
 class ImpactError(WriteError):
@@ -84,11 +98,39 @@ def _mark_impact(rfi: RFI, kind: str) -> None:
     rfi.impact = IMPACT_BOTH
 
 
+def _assert_draftable(rfi: RFI) -> None:
+    """answered and impact_review are both legal. ball_in_court is not."""
+    if rfi.status not in DRAFTABLE:
+        raise ImpactError("drafts only from answered or impact_review")
+
+
+def _has_change_cue(part: str) -> bool:
+    text = f"{part.strip()} "
+    return any(cue in text for cue in _CHANGE_CUES)
+
+
+def _one_change(description: str) -> str:
+    """One scope change per row. Same idea as one question per RFI."""
+    text = (description or "").strip()
+    if not text:
+        raise ImpactError("one change")
+    if text.count("?") > 1:
+        raise ImpactError("one change")
+    if ";" in text or ". " in text.rstrip("."):
+        raise ImpactError("one change per draft")
+    lower = text.lower()
+    if " and " in lower:
+        left, right = lower.split(" and ", 1)
+        if _has_change_cue(left) and _has_change_cue(right):
+            raise ImpactError("one change per draft")
+    return text
+
+
 def _ensure_review(store: Store, rfi: RFI) -> None:
+    """First draft may move answered → impact_review. Enter may do it instead."""
+    _assert_draftable(rfi)
     if rfi.status == "impact_review":
         return
-    if rfi.status != "answered":
-        raise ImpactError("drafts only from answered or impact_review")
     store.add_event(
         Event(
             rfi_id=rfi.id,
@@ -153,14 +195,11 @@ def draft_change_order(
     qty: float | None = None,
     pin_id: str | None = None,
 ) -> ChangeOrder:
-    """Draft only. Never submitted. Cites asked and current revision."""
+    """Draft only. Never submitted. work_stopped does not block. One change."""
     rfi = store.get_rfi(rfi_id)
     require_access(subject, Action.DRAFT_CHANGE_ORDER, resource_for(rfi))
-    claim = (description or "").strip()
-    if not claim:
-        raise ImpactError("one impact claim: what changed")
-    if claim.count("?") > 1:
-        raise ImpactError("one impact claim")
+    _assert_draftable(rfi)
+    claim = _one_change(description)
     _ensure_review(store, rfi)
     asked, current = _cite_revisions(store, rfi)
     pin = _pin_by_id(rfi, pin_id)
@@ -198,9 +237,10 @@ def draft_material_order(
     area_id: UUID | None = None,
     pin_id: str | None = None,
 ) -> MaterialOrder:
-    """Draft only. Never a PO. Cites asked and current revision."""
+    """Draft only. Never a PO. work_stopped does not block. Cites revisions."""
     rfi = store.get_rfi(rfi_id)
     require_access(subject, Action.DRAFT_MATERIAL_ORDER, resource_for(rfi))
+    _assert_draftable(rfi)
     part = (sku or "").strip()
     if not part:
         raise ImpactError("one impact claim: what to buy")

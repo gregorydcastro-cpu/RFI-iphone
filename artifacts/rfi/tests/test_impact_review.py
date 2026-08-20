@@ -111,12 +111,12 @@ def test_work_stopped_survives_enter_and_drafts() -> None:
     set_priority(store, _af(), rfi.id, "work_stopped", work_stopped=True)
     due = rfi.due_at
     number = rfi.rfi_number
-    enter_impact_review(store, _foreman(), rfi.id)
-    assert rfi.work_stopped is True
-    assert rfi.priority == "work_stopped"
+    assert rfi.status == "answered"
     mo = draft_material_order(store, _grok(), rfi.id, sku="225A", qty=1)
     assert mo.status == "draft"
+    assert rfi.status == "impact_review"
     assert rfi.work_stopped is True
+    assert rfi.priority == "work_stopped"
     assert rfi.due_at == due
     assert rfi.rfi_number == number
     with pytest.raises(ImpactError, match="work_stopped"):
@@ -243,3 +243,56 @@ def test_new_print_is_not_an_answer() -> None:
     assert submitted.status == "ball_in_court"
     with pytest.raises(AccessDenied):
         enter_impact_review(store, _foreman(), submitted.id)
+    with pytest.raises(AccessDenied) as denied:
+        draft_change_order(store, _foreman(), submitted.id, description="Move the panel.")
+    assert denied.value.decision.policy == "status_guard"
+    with pytest.raises(AccessDenied) as denied:
+        draft_material_order(store, _grok(), submitted.id, sku="225A", qty=1)
+    assert denied.value.decision.policy == "status_guard"
+
+
+def test_first_draft_from_answered_does_not_need_enter() -> None:
+    store = Store()
+    rfi = _answered(store)
+    assert rfi.status == "answered"
+    walk = evaluate(_grok(), Action.DRAFT_CHANGE_ORDER, resource(status="answered"))
+    assert walk.decision.allowed is True
+    co = draft_change_order(store, _foreman(), rfi.id, description="Different fixture.")
+    assert co.status == "draft"
+    assert co.rfi_id == rfi.id
+    assert co.sheet_revision_id == store._rev_a.id
+    assert co.current_revision_id == store._rev_b.id
+    assert rfi.status == "impact_review"
+    mo = draft_material_order(store, _grok(), rfi.id, sku="225A", qty=1)
+    assert mo.status == "draft"
+    assert mo.rfi_id == rfi.id
+
+
+def test_one_rfi_many_co_drafts_each_one_change() -> None:
+    store = Store()
+    rfi = _answered(store)
+    first = draft_change_order(store, _foreman(), rfi.id, description="Different fixture.")
+    second = draft_change_order(
+        store, _foreman(), rfi.id, description="Different homerun."
+    )
+    assert first.id != second.id
+    assert first.rfi_id == second.rfi_id == rfi.id
+    assert {first.description, second.description} == {
+        "Different fixture.",
+        "Different homerun.",
+    }
+    assert len([row for row in store.change_orders.values() if row.rfi_id == rfi.id]) == 2
+    with pytest.raises(ImpactError, match="one change"):
+        draft_change_order(
+            store,
+            _foreman(),
+            rfi.id,
+            description="Different fixture and a different homerun.",
+        )
+    with pytest.raises(ImpactError, match="one change"):
+        draft_change_order(
+            store,
+            _foreman(),
+            rfi.id,
+            description="Move the panel. Reroute the homerun.",
+        )
