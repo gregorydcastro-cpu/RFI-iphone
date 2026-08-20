@@ -1,0 +1,457 @@
+"""In-memory RFI store and the five hung pieces. No Postgres."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from uuid import UUID, uuid4
+
+from rfi.access import (
+    Action,
+    ActorType,
+    AccessDenied,
+    Env,
+    Resource,
+    Role,
+    Subject,
+    require_access,
+)
+
+WORK_STOPPED = "work_stopped"
+ALLOWED_PRIORITIES = ("standard", "urgent", WORK_STOPPED)
+DRAFT_PRIORITIES = ("standard", "urgent")
+PRIORITY_RANK = {"standard": 0, "urgent": 1, WORK_STOPPED: 2}
+SLA = {
+    "standard": timedelta(days=7),
+    "urgent": timedelta(hours=72),
+    WORK_STOPPED: timedelta(hours=24),
+}
+SUBMITTABLE = frozenset({"draft", "internal_review", "needs_clarification"})
+WAITING_ON_DESIGN = frozenset({"submitted", "ball_in_court"})
+ESCALATE_AFTER_HOURS = {"standard": 48, "urgent": 12, WORK_STOPPED: 0}
+
+
+class WriteError(ValueError):
+    pass
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def pair_holds(priority: str, work_stopped: bool) -> bool:
+    return bool(work_stopped) is (priority == WORK_STOPPED)
+
+
+@dataclass
+class Job:
+    id: UUID
+    requires_internal_review: bool = False
+
+
+@dataclass
+class Event:
+    rfi_id: str
+    event_type: str
+    kind: str | None = None
+    from_status: str | None = None
+    to_status: str | None = None
+    due_at: datetime | None = None
+    at: datetime | None = None
+
+
+@dataclass
+class RFI:
+    id: str
+    project_id: UUID
+    question: str
+    created_by_id: UUID
+    status: str = "draft"
+    priority: str = "standard"
+    work_stopped: bool = False
+    rfi_number: int | None = None
+    rfi_display: str | None = None
+    area_id: UUID | None = None
+    crew_foreman_id: UUID | None = None
+    pin: dict | None = None
+    refs: list = field(default_factory=list)
+    due_at: datetime | None = None
+    submitted_at: datetime | None = None
+    first_submitted_at: datetime | None = None
+    cycle_due_at: datetime | None = None
+
+
+class Store:
+    """Process-memory only. Not a database."""
+
+    def __init__(self, *, now: datetime | None = None) -> None:
+        self.now = now or utc_now()
+        self.jobs: dict[UUID, Job] = {}
+        self.rfis: dict[str, RFI] = {}
+        self.events: list[Event] = []
+
+    def add_job(self, job: Job) -> Job:
+        self.jobs[job.id] = job
+        return job
+
+    def add_event(self, event: Event) -> Event:
+        if event.at is None:
+            event.at = self.now
+        self.events.append(event)
+        return event
+
+    def get_rfi(self, rfi_id: str) -> RFI:
+        row = self.rfis.get(rfi_id)
+        if row is None:
+            raise WriteError(f"RFI {rfi_id} not found")
+        return row
+
+
+def resource_for(rfi: RFI) -> Resource:
+    return Resource(
+        type="rfi",
+        project_id=rfi.project_id,
+        area_id=rfi.area_id,
+        status=rfi.status,
+        priority=rfi.priority,
+        work_stopped=rfi.work_stopped,
+        created_by_id=rfi.created_by_id,
+        crew_foreman_id=rfi.crew_foreman_id,
+        id=UUID(rfi.id) if _is_uuid(rfi.id) else None,
+    )
+
+
+def _is_uuid(value: str) -> bool:
+    try:
+        UUID(value)
+        return True
+    except ValueError:
+        return False
+
+
+def write_priority_pair(rfi: RFI, priority: str) -> None:
+    """Only set_priority is the public writer of this pair."""
+    if priority not in ALLOWED_PRIORITIES:
+        raise WriteError(f"invalid priority: {priority}")
+    rfi.priority = priority
+    rfi.work_stopped = priority == WORK_STOPPED
+    if not pair_holds(rfi.priority, rfi.work_stopped):
+        raise WriteError("work_stopped ⇔ priority = work_stopped does not hold")
+
+
+def _one_question(question: str) -> str:
+    text = (question or "").strip()
+    if not text:
+        raise WriteError("question is required")
+    if text.count("?") > 1:
+        raise WriteError("one question")
+    return text
+
+
+def _due_at(priority: str, now: datetime) -> datetime:
+    return now + SLA[priority]
+
+
+def create_rfi_draft(
+    store: Store,
+    subject: Subject,
+    *,
+    question: str,
+    pin: dict | None = None,
+    refs: list | None = None,
+    priority: str = "standard",
+    env: Env | None = None,
+) -> RFI:
+    """One question. Optional pin/refs. Status draft only. Number stays null."""
+    chosen = (priority or "standard").strip().lower()
+    if chosen not in DRAFT_PRIORITIES:
+        raise WriteError("create_rfi_draft cannot write work_stopped")
+    require_access(
+        subject,
+        Action.CREATE_RFI_DRAFT,
+        Resource(
+            type="rfi",
+            project_id=subject.project_id,
+            area_id=subject.area_id,
+            status="draft",
+            created_by_id=subject.user_id,
+        ),
+        env=env or Env(project_id=subject.project_id, area_id=subject.area_id),
+    )
+    row = RFI(
+        id=str(uuid4()),
+        project_id=subject.project_id,
+        question=_one_question(question),
+        created_by_id=subject.user_id,
+        status="draft",
+        area_id=subject.area_id,
+        pin=dict(pin) if pin else None,
+        refs=list(refs or []),
+    )
+    write_priority_pair(row, chosen)
+    if row.rfi_number is not None or row.status != "draft":
+        raise WriteError("draft only")
+    store.rfis[row.id] = row
+    store.add_event(Event(rfi_id=row.id, event_type="draft", to_status="draft"))
+    return row
+
+
+def _next_number(store: Store, project_id: UUID) -> int:
+    existing = [
+        r.rfi_number
+        for r in store.rfis.values()
+        if r.project_id == project_id and r.rfi_number is not None
+    ]
+    return (max(existing) if existing else 0) + 1
+
+
+def submit_rfi(
+    store: Store,
+    subject: Subject,
+    rfi_id: str,
+    *,
+    env: Env | None = None,
+) -> RFI:
+    """Number on first submit, SLA due_at, internal review when the job requires it, then ball_in_court."""
+    rfi = store.get_rfi(rfi_id)
+    require_access(subject, Action.SUBMIT_RFI, resource_for(rfi), env=env)
+    if rfi.status not in SUBMITTABLE:
+        raise WriteError(f"cannot submit from {rfi.status}")
+    if not (rfi.question or "").strip():
+        raise WriteError("question is required")
+    job = store.jobs.get(rfi.project_id)
+    if job and job.requires_internal_review and rfi.status == "draft":
+        store.add_event(
+            Event(
+                rfi_id=rfi.id,
+                event_type="status_change",
+                from_status=rfi.status,
+                to_status="internal_review",
+            )
+        )
+        rfi.status = "internal_review"
+    first = rfi.rfi_number is None
+    if first:
+        number = _next_number(store, rfi.project_id)
+        rfi.rfi_number = number
+        rfi.rfi_display = f"RFI-{number}"
+        rfi.submitted_at = store.now
+        rfi.due_at = _due_at(rfi.priority, store.now)
+        if rfi.first_submitted_at is None:
+            rfi.first_submitted_at = rfi.submitted_at
+        if rfi.cycle_due_at is None:
+            rfi.cycle_due_at = rfi.due_at
+    store.add_event(
+        Event(
+            rfi_id=rfi.id,
+            event_type="status_change",
+            from_status=rfi.status,
+            to_status="submitted",
+            due_at=rfi.due_at,
+        )
+    )
+    store.add_event(
+        Event(
+            rfi_id=rfi.id,
+            event_type="status_change",
+            from_status="submitted",
+            to_status="ball_in_court",
+        )
+    )
+    rfi.status = "ball_in_court"
+    return rfi
+
+
+def set_priority(
+    store: Store,
+    subject: Subject,
+    rfi_id: str,
+    priority: str,
+    *,
+    work_stopped: bool | None = None,
+    allow_demote: bool = False,
+    env: Env | None = None,
+) -> RFI:
+    """Only writer for work_stopped ⇔ priority. Raise resets due. Demote needs allow_demote."""
+    rfi = store.get_rfi(rfi_id)
+    wanted = (priority or "").strip().lower()
+    if work_stopped is True:
+        wanted = WORK_STOPPED
+    elif work_stopped is False and wanted == WORK_STOPPED:
+        if not allow_demote:
+            raise WriteError("demote needs allow_demote")
+        wanted = "standard"
+    if wanted not in ALLOWED_PRIORITIES:
+        raise WriteError(f"invalid priority: {priority}")
+    require_access(
+        subject,
+        Action.SET_PRIORITY,
+        resource_for(rfi),
+        env=env,
+        ctx={"priority": wanted, "allow_demote": allow_demote},
+    )
+    old = rfi.priority
+    old_rank = PRIORITY_RANK[old]
+    new_rank = PRIORITY_RANK[wanted]
+    if new_rank < old_rank and not allow_demote:
+        raise WriteError("demote needs allow_demote")
+    write_priority_pair(rfi, wanted)
+    reminted = False
+    if new_rank > old_rank and rfi.status in WAITING_ON_DESIGN:
+        rfi.due_at = _due_at(rfi.priority, store.now)
+        rfi.cycle_due_at = rfi.due_at
+        reminted = True
+    store.add_event(
+        Event(
+            rfi_id=rfi.id,
+            event_type="priority_change",
+            kind=rfi.priority,
+            from_status=old,
+            to_status=rfi.priority,
+            due_at=rfi.due_at if reminted else None,
+        )
+    )
+    return rfi
+
+
+def _cycle_kind(rfi: RFI, now: datetime) -> str | None:
+    if rfi.status not in WAITING_ON_DESIGN or rfi.due_at is None:
+        return None
+    if now <= rfi.due_at:
+        return None
+    hours_late = (now - rfi.due_at).total_seconds() / 3600
+    wait = ESCALATE_AFTER_HOURS[rfi.priority]
+    if hours_late >= wait:
+        return "escalated"
+    return "reminder"
+
+
+def _cycled_for_due(store: Store, rfi: RFI) -> bool:
+    return any(
+        event.rfi_id == rfi.id
+        and event.event_type == "cycle"
+        and event.due_at == rfi.due_at
+        for event in store.events
+    )
+
+
+def age_rfis(store: Store, *, now: datetime | None = None) -> list[Event]:
+    """Work-stopped is its own queue. One reminder/escalated per due_at. Silent on replay."""
+    moment = now or store.now
+    written: list[Event] = []
+    rows = list(store.rfis.values())
+    stopped = [row for row in rows if row.work_stopped]
+    rest = [row for row in rows if not row.work_stopped]
+    for row in stopped + rest:
+        if _cycled_for_due(store, row):
+            continue
+        kind = _cycle_kind(row, moment)
+        if kind is None:
+            continue
+        event = store.add_event(
+            Event(
+                rfi_id=row.id,
+                event_type="cycle",
+                kind=kind,
+                due_at=row.due_at,
+                at=moment,
+            )
+        )
+        written.append(event)
+    return written
+
+
+def run_demo() -> dict:
+    """journeyman pin draft → grokbot blocked → RFI-1 → work-stopped → one cycle event."""
+    job_id = UUID("00000000-0000-4000-8000-000000000010")
+    area = UUID("00000000-0000-4000-8000-000000000401")
+    company = UUID("00000000-0000-4000-8000-000000000301")
+    jman = UUID("00000000-0000-4000-8000-000000000001")
+    foreman = UUID("00000000-0000-4000-8000-000000000002")
+    area_fm = UUID("00000000-0000-4000-8000-000000000004")
+    store = Store()
+    store.add_job(Job(id=job_id, requires_internal_review=True))
+
+    journeyman = Subject(
+        user_id=jman,
+        company_id=company,
+        project_id=job_id,
+        role=Role.JOURNEYMAN,
+        actor_type=ActorType.HUMAN,
+        area_id=area,
+    )
+    draft = create_rfi_draft(
+        store,
+        journeyman,
+        question="Clearance at grid A-3?",
+        pin={"label": "A-3"},
+    )
+    created_status = draft.status
+    created_number = draft.rfi_number
+    created_pin = dict(draft.pin or {})
+
+    grok = Subject(
+        user_id=jman,
+        company_id=company,
+        project_id=job_id,
+        role=Role.GENERAL_FOREMAN,
+        actor_type=ActorType.GROKBOT,
+        area_id=area,
+    )
+    grok_policy = None
+    try:
+        submit_rfi(store, grok, draft.id)
+    except AccessDenied as exc:
+        grok_policy = exc.decision.policy
+
+    submitted = submit_rfi(
+        store,
+        Subject(
+            user_id=foreman,
+            company_id=company,
+            project_id=job_id,
+            role=Role.FOREMAN,
+            actor_type=ActorType.HUMAN,
+            area_id=area,
+            crew_ids=frozenset({jman}),
+        ),
+        draft.id,
+    )
+
+    stopped = set_priority(
+        store,
+        Subject(
+            user_id=area_fm,
+            company_id=company,
+            project_id=job_id,
+            role=Role.AREA_FOREMAN,
+            actor_type=ActorType.HUMAN,
+            area_id=area,
+        ),
+        submitted.id,
+        WORK_STOPPED,
+        work_stopped=True,
+    )
+    later = stopped.due_at + timedelta(seconds=1)
+    first = age_rfis(store, now=later)
+    replay = age_rfis(store, now=later)
+    return {
+        "draft_status": created_status,
+        "draft_number": created_number,
+        "draft_was_draft": store.events[0].to_status == "draft",
+        "pin": created_pin,
+        "grokbot_policy": grok_policy,
+        "display": submitted.rfi_display,
+        "status": submitted.status,
+        "internal_review": any(
+            e.to_status == "internal_review" for e in store.events
+        ),
+        "priority": stopped.priority,
+        "work_stopped": stopped.work_stopped,
+        "pair_holds": pair_holds(stopped.priority, stopped.work_stopped),
+        "cycle_kind": first[0].kind if first else None,
+        "cycle_events": len(first),
+        "replay": len(replay),
+        "store": store,
+        "rfi": stopped,
+    }
