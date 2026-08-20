@@ -54,6 +54,16 @@ def test_one_step_per_version_no_v1_to_v3_shortcut() -> None:
     assert "stopped" not in out["hits"]["role_allows"]
 
 
+def test_bool_true_is_not_seen_one() -> None:
+    with pytest.raises(CoverageSchemaError, match="expected int"):
+        migrate(
+            {
+                "schema": 1,
+                "hits": {"role_allows": {"seen": True, "allow": 1, "deny": 0}},
+            }
+        )
+
+
 def test_merge_only_after_migrate(tmp_path: Path) -> None:
     v1 = tmp_path / "gw0.json"
     v1.write_text(

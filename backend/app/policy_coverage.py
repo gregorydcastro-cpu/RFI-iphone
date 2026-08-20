@@ -19,6 +19,40 @@ COV_DIR = Path(__file__).resolve().parents[2] / ".rfi-cov"
 
 class CoverageSchemaError(ValueError):
     """Schema walker failed. Not an ABAC deny."""
+
+
+def _copy(raw: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        raise CoverageSchemaError("coverage file must be an object")
+    return deepcopy(raw)
+
+
+def _as_int(value: Any, default: int = 0) -> int:
+    if value is None:
+        return default
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise CoverageSchemaError(f"expected int, got {type(value).__name__}")
+    return value
+
+
+def _require(raw: dict[str, Any], key: str) -> dict[str, Any]:
+    value = raw.get(key)
+    if not isinstance(value, dict):
+        raise CoverageSchemaError(f"{key} required object")
+    return value
+
+
+def _ensure_hit_row(row: Any) -> dict[str, int]:
+    if not isinstance(row, dict):
+        raise CoverageSchemaError("hit row must be an object")
+    out = dict(row)
+    for key in ("seen", "applicable", "allow", "deny", "stop", "skipped_after_stop"):
+        out[key] = _as_int(out[key], default=0) if key in out else 0
+    if "stop" not in row:
+        out["stop"] = out["deny"]
+    return out
+
+
 COVERAGE_FILE_FORBIDDEN = frozenset(
     {
         "subject",
@@ -98,29 +132,16 @@ class PolicyCoverageData:
 
 
 def migrate_v1_to_v2(raw: dict) -> dict:
-    raw.setdefault("combining", "deny_overrides")
-    raw.setdefault("policy_set", "field_lanes")
-    raw.setdefault("worker", None)
-    raw.setdefault("decisions", {})
-    raw.setdefault("stops", {})
-    hits = raw.get("hits")
-    if not isinstance(hits, dict):
-        raise ValueError("hits required object")
-    next_hits = {}
-    for name, row in hits.items():
-        if not isinstance(row, dict):
-            raise ValueError("hits required object")
-        nxt = dict(row)
-        nxt.setdefault("seen", 0)
-        nxt.setdefault("applicable", 0)
-        nxt.setdefault("allow", 0)
-        nxt.setdefault("deny", 0)
-        nxt.setdefault("stop", nxt["deny"])
-        nxt.setdefault("skipped_after_stop", 0)
-        next_hits[name] = nxt
-    raw["hits"] = next_hits
-    raw["schema"] = 2
-    return raw
+    out = _copy(raw)
+    out["schema"] = 2
+    out.setdefault("combining", "deny_overrides")
+    out.setdefault("policy_set", "field_lanes")
+    out.setdefault("worker", None)
+    out.setdefault("decisions", {})
+    out.setdefault("stops", {})
+    hits = _require(out, "hits")
+    out["hits"] = {name: _ensure_hit_row(row) for name, row in hits.items()}
+    return out
 
 
 def migrate_v2_to_v3(raw: dict) -> dict:
@@ -146,9 +167,7 @@ MIGRATIONS: dict[int, Callable[[dict], dict]] = {
 
 def migrate(raw: Any) -> dict[str, Any]:
     """Schema walk is law. deepcopy first. Steps must land on schema+1."""
-    if not isinstance(raw, dict):
-        raise ValueError("coverage must be an object")
-    out = deepcopy(raw)
+    out = _copy(raw)
     schema = out.get("schema", None)
     if schema is None:
         raise ValueError("missing coverage schema")

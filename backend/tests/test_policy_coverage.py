@@ -12,6 +12,7 @@ import pytest
 from app.policy_coverage import (
     COVERAGE_FILE_FORBIDDEN,
     CURRENT_SCHEMA,
+    CoverageSchemaError,
     DENY_ONLY,
     FIELD_LANES,
     MIGRATIONS,
@@ -443,7 +444,7 @@ def test_migrate_v1_to_v2_hits_required_object():
         migrate({"schema": 1})
     with pytest.raises(ValueError, match="hits required object"):
         migrate({"schema": 1, "hits": []})
-    with pytest.raises(ValueError, match="hits required object"):
+    with pytest.raises(CoverageSchemaError, match="hit row must be an object"):
         migrate({"schema": 1, "hits": {"same_project": 2}})
 
 
