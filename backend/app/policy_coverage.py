@@ -15,6 +15,10 @@ from app.abac import FIELD_POLICY_SET, AccessDenied, EvaluationLog, EvaluationTr
 CURRENT_SCHEMA = 2
 SCHEMA = CURRENT_SCHEMA
 COV_DIR = Path(__file__).resolve().parents[2] / ".rfi-cov"
+
+
+class CoverageSchemaError(ValueError):
+    """Schema walker failed. Not an ABAC deny."""
 COVERAGE_FILE_FORBIDDEN = frozenset(
     {
         "subject",
@@ -151,14 +155,14 @@ def migrate(raw: Any) -> dict[str, Any]:
     if type(schema) is not int:
         raise ValueError("invalid coverage schema")
     if schema > CURRENT_SCHEMA:
-        raise ValueError("upgrade the test runner")
+        raise CoverageSchemaError("newer than code; upgrade the test runner")
     while schema < CURRENT_SCHEMA:
         step = MIGRATIONS.get(schema)
         if step is None:
-            raise ValueError(f"missing migration step {schema}")
+            raise CoverageSchemaError(f"missing migration step {schema}")
         nxt = step(out)
         if not isinstance(nxt, dict) or nxt.get("schema") != schema + 1:
-            raise ValueError(f"migration step {schema} must land on schema+1")
+            raise CoverageSchemaError(f"migration step {schema} must land on schema+1")
         out = nxt
         schema = out["schema"]
     return out
@@ -166,7 +170,7 @@ def migrate(raw: Any) -> dict[str, Any]:
 
 def write_coverage(path: Path, data: PolicyCoverageData) -> None:
     if data.schema != CURRENT_SCHEMA:
-        raise ValueError(
+        raise CoverageSchemaError(
             f"refusing to write schema {data.schema}, current is {CURRENT_SCHEMA}"
         )
     path.parent.mkdir(parents=True, exist_ok=True)
