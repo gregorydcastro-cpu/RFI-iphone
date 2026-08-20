@@ -82,11 +82,14 @@ def test_expand_sql_is_retry_safe_not_a_paste_all_day_contract() -> None:
 
 
 def test_handlers_use_current_schema_only() -> None:
-    from app import main, rfi, pre_migrate
+    from app import main, rfi
 
+    hooks = Path(__file__).resolve().parents[1] / "alembic" / "hooks.py"
+    assert hooks.is_file()
+    assert not (Path(__file__).resolve().parents[1] / "app" / "pre_migrate.py").exists()
     assert "migrate_v1_to_v2" not in inspect.getsource(main)
     assert "migrate_v1_to_v2" not in inspect.getsource(rfi)
-    assert "migrate_v1_to_v2" not in inspect.getsource(pre_migrate.pre_migrate)
+    assert "migrate_v1_to_v2" not in hooks.read_text()
     assert "require_access(" in inspect.getsource(main.create_rfi_draft)
     assert "require_access(" in inspect.getsource(main.submit_rfi)
     assert "require_access(" in inspect.getsource(main.pe_set_priority)

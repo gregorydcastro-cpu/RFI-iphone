@@ -1,8 +1,7 @@
-"""Alembic pre-migrate hook. Runs before any revision applies.
+"""Alembic migrate hooks. One path. Not coverage JSON. Not request-path.
 
-Not coverage JSON. Not a request-path walker. Not VALIDATE. Not backfill.
-The version table still prevents applying 002 twice. This lock is for
-concurrent runners.
+pre_migrate runs before any revision. post_migrate runs after commit.
+_on_version_apply is log-only in env.py.
 """
 
 from __future__ import annotations
@@ -13,13 +12,10 @@ from dataclasses import dataclass
 
 from sqlalchemy import inspect, text
 
-log = logging.getLogger("alembic.pre_migrate")
+log = logging.getLogger("alembic.hooks")
 
-# Session-level advisory lock. Not the alembic_version "apply once" lock.
 LOCK_KEY = 842150449
 
-# Schema objects each stamped revision must already have / must not have.
-# 003 and 004 are data-only; they share 002's expand shape.
 _MUST_HAVE = {
     "001": ("work_stopped",),
     "002": ("work_stopped", "first_submitted_at", "cycle_due_at"),
@@ -58,14 +54,18 @@ class HookError(RuntimeError):
 
 
 @dataclass
-class MigrateCtx:
-    connection: object
-    target_rev: str | None
+class MigrateContext:
+    connection: object | None
+    is_offline: bool
     direction: str
+    starting_rev: str | None
+    target_rev: object
 
 
 def acquire_lock(connection) -> None:
     """DB lock on this connection. Two migrators cannot run."""
+    if connection is None:
+        return
     dialect = connection.dialect.name
     if dialect == "postgresql":
         connection.execute(text("SELECT pg_advisory_lock(:k)"), {"k": LOCK_KEY})
@@ -74,7 +74,21 @@ def acquire_lock(connection) -> None:
     connection.execute(text("SELECT 1"))
 
 
+def release_lock(connection) -> None:
+    if connection is None:
+        return
+    dialect = getattr(getattr(connection, "dialect", None), "name", None)
+    if dialect == "postgresql":
+        connection.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": LOCK_KEY})
+        return
+    if dialect == "sqlite":
+        connection.execute(text("PRAGMA locking_mode=NORMAL"))
+        connection.execute(text("SELECT 1"))
+
+
 def current_revision(connection) -> str | None:
+    if connection is None:
+        return None
     insp = inspect(connection)
     if "alembic_version" not in set(insp.get_table_names()):
         return None
@@ -97,10 +111,7 @@ def _object_names(connection) -> tuple[set[str], set[str]]:
 
 
 def _assert_alembic_version_sane(connection) -> None:
-    """If the version table and the schema disagree, stop.
-
-    Do not rebuild history. Do not IF NOT EXISTS a lost version row.
-    """
+    """If the version table and the schema disagree, stop."""
     live = current_revision(connection)
     if live not in _MUST_NOT_HAVE and live not in _MUST_HAVE:
         raise HookError(f"alembic_version {live!r} is not a known revision")
@@ -108,17 +119,17 @@ def _assert_alembic_version_sane(connection) -> None:
     for name in _MUST_HAVE.get(live, ()):
         if name not in columns:
             raise HookError(
-                f"version table is {live}; schema is missing {name}"
+                f"version table and schema disagree: version={live} missing {name}"
             )
     for name in _MUST_INDEX.get(live, ()):
         if name not in indexes:
             raise HookError(
-                f"version table is {live}; schema is missing {name}"
+                f"version table and schema disagree: version={live} missing {name}"
             )
     for name in _MUST_NOT_HAVE.get(live, ()):
         if name in columns or name in indexes:
             raise HookError(
-                f"version table is {live}; schema already has {name}"
+                f"version table and schema disagree: version={live} already has {name}"
             )
 
 
@@ -139,11 +150,12 @@ def _assert_priority_invariant(connection) -> None:
         )
     ).scalar()
     if drifted:
-        raise HookError("work_stopped ⇔ priority = work_stopped does not hold")
+        raise HookError("priority invariant drifted")
 
 
-def pre_migrate(ctx: MigrateCtx) -> None:
-    acquire_lock(ctx.connection)
+def pre_migrate(ctx: MigrateContext) -> None:
+    if ctx.connection is not None:
+        acquire_lock(ctx.connection)
     live = current_revision(ctx.connection)
     log.info(
         "pre_migrate start=%s target=%s direction=%s",
@@ -154,5 +166,18 @@ def pre_migrate(ctx: MigrateCtx) -> None:
     env = os.environ.get("APP_ENV", "dev")
     if ctx.direction == "down" and env == "prod":
         raise HookError("refuse downgrade in prod")
+    if ctx.connection is None:
+        return
     _assert_alembic_version_sane(ctx.connection)
     _assert_priority_invariant(ctx.connection)
+
+
+def post_migrate(ctx: MigrateContext) -> None:
+    """After the transaction commits. Do not mutate RFI rows."""
+    log.info(
+        "post_migrate start=%s target=%s direction=%s",
+        current_revision(ctx.connection) if ctx.connection is not None else None,
+        ctx.target_rev,
+        ctx.direction,
+    )
+    release_lock(ctx.connection)
