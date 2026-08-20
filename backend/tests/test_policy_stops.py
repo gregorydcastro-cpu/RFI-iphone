@@ -144,6 +144,41 @@ DENY_READ = {
 }
 
 
+TRACE_TABLE_FIELDS = ("seq", "policy", "applicable", "effect", "stopped")
+
+
+def trace_table(steps: Iterable[EvaluationTrace]) -> list[tuple]:
+    """Machine fields only. effect is None when n/a (printed as —)."""
+    return [
+        (step.seq, step.policy, step.applicable, step.effect, step.stopped)
+        for step in steps
+    ]
+
+
+def format_trace_table(steps: Iterable[EvaluationTrace]) -> str:
+    """Server/test/REPL table. Not HTTP. Not the phone. Not a Grok tool result."""
+    lines: list[str] = []
+    for step in steps:
+        appl = "yes" if step.applicable else "no"
+        effect = "—" if step.effect is None else step.effect
+        stopped = "yes" if step.stopped else "no"
+        lines.append(
+            f"seq{step.seq} {step.policy} appl={appl} effect={effect} stopped={stopped}"
+        )
+    return "\n".join(lines)
+
+
+def reject_stopped_only_on_halt_deny(steps: Iterable[EvaluationTrace]) -> None:
+    """stopped is True only on the deny that halted. An allow is never stopped."""
+    for step in steps:
+        if step.effect == "allow" and step.stopped:
+            raise TypeError("an allow is never stopped")
+        if step.stopped and step.effect != "deny":
+            raise TypeError("stopped is True only on the deny that halted")
+        if step.effect == "deny" and not step.stopped:
+            raise TypeError("the deny that halted must set stopped")
+
+
 def format_trace(steps: Iterable[EvaluationTrace], *, decision: Decision | None = None) -> str:
     """Server/test/REPL receipt. Not HTTP. Not the phone. Not a Grok tool result."""
     lines: list[str] = []
@@ -542,6 +577,16 @@ def test_grokbot_submit_never_reaches_role(cov: PolicyCoverage):
         resource(),
     ))
     decision, steps = log
+    assert TRACE_TABLE_FIELDS == ("seq", "policy", "applicable", "effect", "stopped")
+    assert trace_table(steps) == [
+        (1, "same_project", False, None, False),
+        (2, "grokbot_lane", True, "deny", True),
+    ]
+    assert format_trace_table(steps) == (
+        "seq1 same_project appl=no effect=— stopped=no\n"
+        "seq2 grokbot_lane appl=yes effect=deny stopped=yes"
+    )
+    reject_stopped_only_on_halt_deny(steps)
     assert gold_rows(log) == [
         (1, "same_project", "n/a"),
         (2, "grokbot_lane", "DENY", "Grokbot may only create_rfi_draft", "STOP"),
@@ -566,6 +611,31 @@ def test_apprentice_submit_stops_at_role(cov: PolicyCoverage):
 
 def test_journeyman_draft_allow_walks_full_set(cov: PolicyCoverage):
     log = cov.record(evaluate(subject(role=Role.JOURNEYMAN), Action.CREATE_RFI_DRAFT, resource()))
+    decision, steps = log
+    assert TRACE_TABLE_FIELDS == ("seq", "policy", "applicable", "effect", "stopped")
+    assert trace_table(steps) == [
+        (1, "same_project", False, None, False),
+        (2, "grokbot_lane", False, None, False),
+        (3, "on_site", False, None, False),
+        (4, "role_allows", True, "allow", False),
+        (5, "area_scope", False, None, False),
+        (6, "assigned_only", False, None, False),
+        (7, "chain_owns", False, None, False),
+        (8, "status_guard", False, None, False),
+        (9, "work_stop_writer", False, None, False),
+    ]
+    assert format_trace_table(steps) == (
+        "seq1 same_project appl=no effect=— stopped=no\n"
+        "seq2 grokbot_lane appl=no effect=— stopped=no\n"
+        "seq3 on_site appl=no effect=— stopped=no\n"
+        "seq4 role_allows appl=yes effect=allow stopped=no\n"
+        "seq5 area_scope appl=no effect=— stopped=no\n"
+        "seq6 assigned_only appl=no effect=— stopped=no\n"
+        "seq7 chain_owns appl=no effect=— stopped=no\n"
+        "seq8 status_guard appl=no effect=— stopped=no\n"
+        "seq9 work_stop_writer appl=no effect=— stopped=no"
+    )
+    reject_stopped_only_on_halt_deny(steps)
     assert gold_rows(log) == [
         (1, "same_project", "n/a"),
         (2, "grokbot_lane", "n/a"),
@@ -577,9 +647,11 @@ def test_journeyman_draft_allow_walks_full_set(cov: PolicyCoverage):
         (8, "status_guard", "n/a"),
         (9, "work_stop_writer", "n/a"),
     ]
-    assert log.decision.allowed is True
-    assert log.decision.policy == "role_allows"
-    assert not any(step.stopped for step in log.steps)
+    assert decision.allowed is True
+    assert decision.policy == "role_allows"
+    assert steps[3].effect == "allow"
+    assert steps[3].stopped is False
+    assert not any(step.stopped for step in steps)
 
 
 def test_area_foreman_other_area_stops_after_role(cov: PolicyCoverage):
@@ -1040,7 +1112,7 @@ def test_walk_helpers_stay_off_phone_and_grok():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[2]
-    forbidden = ("format_trace", "stop_policy", "assert_stop")
+    forbidden = ("format_trace", "format_trace_table", "stop_policy", "assert_stop")
     swift = list((root / "ios").rglob("*.swift")) if (root / "ios").exists() else []
     for path in swift + [
         root / "backend" / "app" / "main.py",
