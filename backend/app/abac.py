@@ -390,7 +390,7 @@ def chain_owns(
         return None
     if _crew_owns(s, r):
         return None
-    return _deny("chain_owns", "not your crew's draft")
+    return _deny("chain_owns", "not your crew's ticket")
 
 
 def status_guard(
@@ -479,8 +479,8 @@ FIELD_POLICY_SET = PolicySet(
         Policy(name="role_allows", rule=role_allows, order=40),
         Policy(name="area_scope", rule=area_scope, order=50),
         Policy(name="assigned_only", rule=assigned_only, order=60),
-        Policy(name="status_guard", rule=status_guard, order=70),
-        Policy(name="chain_owns", rule=chain_owns, order=80),
+        Policy(name="chain_owns", rule=chain_owns, order=70),
+        Policy(name="status_guard", rule=status_guard, order=80),
         Policy(name="work_stop_writer", rule=work_stop_writer, order=90),
         Policy(name="default_deny", rule=default_deny, order=99),
     ),

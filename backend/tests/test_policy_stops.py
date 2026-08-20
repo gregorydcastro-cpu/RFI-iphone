@@ -98,6 +98,9 @@ def gold_rows(walk) -> list[tuple]:
         if step.effect is None and step.applicable is False:
             rows.append((step.seq, step.policy, "n/a"))
             continue
+        if step.effect == "allow":
+            rows.append((step.seq, step.policy, "ALLOW", step.reason))
+            continue
         if step.effect == "deny" and step.stopped:
             rows.append((step.seq, step.policy, "DENY", step.reason, "STOP"))
             continue
@@ -105,7 +108,7 @@ def gold_rows(walk) -> list[tuple]:
             (
                 step.seq,
                 step.policy,
-                "ALLOW" if step.effect == "allow" else step.effect,
+                step.effect,
                 step.reason,
                 "STOP" if step.stopped else None,
             )
@@ -372,14 +375,48 @@ def test_gf_skips_area_and_still_walks(cov: PolicyCoverage):
 
 
 def test_foreman_other_crew_stops_at_chain_owns(cov: PolicyCoverage):
+    from fastapi import HTTPException
+
+    other = resource(created_by_id=OTHER, crew_foreman_id=OTHER)
     log = cov.record(evaluate(
         subject(role=Role.FOREMAN, crew_ids=frozenset({CREW})),
         Action.SUBMIT_RFI,
-        resource(created_by_id=OTHER, crew_foreman_id=OTHER),
+        other,
     ))
-    assert names(log) == list(EXPECTED_ORDER[:8])
+    assert gold_rows(log) == [
+        (1, "same_project", "n/a"),
+        (2, "grokbot_lane", "n/a"),
+        (3, "on_site", "n/a"),
+        (4, "role_allows", "ALLOW", "foreman may submit_rfi"),
+        (5, "area_scope", "n/a"),
+        (6, "assigned_only", "n/a"),
+        (7, "chain_owns", "DENY", "not your crew's ticket", "STOP"),
+    ]
     assert first_stop(log).policy == "chain_owns"
+    assert first_stop(log).reason == "not your crew's ticket"
     assert log.decision.policy == "chain_owns"
+    assert log.decision.reason == "not your crew's ticket"
+    assigned = cov.record(evaluate(
+        subject(role=Role.FOREMAN, crew_ids=frozenset({CREW})),
+        Action.ASSIGN_MATERIAL,
+        resource(type="ticket", created_by_id=OTHER, crew_foreman_id=OTHER),
+    ))
+    assert first_stop(assigned).policy == "chain_owns"
+    assert first_stop(assigned).reason == "not your crew's ticket"
+    with pytest.raises(AccessDenied) as raised:
+        require_access(
+            subject(role=Role.FOREMAN, crew_ids=frozenset({CREW})),
+            Action.SUBMIT_RFI,
+            other,
+        )
+    cov.record(raised.value)
+    with pytest.raises(HTTPException) as http:
+        raise_http(raised.value)
+    assert http.value.status_code == 403
+    assert http.value.detail == {
+        "policy": "chain_owns",
+        "reason": "not your crew's ticket",
+    }
 
 
 def test_submit_from_answered_stops_at_status(cov: PolicyCoverage):
@@ -388,7 +425,7 @@ def test_submit_from_answered_stops_at_status(cov: PolicyCoverage):
         Action.SUBMIT_RFI,
         resource(status="answered"),
     ))
-    assert names(log) == list(EXPECTED_ORDER[:7])
+    assert names(log) == list(EXPECTED_ORDER[:8])
     assert first_stop(log).policy == "status_guard"
     assert log.decision.policy == "status_guard"
 
