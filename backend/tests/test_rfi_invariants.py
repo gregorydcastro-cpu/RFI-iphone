@@ -11,7 +11,7 @@ import pytest
 from abac import AccessDenied, Action, HUNG_WRITES, Role, require_access
 from app import db as dbmod
 from app.coverage_schema import CURRENT_SCHEMA
-from app.ids import PROJECT_ID, REV_S301_C_ID
+from app.ids import COMPANY_SAMPLE_AE_ID, PROJECT_ID, REV_S301_C_ID, USER_SAMPLE_AE_ID
 from app.models import RFI
 from app.pe import PEError, request_clarification, set_priority
 from app.rfi import WORK_STOPPED_PRIORITY, is_first_submit, pair_holds
@@ -161,6 +161,8 @@ def test_invariant_2_number_only_on_first_submit_and_stays(client) -> None:
             "priority": "standard",
             "work_stopped": False,
             "require_internal_review": True,
+            "assigned_to_user_id": str(USER_SAMPLE_AE_ID),
+            "assigned_to_company_id": str(COMPANY_SAMPLE_AE_ID),
         },
         headers=PE_HEADERS,
     )
@@ -194,6 +196,8 @@ def test_invariant_2_number_only_on_first_submit_and_stays(client) -> None:
             "priority": "standard",
             "work_stopped": False,
             "require_internal_review": True,
+            "assigned_to_user_id": str(USER_SAMPLE_AE_ID),
+            "assigned_to_company_id": str(COMPANY_SAMPLE_AE_ID),
             "comment": "Resubmit after photo.",
         },
         headers=PE_HEADERS,
