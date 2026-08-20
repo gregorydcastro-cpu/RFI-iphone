@@ -359,9 +359,11 @@ class RFI(Base):
     )
     is_sample: Mapped[bool] = mapped_column(default=False)
     due_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    cycle_due_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     official_response: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     responded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    first_submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

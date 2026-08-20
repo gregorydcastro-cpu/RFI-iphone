@@ -333,6 +333,7 @@ def set_priority(
             now=utc_now(),
             allow_demote=allow_demote,
         )
+        rfi.cycle_due_at = rfi.due_at
         reminted = True
     db.add(
         RFIEvent(
@@ -446,6 +447,10 @@ def submit_for_design(
             now=now,
             allow_demote=True,
         )
+        if rfi.first_submitted_at is None:
+            rfi.first_submitted_at = rfi.submitted_at
+        if rfi.cycle_due_at is None:
+            rfi.cycle_due_at = rfi.due_at
 
     note = (comment or "").strip()
     _event(

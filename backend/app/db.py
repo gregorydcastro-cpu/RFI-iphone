@@ -83,12 +83,57 @@ def apply_rfis_work_stopped_law(bind=None) -> None:
                 )
 
 
+BACKFILL_CYCLE_DUE_BATCH = 1000
+
+
+def apply_rfis_hole_backfill(bind=None) -> None:
+    """Copy into missing clocks. Never overwrite. Never +N on rfi_number."""
+    bind = bind or engine
+    insp = inspect(bind)
+    if "rfis" not in insp.get_table_names():
+        return
+    columns = {col["name"] for col in insp.get_columns("rfis")}
+    with bind.begin() as conn:
+        if "first_submitted_at" not in columns:
+            conn.execute(text("ALTER TABLE rfis ADD COLUMN first_submitted_at timestamp"))
+        if "cycle_due_at" not in columns:
+            conn.execute(text("ALTER TABLE rfis ADD COLUMN cycle_due_at timestamp"))
+        conn.execute(
+            text(
+                """
+                UPDATE rfis
+                SET first_submitted_at = submitted_at
+                WHERE first_submitted_at IS NULL
+                  AND submitted_at IS NOT NULL
+                """
+            )
+        )
+        while True:
+            result = conn.execute(
+                text(
+                    """
+                    UPDATE rfis
+                    SET cycle_due_at = due_at
+                    WHERE id IN (
+                      SELECT id FROM rfis
+                      WHERE cycle_due_at IS NULL
+                        AND due_at IS NOT NULL
+                      LIMIT 1000
+                    )
+                    """
+                )
+            )
+            if result.rowcount == 0:
+                break
+
+
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     ATTACHMENTS_DIR.mkdir(parents=True, exist_ok=True)
     ASSETS_DIR.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
     apply_rfis_work_stopped_law(engine)
+    apply_rfis_hole_backfill(engine)
 
 
 def get_db() -> Generator[Session, None, None]:

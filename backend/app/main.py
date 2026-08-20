@@ -854,8 +854,10 @@ def create_rfi_draft(
         created_by_user_id=actor.user_id or None,
         area_id=actor.area_id,
         due_at=None,
+        cycle_due_at=None,
         official_response=None,
         submitted_at=None,
+        first_submitted_at=None,
         closed_at=None,
     )
     db.add(rfi)
