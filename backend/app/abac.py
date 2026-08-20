@@ -346,11 +346,14 @@ def on_site(
 
 def role_allows(
     s: Subject, action: Action, r: Resource, env: Env, ctx: Any = None
-) -> Decision | None:
-    allowed = ROLE_ACTIONS.get(s.role)
-    if allowed is None:
-        return _deny("role_allows", "unknown role")
-    if action not in allowed:
+) -> Decision:
+    """Law. Never returns None.
+
+    if action not in ROLE_ACTIONS.get(s.role, frozenset()):
+        return DENY
+    return ALLOW
+    """
+    if action not in ROLE_ACTIONS.get(s.role, frozenset()):
         return _deny("role_allows", f"{s.role.value} cannot {action.value}")
     return _allow("role_allows", f"{s.role.value} may {action.value}")
 

@@ -365,6 +365,49 @@ def gold_evaluates():
     )
 
 
+def test_role_allows_is_law():
+    from enum import Enum
+
+    from abac import ROLE_ACTIONS, role_allows
+
+    class Extra(str, Enum):
+        INSPECTOR = "inspector"
+
+    env = Env()
+    res = resource()
+    assert role_allows.__doc__ is not None
+    assert "Never returns None" in role_allows.__doc__
+    assert ROLE_ACTIONS.get(Extra.INSPECTOR, frozenset()) == frozenset()
+
+    unknown_role = subject()
+    object.__setattr__(unknown_role, "role", Extra.INSPECTOR)
+    unknown = role_allows(unknown_role, Action.SUBMIT_RFI, res, env)
+    assert unknown is not None
+    assert unknown.allowed is False
+    assert unknown.policy == "role_allows"
+    assert unknown.reason == "inspector cannot submit_rfi"
+
+    known_deny = role_allows(subject(role=Role.JOURNEYMAN), Action.SUBMIT_RFI, res, env)
+    assert known_deny.allowed is False
+    assert known_deny.reason == "journeyman cannot submit_rfi"
+
+    known_allow = role_allows(
+        subject(role=Role.JOURNEYMAN), Action.CREATE_RFI_DRAFT, res, env
+    )
+    assert known_allow.allowed is True
+    assert known_allow.reason == "journeyman may create_rfi_draft"
+
+    for role in Role:
+        for action in Action:
+            decision = role_allows(subject(role=role), action, res, env)
+            assert decision is not None
+            assert decision.policy == "role_allows"
+            if action in ROLE_ACTIONS.get(role, frozenset()):
+                assert decision.allowed is True
+            else:
+                assert decision.allowed is False
+
+
 def test_policy_set_rank_is_fixed():
     assert tuple(policy.name for policy in FIELD_POLICY_SET.ranked()) == FIELD_LANES
     assert EXPECTED_ORDER == FIELD_LANES + ("default_deny",)
@@ -795,9 +838,12 @@ def test_journeyman_draft_allow_walks_full_set(cov: PolicyCoverage):
     ]
     assert decision.allowed is True
     assert decision.policy == "role_allows"
+    assert decision.policy != "default_deny"
+    assert [step.effect for step in steps if step.effect == "allow"] == ["allow"]
     assert steps[3].effect == "allow"
     assert steps[3].stopped is False
     assert not any(step.stopped for step in steps)
+    assert "default_deny" not in names(log)
 
 
 def test_area_foreman_other_area_stops_after_role(cov: PolicyCoverage):
