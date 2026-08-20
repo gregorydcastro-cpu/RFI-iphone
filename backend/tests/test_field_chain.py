@@ -130,7 +130,11 @@ def test_apprentice_403_on_draft_submit_work_stop(client):
         json=_envelope("Hopper note about a missing embed plate.", "apprentice"),
     )
     assert drafted.status_code == 403
-    assert "Apprentice" in drafted.json()["detail"]
+    detail = drafted.json()["detail"]
+    if isinstance(detail, dict):
+        assert detail["policy"] == "role_allows"
+    else:
+        assert "Apprentice" in detail
 
     rfi_id = _draft(client, "Journeyman draft for apprentice 403 checks.")
     headers = {**PE_HEADERS, **field_headers("apprentice")}

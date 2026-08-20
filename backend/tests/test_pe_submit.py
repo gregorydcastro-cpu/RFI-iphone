@@ -251,8 +251,8 @@ def test_cannot_submit_from_ball_in_court(client):
         json=_submit_body(),
         headers=PE_HEADERS,
     )
-    assert blocked.status_code == 422
-    assert "ball_in_court" in blocked.json()["detail"]
+    assert blocked.status_code == 403
+    assert blocked.json()["detail"]["policy"] == "status_guard"
     still = client.get(f"/rfis/{SAMPLE_OVERDUE_ID}").json()
     assert still["status"] == "ball_in_court"
     assert still["rfi_display"] == "RFI-0001"

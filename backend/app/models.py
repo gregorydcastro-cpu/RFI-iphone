@@ -202,6 +202,35 @@ class ProjectArea(Base):
     project: Mapped[Project] = relationship(back_populates="areas")
 
 
+class Role(Base):
+    """Field (or office) role. Rank is the chain; permissions are the door."""
+
+    __tablename__ = "roles"
+
+    name: Mapped[str] = mapped_column(String(32), primary_key=True)
+    rank: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="field")
+    label: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class RolePermission(Base):
+    """Stored role × action seed. evaluate() in access.py is the lock."""
+
+    __tablename__ = "role_permissions"
+    __table_args__ = (
+        UniqueConstraint(
+            "role_name", "action", "resource_kind", name="uq_role_permission"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    role_name: Mapped[str] = mapped_column(
+        String(32), ForeignKey("roles.name"), nullable=False
+    )
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    resource_kind: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+
+
 class ProjectAssignment(Base):
     """One active field role per person on a project. Reuses users — not a second roster."""
 
@@ -366,6 +395,7 @@ class RFIPin(Base):
     x_norm: Mapped[float] = mapped_column(Float, nullable=False)
     y_norm: Mapped[float] = mapped_column(Float, nullable=False)
     label: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    official: Mapped[bool] = mapped_column(default=False)
 
     rfi: Mapped[RFI] = relationship(back_populates="pins")
 

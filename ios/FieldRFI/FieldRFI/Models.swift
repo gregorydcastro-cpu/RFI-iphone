@@ -74,6 +74,10 @@ struct ActorDTO: Codable, Hashable {
     let user_id: String
     let role: String
     var action: String? = "create_rfi_draft"
+    var actor_type: String? = "grokbot"
+    var on_behalf_of_role: String? = nil
+    var project_id: String? = nil
+    var area_id: String? = nil
 }
 
 struct AssignmentDTO: Codable {

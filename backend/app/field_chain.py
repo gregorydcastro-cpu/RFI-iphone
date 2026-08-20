@@ -1,10 +1,10 @@
-"""Contractor field chain. Law, not a UI hint.
+"""Contractor field chain. Route is reports_to. Door is access.evaluate.
 
 General Foreman → Area Foreman → Foreman → Journeyman → Apprentice.
 Nobody jumps a step because they have the phone.
 
-Grokbot still only search_rfis + create_rfi_draft. It reads actor.role
-and stops there. Submit, set_priority, assign, and work-stop are out of lane.
+Grokbot still only search_rfis + create_rfi_draft. Packet actor_type is
+GROKBOT. Submit, set_priority, assign, and work-stop are out of lane.
 """
 
 from __future__ import annotations
@@ -14,6 +14,23 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.access import (
+    AccessContext,
+    AccessDenied,
+    Action,
+    ActorType,
+    Env,
+    Resource,
+    Role,
+    check_access,
+    office_pe_subject,
+    parse_action,
+    require_access,
+    resource_from_order,
+    resource_from_rfi,
+    resource_from_ticket,
+    subject_from_assignment,
+)
 from app.models import (
     DraftMaterialOrder,
     ProjectArea,
@@ -56,20 +73,14 @@ GROK_OUT_OF_LANE = frozenset(
     }
 )
 
-ACTIONS = frozenset(
+ACTIONS = frozenset(action.value for action in Action) | frozenset(
     {
-        "create_rfi_draft",
-        "request_material",
-        "handle_material",
-        "flag_material",
-        "assign_tickets",
-        "submit_rfi",
         "internal_review",
-        "set_priority",
-        "work_stop",
-        "approve_material",
         "void",
-        "allow_demote",
+        "assign_tickets",
+        "request_material",
+        "flag_material",
+        "view_rfi_graph",
     }
 )
 
@@ -295,33 +306,6 @@ def assign_person(
     return row
 
 
-def _same_area(actor: Actor, rfi: RFI | None) -> bool:
-    if rfi is None:
-        return True
-    if actor.role == "general_foreman" or actor.kind == "office_pe":
-        return True
-    if not rfi.area_id:
-        return False
-    return rfi.area_id == actor.area_id
-
-
-def _has_work_stop_grant(db: Session, actor: Actor, rfi: RFI | None) -> bool:
-    rows = list(
-        db.scalars(
-            select(WorkStopGrant).where(
-                WorkStopGrant.project_id == actor.project_id,
-                WorkStopGrant.grantee_user_id == actor.user_id,
-                WorkStopGrant.active.is_(True),
-            )
-        )
-    )
-    if not rows:
-        return False
-    if rfi is None:
-        return True
-    return any(row.rfi_id is None or row.rfi_id == rfi.id for row in rows)
-
-
 def grant_work_stop(
     db: Session,
     *,
@@ -329,8 +313,11 @@ def grant_work_stop(
     grantee_user_id: str,
     rfi_id: str | None = None,
 ) -> WorkStopGrant:
-    if not can(db, grantor, "work_stop"):
-        raise FieldError("Only Area Foreman or GF may grant work-stopped.", 403)
+    # Work-stop is written through set_priority, not this row and not Action.WORK_STOP.
+    try:
+        require_can(db, grantor, "set_priority")
+    except FieldError as exc:
+        raise FieldError("Only Area Foreman or GF may grant work-stopped.", exc.status_code) from exc
     grantee = load_actor(db, grantor.project_id, grantee_user_id)
     if grantee.role != "foreman":
         raise FieldError("Work-stop grants go to a Foreman.")
@@ -349,6 +336,94 @@ def grant_work_stop(
     return row
 
 
+def subject_for(
+    db: Session,
+    actor: Actor,
+    *,
+    actor_type: ActorType = ActorType.HUMAN,
+    project_id: str | None = None,
+):
+    if actor.kind == "office_pe":
+        return office_pe_subject(project_id or actor.project_id)
+    if actor.kind in {"office_design", "office_gc"}:
+        raise FieldError(f"{actor.kind} is not a field writer.", 403)
+    row = db.get(ProjectAssignment, actor.assignment_id)
+    if row is None:
+        row = _active_assignment(db, actor.project_id, actor.user_id)
+    if row is None:
+        raise FieldError("No active assignment on this project.", 403)
+    return subject_from_assignment(db, row, actor_type=actor_type)
+
+
+def resource_for(
+    db: Session,
+    action: Action,
+    *,
+    rfi: RFI | None = None,
+    ticket: DraftMaterialOrder | None = None,
+    project_id: str | None = None,
+    area_id: str | None = None,
+) -> Resource:
+    if ticket is not None and action in {
+        Action.ASSIGN_MATERIAL,
+        Action.APPROVE_MATERIAL,
+        Action.DRAFT_MATERIAL,
+    }:
+        return resource_from_order(db, ticket, rfi)
+    if ticket is not None:
+        return resource_from_ticket(db, ticket, rfi)
+    if rfi is not None:
+        return resource_from_rfi(db, rfi)
+    from app.access import must_uuid, as_uuid
+
+    kind = "rfi"
+    if action in {Action.VIEW_PRINT, Action.PIN_DRAFT}:
+        kind = "sheet"
+    elif action in {
+        Action.DRAFT_MATERIAL,
+        Action.APPROVE_MATERIAL,
+        Action.ASSIGN_MATERIAL,
+    }:
+        kind = "material_order"
+    elif action in {Action.HANDLE_MATERIAL, Action.FLAG_UP}:
+        kind = "ticket"
+    return Resource(
+        type=kind,
+        project_id=must_uuid(project_id),
+        area_id=as_uuid(area_id),
+    )
+
+
+def decision_for(
+    db: Session,
+    actor: Actor,
+    action: str,
+    *,
+    rfi: RFI | None = None,
+    ticket: DraftMaterialOrder | None = None,
+    env: Env | None = None,
+    ctx: AccessContext | None = None,
+    actor_type: ActorType = ActorType.HUMAN,
+):
+    parsed = parse_action(action)
+    subject = subject_for(
+        db,
+        actor,
+        actor_type=actor_type,
+        project_id=(rfi.project_id if rfi is not None else None)
+        or (actor.project_id or None),
+    )
+    resource = resource_for(
+        db,
+        parsed,
+        rfi=rfi,
+        ticket=ticket,
+        project_id=subject.project_id,
+        area_id=str(subject.area_id) if subject.area_id else actor.area_id,
+    )
+    return check_access(subject, parsed, resource, env=env, ctx=ctx)
+
+
 def can(
     db: Session,
     actor: Actor,
@@ -356,66 +431,30 @@ def can(
     *,
     rfi: RFI | None = None,
     ticket: DraftMaterialOrder | None = None,
+    env: Env | None = None,
+    ctx: AccessContext | None = None,
+    actor_type: ActorType = ActorType.HUMAN,
 ) -> bool:
-    if action not in ACTIONS:
-        return False
-    if actor.kind == "office_pe":
-        return action in {
-            "submit_rfi",
-            "internal_review",
-            "set_priority",
-            "work_stop",
-            "void",
-            "allow_demote",
-            "approve_material",
-            "assign_tickets",
-            "request_material",
-        }
     if actor.kind in {"office_design", "office_gc"}:
         return False
-    if not actor.is_field:
+    if action == "view_rfi_graph":
+        return actor.kind == "office_pe" or (
+            actor.is_field and actor.role != Role.APPRENTICE.value
+        )
+    try:
+        parsed = parse_action(action)
+    except ValueError:
         return False
-
-    role = actor.role
-    if action == "create_rfi_draft":
-        return RANK[role] >= RANK["journeyman"]
-    if action == "request_material":
-        return RANK[role] >= RANK["journeyman"]
-    if action == "handle_material":
-        if role != "apprentice" or ticket is None:
-            return False
-        return ticket.assigned_to_user_id == actor.user_id and ticket.handled_at is None
-    if action == "flag_material":
-        return role == "apprentice"
-    if action == "assign_tickets":
-        return RANK[role] >= RANK["foreman"] and _same_area(actor, rfi)
-    if action == "submit_rfi":
-        return RANK[role] >= RANK["foreman"] and _same_area(actor, rfi)
-    if action == "internal_review":
-        return RANK[role] >= RANK["foreman"] and _same_area(actor, rfi)
-    if action == "set_priority":
-        if role == "general_foreman":
-            return True
-        if role == "area_foreman":
-            return _same_area(actor, rfi)
-        return False
-    if action == "work_stop":
-        if role == "general_foreman":
-            return True
-        if role == "area_foreman":
-            return _same_area(actor, rfi)
-        if role == "foreman":
-            return _same_area(actor, rfi) and _has_work_stop_grant(db, actor, rfi)
-        return False
-    if action == "approve_material":
-        if role == "general_foreman":
-            return True
-        if role == "area_foreman":
-            return _same_area(actor, rfi)
-        return False
-    if action in {"void", "allow_demote"}:
-        return role == "general_foreman"
-    return False
+    return decision_for(
+        db,
+        actor,
+        parsed.value,
+        rfi=rfi,
+        ticket=ticket,
+        env=env,
+        ctx=ctx,
+        actor_type=actor_type,
+    ).allowed
 
 
 def require_can(
@@ -425,9 +464,38 @@ def require_can(
     *,
     rfi: RFI | None = None,
     ticket: DraftMaterialOrder | None = None,
+    env: Env | None = None,
+    ctx: AccessContext | None = None,
+    actor_type: ActorType = ActorType.HUMAN,
 ) -> None:
-    if not can(db, actor, action, rfi=rfi, ticket=ticket):
+    if actor.kind in {"office_design", "office_gc"}:
         raise FieldError(f"{actor.role} cannot {action}.", 403)
+    if action == "view_rfi_graph":
+        if can(db, actor, action):
+            return
+        raise FieldError(f"{actor.role} cannot {action}.", 403)
+    try:
+        parsed = parse_action(action)
+        subject = subject_for(
+            db,
+            actor,
+            actor_type=actor_type,
+            project_id=(rfi.project_id if rfi is not None else None)
+            or (actor.project_id or None),
+        )
+        resource = resource_for(
+            db,
+            parsed,
+            rfi=rfi,
+            ticket=ticket,
+            project_id=subject.project_id,
+            area_id=str(subject.area_id) if subject.area_id else actor.area_id,
+        )
+        require_access(subject, parsed, resource, env=env, ctx=ctx)
+    except AccessDenied:
+        raise
+    except ValueError as exc:
+        raise FieldError(f"{actor.role} cannot {action}.", 403) from exc
 
 
 def grok_out_of_lane(raw: dict | None, actor_role: str | None) -> str | None:
@@ -449,7 +517,8 @@ def grok_out_of_lane(raw: dict | None, actor_role: str | None) -> str | None:
 
 
 def capabilities(db: Session, actor: Actor, rfi: RFI | None = None) -> dict[str, bool]:
-    return {name: can(db, actor, name, rfi=rfi) for name in sorted(ACTIONS)}
+    names = sorted(ACTIONS)
+    return {name: can(db, actor, name, rfi=rfi) for name in names}
 
 
 def assignment_payload(db: Session, actor: Actor) -> dict:

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.drawings import ensure_demo_drawings, png_size
 from app.holiday_cache import holiday_cache
+from app.access import seed_role_permissions
 from app.field_chain import assign_person
 from app.ids import (
     COMPANY_CASTRO_ID,
@@ -672,7 +673,9 @@ def seed_demo(db: Session) -> None:
     seed_pe_roster(db)
     ingest_ilsb_draft(db)
     seed_sample_graph_rfis(db)
+    seed_role_permissions(db)
     seed_field_crews(db)
+    db.commit()
 
 
 def has_demo_project(db: Session) -> bool:

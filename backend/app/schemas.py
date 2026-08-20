@@ -107,13 +107,19 @@ class ActorInfo(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     user_id: UUID
-    role: str
+    role: Optional[str] = None
     action: Optional[str] = None
+    actor_type: Optional[str] = None
+    on_behalf_of_role: Optional[str] = None
+    project_id: Optional[UUID] = None
+    area_id: Optional[UUID] = None
 
     @field_validator("role")
     @classmethod
-    def strip_role(cls, value: str) -> str:
-        return value.strip().lower()
+    def strip_role(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return value.strip().lower() or None
 
     @field_validator("action")
     @classmethod

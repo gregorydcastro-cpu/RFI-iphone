@@ -26,6 +26,19 @@ from app.aging import (
     work_stopped,
 )
 from app.calendar import DEFAULT_TZ
+from app.access import (
+    AccessDenied,
+    Action,
+    ActorType,
+    Env,
+    Resource,
+    as_uuid,
+    load_rfi,
+    must_uuid,
+    raise_http,
+    require_access,
+    resource_from_rfi,
+)
 from app.field_chain import (
     FieldError,
     assignment_payload,
@@ -34,6 +47,7 @@ from app.field_chain import (
     load_actor,
     require_can,
     resolve_actor,
+    subject_for,
 )
 from app.holiday_cache import holiday_cache
 from app.grokbot import GrokbotError, draft_from_preflight
@@ -137,6 +151,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.exception_handler(AccessDenied)
+async def _access_denied_handler(_, exc: AccessDenied):
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(
+        status_code=403,
+        content={"detail": {"policy": exc.decision.policy, "reason": exc.decision.reason}},
+    )
+
 DEFAULT_PE_TOKEN = "pe-demo"
 DEFAULT_DESIGN_TOKEN = "design-demo"
 DEFAULT_GC_TOKEN = "gc-demo"
@@ -176,6 +200,17 @@ def _http_field(exc: FieldError) -> HTTPException:
     return HTTPException(exc.status_code, str(exc))
 
 
+def _http_denied(exc: AccessDenied) -> HTTPException:
+    try:
+        raise_http(exc)
+    except HTTPException as mapped:
+        return mapped
+    return HTTPException(
+        status_code=403,
+        detail={"policy": exc.decision.policy, "reason": exc.decision.reason},
+    )
+
+
 def _field_actor(
     db: Session,
     project_id: str,
@@ -199,10 +234,33 @@ def _field_actor(
     raise HTTPException(403, "Actor role is required.")
 
 
-def _gate(db: Session, actor, action: str, *, rfi=None, ticket=None) -> None:
+def _gate(
+    db: Session,
+    actor,
+    action: str,
+    *,
+    rfi=None,
+    ticket=None,
+    env=None,
+    ctx=None,
+    actor_type: ActorType = ActorType.HUMAN,
+) -> None:
     try:
-        require_can(db, actor, action, rfi=rfi, ticket=ticket)
+        require_can(
+            db,
+            actor,
+            action,
+            rfi=rfi,
+            ticket=ticket,
+            env=env,
+            ctx=ctx,
+            actor_type=actor_type,
+        )
+    except AccessDenied as exc:
+        raise _http_denied(exc) from exc
     except FieldError as exc:
+        if isinstance(exc.__cause__, AccessDenied):
+            raise _http_denied(exc.__cause__) from exc
         raise _http_field(exc) from exc
 
 
@@ -396,10 +454,19 @@ def search_rfis(
     limit: int = Query(10, ge=1, le=25),
     exclude_sample: bool = Query(True, description="Hide PE SAMPLE meeting-log rows"),
     db: Session = Depends(get_db),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_field_role: str | None = Header(default=None, alias="X-Field-Role"),
 ) -> SearchResponse:
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(404, "Project not found.")
+    if x_user_id:
+        actor = _field_actor(db, project_id, x_user_id, x_field_role)
+        if actor.role == "apprentice":
+            raise HTTPException(
+                403,
+                {"policy": "role_allows", "reason": "apprentice cannot view the RFI list"},
+            )
     statuses = None
     if status_in:
         statuses = [part.strip() for part in status_in.split(",") if part.strip()]
@@ -483,7 +550,16 @@ def _graph_row(rfi: RFI, project_name: str, now, lookup, escalate_hours: int) ->
 def rfi_graph(
     project_id: str | None = None,
     db: Session = Depends(get_db),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_field_role: str | None = Header(default=None, alias="X-Field-Role"),
 ) -> GraphResponse:
+    if x_user_id and project_id:
+        actor = _field_actor(db, project_id, x_user_id, x_field_role)
+        if actor.role == "apprentice":
+            raise HTTPException(
+                403,
+                {"policy": "role_allows", "reason": "apprentice cannot view the RFI list"},
+            )
     now = utc_now()
     stmt = select(RFI, Project.name).join(Project, Project.id == RFI.project_id)
     if project_id:
@@ -616,14 +692,48 @@ def _store_photos(rfi_id: str, photos: list) -> list[RFIAttachment]:
 
 
 @app.post("/create_rfi_draft", response_model=DraftResult)
-def create_rfi_draft(raw: dict, db: Session = Depends(get_db)) -> DraftResult:
+def create_rfi_draft(
+    raw: dict,
+    db: Session = Depends(get_db),
+    x_on_site: str | None = Header(default=None, alias="X-On-Site"),
+) -> DraftResult:
     actor_raw = raw.get("actor") if isinstance(raw, dict) else None
-    if not isinstance(actor_raw, dict) or not actor_raw.get("user_id") or not actor_raw.get("role"):
+    if not isinstance(actor_raw, dict) or not actor_raw.get("user_id"):
         raise HTTPException(
             403,
             "Actor role is required so a hopper note is never treated as a submitted RFI.",
         )
-    lane = grok_out_of_lane(raw, str(actor_raw.get("role") or ""))
+    project_info = raw.get("project") if isinstance(raw.get("project"), dict) else {}
+    project_id = project_info.get("id")
+    if not project_id:
+        raise HTTPException(422, "project.id is required.")
+    project = db.get(Project, str(project_id))
+    if not project:
+        raise HTTPException(404, "Project not found.")
+    # Packet on_behalf_of_role is not a wish. Assignment wins. This write is GROKBOT.
+    actor = _field_actor(
+        db,
+        str(project_id),
+        str(actor_raw.get("user_id")),
+        actor_raw.get("role"),
+    )
+    subject = subject_for(db, actor, actor_type=ActorType.GROKBOT)
+    try:
+        require_access(
+            subject,
+            Action.CREATE_RFI_DRAFT,
+            Resource(
+                type="rfi",
+                project_id=must_uuid(project_id),
+                area_id=subject.area_id,
+                status="draft",
+                created_by_id=subject.user_id,
+            ),
+            env=Env(project_id=must_uuid(project_id), area_id=subject.area_id),
+        )
+    except AccessDenied as exc:
+        raise_http(exc)
+    lane = grok_out_of_lane(raw, actor.role)
     if lane:
         raise HTTPException(403, lane)
     try:
@@ -634,18 +744,8 @@ def create_rfi_draft(raw: dict, db: Session = Depends(get_db)) -> DraftResult:
     except Exception as exc:
         raise HTTPException(422, f"Invalid preflight_rfi envelope: {exc}") from exc
 
-    project = db.get(Project, str(envelope.project.id))
-    if not project:
-        raise HTTPException(404, "Project not found.")
     if project.name != envelope.project.name:
         raise HTTPException(422, "project.name does not match the catalog.")
-    actor = _field_actor(
-        db,
-        project.id,
-        str(envelope.actor.user_id) if envelope.actor else None,
-        envelope.actor.role if envelope.actor else None,
-    )
-    _gate(db, actor, "create_rfi_draft")
 
     sheet_rev = None
     sheet = None
@@ -986,9 +1086,38 @@ def pe_submit_rfi(
     if not rfi:
         raise HTTPException(404, "RFI not found.")
     actor = _actor_on_rfi(db, rfi, x_user_id, x_field_role)
-    _gate(db, actor, "submit_rfi", rfi=rfi)
-    if body.work_stopped or body.priority == "work_stopped":
-        _gate(db, actor, "work_stop", rfi=rfi)
+    subject = subject_for(db, actor, project_id=rfi.project_id)
+    loaded, mapped = load_rfi(db, rfi.id)
+    try:
+        require_access(
+            subject,
+            Action.SUBMIT_RFI,
+            Resource(
+                type="rfi",
+                project_id=mapped.project_id,
+                area_id=mapped.area_id,
+                status=mapped.status,
+                created_by_id=mapped.created_by_id,
+                crew_foreman_id=mapped.crew_foreman_id,
+                requires_internal_review=body.require_internal_review,
+            ),
+        )
+        if body.work_stopped or body.priority == "work_stopped":
+            require_access(
+                subject,
+                Action.SET_PRIORITY,
+                Resource(
+                    type="rfi",
+                    project_id=must_uuid(loaded.project_id),
+                    area_id=as_uuid(loaded.area_id),
+                    status=loaded.status,
+                    priority=loaded.priority,
+                    work_stopped=loaded.priority == "work_stopped",
+                ),
+                ctx={"priority": "work_stopped", "allow_demote": False},
+            )
+    except AccessDenied as exc:
+        raise_http(exc)
     try:
         result = submit_for_design(
             db,
@@ -1038,11 +1167,37 @@ def pe_set_priority(
     if not rfi:
         raise HTTPException(404, "RFI not found.")
     actor = _actor_on_rfi(db, rfi, x_user_id, x_field_role)
-    _gate(db, actor, "set_priority", rfi=rfi)
-    if body.work_stopped or body.priority == "work_stopped":
-        _gate(db, actor, "work_stop", rfi=rfi)
-    if body.allow_demote:
-        _gate(db, actor, "allow_demote", rfi=rfi)
+    subject = subject_for(db, actor, project_id=rfi.project_id)
+    loaded, _ = load_rfi(db, rfi.id)
+    try:
+        require_access(
+            subject,
+            Action.SET_PRIORITY,
+            Resource(
+                type="rfi",
+                project_id=must_uuid(loaded.project_id),
+                area_id=as_uuid(loaded.area_id),
+                status=loaded.status,
+                priority=loaded.priority,
+                work_stopped=loaded.priority == "work_stopped",
+            ),
+            ctx={"priority": body.priority, "allow_demote": body.allow_demote},
+        )
+        if body.allow_demote:
+            require_access(
+                subject,
+                Action.ALLOW_DEMOTE,
+                Resource(
+                    type="rfi",
+                    project_id=must_uuid(loaded.project_id),
+                    area_id=as_uuid(loaded.area_id),
+                    status=loaded.status,
+                    priority=loaded.priority,
+                    work_stopped=loaded.priority == "work_stopped",
+                ),
+            )
+    except AccessDenied as exc:
+        raise_http(exc)
     try:
         result = set_priority(
             db,

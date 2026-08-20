@@ -12,15 +12,23 @@ final class FieldSession: ObservableObject {
     var isApprentice: Bool { role == "apprentice" }
 
     var canDraftRFI: Bool {
-        ["journeyman", "foreman", "area_foreman", "general_foreman"].contains(role)
+        assignment?.capabilities["create_rfi_draft"] == true
     }
 
     var canSubmitRFI: Bool {
-        ["foreman", "area_foreman", "general_foreman"].contains(role)
+        assignment?.capabilities["submit_rfi"] == true
     }
 
     var canWorkStop: Bool {
-        assignment?.capabilities["work_stop"] == true
+        assignment?.capabilities["set_priority"] == true
+    }
+
+    var canHandleMaterial: Bool {
+        assignment?.capabilities["handle_material"] == true
+    }
+
+    var canViewRFIGraph: Bool {
+        assignment?.capabilities["view_rfi_graph"] == true
     }
 
     var banner: String {
@@ -58,6 +66,14 @@ final class FieldSession: ObservableObject {
 
     func actorDTO() -> ActorDTO? {
         guard let userID, canDraftRFI else { return nil }
-        return ActorDTO(user_id: userID, role: role, action: "create_rfi_draft")
+        return ActorDTO(
+            user_id: userID,
+            role: role,
+            action: "create_rfi_draft",
+            actor_type: "grokbot",
+            on_behalf_of_role: role,
+            project_id: assignment?.project_id,
+            area_id: assignment?.area_id
+        )
     }
 }
