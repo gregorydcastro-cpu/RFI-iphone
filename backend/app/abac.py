@@ -6,8 +6,10 @@ import inspect
 from dataclasses import MISSING, dataclass, field, fields
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 from uuid import UUID
+
+SlaUnit = Literal["business_days", "calendar_days"]
 
 
 class Role(str, Enum):
@@ -120,10 +122,24 @@ class Resource:
     requires_internal_review: bool = False
 
 
+ENV_FIELD_ORDER = (
+    "now",
+    "on_site",
+    "timezone_name",
+    "sla_unit",
+    "work_stopped_queue",
+    "project_id",
+    "area_id",
+)
+
+
 @dataclass(frozen=True, kw_only=True)
 class Env:
     now: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     on_site: bool = True
+    timezone_name: str = "America/New_York"
+    sla_unit: SlaUnit = "business_days"
+    work_stopped_queue: bool = False
     project_id: UUID | None = None
     area_id: UUID | None = None
 
@@ -137,7 +153,20 @@ def reject_frozen_env_now(cls: type) -> None:
         raise TypeError("Env.now must use field(default_factory=...)")
 
 
-reject_frozen_env_now(Env)
+def reject_env_field_order(cls: type) -> None:
+    """kw_only so a defaulted on_site cannot sit in front of a required now."""
+    params = getattr(cls, "__dataclass_params__", None)
+    if params is None or not params.frozen:
+        raise TypeError("Env must be frozen")
+    if not params.kw_only:
+        raise TypeError("Env must be kw_only so field order cannot break")
+    names = tuple(item.name for item in fields(cls))
+    if names != ENV_FIELD_ORDER:
+        raise TypeError(f"Env field order is law: {ENV_FIELD_ORDER}")
+    reject_frozen_env_now(cls)
+
+
+reject_env_field_order(Env)
 
 
 @dataclass(frozen=True)

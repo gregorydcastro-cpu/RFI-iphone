@@ -12,12 +12,14 @@ from abac import (
     ActorType,
     Effect,
     Env,
+    ENV_FIELD_ORDER,
     EvaluationTrace,
     FIELD_POLICY_SET,
     Resource,
     Role,
     Subject,
     evaluate,
+    reject_env_field_order,
     reject_frozen_env_now,
     reject_subject_crew_ids,
     require_access,
@@ -102,6 +104,34 @@ def test_env_now_is_factory_not_import_stamp():
 
     with pytest.raises(TypeError, match="class-body"):
         reject_frozen_env_now(FrozenNow)
+
+
+def test_env_field_order_is_kw_only_law():
+    from dataclasses import dataclass, field, fields
+    from datetime import datetime, timezone
+
+    params = Env.__dataclass_params__
+    assert params.frozen is True
+    assert params.kw_only is True
+    assert tuple(item.name for item in fields(Env)) == ENV_FIELD_ORDER
+    reject_env_field_order(Env)
+    env = Env()
+    assert env.timezone_name == "America/New_York"
+    assert env.sla_unit == "business_days"
+    assert env.work_stopped_queue is False
+
+    @dataclass(frozen=True)
+    class PositionalEnv:
+        now: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+        on_site: bool = True
+        timezone_name: str = "America/New_York"
+        sla_unit: str = "business_days"
+        work_stopped_queue: bool = False
+        project_id: UUID | None = None
+        area_id: UUID | None = None
+
+    with pytest.raises(TypeError, match="kw_only"):
+        reject_env_field_order(PositionalEnv)
 
 
 def test_subject_crew_ids_is_per_instance_frozenset():
