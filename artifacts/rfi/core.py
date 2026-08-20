@@ -58,6 +58,35 @@ class Event:
     to_status: str | None = None
     due_at: datetime | None = None
     at: datetime | None = None
+    actor_id: UUID | None = None
+    from_revision_id: UUID | None = None
+    to_revision_id: UUID | None = None
+
+
+@dataclass
+class Sheet:
+    id: UUID
+    project_id: UUID
+    sheet_number: str
+    title: str = ""
+    discipline: str = ""
+
+
+@dataclass
+class SheetRevision:
+    id: UUID
+    sheet_id: UUID
+    revision: str
+    is_current: bool = False
+
+
+@dataclass
+class Pin:
+    sheet_revision_id: UUID
+    x: float
+    y: float
+    label: str | None = None
+    id: str = field(default_factory=lambda: str(uuid4()))
 
 
 @dataclass
@@ -74,11 +103,16 @@ class RFI:
     area_id: UUID | None = None
     crew_foreman_id: UUID | None = None
     pin: dict | None = None
+    pins: list[Pin] = field(default_factory=list)
     refs: list = field(default_factory=list)
     due_at: datetime | None = None
     submitted_at: datetime | None = None
     first_submitted_at: datetime | None = None
     cycle_due_at: datetime | None = None
+
+
+def as_uuid(value: UUID | str) -> UUID:
+    return value if isinstance(value, UUID) else UUID(str(value))
 
 
 class Store:
@@ -87,12 +121,37 @@ class Store:
     def __init__(self, *, now: datetime | None = None) -> None:
         self.now = now or utc_now()
         self.jobs: dict[UUID, Job] = {}
+        self.sheets: dict[UUID, Sheet] = {}
+        self.revisions: dict[UUID, SheetRevision] = {}
         self.rfis: dict[str, RFI] = {}
         self.events: list[Event] = []
 
     def add_job(self, job: Job) -> Job:
         self.jobs[job.id] = job
         return job
+
+    def add_sheet(self, sheet: Sheet) -> Sheet:
+        self.sheets[sheet.id] = sheet
+        return sheet
+
+    def add_revision(self, revision: SheetRevision) -> SheetRevision:
+        """A new print does not spawn RFIs and does not move existing pins."""
+        if revision.id in self.revisions:
+            raise WriteError("revision already exists")
+        sheet = self.sheets.get(revision.sheet_id)
+        if sheet is None:
+            raise WriteError("sheet not found")
+        if any(
+            row.sheet_id == revision.sheet_id and row.revision == revision.revision
+            for row in self.revisions.values()
+        ):
+            raise WriteError("revision already exists on this sheet")
+        if revision.is_current:
+            for row in self.revisions.values():
+                if row.sheet_id == revision.sheet_id:
+                    row.is_current = False
+        self.revisions[revision.id] = revision
+        return revision
 
     def add_event(self, event: Event) -> Event:
         if event.at is None:
@@ -104,6 +163,12 @@ class Store:
         row = self.rfis.get(rfi_id)
         if row is None:
             raise WriteError(f"RFI {rfi_id} not found")
+        return row
+
+    def get_revision(self, revision_id: UUID | str) -> SheetRevision:
+        row = self.revisions.get(as_uuid(revision_id))
+        if row is None:
+            raise WriteError("sheet_revision.id is not a known revision")
         return row
 
 
@@ -152,6 +217,23 @@ def _due_at(priority: str, now: datetime) -> datetime:
     return now + SLA[priority]
 
 
+def _pin_from_dict(store: Store, pin: dict) -> Pin | None:
+    rev_raw = pin.get("sheet_revision_id")
+    if rev_raw is None:
+        return None
+    rev = store.get_revision(rev_raw)
+    x = pin.get("x_norm", pin.get("x"))
+    y = pin.get("y_norm", pin.get("y"))
+    if x is None or y is None:
+        raise WriteError("a draft must pin to a sheet_revision_id (plus x/y)")
+    return Pin(
+        sheet_revision_id=rev.id,
+        x=float(x),
+        y=float(y),
+        label=pin.get("label"),
+    )
+
+
 def create_rfi_draft(
     store: Store,
     subject: Subject,
@@ -178,6 +260,11 @@ def create_rfi_draft(
         ),
         env=env or Env(project_id=subject.project_id, area_id=subject.area_id),
     )
+    pins: list[Pin] = []
+    if pin and pin.get("sheet_revision_id") is not None:
+        built = _pin_from_dict(store, pin)
+        if built is not None:
+            pins.append(built)
     row = RFI(
         id=str(uuid4()),
         project_id=subject.project_id,
@@ -186,6 +273,7 @@ def create_rfi_draft(
         status="draft",
         area_id=subject.area_id,
         pin=dict(pin) if pin else None,
+        pins=pins,
         refs=list(refs or []),
     )
     write_priority_pair(row, chosen)
@@ -363,6 +451,8 @@ def age_rfis(store: Store, *, now: datetime | None = None) -> list[Event]:
 
 def run_demo() -> dict:
     """journeyman pin draft → grokbot blocked → RFI-1 → work-stopped → one cycle event."""
+    from rfi.compare import apply_carry_forward, compare_revisions, search_open_on_sheet
+
     job_id = UUID("00000000-0000-4000-8000-000000000010")
     area = UUID("00000000-0000-4000-8000-000000000401")
     company = UUID("00000000-0000-4000-8000-000000000301")
@@ -371,6 +461,23 @@ def run_demo() -> dict:
     area_fm = UUID("00000000-0000-4000-8000-000000000004")
     store = Store()
     store.add_job(Job(id=job_id, requires_internal_review=True))
+    sheet = store.add_sheet(
+        Sheet(
+            id=UUID("aaaaaaaa-0000-4000-8000-000000000131"),
+            project_id=job_id,
+            sheet_number="EL107_N",
+            title="Electrical Lighting Plan — Level 07 North",
+            discipline="E",
+        )
+    )
+    rev27 = store.add_revision(
+        SheetRevision(
+            id=UUID("aaaaaaaa-0000-4000-8000-000000000141"),
+            sheet_id=sheet.id,
+            revision="27",
+            is_current=True,
+        )
+    )
 
     journeyman = Subject(
         user_id=jman,
@@ -384,11 +491,27 @@ def run_demo() -> dict:
         store,
         journeyman,
         question="Clearance at grid A-3?",
-        pin={"label": "A-3"},
+        pin={
+            "sheet_revision_id": rev27.id,
+            "x": 0.28,
+            "y": 0.52,
+            "label": "A-3",
+        },
+    )
+    leftover_draft = create_rfi_draft(
+        store,
+        journeyman,
+        question="Same hatch on the old print?",
+        pin={
+            "sheet_revision_id": rev27.id,
+            "x": 0.31,
+            "y": 0.48,
+            "label": "leftover",
+        },
     )
     created_status = draft.status
     created_number = draft.rfi_number
-    created_pin = dict(draft.pin or {})
+    created_pin = {"label": "A-3"}
 
     grok = Subject(
         user_id=jman,
@@ -435,6 +558,18 @@ def run_demo() -> dict:
     later = stopped.due_at + timedelta(seconds=1)
     first = age_rfis(store, now=later)
     replay = age_rfis(store, now=later)
+    rev28 = store.add_revision(
+        SheetRevision(
+            id=UUID("aaaaaaaa-0000-4000-8000-000000000142"),
+            sheet_id=sheet.id,
+            revision="28",
+            is_current=True,
+        )
+    )
+    diff = compare_revisions(store, rev27.id, rev28.id)
+    carried = apply_carry_forward(store, diff, actor_id=foreman)
+    apply_carry_forward(store, diff, actor_id=foreman)
+    open_on_sheet = search_open_on_sheet(store, sheet.id)
     return {
         "draft_status": created_status,
         "draft_number": created_number,
@@ -452,6 +587,22 @@ def run_demo() -> dict:
         "cycle_kind": first[0].kind if first else None,
         "cycle_events": len(first),
         "replay": len(replay),
+        "carry": [item.rfi_id for item in diff.carry],
+        "leftover": [item.rfi_id for item in diff.leftover],
+        "carried_pins": len(carried),
+        "pin_carried_events": sum(
+            1 for event in store.events if event.event_type == "pin_carried"
+        ),
+        "leftover_still_on_old": leftover_draft.pins[0].sheet_revision_id == rev27.id
+        and leftover_draft.rfi_number is None,
+        "carried_has_both_revs": {p.sheet_revision_id for p in stopped.pins}
+        == {rev27.id, rev28.id},
+        "search_open_ids": {row.id for row in open_on_sheet},
         "store": store,
         "rfi": stopped,
+        "sheet": sheet,
+        "rev_a": rev27,
+        "rev_b": rev28,
+        "leftover_draft": leftover_draft,
+        "foreman_id": foreman,
     }

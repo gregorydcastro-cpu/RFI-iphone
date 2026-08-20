@@ -19,6 +19,14 @@ def main() -> int:
         facts["cycle_events"] == 1,
         facts["cycle_kind"] == "escalated",
         facts["replay"] == 0,
+        facts["carried_pins"] == 1,
+        facts["pin_carried_events"] == 1,
+        facts["leftover_still_on_old"] is True,
+        facts["carried_has_both_revs"] is True,
+        facts["leftover_draft"].id in facts["leftover"],
+        facts["rfi"].id in facts["carry"],
+        facts["leftover_draft"].id in facts["search_open_ids"],
+        facts["rfi"].id in facts["search_open_ids"],
     )
     print("journeyman drafted on pin A-3 status=draft number=None")
     print(f"grokbot submit blocked policy={facts['grokbot_policy']}")
@@ -27,6 +35,10 @@ def main() -> int:
     print(
         f"age_rfis wrote {facts['cycle_events']} {facts['cycle_kind']} "
         f"replay={facts['replay']}"
+    )
+    print(
+        f"compare carried {facts['carried_pins']} pin; "
+        f"leftover drafts stay on rev 27; pin_carried x2 is no-op"
     )
     if not all(checks):
         raise SystemExit("demo path failed")

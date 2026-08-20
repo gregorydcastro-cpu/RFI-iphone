@@ -37,6 +37,11 @@ def test_demo_path() -> None:
     assert facts["cycle_events"] == 1
     assert facts["cycle_kind"] == "escalated"
     assert facts["replay"] == 0
+    assert facts["carried_pins"] == 1
+    assert facts["pin_carried_events"] == 1
+    assert facts["leftover_still_on_old"] is True
+    assert facts["carried_has_both_revs"] is True
+    assert facts["leftover_draft"].id in facts["search_open_ids"]
 
 
 def test_grokbot_can_only_draft() -> None:
