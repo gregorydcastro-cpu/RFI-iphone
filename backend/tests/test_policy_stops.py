@@ -22,6 +22,8 @@ from tests.conftest import (
     subject,
 )
 
+evaluate = None
+
 
 def _prefix(steps, stop: str) -> None:
     assert_stop(steps, stop)

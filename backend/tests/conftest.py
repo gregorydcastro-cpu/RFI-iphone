@@ -306,15 +306,14 @@ def pytest_xdist_make_scheduler(config, log):
 def cov(request: pytest.FixtureRequest) -> PolicyCoverage:
     """One bag per test module. Teardown fails if a rule never applied."""
     coverage = PolicyCoverage()
-    failed_before = request.session.testsfailed
     yield coverage
+    if request.session.testsfailed:
+        return
     bags = getattr(request.config, "_rfi_cov_bags", None)
     if bags is None:
         request.config._rfi_cov_bags = []
         bags = request.config._rfi_cov_bags
     bags.append(_hits_to_dict(coverage, worker=_worker_id(request.config)))
-    if request.session.testsfailed > failed_before:
-        return
     assert_policy_coverage(coverage)
 
 
