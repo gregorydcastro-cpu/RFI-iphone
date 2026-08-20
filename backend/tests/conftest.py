@@ -296,7 +296,7 @@ def pytest_configure(config):
 
 
 def pytest_xdist_make_scheduler(config, log):
-    """Keep each test file on one worker so a module coverage bag stays whole."""
+    """Keep each test file on one worker so a session coverage bag stays whole."""
     from xdist.scheduler import LoadFileScheduling
 
     return LoadFileScheduling(config, log)
@@ -316,14 +316,24 @@ def _module_items(request: pytest.FixtureRequest):
             yield item
 
 
+def _item_was_skipped(item) -> bool:
+    for when in ("setup", "call", "teardown"):
+        report = getattr(item, f"rep_{when}", None)
+        if report is not None and report.skipped:
+            return True
+    return False
+
+
 def _module_had_skips(request: pytest.FixtureRequest) -> bool:
     """Skipped outcomes on this module’s items only. Not the whole session."""
-    for item in _module_items(request):
-        for when in ("setup", "call", "teardown"):
-            report = getattr(item, f"rep_{when}", None)
-            if report is not None and report.skipped:
-                return True
-    return False
+    return any(_item_was_skipped(item) for item in _module_items(request))
+
+
+def _session_had_skips(request: pytest.FixtureRequest) -> bool:
+    """Skipped outcomes anywhere in this session. Used by session-scoped cov."""
+    return any(
+        _item_was_skipped(item) for item in getattr(request.session, "items", ())
+    )
 
 
 def _module_was_subset(request: pytest.FixtureRequest) -> bool:
@@ -337,9 +347,9 @@ def _module_was_subset(request: pytest.FixtureRequest) -> bool:
     return len(collected) < len(defined)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def cov(request: pytest.FixtureRequest) -> PolicyCoverage:
-    """Completeness bag. Teardown must not hide a failed stop or a -k subset."""
+    """One production bag per session. Teardown must not bury a failed stop."""
     coverage = PolicyCoverage()
     failed_before = request.session.testsfailed
     yield coverage
@@ -349,9 +359,7 @@ def cov(request: pytest.FixtureRequest) -> PolicyCoverage:
         return
     incomplete = coverage.report().never_applicable()
     if incomplete and (
-        _module_had_skips(request)
-        or _module_was_subset(request)
-        or _is_subset_run(request.config)
+        _session_had_skips(request) or _is_subset_run(request.config)
     ):
         pytest.skip("coverage incomplete because tests were skipped")
     bags = getattr(request.config, "_rfi_cov_bags", None)

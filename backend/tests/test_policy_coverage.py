@@ -128,6 +128,40 @@ def test_report_never_applicable_lists_unapplied_lanes():
     assert "assigned_only" in coverage.report().never_applicable()
 
 
+def test_session_had_skips_looks_at_whole_session():
+    from types import SimpleNamespace
+
+    from tests.conftest import _session_had_skips
+
+    this = object()
+    other = object()
+    request = SimpleNamespace(
+        session=SimpleNamespace(
+            items=[
+                SimpleNamespace(module=this, rep_call=SimpleNamespace(skipped=False)),
+                SimpleNamespace(module=other, rep_call=SimpleNamespace(skipped=True)),
+            ]
+        )
+    )
+    assert _session_had_skips(request) is True
+
+
+def test_default_deny_and_submit_access_do_not_request_cov():
+    import ast
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent
+    for name in ("test_default_deny.py", "test_submit_rfi_access.py"):
+        tree = ast.parse((root / name).read_text())
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            args = [arg.arg for arg in node.args.args]
+            assert "cov" not in args, f"{name} {node.name} requests cov"
+            assert "evaluate_cov" not in args, f"{name} {node.name} requests evaluate_cov"
+            assert node.name != "cov", f"{name} must not define cov"
+
+
 def test_module_had_skips_looks_at_this_module_only():
     from types import SimpleNamespace
 
