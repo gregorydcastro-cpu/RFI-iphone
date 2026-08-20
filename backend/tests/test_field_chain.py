@@ -132,8 +132,10 @@ def test_apprentice_403_on_draft_submit_work_stop(client):
     assert drafted.status_code == 403
     detail = drafted.json()["detail"]
     if isinstance(detail, dict):
-        assert detail == {"denied": True, "policy": "role_allows"}
-        assert "reason" not in detail
+        assert detail["policy"] == "role_allows"
+        assert "reason" in detail
+        assert set(detail) == {"policy", "reason"}
+        assert "denied" not in detail
         assert "steps" not in detail
         assert "trace" not in detail
     else:

@@ -189,7 +189,8 @@ def test_cannot_submit_without_pe_credentials_or_grok_tool(client):
     )
     assert wrong.status_code == 403
     grok = client.post("/submit_rfi", json={"rfi_id": rfi_id})
-    assert grok.status_code == 404
+    assert grok.status_code == 403
+    assert grok.json()["detail"]["policy"] == "grokbot_lane"
     still = client.get(f"/rfis/{rfi_id}").json()
     assert still["status"] == "internal_review"
     assert still["rfi_display"] is None

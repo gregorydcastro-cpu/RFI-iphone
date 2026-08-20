@@ -106,7 +106,9 @@ def test_design_and_gc_routes_require_tokens(client):
     assert client.post(
         f"/gc/rfis/{rfi_id}/start_impact_review", headers=DESIGN_HEADERS
     ).status_code == 403
-    assert client.post("/submit_rfi", json={"rfi_id": rfi_id}).status_code == 404
+    grok = client.post("/submit_rfi", json={"rfi_id": rfi_id})
+    assert grok.status_code == 403
+    assert grok.json()["detail"]["policy"] == "grokbot_lane"
     still = client.get(f"/rfis/{rfi_id}").json()
     assert still["status"] == "ball_in_court"
     e803 = client.get(f"/rfis/{ILSB_RFI_ID}").json()

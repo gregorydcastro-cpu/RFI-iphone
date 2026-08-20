@@ -76,7 +76,9 @@ def test_gc_routes_require_token(client):
         json={"lines": [{"description": "Plate", "qty": 1, "uom": "EA"}]},
     ).status_code == 403
     assert client.post(f"/gc/rfis/{rfi_id}/close", json={}).status_code == 403
-    assert client.post("/submit_rfi", json={"rfi_id": rfi_id}).status_code == 404
+    grok = client.post("/submit_rfi", json={"rfi_id": rfi_id})
+    assert grok.status_code == 403
+    assert grok.json()["detail"]["policy"] == "grokbot_lane"
     e803 = client.get(f"/rfis/{ILSB_RFI_ID}").json()
     assert e803["status"] == "draft"
     assert e803["rfi_display"] is None

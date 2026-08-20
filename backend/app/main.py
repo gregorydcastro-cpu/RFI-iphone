@@ -34,7 +34,6 @@ from app.access import (
     Resource,
     as_uuid,
     flag_up,
-    grok_denied,
     handle_material,
     load_rfi,
     must_uuid,
@@ -42,6 +41,8 @@ from app.access import (
     require_access,
     resource_from_rfi,
 )
+from app.rfi import grok_subject
+from app.rfi import submit_rfi as run_submit_rfi
 from app.field_chain import (
     FieldError,
     assignment_payload,
@@ -735,7 +736,7 @@ def create_rfi_draft(
             env=Env(project_id=must_uuid(project_id), area_id=subject.area_id),
         )
     except AccessDenied as exc:
-        raise HTTPException(status_code=403, detail=grok_denied(exc.decision))
+        raise_http(exc)
     lane = grok_out_of_lane(raw, actor.role)
     if lane:
         raise HTTPException(403, lane)
@@ -1075,6 +1076,94 @@ def pe_approve_internal_review(
         rfi_id=result.rfi_id,
         status=result.status,
         rfi_display=result.rfi_display,
+        message=result.message,
+    )
+
+
+@app.post("/submit_rfi", response_model=PESubmitResult)
+def submit_rfi(
+    raw: dict,
+    db: Session = Depends(get_db),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_field_role: str | None = Header(default=None, alias="X-Field-Role"),
+    x_field_actor: str | None = Header(default=None, alias="X-Field-Actor"),
+    x_pe_token: str | None = Header(default=None, alias="X-PE-Token"),
+) -> PESubmitResult:
+    """Named write. require_access first. Grokbot 403s at grokbot_lane."""
+    rfi_id = str((raw or {}).get("rfi_id") or "").strip()
+    if not rfi_id:
+        raise HTTPException(422, "rfi_id is required.")
+    rfi = db.get(RFI, rfi_id)
+    if not rfi:
+        raise HTTPException(404, "RFI not found.")
+    pe_ok = (
+        (x_field_actor or "").strip().lower() == "pe"
+        and (x_pe_token or "") == os.environ.get("RFI_PE_TOKEN", DEFAULT_PE_TOKEN)
+    )
+    actor_raw = raw.get("actor") if isinstance(raw, dict) else None
+    try:
+        if x_user_id:
+            actor = _field_actor(db, rfi.project_id, x_user_id, x_field_role)
+            subject = subject_for(
+                db, actor, actor_type=ActorType.HUMAN, project_id=rfi.project_id
+            )
+        elif pe_ok:
+            actor = _actor_on_rfi(db, rfi, None, None)
+            subject = subject_for(
+                db, actor, actor_type=ActorType.HUMAN, project_id=rfi.project_id
+            )
+        elif isinstance(actor_raw, dict) and actor_raw.get("user_id"):
+            actor = _field_actor(
+                db,
+                rfi.project_id,
+                str(actor_raw.get("user_id")),
+                actor_raw.get("role"),
+            )
+            subject = subject_for(
+                db, actor, actor_type=ActorType.GROKBOT, project_id=rfi.project_id
+            )
+        else:
+            subject = grok_subject(rfi.project_id)
+        _, mapped = load_rfi(db, rfi.id)
+        require_access(subject, Action.SUBMIT_RFI, mapped)
+    except AccessDenied as exc:
+        raise_http(exc)
+    try:
+        result = run_submit_rfi(
+            db,
+            rfi_id,
+            assignee=raw.get("assignee"),
+            assigned_to_user_id=(
+                str(raw["assigned_to_user_id"]) if raw.get("assigned_to_user_id") else None
+            ),
+            assigned_to_company_id=(
+                str(raw["assigned_to_company_id"])
+                if raw.get("assigned_to_company_id")
+                else None
+            ),
+            priority=raw.get("priority"),
+            work_stopped_flag=raw.get("work_stopped"),
+            require_internal_review=bool(raw.get("require_internal_review", True)),
+            comment=raw.get("comment"),
+            source="submit_rfi",
+        )
+    except PEError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return PESubmitResult(
+        ok=True,
+        rfi_id=result.rfi_id,
+        status=result.status,
+        rfi_display=result.rfi_display,
+        rfi_number=result.rfi_number,
+        due_at=_iso(result.due_at),
+        submitted_at=_iso(result.submitted_at),
+        first_submit=result.first_submit,
+        assigned=result.assigned,
+        assigned_to_user_id=result.assigned_to_user_id,
+        assigned_to_company_id=result.assigned_to_company_id,
+        priority=result.priority or "",
+        work_stopped=result.work_stopped,
+        due_at_rule=DUE_AT_RULE,
         message=result.message,
     )
 
