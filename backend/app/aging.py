@@ -21,7 +21,7 @@ DUE_SOON_HOURS = {
 }
 
 DAYS_OPEN_RULE = (
-    "count_business_days in project TZ over (submitted_date, today], "
+    "business days in project TZ over (submitted_date, today], "
     "excluding weekends and active holidays; today is not counted before due_time; "
     "not UTC floor(hours/24)"
 )
