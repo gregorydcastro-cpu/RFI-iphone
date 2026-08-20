@@ -151,6 +151,63 @@ def test_v1_step_does_not_overwrite_existing_stop() -> None:
     assert out["hits"]["same_project"]["stop"] == 9
 
 
+def test_v1_step_lands_on_n_plus_one_and_does_not_mutate() -> None:
+    raw = deepcopy(V1)
+    snapshot = deepcopy(raw)
+    out = migrate_v1_to_v2(raw)
+    assert raw == snapshot
+    assert out is not raw
+    assert out["schema"] == 2 == raw["schema"] + 1
+
+
+def test_v1_step_on_already_v2_keeps_counts() -> None:
+    raw = deepcopy(V2)
+    snapshot = deepcopy(raw)
+    out = migrate_v1_to_v2(raw)
+    assert raw == snapshot
+    assert out["schema"] == 2
+    assert out["hits"]["same_project"]["deny"] == 1
+    assert out["hits"]["same_project"]["stop"] == 1
+    assert out["hits"]["same_project"]["skipped_after_stop"] == 0
+    assert out["hits"]["role_allows"]["allow"] == 1
+    assert out["hits"]["role_allows"]["deny"] == 1
+    assert out["hits"]["role_allows"]["skipped_after_stop"] == 1
+
+
+def test_v2_step_lands_on_n_plus_one_and_does_not_mutate() -> None:
+    raw = deepcopy(V2)
+    snapshot = deepcopy(raw)
+    out = migrate_v2_to_v3(raw)
+    assert raw == snapshot
+    assert out is not raw
+    assert out["schema"] == 3 == raw["schema"] + 1
+    assert out["hits"]["same_project"]["stopped"] == 1
+    assert "stop" not in out["hits"]["same_project"]
+
+
+def test_v2_step_on_already_v3_keeps_counts() -> None:
+    raw = {
+        "schema": 3,
+        "policy_set": "field_lanes",
+        "hits": {
+            "same_project": {"deny": 1, "stopped": 1, "skipped_after_stop": 0},
+            "role_allows": {"allow": 1, "stopped": 1, "skipped_after_stop": 1},
+        },
+    }
+    snapshot = deepcopy(raw)
+    out = migrate_v2_to_v3(raw)
+    assert raw == snapshot
+    assert out["schema"] == 3
+    assert out["hits"]["same_project"]["deny"] == 1
+    assert out["hits"]["same_project"]["stopped"] == 1
+    assert out["hits"]["same_project"]["skipped_after_stop"] == 0
+    assert out["hits"]["role_allows"]["allow"] == 1
+    assert out["hits"]["role_allows"]["stopped"] == 1
+    assert out["hits"]["role_allows"]["skipped_after_stop"] == 1
+    assert "stop" not in out["hits"]["same_project"]
+    assert "stop" not in out["hits"]["role_allows"]
+
+
 def test_strategy_a_is_monotonic_int_with_every_step_from_1() -> None:
     assert type(CURRENT_SCHEMA) is int
     assert CURRENT_SCHEMA >= 1

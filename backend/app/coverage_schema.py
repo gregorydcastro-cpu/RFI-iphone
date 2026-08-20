@@ -7,6 +7,8 @@ Counter meaning change → bump, do not reuse stop.
 New policy name under hits is data, not a bump.
 New policy_set value is reject on read, not a bump.
 Keep every step from 1. file>code refuse. file<code migrate then merge.
+Every step: n→n+1; already-n+1→n+1 same counts; no input mutation;
+result schema is exactly n+1. Walker rejects in-place and landing != src+1.
 """
 
 from __future__ import annotations
@@ -117,6 +119,7 @@ class PolicyCoverageData:
 
 
 def migrate_v1_to_v2(raw: dict) -> dict:
+    """step(1)→2. step(already-2)→2 with the same counts. Input not mutated."""
     out = _copy(raw)
     out["schema"] = 2
     out.setdefault("combining", "deny_overrides")
@@ -130,14 +133,15 @@ def migrate_v1_to_v2(raw: dict) -> dict:
 
 
 def migrate_v2_to_v3(raw: dict) -> dict:
-    out = deepcopy(raw)
+    """step(2)→3. step(already-3)→3 with the same counts. Input not mutated."""
+    out = _copy(raw)
     hits = {}
     for name, row in out["hits"].items():
         nxt = dict(row)
         if "stopped" not in nxt and "stop" in nxt:
             nxt["stopped"] = nxt["stop"]
         nxt.setdefault("stopped", 0)
-        nxt.pop("stop", None)  # only after copy
+        nxt.pop("stop", None)  # only after copy; do not reuse stop
         hits[name] = nxt
     out["hits"] = hits
     out["schema"] = 3
