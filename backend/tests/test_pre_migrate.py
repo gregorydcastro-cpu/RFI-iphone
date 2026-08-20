@@ -52,7 +52,7 @@ def test_env_py_is_the_exact_wiring() -> None:
     assert "post_migrate(ctx)" in src
     assert "release_lock(connection)" in src
     assert "target_metadata = Base.metadata" in src
-    assert "Do not mutate RFI rows" in src
+    assert "Log only — do not mutate RFI rows" in src
     assert "UPDATE rfis" not in src
     assert "rfi_events" not in src
     assert "rfi_number" not in src or "Do not allocate rfi_number" in src
