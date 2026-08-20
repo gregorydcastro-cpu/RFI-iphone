@@ -165,6 +165,10 @@ def migrate(raw: Any) -> dict[str, Any]:
 
 
 def write_coverage(path: Path, data: PolicyCoverageData) -> None:
+    if data.schema != CURRENT_SCHEMA:
+        raise ValueError(
+            f"refusing to write schema {data.schema}, current is {CURRENT_SCHEMA}"
+        )
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(data.to_json(), indent=2, sort_keys=True))

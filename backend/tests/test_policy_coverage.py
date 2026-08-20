@@ -57,6 +57,31 @@ def test_write_coverage_is_atomic(tmp_path: Path):
     assert loaded.schema == SCHEMA
 
 
+def test_write_coverage_refuses_non_current_schema(tmp_path: Path):
+    path = tmp_path / "future.json"
+    data = PolicyCoverageData()
+    data.schema = CURRENT_SCHEMA + 1
+    with pytest.raises(ValueError, match="refusing to write schema"):
+        write_coverage(path, data)
+    assert not path.exists()
+    assert not path.with_suffix(".tmp").exists()
+    future = PolicyCoverageData(schema=3)
+    with pytest.raises(ValueError, match="refusing to write schema"):
+        write_coverage(path, future)
+
+
+def test_from_json_migrates_then_refuses_policy_set():
+    """migrate(raw) first — schema 1 with empty set is upgraded, then refused."""
+    with pytest.raises(ValueError, match="refusing to merge"):
+        PolicyCoverageData.from_json(
+            {"schema": 1, "policy_set": "empty", "hits": {}}
+        )
+    raw = PolicyCoverageData().to_json()
+    raw["policy_set"] = "empty"
+    with pytest.raises(ValueError, match="refusing to merge"):
+        PolicyCoverageData.from_json(raw)
+
+
 def test_refuse_missing_schema():
     with pytest.raises(ValueError, match="missing coverage schema"):
         PolicyCoverageData.from_json({"policy_set": "field_lanes", "hits": {}})
