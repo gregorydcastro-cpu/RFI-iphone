@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from abac import AccessDenied, Action, ActorType, Env, HUNG_WRITES, Role, require_access
+from abac import AccessDenied, Action, ActorType, Env, HUNG_WRITES, Role
 from app.policy_coverage import EXPECTED_ORDER
 from tests.conftest import (
     AREA,
@@ -17,6 +17,7 @@ from tests.conftest import (
     assert_stop,
     format_trace,
     names,
+    require_access_cov,
     resource,
     subject,
 )
@@ -141,9 +142,11 @@ def test_assert_stop_prints_receipt_on_mismatch(cov):
     assert format_trace(walk.steps) in str(raised.value)
 
 
-def test_submit_rfi_require_access_policy_only():
+def test_submit_rfi_require_access_policy_only(cov):
     with pytest.raises(AccessDenied) as raised:
-        require_access(subject(role=Role.APPRENTICE), Action.SUBMIT_RFI, resource())
+        require_access_cov(
+            cov, subject(role=Role.APPRENTICE), Action.SUBMIT_RFI, resource()
+        )
     assert raised.value.decision.policy == "role_allows"
 
 

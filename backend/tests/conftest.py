@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from abac import (
+    AccessDenied,
     ActorType,
     Decision,
     EvaluationTrace,
@@ -251,6 +252,14 @@ def evaluate(*args, **kwargs):
     )
     reject_stopped_only_on_halt_deny(walk.steps)
     return walk
+
+
+def require_access_cov(cov: PolicyCoverage, *args, **kwargs):
+    """Coverage + raise. Production require_access still builds EvaluationLog."""
+    decision, steps = cov.evaluate(*args, **kwargs)
+    if not decision.allowed:
+        raise AccessDenied(decision=decision, trace=tuple(steps))
+    return decision
 
 
 def assert_stop(steps: list[EvaluationTrace], name: str) -> None:
