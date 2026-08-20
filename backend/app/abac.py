@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import logging
 from dataclasses import MISSING, dataclass, field, fields
 from datetime import datetime, timezone
 from enum import Enum
@@ -627,6 +628,70 @@ def evaluate(
 rfi_abac_deny_total: dict[str, int] = {}
 rfi_abac_allow_total: dict[str, int] = {}
 _AUDIT: list[EvaluationLog] = []
+_LOG = logging.getLogger("abac")
+
+AUDIT_LINE_KEYS = ("action", "role", "actor", "policy", "project")
+AUDIT_LINE_FORBIDDEN_KEYS = frozenset(
+    {
+        "user",
+        "user_id",
+        "name",
+        "phone",
+        "question",
+        "pdf",
+        "subject_id",
+    }
+)
+AUDIT_ALLOW_ACTIONS = frozenset({Action.SUBMIT_RFI.value, Action.SET_PRIORITY.value})
+
+
+def format_audit_line(log: EvaluationLog) -> str:
+    """Server log line. Not HTTP. Not Grafana. Five keys only."""
+    effect = "allow" if log.decision.allowed else "deny"
+    return (
+        f"abac {effect} "
+        f"action={log.action} "
+        f"role={log.role} "
+        f"actor={log.actor_type} "
+        f"policy={log.decision.policy} "
+        f"project={log.resource_project_id}"
+    )
+
+
+def reject_audit_line(line: str) -> None:
+    parts = line.split()
+    if len(parts) < 2 or parts[0] != "abac" or parts[1] not in {"deny", "allow"}:
+        raise TypeError("audit line must start with 'abac deny' or 'abac allow'")
+    keys: list[str] = []
+    actor: str | None = None
+    for item in parts[2:]:
+        if "=" not in item:
+            raise TypeError("audit line fields must be key=value")
+        key, value = item.split("=", 1)
+        if key in AUDIT_LINE_FORBIDDEN_KEYS:
+            raise TypeError(f"audit line must not include {key}")
+        if key == "actor":
+            actor = value
+        keys.append(key)
+    if tuple(keys) != AUDIT_LINE_KEYS:
+        raise TypeError(f"audit line keys are law: {AUDIT_LINE_KEYS}")
+    if actor not in {"human", "grokbot"}:
+        raise TypeError("actor must be human or grokbot")
+
+
+reject_audit_line(
+    "abac deny action=submit_rfi role=foreman actor=human "
+    "policy=chain_owns project=00000000-0000-4000-8000-000000000010"
+)
+
+
+def emit_audit_line(log: EvaluationLog) -> str:
+    line = format_audit_line(log)
+    reject_audit_line(line)
+    if log.decision.allowed and log.action not in AUDIT_ALLOW_ACTIONS:
+        return line
+    _LOG.info(line)
+    return line
 
 
 def _count_deny(policy: str) -> None:
@@ -703,6 +768,7 @@ def require_access(
         ),
     )
     record_audit(log)
+    emit_audit_line(log)
     if audit is not None:
         audit.extend(log.steps)
     if not decision.allowed:

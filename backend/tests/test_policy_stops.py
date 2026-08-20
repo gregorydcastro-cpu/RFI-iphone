@@ -8,6 +8,7 @@ from uuid import UUID
 import pytest
 
 from abac import (
+    AUDIT_LINE_KEYS,
     AccessDenied,
     Action,
     ActorType,
@@ -24,8 +25,11 @@ from abac import (
     Subject,
     SUBJECT_FIELD_ORDER,
     TRACE_FIELD_ORDER,
+    emit_audit_line,
     evaluate,
+    format_audit_line,
     raise_http,
+    reject_audit_line,
     reject_env_field_order,
     reject_evaluation_log_shape,
     reject_evaluation_trace_shape,
@@ -323,6 +327,76 @@ def test_evaluation_log_is_server_audit_envelope():
     assert log.steps[0].policy == "same_project"
 
 
+def test_deny_audit_line_is_law(caplog):
+    import logging
+
+    from abac import audit_logs
+
+    other = resource(created_by_id=OTHER, crew_foreman_id=OTHER)
+    with caplog.at_level(logging.INFO, logger="abac"):
+        with pytest.raises(AccessDenied):
+            require_access(
+                subject(role=Role.FOREMAN, crew_ids=frozenset({CREW})),
+                Action.SUBMIT_RFI,
+                other,
+            )
+    log = audit_logs()[-1]
+    line = (
+        f"abac deny action=submit_rfi role=foreman actor=human "
+        f"policy=chain_owns project={JOB}"
+    )
+    assert format_audit_line(log) == line
+    reject_audit_line(line)
+    assert AUDIT_LINE_KEYS == ("action", "role", "actor", "policy", "project")
+    assert line in caplog.messages
+    assert "user" not in line
+    assert "phone" not in line
+    assert "question" not in line
+    assert "pdf" not in line
+    with pytest.raises(TypeError, match="must not include"):
+        reject_audit_line(line + " question=why the beam")
+    with pytest.raises(TypeError, match="keys are law"):
+        reject_audit_line(line + " extra=1")
+
+
+def test_allow_audit_line_for_submit_and_set_priority(caplog):
+    import logging
+
+    from abac import audit_logs
+
+    with caplog.at_level(logging.INFO, logger="abac"):
+        require_access(subject(role=Role.GENERAL_FOREMAN), Action.SUBMIT_RFI, resource())
+        require_access(
+            subject(role=Role.GENERAL_FOREMAN),
+            Action.SET_PRIORITY,
+            resource(),
+            ctx={"priority": "urgent"},
+        )
+        require_access(subject(role=Role.JOURNEYMAN), Action.CREATE_RFI_DRAFT, resource())
+    submit = (
+        f"abac allow action=submit_rfi role=general_foreman actor=human "
+        f"policy=role_allows project={JOB}"
+    )
+    priority = (
+        f"abac allow action=set_priority role=general_foreman actor=human "
+        f"policy=role_allows project={JOB}"
+    )
+    draft = (
+        f"abac allow action=create_rfi_draft role=journeyman actor=human "
+        f"policy=role_allows project={JOB}"
+    )
+    logs = audit_logs()
+    assert format_audit_line(logs[-3]) == submit
+    assert format_audit_line(logs[-2]) == priority
+    assert format_audit_line(logs[-1]) == draft
+    reject_audit_line(submit)
+    reject_audit_line(priority)
+    assert submit in caplog.messages
+    assert priority in caplog.messages
+    assert draft not in caplog.messages
+    assert emit_audit_line(logs[-1]) == draft
+
+
 def test_wrong_job_stops_at_same_project(cov: PolicyCoverage):
     log = cov.record(evaluate(
         subject(project_id=JOB),
@@ -450,6 +524,9 @@ def test_foreman_other_crew_stops_at_chain_owns(cov: PolicyCoverage):
         "policy": "chain_owns",
         "reason": "not your crew's ticket",
     }
+    assert "abac" not in str(http.value.detail)
+    assert "actor" not in http.value.detail
+    assert "project" not in http.value.detail
 
 
 def test_submit_from_answered_stops_at_status(cov: PolicyCoverage):
