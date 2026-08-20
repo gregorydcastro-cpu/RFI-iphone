@@ -389,8 +389,9 @@ def test_migrate_deepcopy_rejects_non_object_and_bad_schema():
 
 def test_migrate_rejects_step_that_does_not_land_on_schema_plus_one(monkeypatch):
     def bad_step(raw):
-        raw["schema"] = 99
-        return raw
+        nxt = dict(raw)
+        nxt["schema"] = 99
+        return nxt
 
     monkeypatch.setitem(MIGRATIONS, 1, bad_step)
     with pytest.raises(ValueError, match="schema\\+1"):

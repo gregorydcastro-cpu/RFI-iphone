@@ -46,10 +46,30 @@ def _ensure_hit_row(row: Any) -> dict[str, int]:
     if not isinstance(row, dict):
         raise CoverageSchemaError("hit row must be an object")
     out = dict(row)
-    for key in ("seen", "applicable", "allow", "deny", "stop", "skipped_after_stop"):
-        out[key] = _as_int(out[key], default=0) if key in out else 0
+    for key in ("seen", "applicable", "allow", "deny", "skipped_after_stop"):
+        if key not in out:
+            out[key] = 0
+        else:
+            out[key] = _as_int(out[key], default=0)
     if "stop" not in row:
         out["stop"] = out["deny"]
+    else:
+        out["stop"] = _as_int(out["stop"], default=0)
+    return out
+
+
+def _normalize_current(raw: dict[str, Any]) -> dict[str, Any]:
+    """Fill missing current-schema keys. Never bump. Never add counts."""
+    out = _copy(raw)
+    if out.get("schema") != CURRENT_SCHEMA:
+        raise CoverageSchemaError("normalize is current-schema only")
+    out.setdefault("combining", "deny_overrides")
+    out.setdefault("policy_set", "field_lanes")
+    out.setdefault("worker", None)
+    out.setdefault("decisions", {})
+    out.setdefault("stops", {})
+    hits = _require(out, "hits")
+    out["hits"] = {name: _ensure_hit_row(row) for name, row in hits.items()}
     return out
 
 
@@ -179,12 +199,15 @@ def migrate(raw: Any) -> dict[str, Any]:
         step = MIGRATIONS.get(schema)
         if step is None:
             raise CoverageSchemaError(f"missing migration step {schema}")
+        before = deepcopy(out)
         nxt = step(out)
+        if nxt is out or out != before:
+            raise CoverageSchemaError("migration step must not mutate input in place")
         if not isinstance(nxt, dict) or nxt.get("schema") != schema + 1:
             raise CoverageSchemaError(f"migration step {schema} must land on schema+1")
         out = nxt
         schema = out["schema"]
-    return out
+    return _normalize_current(out)
 
 
 def write_coverage(path: Path, data: PolicyCoverageData) -> None:
