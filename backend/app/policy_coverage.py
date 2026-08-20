@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from app.abac import AccessDenied, EvaluationLog, EvaluationTrace
+from app.abac import FIELD_POLICY_SET, AccessDenied, EvaluationLog, EvaluationTrace
 
 CURRENT_SCHEMA = 2
 SCHEMA = CURRENT_SCHEMA
@@ -41,6 +41,17 @@ REQUIRED_STOPS = {
     "status_guard",
     "work_stop_writer",
 }
+DENY_ONLY = (
+    "same_project",
+    "grokbot_lane",
+    "on_site",
+    "area_scope",
+    "assigned_only",
+    "chain_owns",
+    "status_guard",
+    "work_stop_writer",
+)
+ALLOW_POLICIES = ("role_allows",)
 
 
 @dataclass
@@ -132,6 +143,7 @@ class PolicyCoverage:
         self.decision_counts: dict[str, int] = defaultdict(int)
 
     def record(self, walk):
+        stopped_at: str | None = None
         for step in _traces(walk):
             if step.policy == "default_deny":
                 continue
@@ -139,6 +151,7 @@ class PolicyCoverage:
             if step.stopped:
                 self.stops.add(step.policy)
                 self.stop_counts[step.policy] += 1
+                stopped_at = step.policy
             if not step.applicable or step.effect is None:
                 self.na.add(step.policy)
                 self.effects[step.policy].add("n/a")
@@ -152,6 +165,14 @@ class PolicyCoverage:
                 self.denies.add(step.policy)
                 self.effects[step.policy].add("deny")
                 self.hit_counts[step.policy]["deny"] += 1
+        if stopped_at is not None:
+            after = False
+            for policy in FIELD_POLICY_SET.ranked():
+                if policy.name == stopped_at:
+                    after = True
+                    continue
+                if after:
+                    self.hit_counts[policy.name]["skipped_after_stop"] += 1
         decision = getattr(walk, "decision", None)
         if decision is not None:
             self.decision_counts["allow" if decision.allowed else "deny"] += 1
@@ -195,11 +216,30 @@ def _merge_hits(bags: list[dict[str, Any]]) -> PolicyCoverage:
 
 def assert_policy_coverage(coverage: PolicyCoverage) -> None:
     missing = [name for name in FIELD_LANES if name not in coverage.seen]
-    assert missing == [], f"policies never walked: {missing}"
+    assert missing == [], f"never_seen: {missing}"
     missing_stops = sorted(REQUIRED_STOPS - coverage.stops)
     assert missing_stops == [], f"policies never stopped: {missing_stops}"
+    never_app = [
+        name
+        for name in FIELD_LANES
+        if coverage.hit_counts[name].get("allow", 0)
+        + coverage.hit_counts[name].get("deny", 0)
+        == 0
+    ]
+    assert never_app == [], f"never_applicable: {never_app}"
+    deny_zero = [
+        name for name in DENY_ONLY if coverage.hit_counts[name].get("deny", 0) == 0
+    ]
+    assert deny_zero == [], f"DENY_ONLY deny==0: {deny_zero}"
+    if coverage.hit_counts["role_allows"].get("allow", 0) == 0:
+        raise AssertionError("role_allows allow==0")
+    if coverage.hit_counts["role_allows"].get("deny", 0) == 0:
+        raise AssertionError("role_allows deny==0")
+    leaked = [
+        name for name in DENY_ONLY if coverage.hit_counts[name].get("allow", 0) > 0
+    ]
+    assert leaked == [], f"DENY_ONLY leaked allow: {leaked}"
     assert "default_deny" not in REQUIRED_STOPS
     assert "default_deny" not in FIELD_LANES
     assert "default_deny" not in coverage.allows
-    # default_deny deny/stop is off this bag. Do not require a hit.
-    # The only honest hit is test_default_deny_on_permitless_set.
+    # skipped_after_stop is expected. Do not require a default_deny hit.

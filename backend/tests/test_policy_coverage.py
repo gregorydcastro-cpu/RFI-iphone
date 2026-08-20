@@ -10,6 +10,7 @@ import pytest
 
 from app.policy_coverage import (
     CURRENT_SCHEMA,
+    DENY_ONLY,
     FIELD_LANES,
     MIGRATIONS,
     REQUIRED_STOPS,
@@ -92,27 +93,36 @@ def test_merge_hits_unions_worker_bags():
     assert "assigned_only" in merged.denies
 
 
+def _green_bag() -> PolicyCoverage:
+    coverage = PolicyCoverage()
+    for name in DENY_ONLY:
+        coverage.seen.add(name)
+        coverage.stops.add(name)
+        coverage.hit_counts[name]["deny"] = 1
+    coverage.seen.add("role_allows")
+    coverage.stops.add("role_allows")
+    coverage.hit_counts["role_allows"]["allow"] = 1
+    coverage.hit_counts["role_allows"]["deny"] = 1
+    return coverage
+
+
 def test_default_deny_stop_is_off_the_production_bag():
     assert "default_deny" not in REQUIRED_STOPS
     assert "default_deny" not in FIELD_LANES
-    coverage = PolicyCoverage()
-    coverage.seen.update(REQUIRED_STOPS)
-    coverage.stops.update(REQUIRED_STOPS)
+    coverage = _green_bag()
     assert_policy_coverage(coverage)
     assert "default_deny" not in coverage.seen
     assert "default_deny" not in coverage.stops
-    stray = PolicyCoverage()
-    stray.seen.update(REQUIRED_STOPS | {"default_deny"})
-    stray.stops.update(REQUIRED_STOPS)
+    stray = _green_bag()
+    stray.seen.add("default_deny")
     stray.na.add("default_deny")
     assert_policy_coverage(stray)
 
 
 def test_line_coverage_is_not_assigned_only_denied():
-    coverage = PolicyCoverage()
-    coverage.seen.update(REQUIRED_STOPS | {"default_deny"})
-    coverage.stops.update(REQUIRED_STOPS - {"assigned_only"})
-    coverage.na.add("default_deny")
+    coverage = _green_bag()
+    coverage.stops.discard("assigned_only")
+    coverage.hit_counts["assigned_only"]["deny"] = 0
     with pytest.raises(AssertionError, match="assigned_only"):
         assert_policy_coverage(coverage)
 

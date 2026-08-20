@@ -54,6 +54,7 @@ from tests.conftest import (
     evaluate,
     names,
     resource,
+    stop_policy,
     subject,
 )
 
@@ -183,7 +184,10 @@ def test_evaluate_algorithm_is_law():
     )
     assert decision.allowed is True
     assert decision.policy == "role_allows"
-    assert [step.effect for step in steps] == [None, "allow", None]
+    assert [step.effect for step in steps] == [None, "allow", None, None]
+    assert steps[-1].policy == "default_deny"
+    assert steps[-1].applicable is False
+    assert steps[-1].order == 99
     assert not any(step.stopped for step in steps)
 
     empty = PolicySet(
@@ -529,3 +533,94 @@ def test_walk_helpers_stay_off_phone_and_grok():
         text = path.read_text()
         for name in forbidden:
             assert name not in text, f"{name} leaked into {path}"
+
+
+def test_mutation_swap_area_scope_and_role_allows_changes_stop():
+    hopper = subject(role=Role.APPRENTICE, area_id=AREA)
+    other = resource(area_id=OTHER_AREA)
+    current = evaluate(hopper, Action.CREATE_RFI_DRAFT, other)
+    assert_stop(current.steps, "role_allows")
+    swapped = PolicySet(
+        name="swapped",
+        combining=Combining.DENY_OVERRIDES,
+        policies=tuple(
+            Policy(
+                name=policy.name,
+                rule=policy.rule,
+                order=(
+                    35
+                    if policy.name == "area_scope"
+                    else 50
+                    if policy.name == "role_allows"
+                    else policy.order
+                ),
+            )
+            for policy in FIELD_POLICY_SET.policies
+        ),
+    )
+    mutated = evaluate(hopper, Action.CREATE_RFI_DRAFT, other, policy_set=swapped)
+    assert_stop(mutated.steps, "area_scope")
+    assert stop_policy(current.steps) != stop_policy(mutated.steps)
+
+
+def test_mutation_role_allows_none_hits_default_deny_not_fail_open():
+    hole = PolicySet(
+        name="muted_role",
+        combining=Combining.DENY_OVERRIDES,
+        policies=tuple(
+            Policy(
+                name=policy.name,
+                rule=(lambda *_a, **_k: None)
+                if policy.name == "role_allows"
+                else policy.rule,
+                order=policy.order,
+            )
+            for policy in FIELD_POLICY_SET.ranked()
+        ),
+    )
+    decision, steps = evaluate(
+        subject(role=Role.JOURNEYMAN),
+        Action.CREATE_RFI_DRAFT,
+        resource(),
+        policy_set=hole,
+    )
+    assert decision.allowed is False
+    assert decision.policy == "default_deny"
+    assert steps[-1].policy == "default_deny"
+    assert steps[-1].effect == "deny"
+
+
+def test_mutation_area_scope_second_allow_fails_leaked_allow():
+    from app.policy_coverage import DENY_ONLY, PolicyCoverage, assert_policy_coverage
+
+    def leak(*_args, **_kwargs):
+        return Decision(Effect.ALLOW, "leaked", policy="area_scope")
+
+    two = PolicySet(
+        name="leaked",
+        combining=Combining.DENY_OVERRIDES,
+        policies=(
+            Policy(name="role_allows", rule=role_allows, order=40),
+            Policy(name="area_scope", rule=leak, order=50),
+        ),
+    )
+    with pytest.raises(TypeError, match="second allow"):
+        evaluate(
+            subject(role=Role.JOURNEYMAN),
+            Action.CREATE_RFI_DRAFT,
+            resource(),
+            policy_set=two,
+        )
+
+    bag = PolicyCoverage()
+    for name in DENY_ONLY:
+        bag.seen.add(name)
+        bag.stops.add(name)
+        bag.hit_counts[name]["deny"] = 1
+    bag.seen.add("role_allows")
+    bag.stops.add("role_allows")
+    bag.hit_counts["role_allows"]["allow"] = 1
+    bag.hit_counts["role_allows"]["deny"] = 1
+    bag.hit_counts["area_scope"]["allow"] = 1
+    with pytest.raises(AssertionError, match="leaked"):
+        assert_policy_coverage(bag)

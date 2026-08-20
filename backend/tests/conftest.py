@@ -222,7 +222,16 @@ def assert_walk_invariants(
         if as_decision_policy(decision) != "default_deny":
             assert decision.policy == stopped[0].policy
     if not stopped and decision.allowed:
-        assert walked == list(ranked)
+        if walked and walked[-1] == "default_deny":
+            body = list(ranked)
+            if body and body[-1] == "default_deny":
+                assert walked == body
+            else:
+                assert walked[:-1] == body
+            assert rows[-1].applicable is False
+            assert rows[-1].order == 99
+        else:
+            assert walked == list(ranked)
     first = next((step for step in rows if step.applicable), None)
     if (
         policy_set is FIELD_POLICY_SET

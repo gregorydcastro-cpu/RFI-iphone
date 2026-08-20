@@ -145,6 +145,10 @@ def test_apprentice_403_on_draft_submit_work_stop(client):
         f"/pe/rfis/{rfi_id}/submit", json=_submit_body(), headers=headers
     )
     assert submit.status_code == 403
+    detail = submit.json()["detail"]
+    assert detail["policy"] == "role_allows"
+    assert "steps" not in detail
+    assert "trace" not in detail
     stopped = client.post(
         f"/pe/rfis/{rfi_id}/set_priority",
         json={"priority": "work_stopped", "work_stopped": True},
@@ -164,6 +168,10 @@ def test_journeyman_drafts_unnumbered_and_403_on_submit_work_stop(client):
         f"/pe/rfis/{rfi_id}/submit", json=_submit_body(), headers=headers
     )
     assert submit.status_code == 403
+    detail = submit.json()["detail"]
+    assert detail["policy"] == "role_allows"
+    assert "steps" not in detail
+    assert "trace" not in detail
     stopped = client.post(
         f"/pe/rfis/{rfi_id}/set_priority",
         json={"priority": "work_stopped", "work_stopped": True},

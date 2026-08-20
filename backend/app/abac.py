@@ -643,6 +643,16 @@ def evaluate(
             _step(seq, policy, applicable=True, decision=result, stopped=False)
         )
     if allow is not None:
+        if not traces or traces[-1].policy != "default_deny":
+            traces.append(
+                _step(
+                    len(traces) + 1,
+                    Policy(name="default_deny", rule=default_deny, order=99),
+                    applicable=False,
+                    decision=None,
+                    stopped=False,
+                )
+            )
         return Evaluation(allow, tuple(traces))
     result = invoke_rule(default_deny, subject, action, resource, env, ctx)
     if result is None or result.effect is not Effect.DENY:

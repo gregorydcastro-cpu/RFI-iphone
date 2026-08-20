@@ -6,19 +6,8 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from app.abac import FIELD_POLICY_SET, evaluate as _evaluate
-from app.policy_coverage import FIELD_LANES, _traces
+from app.policy_coverage import ALLOW_POLICIES, DENY_ONLY, FIELD_LANES, _traces
 
-DENY_ONLY = (
-    "same_project",
-    "grokbot_lane",
-    "on_site",
-    "area_scope",
-    "assigned_only",
-    "chain_owns",
-    "status_guard",
-    "work_stop_writer",
-)
-ALLOW_POLICIES = ("role_allows",)
 COVERED = DENY_ONLY + ALLOW_POLICIES
 # Production FIELD_POLICY_SET coverage must not require a default_deny hit.
 # The only honest hit is test_default_deny_on_permitless_set.

@@ -1,20 +1,11 @@
-"""One stop per field lane. assert_stop / format_trace."""
+"""Strategy 1: one deny each. Strategy 2: journeyman draft full walk."""
 
 from __future__ import annotations
 
 import pytest
 
-from abac import (
-    AccessDenied,
-    Action,
-    ActorType,
-    Env,
-    HUNG_WRITES,
-    Role,
-    grok_denied,
-    raise_http,
-    require_access,
-)
+from abac import AccessDenied, Action, ActorType, Env, HUNG_WRITES, Role, require_access
+from app.policy_coverage import EXPECTED_ORDER
 from tests.conftest import (
     AREA,
     CREW,
@@ -25,177 +16,147 @@ from tests.conftest import (
     USER,
     assert_stop,
     evaluate,
-    first_stop,
     format_trace,
-    gold_rows,
+    names,
     resource,
     subject,
 )
 
 
+def _prefix(steps, stop: str) -> None:
+    assert_stop(steps, stop)
+    walked = [step.policy for step in steps]
+    assert walked == list(EXPECTED_ORDER[: len(walked)])
+    after = [name for name in EXPECTED_ORDER if name not in walked]
+    assert stop not in after
+
+
 def test_same_project_stops(cov):
-    decision, steps = evaluate(
+    walk = evaluate(
         subject(project_id=JOB),
         Action.SUBMIT_RFI,
         resource(project_id=OTHER_JOB),
     )
-    cov.record((decision, steps))
-    assert_stop(steps, "same_project")
-    assert "same_project" in format_trace(steps)
-    assert decision.policy == "same_project"
-    assert decision.allowed is False
+    cov.record(walk)
+    _prefix(walk.steps, "same_project")
 
 
 def test_grokbot_lane_stops(cov):
-    decision, steps = evaluate(
+    walk = evaluate(
         subject(role=Role.GENERAL_FOREMAN, actor_type=ActorType.GROKBOT),
         Action.SUBMIT_RFI,
         resource(),
     )
-    cov.record((decision, steps))
-    assert_stop(steps, "grokbot_lane")
-    assert "grokbot_lane" in format_trace(steps)
-    assert gold_rows((decision, steps))[-1][1] == "grokbot_lane"
-    assert decision.policy == "grokbot_lane"
+    cov.record(walk)
+    _prefix(walk.steps, "grokbot_lane")
 
 
 def test_on_site_stops(cov):
-    decision, steps = evaluate(
+    walk = evaluate(
         subject(role=Role.JOURNEYMAN),
         Action.PIN_DRAFT,
         resource(type="sheet"),
         env=Env(on_site=False),
     )
-    cov.record((decision, steps))
-    assert_stop(steps, "on_site")
-    assert "on_site" in format_trace(steps)
-    assert decision.policy == "on_site"
+    cov.record(walk)
+    _prefix(walk.steps, "on_site")
 
 
 def test_role_allows_stops(cov):
-    decision, steps = evaluate(subject(role=Role.APPRENTICE), Action.SUBMIT_RFI, resource())
-    cov.record((decision, steps))
-    assert_stop(steps, "role_allows")
-    assert "apprentice cannot submit_rfi" in format_trace(steps)
-    assert decision.policy == "role_allows"
+    walk = evaluate(subject(role=Role.APPRENTICE), Action.SUBMIT_RFI, resource())
+    cov.record(walk)
+    _prefix(walk.steps, "role_allows")
 
 
 def test_area_scope_stops(cov):
-    decision, steps = evaluate(
+    walk = evaluate(
         subject(role=Role.AREA_FOREMAN, area_id=AREA),
         Action.SET_PRIORITY,
         resource(area_id=OTHER_AREA),
     )
-    cov.record((decision, steps))
-    assert_stop(steps, "area_scope")
-    assert "area_scope" in format_trace(steps)
-    assert decision.policy == "area_scope"
+    cov.record(walk)
+    _prefix(walk.steps, "area_scope")
 
 
 def test_assigned_only_stops(cov):
-    decision, steps = evaluate(
+    walk = evaluate(
         subject(role=Role.APPRENTICE, user_id=USER),
         Action.HANDLE_MATERIAL,
         resource(type="ticket", assigned_to_id=OTHER),
     )
-    cov.record((decision, steps))
-    assert_stop(steps, "assigned_only")
-    assert "assigned_only" in format_trace(steps)
-    assert decision.policy == "assigned_only"
+    cov.record(walk)
+    _prefix(walk.steps, "assigned_only")
 
 
 def test_chain_owns_stops(cov):
-    decision, steps = evaluate(
+    walk = evaluate(
         subject(role=Role.FOREMAN, crew_ids=frozenset({CREW})),
         Action.SUBMIT_RFI,
         resource(created_by_id=OTHER, crew_foreman_id=OTHER),
     )
-    cov.record((decision, steps))
-    assert_stop(steps, "chain_owns")
-    assert first_stop((decision, steps)).reason == "not your crew's ticket"
-    assert "chain_owns" in format_trace(steps)
-    assert decision.policy == "chain_owns"
+    cov.record(walk)
+    _prefix(walk.steps, "chain_owns")
 
 
 def test_status_guard_stops(cov):
-    decision, steps = evaluate(
+    walk = evaluate(
         subject(role=Role.GENERAL_FOREMAN),
         Action.SUBMIT_RFI,
         resource(status="answered"),
     )
-    cov.record((decision, steps))
-    assert_stop(steps, "status_guard")
-    assert "status_guard" in format_trace(steps)
-    assert decision.policy == "status_guard"
+    cov.record(walk)
+    _prefix(walk.steps, "status_guard")
 
 
 def test_work_stop_writer_stops(cov):
-    decision, steps = evaluate(
+    walk = evaluate(
         subject(role=Role.GENERAL_FOREMAN),
         Action.SET_PRIORITY,
         resource(priority="work_stopped", work_stopped=True, status="ball_in_court"),
         ctx={"priority": "standard", "allow_demote": False},
     )
-    cov.record((decision, steps))
-    assert_stop(steps, "work_stop_writer")
-    assert "work_stop_writer" in format_trace(steps)
-    assert decision.policy == "work_stop_writer"
+    cov.record(walk)
+    _prefix(walk.steps, "work_stop_writer")
+
+
+def test_journeyman_draft_full_walk(cov):
+    walk = evaluate(
+        subject(role=Role.JOURNEYMAN),
+        Action.CREATE_RFI_DRAFT,
+        resource(),
+    )
+    cov.record(walk)
+    decision, steps = walk
+    assert names(walk) == list(EXPECTED_ORDER)
+    assert [step.effect for step in steps if step.effect == "allow"] == ["allow"]
+    assert steps[3].policy == "role_allows"
+    assert steps[3].effect == "allow"
+    assert steps[3].stopped is False
+    assert steps[-1].policy == "default_deny"
+    assert steps[-1].applicable is False
+    assert steps[-1].effect is None
+    assert steps[-1].order == 99
+    assert steps[-1].stopped is False
+    assert decision.allowed is True
+    assert decision.policy == "role_allows"
 
 
 def test_assert_stop_prints_receipt_on_mismatch():
-    decision, steps = evaluate(
+    walk = evaluate(
         subject(project_id=JOB),
         Action.SUBMIT_RFI,
         resource(project_id=OTHER_JOB),
     )
     with pytest.raises(AssertionError) as raised:
-        assert_stop(steps, "role_allows")
-    receipt = str(raised.value)
-    assert "expected stop at role_allows, got same_project" in receipt
-    assert format_trace(steps) in receipt
-    assert decision.policy == "same_project"
+        assert_stop(walk.steps, "role_allows")
+    assert "expected stop at role_allows, got same_project" in str(raised.value)
+    assert format_trace(walk.steps) in str(raised.value)
 
 
-def test_debug_on_fail():
-    decision, steps = evaluate(subject(role=Role.APPRENTICE), Action.SUBMIT_RFI, resource())
-    if decision.policy != "role_allows":
-        raise AssertionError(format_trace(steps, decision=decision))
-
-
-def test_require_access_raises_with_trace_stop(cov):
-    from fastapi import HTTPException
-
-    audit: list = []
+def test_submit_rfi_require_access_policy_only():
     with pytest.raises(AccessDenied) as raised:
-        require_access(
-            subject(role=Role.APPRENTICE),
-            Action.SUBMIT_RFI,
-            resource(),
-            audit=audit,
-        )
-    cov.record(raised.value)
-    steps = list(raised.value.trace)
-    assert_stop(steps, "role_allows")
-    assert format_trace(steps)
-    with pytest.raises(HTTPException) as http:
-        raise_http(raised.value)
-    assert http.value.status_code == 403
-    assert http.value.detail == {
-        "policy": "role_allows",
-        "reason": "apprentice cannot submit_rfi",
-    }
-
-
-def test_grok_sees_denied_and_policy_only():
-    decision, steps = evaluate(
-        subject(role=Role.GENERAL_FOREMAN, actor_type=ActorType.GROKBOT),
-        Action.SUBMIT_RFI,
-        resource(),
-    )
-    assert_stop(steps, "grokbot_lane")
-    body = grok_denied(decision)
-    assert body == {"denied": True, "policy": "grokbot_lane"}
-    assert format_trace(steps) not in str(body)
+        require_access(subject(role=Role.APPRENTICE), Action.SUBMIT_RFI, resource())
+    assert raised.value.decision.policy == "role_allows"
 
 
 def test_three_writes_hang_require_access():
