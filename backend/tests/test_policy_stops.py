@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from collections import Counter
 from collections.abc import Iterable
-from dataclasses import dataclass, field
 from uuid import UUID
 
 import pytest
@@ -46,6 +44,8 @@ from abac import (
     require_access,
 )
 from app.policy_coverage import EXPECTED_ORDER, PolicyCoverage, _traces
+from tests.coverage_abac import PolicyCoverage as WalkCoverage
+from tests.coverage_abac import assert_policy_coverage as assert_walk_coverage
 
 JOB = UUID("00000000-0000-4000-8000-000000000010")
 OTHER_JOB = UUID("00000000-0000-4000-8000-000000000110")
@@ -174,77 +174,6 @@ def assert_stop(steps: list[EvaluationTrace], name: str) -> None:
         raise AssertionError(
             f"expected stop at {name}, got {actual}\n{format_trace(steps)}"
         )
-
-
-@dataclass
-class PolicyHits:
-    seen: int = 0
-    applicable: int = 0
-    allow: int = 0
-    deny: int = 0
-    stop: int = 0
-    skipped_after_stop: int = 0
-
-
-@dataclass
-class CoverageReport:
-    """Test-side helper. Not Grafana."""
-
-    combining: str
-    hits: dict[str, PolicyHits]
-    decisions: Counter[str] = field(default_factory=Counter)
-    stop_policies: Counter[str] = field(default_factory=Counter)
-
-    def record(self, walk, *, policy_names: tuple[str, ...] | None = None) -> None:
-        steps = list(_traces(walk))
-        stopped_at: str | None = None
-        for step in steps:
-            hit = self.hits.setdefault(step.policy, PolicyHits())
-            hit.seen += 1
-            if step.applicable:
-                hit.applicable += 1
-            if step.effect == "allow":
-                hit.allow += 1
-            if step.effect == "deny":
-                hit.deny += 1
-            if step.stopped or step.effect == "deny":
-                hit.stop += 1
-                stopped_at = step.policy
-                self.stop_policies[step.policy] += 1
-        decision = getattr(walk, "decision", None)
-        if decision is not None:
-            self.decisions["allow" if decision.allowed else "deny"] += 1
-        if stopped_at is not None and policy_names:
-            after = False
-            for name in policy_names:
-                if name == stopped_at:
-                    after = True
-                    continue
-                if after:
-                    self.hits.setdefault(name, PolicyHits()).skipped_after_stop += 1
-
-    def never_seen(self) -> list[str]:
-        return [name for name, hit in self.hits.items() if hit.seen == 0]
-
-    def never_applicable(self) -> list[str]:
-        return [name for name, hit in self.hits.items() if hit.applicable == 0]
-
-    def never_deny(self) -> list[str]:
-        return [name for name, hit in self.hits.items() if hit.deny == 0]
-
-    def never_allow(self) -> list[str]:
-        return [name for name, hit in self.hits.items() if hit.allow == 0]
-
-    @property
-    def dead_rules(self) -> list[str]:
-        return sorted(set(self.never_seen()) | set(self.never_applicable()))
-
-
-def field_coverage_report() -> CoverageReport:
-    return CoverageReport(
-        combining=FIELD_POLICY_SET.combining.value,
-        hits={policy.name: PolicyHits() for policy in FIELD_POLICY_SET.ranked()},
-    )
 
 
 def gold_evaluates():
@@ -1082,17 +1011,14 @@ def test_reading_a_deny_last_applicable_is_the_problem():
 
 
 def test_coverage_report_gold_walks_have_no_dead_rules():
-    names = tuple(policy.name for policy in FIELD_POLICY_SET.ranked())
-    report = field_coverage_report()
-    assert report.combining == "deny_overrides"
+    bag = WalkCoverage()
     for walk in gold_evaluates():
-        report.record(walk, policy_names=names)
-    assert report.never_seen() == []
-    assert report.never_deny() == []
-    assert report.dead_rules == []
-    assert set(report.hits) >= set(names)
-    assert report.hits["chain_owns"].stop >= 1
-    assert report.hits["status_guard"].skipped_after_stop >= 1
+        bag.record(walk)
+    assert_walk_coverage(bag)
+    assert bag.dead_rules == []
+    assert bag.hits["chain_owns"].stop >= 1
+    assert bag.hits["status_guard"].skipped_after_stop >= 1
+    assert bag.hits["work_stop_writer"].skipped_after_stop >= 1
 
 
 def test_grok_sees_denied_and_policy_only():

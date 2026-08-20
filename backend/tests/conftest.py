@@ -45,6 +45,13 @@ def pytest_configure(config):
     config._rfi_cov_merged = []
 
 
+def pytest_xdist_make_scheduler(config, log):
+    """Keep each test file on one worker so a module coverage bag stays whole."""
+    from xdist.scheduler import LoadFileScheduling
+
+    return LoadFileScheduling(config, log)
+
+
 @pytest.fixture(scope="module")
 def cov(request: pytest.FixtureRequest) -> PolicyCoverage:
     coverage = PolicyCoverage()

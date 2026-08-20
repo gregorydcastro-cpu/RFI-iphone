@@ -320,12 +320,14 @@ def _allow(policy: str, reason: str) -> Decision:
 
 
 def same_project(s: Subject, r: Resource) -> Decision | None:
+    """Deny-only. Never ALLOW."""
     if s.project_id != r.project_id:
         return _deny("same_project", "not on this job")
     return None
 
 
 def grokbot_lane(s: Subject, action: Action) -> Decision | None:
+    """Deny-only. Never ALLOW."""
     if s.actor_type is ActorType.GROKBOT and action is not Action.CREATE_RFI_DRAFT:
         return _deny("grokbot_lane", "Grokbot may only create_rfi_draft")
     return None
@@ -334,6 +336,7 @@ def grokbot_lane(s: Subject, action: Action) -> Decision | None:
 def on_site(
     s: Subject, action: Action, r: Resource, env: Env, ctx: Any = None
 ) -> Decision | None:
+    """Deny-only. Never ALLOW."""
     if action in {Action.HANDLE_MATERIAL, Action.PIN_DRAFT} and not env.on_site:
         return _deny("on_site", "must be on site")
     return None
@@ -351,6 +354,7 @@ def role_allows(
 
 
 def area_scope(s: Subject, r: Resource) -> Decision | None:
+    """Deny-only. Never ALLOW."""
     if s.role is Role.GENERAL_FOREMAN:
         return None
     if r.area_id is not None and s.area_id != r.area_id:
@@ -361,6 +365,7 @@ def area_scope(s: Subject, r: Resource) -> Decision | None:
 def assigned_only(
     s: Subject, action: Action, r: Resource, env: Env, ctx: Any = None
 ) -> Decision | None:
+    """Deny-only. Never ALLOW."""
     if s.role is not Role.APPRENTICE:
         return None
     if action not in {Action.HANDLE_MATERIAL, Action.FLAG_UP}:
@@ -383,6 +388,7 @@ def _crew_owns(s: Subject, r: Resource) -> bool:
 def chain_owns(
     s: Subject, action: Action, r: Resource, env: Env, ctx: Any = None
 ) -> Decision | None:
+    """Deny-only. Never ALLOW."""
     if s.role is not Role.FOREMAN:
         return None
     if action not in {Action.SUBMIT_RFI, Action.ASSIGN_MATERIAL}:
@@ -397,6 +403,7 @@ def chain_owns(
 def status_guard(
     s: Subject, action: Action, r: Resource, env: Env, ctx: Any = None
 ) -> Decision | None:
+    """Deny-only. Never ALLOW."""
     if r.status is None:
         return None
     if action is Action.PIN_DRAFT and r.status not in DRAFTISH:
@@ -424,6 +431,7 @@ def _as_ctx(ctx: PolicyContext | dict | None) -> PolicyContext:
 def work_stop_writer(
     s: Subject, action: Action, r: Resource, env: Env, ctx: Any = None
 ) -> Decision | None:
+    """Deny-only. Never ALLOW."""
     if action is Action.WORK_STOP:
         return _deny("work_stop_writer", "use set_priority; do not flip work_stopped")
     if action is Action.SET_PRIORITY:
