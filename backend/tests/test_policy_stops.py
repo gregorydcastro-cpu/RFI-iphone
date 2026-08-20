@@ -10,7 +10,11 @@ import pytest
 from abac import (
     AUDIT_LINE_KEYS,
     DENY_LOG_FIELDS,
+    FIELD_SET_NAMES,
     HUNG_WRITES,
+    WALK_DUMP_DROP,
+    WALK_DUMP_KEYS,
+    WALK_DUMP_STEP_KEYS,
     AccessDenied,
     Action,
     ActorType,
@@ -28,9 +32,11 @@ from abac import (
     Subject,
     SUBJECT_FIELD_ORDER,
     TRACE_FIELD_ORDER,
+    as_decision_policy,
     deny_log_fields,
+    dump_walk,
     emit_audit_line,
-    evaluate,
+    evaluate as _engine_evaluate,
     format_audit_line,
     grok_denied,
     raise_http,
@@ -43,7 +49,7 @@ from abac import (
     reject_subject_crew_ids,
     require_access,
 )
-from app.policy_coverage import EXPECTED_ORDER, PolicyCoverage, _traces
+from app.policy_coverage import EXPECTED_ORDER, FIELD_LANES, PolicyCoverage, _traces
 from tests.coverage_abac import PolicyCoverage as WalkCoverage
 from tests.coverage_abac import assert_policy_coverage as assert_walk_coverage
 
@@ -189,18 +195,77 @@ def format_trace(steps: Iterable[EvaluationTrace], *, decision: Decision | None 
             mark = f"DENY  {step.reason}"
         else:
             mark = f"ALLOW {step.reason}"
-        stop = "  STOP" if step.effect == "deny" else ""
+        stop = "  STOP" if step.stopped else ""
         lines.append(f"{i:2}  {step.policy:<20} {mark}{stop}")
     if decision is not None:
         lines.append(f"→ {decision.effect.value.upper()}  {decision.policy}: {decision.reason}")
     return "\n".join(lines)
 
 
+PREFIX_DENY = {
+    1: "same_project",
+    2: "grokbot_lane",
+    3: "on_site",
+    4: "role_allows",
+}
+
+
 def stop_policy(steps: list[EvaluationTrace]) -> str | None:
+    """Use stopped=True. Never steps[-1]."""
     for step in steps:
-        if step.effect == "deny":
+        if step.stopped:
             return step.policy
     return None
+
+
+def assert_walk_invariants(
+    decision: Decision,
+    steps: Iterable[EvaluationTrace],
+    *,
+    policy_set=FIELD_POLICY_SET,
+) -> None:
+    """Sanity. Evaluator/logger drifted — do not tune a role."""
+    rows = list(steps)
+    seqs = [step.seq for step in rows]
+    assert seqs == list(range(1, len(rows) + 1)), f"seq not contiguous from 1: {seqs}"
+    names = [step.policy for step in rows]
+    ranked = tuple(policy.name for policy in policy_set.ranked())
+    space = EXPECTED_ORDER if policy_set is FIELD_POLICY_SET else ranked
+    assert names == list(space[: len(names)]), (
+        f"names are a prefix of the ranked set, never a reshuffle: {names}"
+    )
+    stopped = [step for step in rows if step.stopped]
+    assert len(stopped) <= 1, f"at most one stopped=True: {stopped}"
+    allows = [step for step in rows if step.effect == "allow"]
+    assert len(allows) <= 1, f"at most one effect=allow: {allows}"
+    if allows:
+        assert allows[0].policy == "role_allows"
+        assert allows[0].stopped is False
+    if stopped:
+        assert decision.allowed is False
+        if as_decision_policy(decision) != "default_deny":
+            assert decision.policy == stopped[0].policy
+    if not stopped and decision.allowed:
+        assert names == list(ranked)
+    first = next((step for step in rows if step.applicable), None)
+    if (
+        policy_set is FIELD_POLICY_SET
+        and first is not None
+        and first.effect == "deny"
+        and first.seq in PREFIX_DENY
+    ):
+        assert first.policy == PREFIX_DENY[first.seq]
+
+
+def evaluate(*args, **kwargs):
+    walk = _engine_evaluate(*args, **kwargs)
+    assert_walk_invariants(
+        walk.decision,
+        walk.steps,
+        policy_set=kwargs.get("policy_set", FIELD_POLICY_SET),
+    )
+    reject_stopped_only_on_halt_deny(walk.steps)
+    return walk
 
 
 def assert_stop(steps: list[EvaluationTrace], name: str) -> None:
@@ -301,7 +366,9 @@ def gold_evaluates():
 
 
 def test_policy_set_rank_is_fixed():
-    assert tuple(policy.name for policy in FIELD_POLICY_SET.ranked()) == EXPECTED_ORDER
+    assert tuple(policy.name for policy in FIELD_POLICY_SET.ranked()) == FIELD_LANES
+    assert EXPECTED_ORDER == FIELD_LANES + ("default_deny",)
+    assert "default_deny" not in FIELD_SET_NAMES
 
 
 def test_env_now_is_factory_not_import_stamp():
@@ -471,6 +538,7 @@ def test_evaluation_log_is_server_audit_envelope():
     assert log.resource_type == "rfi"
     assert log.resource_project_id == OTHER_JOB
     assert log.resource_id is None
+    assert log.area_id == AREA
     assert log.steps[0].policy == "same_project"
 
 
@@ -967,6 +1035,128 @@ def test_default_deny_is_deny_only_when_nothing_permitted():
     assert_stop(steps, "default_deny")
     assert decision.allowed is False
     assert default_deny(subject(), Action.VIEW_PRINT, resource(), Env()).effect is Effect.DENY
+
+
+def test_default_deny_hole_when_role_allows_returns_none(caplog):
+    import logging
+
+    from abac import Policy, PolicySet, audit_logs, default_deny
+
+    def mute_role(*_args, **_kwargs):
+        return None
+
+    hole = PolicySet(
+        name="field_chain",
+        combining=Combining.DENY_OVERRIDES,
+        policies=tuple(
+            Policy(
+                name=policy.name,
+                rule=mute_role if policy.name == "role_allows" else policy.rule,
+                order=policy.order,
+            )
+            for policy in FIELD_POLICY_SET.ranked()
+        ),
+    )
+    with caplog.at_level(logging.INFO, logger="abac"):
+        decision, steps = evaluate(
+            subject(role=Role.JOURNEYMAN),
+            Action.CREATE_RFI_DRAFT,
+            resource(),
+            policy_set=hole,
+        )
+        with pytest.raises(AccessDenied):
+            require_access(
+                subject(role=Role.JOURNEYMAN),
+                Action.CREATE_RFI_DRAFT,
+                resource(),
+                policy_set=hole,
+            )
+    assert [step.policy for step in steps] == list(FIELD_LANES)
+    assert all(step.applicable is False for step in steps)
+    assert all(step.effect is None for step in steps)
+    assert not any(step.stopped for step in steps)
+    assert decision.allowed is False
+    assert as_decision_policy(decision) == "default_deny"
+    assert decision.policy not in FIELD_SET_NAMES
+    assert default_deny(subject(), Action.CREATE_RFI_DRAFT, resource(), Env()).effect is Effect.DENY
+    line = (
+        f"abac deny action=create_rfi_draft role=journeyman actor=human "
+        f"policy=default_deny project={JOB}"
+    )
+    assert format_audit_line(audit_logs()[-1]) == line
+    assert line in caplog.messages
+    from abac import Evaluation
+
+    bag = WalkCoverage()
+    bag.record(Evaluation(decision, tuple(steps)))
+    with pytest.raises(AssertionError, match="never_applicable") as raised:
+        assert_walk_coverage(bag)
+    assert "role_allows" in str(raised.value)
+
+
+def test_walk_dump_keeps_machine_fields_only():
+    decision, steps = evaluate(
+        subject(role=Role.FOREMAN, crew_ids=frozenset({CREW})),
+        Action.SUBMIT_RFI,
+        resource(created_by_id=OTHER, crew_foreman_id=OTHER),
+    )
+    dumped = dump_walk(
+        decision,
+        steps,
+        action=Action.SUBMIT_RFI,
+        role=Role.FOREMAN,
+        actor_type=ActorType.HUMAN,
+    )
+    assert dumped["decision.policy"] == "chain_owns"
+    assert dumped["action"] == "submit_rfi"
+    assert dumped["role"] == "foreman"
+    assert dumped["actor_type"] == "human"
+    assert set(dumped["steps"][0]) == set(WALK_DUMP_STEP_KEYS)
+    blob = str(dumped)
+    for dropped in WALK_DUMP_DROP:
+        assert dropped not in blob
+    assert "not your crew's ticket" not in blob
+    assert WALK_DUMP_KEYS[-1] == "actor_type"
+
+
+def test_chain_owns_denies_differ_by_resource_id_and_area():
+    from abac import audit_logs
+
+    left_id = UUID("00000000-0000-4000-8000-000000000701")
+    right_id = UUID("00000000-0000-4000-8000-000000000702")
+    left = resource(
+        id=left_id,
+        area_id=AREA,
+        created_by_id=OTHER,
+        crew_foreman_id=OTHER,
+    )
+    right = resource(
+        id=right_id,
+        area_id=OTHER_AREA,
+        created_by_id=OTHER,
+        crew_foreman_id=OTHER,
+    )
+    with pytest.raises(AccessDenied):
+        require_access(
+            subject(role=Role.FOREMAN, area_id=AREA, crew_ids=frozenset({CREW})),
+            Action.SUBMIT_RFI,
+            left,
+        )
+    with pytest.raises(AccessDenied):
+        require_access(
+            subject(
+                role=Role.FOREMAN, area_id=OTHER_AREA, crew_ids=frozenset({CREW})
+            ),
+            Action.SUBMIT_RFI,
+            right,
+        )
+    first, second = audit_logs()[-2:]
+    assert first.decision.policy == second.decision.policy == "chain_owns"
+    assert first.resource_id == left_id
+    assert second.resource_id == right_id
+    assert first.area_id == AREA
+    assert second.area_id == OTHER_AREA
+    assert (first.resource_id, first.area_id) != (second.resource_id, second.area_id)
 
 
 def test_debug_on_fail() -> None:

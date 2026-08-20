@@ -266,6 +266,7 @@ LOG_FIELD_ORDER = (
     "resource_type",
     "resource_project_id",
     "resource_id",
+    "area_id",
     "decision",
     "steps",
 )
@@ -282,6 +283,7 @@ class EvaluationLog:
     resource_type: str
     resource_project_id: UUID
     resource_id: UUID | None
+    area_id: UUID | None
     decision: Decision
     steps: tuple[EvaluationTrace, ...]
 
@@ -491,15 +493,17 @@ FIELD_POLICY_SET = PolicySet(
         Policy(name="chain_owns", rule=chain_owns, order=70),
         Policy(name="status_guard", rule=status_guard, order=80),
         Policy(name="work_stop_writer", rule=work_stop_writer, order=90),
-        Policy(name="default_deny", rule=default_deny, order=99),
     ),
 )
 FIELD_CHAIN = FIELD_POLICY_SET
+FIELD_SET_NAMES = frozenset(policy.name for policy in FIELD_POLICY_SET.ranked())
 if FIELD_POLICY_SET.combining is not Combining.DENY_OVERRIDES:
     raise TypeError(
         "FIELD_POLICY_SET combining is deny_overrides. "
         "A later ALLOW does not cancel a DENY."
     )
+if "default_deny" in FIELD_SET_NAMES:
+    raise TypeError("default_deny is not a FIELD_POLICY_SET member")
 
 
 def invoke_rule(
@@ -552,6 +556,7 @@ def _log(
         resource_type=resource.type,
         resource_project_id=resource.project_id,
         resource_id=resource.id,
+        area_id=resource.area_id,
         decision=decision,
         steps=tuple(traces),
     )
@@ -621,20 +626,8 @@ def evaluate(
             _step(seq, policy, applicable=True, decision=result, stopped=False)
         )
     if allow is None:
-        decision = _deny("default_deny", "denied")
-        seq += 1
-        traces.append(
-            EvaluationTrace(
-                seq=seq,
-                policy="default_deny",
-                order=99,
-                applicable=True,
-                effect="deny",
-                reason="denied",
-                stopped=True,
-            )
-        )
-        return Evaluation(decision, tuple(traces))
+        # Fail closed. default_deny is not a set member. Full n/a walk.
+        return Evaluation(_deny("default_deny", "denied"), tuple(traces))
     return Evaluation(allow, tuple(traces))
 
 
@@ -708,9 +701,58 @@ reject_audit_line(
 
 def stop_seq(log: EvaluationLog) -> int | None:
     for step in log.steps:
-        if step.effect == "deny":
+        if step.stopped:
             return step.seq
     return None
+
+
+def as_decision_policy(decision: Decision) -> str:
+    """decision.policy not in FIELD_POLICY_SET is default_deny, not a set member."""
+    if decision.policy not in FIELD_SET_NAMES:
+        return "default_deny"
+    return decision.policy
+
+
+WALK_DUMP_STEP_KEYS = ("seq", "policy", "applicable", "effect", "stopped")
+WALK_DUMP_KEYS = (
+    "seq",
+    "policy",
+    "applicable",
+    "effect",
+    "stopped",
+    "decision.policy",
+    "action",
+    "role",
+    "actor_type",
+)
+WALK_DUMP_DROP = frozenset({"question", "photos", "photo", "crew_ids", "reason"})
+
+
+def dump_walk(
+    decision: Decision,
+    steps: tuple[EvaluationTrace, ...] | list[EvaluationTrace],
+    *,
+    action: Action | str,
+    role: Role | str,
+    actor_type: ActorType | str,
+) -> dict[str, object]:
+    """Compact dump. No question text, photos, crew_ids, or long reasons."""
+    return {
+        "action": action.value if hasattr(action, "value") else action,
+        "role": role.value if hasattr(role, "value") else role,
+        "actor_type": actor_type.value if hasattr(actor_type, "value") else actor_type,
+        "decision.policy": as_decision_policy(decision),
+        "steps": [
+            {
+                "seq": step.seq,
+                "policy": step.policy,
+                "applicable": step.applicable,
+                "effect": step.effect,
+                "stopped": step.stopped,
+            }
+            for step in steps
+        ],
+    }
 
 
 def deny_log_fields(log: EvaluationLog) -> dict[str, object]:
@@ -800,20 +842,20 @@ def require_access(
         action=action.value,
         resource_type=resource.type,
         resource_project_id=resource.project_id,
-        resource_id=None,
+        resource_id=resource.id,
+        area_id=resource.area_id,
         decision=decision,
         steps=tuple(
             EvaluationTrace(
-                seq=i,
+                seq=t.seq,
                 policy=t.policy,
-                order=next(p.order for p in policy_set.ranked() if p.name == t.policy),
+                order=t.order,
                 applicable=t.applicable,
                 effect=t.effect,
                 reason=t.reason,
-                stopped=(t.effect == "deny")
-                or (i == len(steps) and decision.effect.value == "deny"),
+                stopped=t.stopped,
             )
-            for i, t in enumerate(steps, start=1)
+            for t in steps
         ),
     )
     record_audit(log)

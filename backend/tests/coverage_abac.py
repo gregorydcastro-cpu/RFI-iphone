@@ -78,7 +78,12 @@ class PolicyCoverage:
         return walk
 
     def never_seen(self) -> list[str]:
-        return [name for name in COVERED if self.hits[name].seen == 0]
+        # Short-circuit unread names increment skipped_after_stop, not never_seen.
+        return [
+            name
+            for name in COVERED
+            if self.hits[name].seen == 0 and self.hits[name].skipped_after_stop == 0
+        ]
 
     def never_applicable(self) -> list[str]:
         return [name for name in COVERED if self.hits[name].applicable == 0]
