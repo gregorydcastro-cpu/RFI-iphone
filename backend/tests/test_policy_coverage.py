@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from dataclasses import fields
 from pathlib import Path
@@ -24,6 +25,7 @@ from app.policy_coverage import (
     assert_policy_coverage,
     dump_from_bag,
     merge_coverage,
+    migrate,
     migrate_v1_to_v2,
     migrate_v2_to_v3,
     read_coverage,
@@ -63,7 +65,7 @@ def test_refuse_missing_schema():
 def test_refuse_schema_mismatch(tmp_path: Path):
     raw = PolicyCoverageData().to_json()
     raw["schema"] = 99
-    with pytest.raises(ValueError, match="unsupported coverage schema"):
+    with pytest.raises(ValueError, match="upgrade the test runner"):
         PolicyCoverageData.from_json(raw)
 
 
@@ -316,25 +318,82 @@ def test_truncated_json_fails_the_merge(tmp_path: Path):
         merge_coverage(bags)
 
 
-def test_migrate_v1_to_v2_finishes_setdefaults_and_does_not_mutate():
+def test_migrate_deepcopy_rejects_non_object_and_bad_schema():
+    raw = {"schema": 2, "policy_set": "field_lanes", "hits": {}}
+    snapshot = deepcopy(raw)
+    assert migrate(raw)["schema"] == 2
+    assert raw == snapshot
+    with pytest.raises(ValueError, match="object"):
+        migrate(["not", "an", "object"])
+    with pytest.raises(ValueError, match="missing coverage schema"):
+        migrate({"policy_set": "field_lanes", "hits": {}})
+    with pytest.raises(ValueError, match="invalid coverage schema"):
+        migrate({"schema": "2", "hits": {}})
+    with pytest.raises(ValueError, match="upgrade the test runner"):
+        migrate({"schema": 99, "hits": {}})
+    with pytest.raises(ValueError, match="missing migration step"):
+        migrate({"schema": 0, "hits": {}})
+
+
+def test_migrate_rejects_step_that_does_not_land_on_schema_plus_one(monkeypatch):
+    def bad_step(raw):
+        raw["schema"] = 99
+        return raw
+
+    monkeypatch.setitem(MIGRATIONS, 1, bad_step)
+    with pytest.raises(ValueError, match="schema\\+1"):
+        migrate({"schema": 1, "hits": {}})
+
+
+def test_migrate_v1_to_v2_setdefaults_stop_defaults_to_deny():
     raw = {
         "schema": 1,
-        "policy_set": "field_lanes",
         "hits": {"same_project": {"deny": 2}},
     }
     snapshot = deepcopy(raw)
-    out = migrate_v1_to_v2(raw)
+    out = migrate(raw)
     assert raw == snapshot
     assert out["schema"] == 2
     assert out["combining"] == "deny_overrides"
+    assert out["policy_set"] == "field_lanes"
+    assert out["worker"] is None
     assert out["decisions"] == {}
     assert out["stops"] == {}
-    assert out["hits"]["same_project"]["deny"] == 2
-    assert out["hits"]["same_project"]["skipped_after_stop"] == 0
+    row = out["hits"]["same_project"]
+    assert row["seen"] == 0
+    assert row["applicable"] == 0
+    assert row["allow"] == 0
+    assert row["deny"] == 2
+    assert row["stop"] == 2
+    assert row["skipped_after_stop"] == 0
     loaded = PolicyCoverageData.from_json(raw)
     assert loaded.schema == 2
     assert loaded.combining == "deny_overrides"
-    assert loaded.hits["same_project"]["skipped_after_stop"] == 0
+    assert loaded.hits["same_project"]["stop"] == 2
+
+
+def test_read_coverage_migrates_then_validates_policy_set(tmp_path: Path):
+    path = tmp_path / "gw0.json"
+    path.write_text(json.dumps({"schema": 1, "hits": {"same_project": {"deny": 1}}}))
+    loaded = read_coverage(path)
+    assert loaded.schema == 2
+    assert loaded.policy_set == "field_lanes"
+    assert loaded.hits["same_project"]["stop"] == 1
+    bad = tmp_path / "gw1.json"
+    bad.write_text(
+        json.dumps({"schema": 1, "policy_set": "empty", "hits": {}})
+    )
+    with pytest.raises(ValueError, match="refusing to merge"):
+        read_coverage(bad)
+
+
+def test_migrate_v1_to_v2_hits_required_object():
+    with pytest.raises(ValueError, match="hits required object"):
+        migrate({"schema": 1})
+    with pytest.raises(ValueError, match="hits required object"):
+        migrate({"schema": 1, "hits": []})
+    with pytest.raises(ValueError, match="hits required object"):
+        migrate({"schema": 1, "hits": {"same_project": 2}})
 
 
 def test_migrate_v1_is_registered_v2_to_v3_is_not():

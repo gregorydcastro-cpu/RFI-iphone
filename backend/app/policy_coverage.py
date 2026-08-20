@@ -84,7 +84,9 @@ class PolicyCoverageData:
 
     @classmethod
     def from_json(cls, raw: dict[str, Any]) -> PolicyCoverageData:
-        raw = normalize_coverage(raw)
+        raw = migrate(raw)
+        if raw.get("policy_set") != "field_lanes":
+            raise ValueError(f"refusing to merge {raw.get('policy_set')}")
         leaked = COVERAGE_FILE_FORBIDDEN & raw.keys()
         if leaked:
             raise ValueError(f"coverage file must not include {sorted(leaked)}")
@@ -92,20 +94,29 @@ class PolicyCoverageData:
 
 
 def migrate_v1_to_v2(raw: dict) -> dict:
-    """v1 → v2. His paste cut off at setdefault; finish the defaults here."""
-    out = deepcopy(raw)
-    out.setdefault("policy_set", "field_lanes")
-    out.setdefault("combining", "deny_overrides")
-    out.setdefault("decisions", {})
-    out.setdefault("stops", {})
-    hits = {}
-    for name, row in out.get("hits", {}).items():
-        nxt = dict(row) if isinstance(row, dict) else {}
+    raw.setdefault("combining", "deny_overrides")
+    raw.setdefault("policy_set", "field_lanes")
+    raw.setdefault("worker", None)
+    raw.setdefault("decisions", {})
+    raw.setdefault("stops", {})
+    hits = raw.get("hits")
+    if not isinstance(hits, dict):
+        raise ValueError("hits required object")
+    next_hits = {}
+    for name, row in hits.items():
+        if not isinstance(row, dict):
+            raise ValueError("hits required object")
+        nxt = dict(row)
+        nxt.setdefault("seen", 0)
+        nxt.setdefault("applicable", 0)
+        nxt.setdefault("allow", 0)
+        nxt.setdefault("deny", 0)
+        nxt.setdefault("stop", nxt["deny"])
         nxt.setdefault("skipped_after_stop", 0)
-        hits[name] = nxt
-    out["hits"] = hits
-    out["schema"] = 2
-    return out
+        next_hits[name] = nxt
+    raw["hits"] = next_hits
+    raw["schema"] = 2
+    return raw
 
 
 def migrate_v2_to_v3(raw: dict) -> dict:
@@ -129,22 +140,27 @@ MIGRATIONS: dict[int, Callable[[dict], dict]] = {
 }
 
 
-def normalize_coverage(raw: dict[str, Any]) -> dict[str, Any]:
-    if "schema" not in raw:
-        raise ValueError("missing coverage schema")
+def migrate(raw: Any) -> dict[str, Any]:
+    """Schema walk is law. deepcopy first. Steps must land on schema+1."""
+    if not isinstance(raw, dict):
+        raise ValueError("coverage must be an object")
     out = deepcopy(raw)
-    seen: set[int] = set()
-    while out["schema"] != CURRENT_SCHEMA:
+    schema = out.get("schema", None)
+    if schema is None:
+        raise ValueError("missing coverage schema")
+    if type(schema) is not int:
+        raise ValueError("invalid coverage schema")
+    if schema > CURRENT_SCHEMA:
+        raise ValueError("upgrade the test runner")
+    while schema < CURRENT_SCHEMA:
+        step = MIGRATIONS.get(schema)
+        if step is None:
+            raise ValueError(f"missing migration step {schema}")
+        nxt = step(out)
+        if not isinstance(nxt, dict) or nxt.get("schema") != schema + 1:
+            raise ValueError(f"migration step {schema} must land on schema+1")
+        out = nxt
         schema = out["schema"]
-        if schema in seen:
-            raise ValueError(f"unsupported coverage schema {schema}")
-        seen.add(schema)
-        migrate = MIGRATIONS.get(schema)
-        if migrate is None:
-            raise ValueError(f"unsupported coverage schema {schema}")
-        out = migrate(out)
-    if out.get("policy_set") != "field_lanes":
-        raise ValueError(f"refusing to merge {out.get('policy_set')}")
     return out
 
 
@@ -169,7 +185,7 @@ def merge_coverage(bags: list[dict[str, Any]]) -> dict[str, Any]:
     """Add ints only. Never average or max. Empty hits merge as zeros."""
     if not bags:
         return PolicyCoverageData(hits={}, decisions={}, stops={}).to_json()
-    loaded = [normalize_coverage(bag) for bag in bags]
+    loaded = [migrate(bag) for bag in bags]
     policy_set = loaded[0].get("policy_set", "field_lanes")
     combining = loaded[0].get("combining", "deny_overrides")
     for bag in loaded[1:]:
