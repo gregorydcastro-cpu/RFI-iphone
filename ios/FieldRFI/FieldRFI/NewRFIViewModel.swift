@@ -36,7 +36,9 @@ final class NewRFIViewModel: ObservableObject {
             let rows = try await client.projects()
             projects = rows
             if selectedProject == nil {
-                selectedProject = rows.first(where: { $0.name == "Harbor Yard Warehouse" }) ?? rows.first
+                selectedProject = rows.first(where: { $0.name.contains("ILSB") })
+                    ?? rows.first(where: { $0.name == "Harbor Yard Warehouse" })
+                    ?? rows.first
             }
             await loadRevisions()
         } catch {
@@ -58,7 +60,9 @@ final class NewRFIViewModel: ObservableObject {
                 await loadDrawing()
                 return
             }
-            selectedRevision = rows.first(where: { $0.sheet_number == "S301" && $0.revision == "C" }) ?? rows.first
+            selectedRevision = rows.first(where: { $0.sheet_number == "EL107_N" && $0.revision == "27" })
+                ?? rows.first(where: { $0.sheet_number == "S301" && $0.revision == "C" })
+                ?? rows.first
             await loadDrawing()
         } catch {
             errorMessage = error.localizedDescription

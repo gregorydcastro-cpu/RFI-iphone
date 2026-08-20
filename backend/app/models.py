@@ -46,6 +46,9 @@ class Project(Base):
         String(36), ForeignKey("organizations.id"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+    address: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    architect: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    project_number: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     organization: Mapped[Organization] = relationship(back_populates="projects")
@@ -111,6 +114,10 @@ class SheetRevision(Base):
     )
     revision: Mapped[str] = mapped_column(String(16), nullable=False)
     drawing_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_url: Mapped[Optional[str]] = mapped_column(String(400), nullable=True)
+    page_width: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    page_height: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    is_current: Mapped[bool] = mapped_column(default=False)
     issued_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     sheet: Mapped[Sheet] = relationship(back_populates="revisions")

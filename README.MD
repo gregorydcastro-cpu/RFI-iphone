@@ -22,9 +22,11 @@ Seeded on first API boot:
 
 | | |
 | --- | --- |
-| Organization | Castro Construction |
-| Project | Harbor Yard Warehouse |
-| Sheets | S301 Foundation Plan (Rev B, **Rev C**), S302 Framing Plan (Rev A) |
+| Organization | Castro Construction | Brown University |
+| Project | Harbor Yard Warehouse | **Brown Integrated Life Sciences Building (ILSB)** |
+| Address / architect | — | 233 Richmond St, Providence RI 02903 · TenBerke · 4224 |
+| Sheets | S301 Rev B/C, S302 Rev A | **EL107_N Rev 27** (Bulletin 46, 06/25/2026, `is_current`) |
+| Seeded draft | none | Vivarium lighting control — which E-803 revision for EL107_N (`draft`, no number) |
 
 ## Backend (Linux / Mac)
 
@@ -60,8 +62,8 @@ This cloud VM cannot run the iOS simulator. On a Mac:
 ## Test plan (New RFI screen)
 
 1. Open the app. You should land on **New RFI**, not a placeholder.
-2. Project should resolve to **Harbor Yard Warehouse** (or pick it).
-3. Pick **S301 Rev C** (Structural / Foundation Plan). The drawing should load.
+2. Project list includes **Brown Integrated Life Sciences Building (ILSB)** (default) and Harbor Yard Warehouse.
+3. Pick **EL107_N Rev 27** (Electrical Lighting Plan — Level 07 North). The full-sheet drawing should load. Harbor Yard **S301 Rev C** remains available.
 4. Tap the sheet to drop a pin. Optionally set grid `B-4`.
 5. Add a photo if you want. Enter one note, for example: `Beam at grid B-4 appears to conflict with the duct. Please confirm clearance.`
 6. Tap **Draft RFI**. The client calls `search_rfis`, then `create_rfi_draft`.

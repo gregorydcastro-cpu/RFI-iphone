@@ -135,6 +135,9 @@ class ProjectOut(BaseModel):
     id: str
     name: str
     organization_name: str
+    address: Optional[str] = None
+    architect: Optional[str] = None
+    project_number: Optional[str] = None
 
 
 class SheetRevisionOut(BaseModel):
@@ -145,6 +148,10 @@ class SheetRevisionOut(BaseModel):
     discipline: str
     title: str
     drawing_url: str
+    file_url: Optional[str] = None
+    page_width: Optional[int] = None
+    page_height: Optional[int] = None
+    is_current: bool = False
 
 
 class RFIOut(BaseModel):

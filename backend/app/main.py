@@ -75,7 +75,14 @@ def list_projects(db: Session = Depends(get_db)) -> list[ProjectOut]:
         .order_by(Project.name)
     ).all()
     return [
-        ProjectOut(id=project.id, name=project.name, organization_name=org_name)
+        ProjectOut(
+            id=project.id,
+            name=project.name,
+            organization_name=org_name,
+            address=project.address,
+            architect=project.architect,
+            project_number=project.project_number,
+        )
         for project, org_name in rows
     ]
 
@@ -99,7 +106,11 @@ def list_sheet_revisions(project_id: str, db: Session = Depends(get_db)) -> list
             revision=rev.revision,
             discipline=sheet.discipline,
             title=sheet.title,
-            drawing_url=f"/sheet-revisions/{rev.id}/drawing",
+            drawing_url=rev.file_url or f"/sheet-revisions/{rev.id}/drawing",
+            file_url=rev.file_url or f"/sheet-revisions/{rev.id}/drawing",
+            page_width=rev.page_width,
+            page_height=rev.page_height,
+            is_current=bool(rev.is_current),
         )
         for rev, sheet in rows
     ]
@@ -356,6 +367,11 @@ def create_rfi_draft(raw: dict, db: Session = Depends(get_db)) -> DraftResult:
     rfi_id = str(uuid.uuid4())
     preflight = {
         "envelope": envelope.model_dump(mode="json"),
+        "is_duplicate": False,
+        "question_count": drafted.question_count,
+        "rewrite_applied": drafted.rewrite_applied,
+        "missing_fields": [],
+        "notes": drafted.notes,
         "rules": {
             "search_first": True,
             "one_question": True,
@@ -422,6 +438,17 @@ def create_rfi_draft(raw: dict, db: Session = Depends(get_db)) -> DraftResult:
                 grid=grid,
             )
         )
+        if "e-803" in drafted.question.lower() and sheet.sheet_number == "EL107_N":
+            db.add(
+                RFIRef(
+                    rfi_id=rfi_id,
+                    sheet_revision_id=None,
+                    sheet_number="E-803",
+                    revision=None,
+                    discipline="E",
+                    detail="revision not stated on EL107_N",
+                )
+            )
     if envelope.pin and sheet_rev:
         db.add(
             RFIPin(
@@ -485,7 +512,10 @@ def get_rfi(rfi_id: str, db: Session = Depends(get_db)) -> RFIOut:
                 "sheet_revision_id": ref.sheet_revision_id,
                 "sheet_number": ref.sheet_number,
                 "revision": ref.revision,
+                "discipline": ref.discipline,
+                "detail": ref.detail,
                 "grid": ref.grid,
+                "location_id": ref.location_id,
             }
             for ref in rfi.refs
         ],

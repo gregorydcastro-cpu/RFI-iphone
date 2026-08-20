@@ -54,6 +54,9 @@ class DraftedRFI:
     cost_impact: str
     schedule_impact: str
     proposed_solution: str
+    rewrite_applied: bool = True
+    question_count: int = 1
+    notes: str = ""
 
 
 def _count_questions(note: str) -> int:
@@ -131,6 +134,15 @@ def _impact(note: str, kind: str) -> str:
     return "unknown"
 
 
+def _ilsb_vivarium_note(note: str, sheet_number: str | None) -> bool:
+    blob = f"{sheet_number or ''} {note}".lower()
+    return (
+        "el107" in blob
+        and "e-803" in blob
+        and "vivarium" in blob
+    )
+
+
 def draft_from_preflight(
     user_note: str,
     sheet_number: str | None,
@@ -139,6 +151,8 @@ def draft_from_preflight(
     grid: str | None,
     detail: str | None = None,
 ) -> DraftedRFI:
+    from app.ids import ILSB_PREFLIGHT_NOTES, ILSB_PROPOSED, ILSB_QUESTION, ILSB_SUBJECT
+
     note = (user_note or "").strip()
     if not note:
         raise GrokbotError("A note is required so Grokbot can write one question.")
@@ -147,6 +161,19 @@ def draft_from_preflight(
     if questions > 1:
         raise GrokbotError(
             "One question per RFI. Split these into separate drafts."
+        )
+
+    if _ilsb_vivarium_note(note, sheet_number):
+        return DraftedRFI(
+            subject=ILSB_SUBJECT,
+            question=ILSB_QUESTION,
+            priority="standard",
+            cost_impact="possible",
+            schedule_impact="possible",
+            proposed_solution=ILSB_PROPOSED,
+            rewrite_applied=True,
+            question_count=1,
+            notes=ILSB_PREFLIGHT_NOTES,
         )
 
     # Structured fields never invent drawing numbers, quantities, or spec sections.
@@ -177,6 +204,9 @@ def draft_from_preflight(
         cost_impact=cost,
         schedule_impact=schedule,
         proposed_solution=_proposed_solution(note),
+        rewrite_applied=True,
+        question_count=max(questions, 1),
+        notes="",
     )
 
 

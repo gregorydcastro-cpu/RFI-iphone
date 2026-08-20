@@ -4,6 +4,9 @@ struct ProjectDTO: Codable, Identifiable, Hashable {
     let id: String
     let name: String
     let organization_name: String
+    let address: String?
+    let architect: String?
+    let project_number: String?
 }
 
 struct SheetRevisionDTO: Codable, Identifiable, Hashable {
@@ -14,9 +17,14 @@ struct SheetRevisionDTO: Codable, Identifiable, Hashable {
     let discipline: String
     let title: String
     let drawing_url: String
+    let file_url: String?
+    let page_width: Int?
+    let page_height: Int?
+    let is_current: Bool?
 
     var pickerLabel: String {
-        "\(sheet_number)  Rev \(revision)  ·  \(discipline)"
+        let current = is_current == true ? "  ·  current" : ""
+        return "\(sheet_number)  Rev \(revision)  ·  \(discipline)\(current)"
     }
 }
 
