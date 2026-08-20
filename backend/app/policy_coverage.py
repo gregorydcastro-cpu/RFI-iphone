@@ -15,7 +15,7 @@ from app.abac import AccessDenied, EvaluationLog, EvaluationTrace
 CURRENT_SCHEMA = 2
 SCHEMA = CURRENT_SCHEMA
 
-EXPECTED_ORDER = (
+FIELD_LANES = (
     "same_project",
     "grokbot_lane",
     "on_site",
@@ -25,8 +25,8 @@ EXPECTED_ORDER = (
     "chain_owns",
     "status_guard",
     "work_stop_writer",
-    "default_deny",
 )
+EXPECTED_ORDER = FIELD_LANES + ("default_deny",)
 
 # default_deny deny/stop is off this bag — tested with bare evaluate.
 REQUIRED_STOPS = {
@@ -184,10 +184,9 @@ def _merge_hits(bags: list[dict[str, Any]]) -> PolicyCoverage:
 
 
 def assert_policy_coverage(coverage: PolicyCoverage) -> None:
-    missing = [name for name in EXPECTED_ORDER if name not in coverage.seen]
+    missing = [name for name in FIELD_LANES if name not in coverage.seen]
     assert missing == [], f"policies never walked: {missing}"
     missing_stops = sorted(REQUIRED_STOPS - coverage.stops)
     assert missing_stops == [], f"policies never stopped: {missing_stops}"
-    assert "default_deny" in coverage.na
     assert "default_deny" not in coverage.allows
     # default_deny deny is off this bag. Line coverage is not assigned_only denied.

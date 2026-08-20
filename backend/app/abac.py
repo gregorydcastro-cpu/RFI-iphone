@@ -6,7 +6,7 @@ import inspect
 from dataclasses import MISSING, dataclass, field, fields
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, NamedTuple
 from uuid import UUID
 
 SlaUnit = Literal["business_days", "calendar_days"]
@@ -568,6 +568,11 @@ def _step(
     )
 
 
+class Evaluation(NamedTuple):
+    decision: Decision
+    steps: tuple[EvaluationTrace, ...]
+
+
 def evaluate(
     subject: Subject,
     action: Action,
@@ -576,19 +581,16 @@ def evaluate(
     ctx: Any = None,
     *,
     policy_set: PolicySet = FIELD_POLICY_SET,
-) -> EvaluationLog:
-    """DENY_OVERRIDES. Trace is the receipt. Unused steps are n/a, not missing."""
+) -> Evaluation:
+    """DENY_OVERRIDES. First deny stops. ALLOW does not stop; remaining emit n/a."""
     env = env or Env()
     traces: list[EvaluationTrace] = []
     allow: Decision | None = None
     seq = 0
     for policy in policy_set.ranked():
-        seq += 1
         if policy.name == "default_deny" and allow is not None:
-            traces.append(
-                _step(seq, policy, applicable=False, decision=None, stopped=False)
-            )
             continue
+        seq += 1
         result = invoke_rule(policy.rule, subject, action, resource, env, ctx)
         if result is None:
             traces.append(
@@ -599,9 +601,7 @@ def evaluate(
             traces.append(
                 _step(seq, policy, applicable=True, decision=result, stopped=True)
             )
-            return _log(
-                subject, action, resource, traces, result, env=env, policy_set=policy_set
-            )
+            return Evaluation(result, tuple(traces))
         allow = result
         traces.append(
             _step(seq, policy, applicable=True, decision=result, stopped=False)
@@ -620,12 +620,8 @@ def evaluate(
                 stopped=True,
             )
         )
-        return _log(
-            subject, action, resource, traces, decision, env=env, policy_set=policy_set
-        )
-    return _log(
-        subject, action, resource, traces, allow, env=env, policy_set=policy_set
-    )
+        return Evaluation(decision, tuple(traces))
+    return Evaluation(allow, tuple(traces))
 
 
 rfi_abac_deny_total: dict[str, int] = {}
@@ -659,10 +655,12 @@ def check_access(
     policy_set: PolicySet = FIELD_POLICY_SET,
     audit: list[EvaluationTrace] | None = None,
 ) -> Decision:
-    log = evaluate(subject, action, resource, env=env, ctx=ctx, policy_set=policy_set)
+    decision, steps = evaluate(
+        subject, action, resource, env=env, ctx=ctx, policy_set=policy_set
+    )
     if audit is not None:
-        audit.extend(log.steps)
-    return log.decision
+        audit.extend(steps)
+    return decision
 
 
 def require_access(
@@ -675,18 +673,41 @@ def require_access(
     policy_set: PolicySet = FIELD_POLICY_SET,
     audit: list[EvaluationTrace] | None = None,
 ) -> Decision:
-    """Fail closed. First deny wins. No implicit allow from a missing role."""
-    log = evaluate(subject, action, resource, env=env, ctx=ctx, policy_set=policy_set)
+    """Fail closed. First deny wins. ALLOW does not stop."""
+    decision, steps = evaluate(
+        subject, action, resource, env=env, ctx=ctx, policy_set=policy_set
+    )
+    log = EvaluationLog(
+        evaluated_at=datetime.now(timezone.utc),
+        combining=policy_set.combining.value,
+        subject_id=subject.user_id,
+        actor_type=subject.actor_type.value,
+        role=subject.role.value,
+        action=action.value,
+        resource_type=resource.type,
+        resource_project_id=resource.project_id,
+        resource_id=None,
+        decision=decision,
+        steps=tuple(
+            EvaluationTrace(
+                seq=i,
+                policy=t.policy,
+                order=next(p.order for p in policy_set.ranked() if p.name == t.policy),
+                applicable=t.applicable,
+                effect=t.effect,
+                reason=t.reason,
+                stopped=(t.effect == "deny")
+                or (i == len(steps) and decision.effect.value == "deny"),
+            )
+            for i, t in enumerate(steps, start=1)
+        ),
+    )
+    record_audit(log)
     if audit is not None:
         audit.extend(log.steps)
-    if not log.decision.allowed:
-        _count_deny(log.decision.policy)
-        record_audit(log)
-        raise AccessDenied(decision=log.decision, trace=log.steps)
-    _count_allow(action)
-    if action in {Action.SUBMIT_RFI, Action.SET_PRIORITY}:
-        record_audit(log)
-    return log.decision
+    if not decision.allowed:
+        raise AccessDenied(decision=decision, trace=log.steps)
+    return decision
 
 
 def raise_http(exc: AccessDenied) -> None:

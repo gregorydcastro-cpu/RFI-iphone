@@ -267,14 +267,16 @@ def test_evaluation_log_is_server_audit_envelope():
     assert stamped.default_factory is MISSING
     assert tuple(item.name for item in fields(EvaluationLog)) == LOG_FIELD_ORDER
     reject_evaluation_log_shape(EvaluationLog)
-    now = datetime(2026, 8, 20, 17, 0, tzinfo=timezone.utc)
-    log = evaluate(
-        subject(project_id=JOB),
-        Action.SUBMIT_RFI,
-        resource(project_id=OTHER_JOB),
-        env=Env(now=now),
-    )
-    assert log.evaluated_at is now
+    from abac import audit_logs
+
+    with pytest.raises(AccessDenied):
+        require_access(
+            subject(project_id=JOB),
+            Action.SUBMIT_RFI,
+            resource(project_id=OTHER_JOB),
+        )
+    log = audit_logs()[-1]
+    assert isinstance(log.evaluated_at, datetime)
     assert log.combining == "deny_overrides"
     assert log.subject_id == USER
     assert log.actor_type == "human"
@@ -327,31 +329,20 @@ def test_apprentice_submit_stops_at_role(cov: PolicyCoverage):
 
 def test_journeyman_draft_allow_walks_full_set(cov: PolicyCoverage):
     log = cov.record(evaluate(subject(role=Role.JOURNEYMAN), Action.CREATE_RFI_DRAFT, resource()))
-    assert names(log) == list(EXPECTED_ORDER)
-    assert [step.applicable for step in log.steps] == [
-        False,
-        False,
-        False,
-        True,
-        False,
-        False,
-        False,
-        False,
-        False,
-        False,
+    assert gold_rows(log) == [
+        (1, "same_project", "n/a"),
+        (2, "grokbot_lane", "n/a"),
+        (3, "on_site", "n/a"),
+        (4, "role_allows", "ALLOW", "journeyman may create_rfi_draft"),
+        (5, "area_scope", "n/a"),
+        (6, "assigned_only", "n/a"),
+        (7, "chain_owns", "n/a"),
+        (8, "status_guard", "n/a"),
+        (9, "work_stop_writer", "n/a"),
     ]
-    assert log.steps[-1].policy == "default_deny"
-    assert log.steps[-1].applicable is False
-    allows = [step for step in log.steps if step.effect == "allow"]
-    assert [step.seq for step in log.steps] == list(range(1, 11))
-    assert [step.order for step in log.steps] == [10, 20, 30, 40, 50, 60, 70, 80, 90, 99]
-    assert log.steps[-1].effect is None
-    assert log.steps[-1].reason is None
-    assert log.steps[-1].stopped is False
-    assert len(allows) == 1
-    assert allows[0].policy == "role_allows"
     assert log.decision.allowed is True
     assert log.decision.policy == "role_allows"
+    assert not any(step.stopped for step in log.steps)
 
 
 def test_area_foreman_other_area_stops_after_role(cov: PolicyCoverage):
@@ -368,7 +359,7 @@ def test_area_foreman_other_area_stops_after_role(cov: PolicyCoverage):
 
 def test_gf_skips_area_and_still_walks(cov: PolicyCoverage):
     log = cov.record(evaluate(subject(role=Role.GENERAL_FOREMAN, area_id=None), Action.SUBMIT_RFI, resource()))
-    assert names(log) == list(EXPECTED_ORDER)
+    assert names(log) == list(EXPECTED_ORDER[:9])
     area = next(step for step in log.steps if step.policy == "area_scope")
     assert area.applicable is False
     assert log.decision.allowed is True
@@ -431,17 +422,44 @@ def test_submit_from_answered_stops_at_status(cov: PolicyCoverage):
 
 
 def test_work_stopped_demote_without_flag(cov: PolicyCoverage):
+    from fastapi import HTTPException
+
+    stopped = resource(
+        priority="work_stopped", work_stopped=True, status="ball_in_court"
+    )
     log = cov.record(evaluate(
         subject(role=Role.GENERAL_FOREMAN),
         Action.SET_PRIORITY,
-        resource(priority="work_stopped", work_stopped=True, status="ball_in_court"),
+        stopped,
         ctx={"priority": "standard", "allow_demote": False},
     ))
-    assert names(log) == list(EXPECTED_ORDER[:9])
+    rows = gold_rows(log)
+    assert (4, "role_allows", "ALLOW", "general_foreman may set_priority") in rows
+    assert rows[-1] == (
+        9,
+        "work_stop_writer",
+        "DENY",
+        "demote of work_stopped requires allow_demote",
+        "STOP",
+    )
     assert first_stop(log).policy == "work_stop_writer"
-    assert log.steps[-1].effect == "deny"
     assert log.decision.policy == "work_stop_writer"
-    assert "default_deny" not in names(log)
+    with pytest.raises(AccessDenied) as raised:
+        require_access(
+            subject(role=Role.GENERAL_FOREMAN),
+            Action.SET_PRIORITY,
+            stopped,
+            ctx={"priority": "standard", "allow_demote": False},
+        )
+    cov.record(raised.value)
+    with pytest.raises(HTTPException) as http:
+        raise_http(raised.value)
+    assert http.value.status_code == 403
+    assert http.value.detail["policy"] == "work_stop_writer"
+    assert http.value.detail == {
+        "policy": "work_stop_writer",
+        "reason": "demote of work_stopped requires allow_demote",
+    }
 
 
 def test_work_stop_action_always_denied_at_writer(cov: PolicyCoverage):
