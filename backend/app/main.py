@@ -34,6 +34,7 @@ from app.access import (
     Resource,
     as_uuid,
     flag_up,
+    grok_denied,
     handle_material,
     load_rfi,
     must_uuid,
@@ -734,7 +735,7 @@ def create_rfi_draft(
             env=Env(project_id=must_uuid(project_id), area_id=subject.area_id),
         )
     except AccessDenied as exc:
-        raise_http(exc)
+        raise HTTPException(status_code=403, detail=grok_denied(exc.decision))
     lane = grok_out_of_lane(raw, actor.role)
     if lane:
         raise HTTPException(403, lane)

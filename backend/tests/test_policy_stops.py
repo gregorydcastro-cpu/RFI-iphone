@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Iterable
+from dataclasses import dataclass, field
 from uuid import UUID
 
 import pytest
 
 from abac import (
     AUDIT_LINE_KEYS,
+    DENY_LOG_FIELDS,
+    HUNG_WRITES,
     AccessDenied,
     Action,
     ActorType,
+    Combining,
     Decision,
     Effect,
     Env,
@@ -25,9 +30,11 @@ from abac import (
     Subject,
     SUBJECT_FIELD_ORDER,
     TRACE_FIELD_ORDER,
+    deny_log_fields,
     emit_audit_line,
     evaluate,
     format_audit_line,
+    grok_denied,
     raise_http,
     reject_audit_line,
     reject_env_field_order,
@@ -122,7 +129,23 @@ def gold_rows(walk) -> list[tuple]:
     return rows
 
 
+# Server / test / REPL only. Never on the iPhone. Never a Grokbot tool result.
+# Reading a deny: last applicable step is the problem.
+# Before = n/a (not allowed). After = did not run.
+DENY_READ = {
+    "grokbot_lane": "packet bug, bot tried to submit/set_priority",
+    "role_allows": "wrong role on project_assignments",
+    "area_scope": "area_id on resource vs subject",
+    "assigned_only": "assigned_to_id",
+    "chain_owns": "crew_foreman_id",
+    "status_guard": "already submitted/answered",
+    "work_stop_writer": "need set_priority / allow_demote",
+    "same_project": "handler loaded the wrong job",
+}
+
+
 def format_trace(steps: Iterable[EvaluationTrace], *, decision: Decision | None = None) -> str:
+    """Server/test/REPL receipt. Not HTTP. Not the phone. Not a Grok tool result."""
     lines: list[str] = []
     for i, step in enumerate(steps, start=1):
         if not step.applicable:
@@ -151,6 +174,166 @@ def assert_stop(steps: list[EvaluationTrace], name: str) -> None:
         raise AssertionError(
             f"expected stop at {name}, got {actual}\n{format_trace(steps)}"
         )
+
+
+@dataclass
+class PolicyHits:
+    seen: int = 0
+    applicable: int = 0
+    allow: int = 0
+    deny: int = 0
+    stop: int = 0
+    skipped_after_stop: int = 0
+
+
+@dataclass
+class CoverageReport:
+    """Test-side helper. Not Grafana."""
+
+    combining: str
+    hits: dict[str, PolicyHits]
+    decisions: Counter[str] = field(default_factory=Counter)
+    stop_policies: Counter[str] = field(default_factory=Counter)
+
+    def record(self, walk, *, policy_names: tuple[str, ...] | None = None) -> None:
+        steps = list(_traces(walk))
+        stopped_at: str | None = None
+        for step in steps:
+            hit = self.hits.setdefault(step.policy, PolicyHits())
+            hit.seen += 1
+            if step.applicable:
+                hit.applicable += 1
+            if step.effect == "allow":
+                hit.allow += 1
+            if step.effect == "deny":
+                hit.deny += 1
+            if step.stopped or step.effect == "deny":
+                hit.stop += 1
+                stopped_at = step.policy
+                self.stop_policies[step.policy] += 1
+        decision = getattr(walk, "decision", None)
+        if decision is not None:
+            self.decisions["allow" if decision.allowed else "deny"] += 1
+        if stopped_at is not None and policy_names:
+            after = False
+            for name in policy_names:
+                if name == stopped_at:
+                    after = True
+                    continue
+                if after:
+                    self.hits.setdefault(name, PolicyHits()).skipped_after_stop += 1
+
+    def never_seen(self) -> list[str]:
+        return [name for name, hit in self.hits.items() if hit.seen == 0]
+
+    def never_applicable(self) -> list[str]:
+        return [name for name, hit in self.hits.items() if hit.applicable == 0]
+
+    def never_deny(self) -> list[str]:
+        return [name for name, hit in self.hits.items() if hit.deny == 0]
+
+    def never_allow(self) -> list[str]:
+        return [name for name, hit in self.hits.items() if hit.allow == 0]
+
+    @property
+    def dead_rules(self) -> list[str]:
+        return sorted(set(self.never_seen()) | set(self.never_applicable()))
+
+
+def field_coverage_report() -> CoverageReport:
+    return CoverageReport(
+        combining=FIELD_POLICY_SET.combining.value,
+        hits={policy.name: PolicyHits() for policy in FIELD_POLICY_SET.ranked()},
+    )
+
+
+def gold_evaluates():
+    yield evaluate(
+        subject(project_id=JOB),
+        Action.SUBMIT_RFI,
+        resource(project_id=OTHER_JOB),
+    )
+    yield evaluate(
+        subject(role=Role.GENERAL_FOREMAN, actor_type=ActorType.GROKBOT),
+        Action.SUBMIT_RFI,
+        resource(),
+    )
+    yield evaluate(subject(role=Role.APPRENTICE), Action.SUBMIT_RFI, resource())
+    yield evaluate(subject(role=Role.JOURNEYMAN), Action.CREATE_RFI_DRAFT, resource())
+    yield evaluate(
+        subject(role=Role.AREA_FOREMAN, area_id=AREA),
+        Action.SET_PRIORITY,
+        resource(area_id=OTHER_AREA),
+    )
+    yield evaluate(
+        subject(role=Role.GENERAL_FOREMAN, area_id=None),
+        Action.SUBMIT_RFI,
+        resource(),
+    )
+    yield evaluate(
+        subject(role=Role.FOREMAN, crew_ids=frozenset({CREW})),
+        Action.SUBMIT_RFI,
+        resource(created_by_id=OTHER, crew_foreman_id=OTHER),
+    )
+    yield evaluate(
+        subject(role=Role.GENERAL_FOREMAN),
+        Action.SUBMIT_RFI,
+        resource(status="answered"),
+    )
+    yield evaluate(
+        subject(role=Role.GENERAL_FOREMAN),
+        Action.SET_PRIORITY,
+        resource(priority="work_stopped", work_stopped=True, status="ball_in_court"),
+        ctx={"priority": "standard", "allow_demote": False},
+    )
+    yield evaluate(subject(role=Role.GENERAL_FOREMAN), Action.WORK_STOP, resource())
+    yield evaluate(
+        subject(role=Role.JOURNEYMAN),
+        Action.PIN_DRAFT,
+        resource(type="sheet"),
+        env=Env(on_site=False),
+    )
+    yield evaluate(
+        subject(role=Role.JOURNEYMAN, area_id=AREA),
+        Action.CREATE_RFI_DRAFT,
+        resource(area_id=OTHER_AREA),
+    )
+    yield evaluate(
+        subject(role=Role.APPRENTICE),
+        Action.HANDLE_MATERIAL,
+        resource(type="ticket", assigned_to_id=None),
+    )
+    yield evaluate(
+        subject(role=Role.APPRENTICE, actor_type=ActorType.GROKBOT),
+        Action.HANDLE_MATERIAL,
+        resource(type="ticket", assigned_to_id=USER),
+    )
+    yield evaluate(
+        subject(role=Role.JOURNEYMAN),
+        Action.HANDLE_MATERIAL,
+        resource(type="ticket", assigned_to_id=USER),
+    )
+    yield evaluate(
+        subject(role=Role.APPRENTICE, user_id=USER),
+        Action.HANDLE_MATERIAL,
+        resource(type="ticket", assigned_to_id=USER),
+    )
+    from abac import Policy, PolicySet, default_deny, same_project
+
+    empty = PolicySet(
+        name="empty",
+        combining=Combining.DENY_OVERRIDES,
+        policies=(
+            Policy(name="same_project", rule=same_project, order=10),
+            Policy(name="default_deny", rule=default_deny, order=99),
+        ),
+    )
+    yield evaluate(
+        subject(project_id=JOB),
+        Action.VIEW_PRINT,
+        resource(project_id=JOB),
+        policy_set=empty,
+    )
 
 
 def test_policy_set_rank_is_fixed():
@@ -348,6 +531,19 @@ def test_deny_audit_line_is_law(caplog):
     assert format_audit_line(log) == line
     reject_audit_line(line)
     assert AUDIT_LINE_KEYS == ("action", "role", "actor", "policy", "project")
+    assert DENY_LOG_FIELDS == ("policy", "action", "role", "actor_type", "project_id", "seq")
+    assert deny_log_fields(log) == {
+        "policy": "chain_owns",
+        "action": "submit_rfi",
+        "role": "foreman",
+        "actor_type": "human",
+        "project_id": str(JOB),
+        "seq": 7,
+    }
+    recorded = next(item for item in caplog.records if item.message == line)
+    assert recorded.seq == 7
+    assert recorded.actor_type == "human"
+    assert recorded.project_id == str(JOB)
     assert line in caplog.messages
     assert "user" not in line
     assert "phone" not in line
@@ -790,3 +986,159 @@ def test_assert_stop_prints_receipt_on_mismatch() -> None:
     assert "expected stop at role_allows, got same_project" in receipt
     assert format_trace(steps) in receipt
     assert decision.policy == "same_project"
+
+
+def test_later_allow_does_not_cancel_a_deny():
+    assert FIELD_POLICY_SET.combining is Combining.DENY_OVERRIDES
+    decision, steps = evaluate(
+        subject(role=Role.JOURNEYMAN, area_id=AREA),
+        Action.CREATE_RFI_DRAFT,
+        resource(area_id=OTHER_AREA),
+    )
+    assert_stop(steps, "area_scope")
+    assert steps[3].effect == "allow"
+    assert decision.allowed is False
+    assert decision.policy == "area_scope"
+
+
+def test_reading_a_deny_last_applicable_is_the_problem():
+    cases = (
+        (
+            evaluate(
+                subject(role=Role.GENERAL_FOREMAN, actor_type=ActorType.GROKBOT),
+                Action.SUBMIT_RFI,
+                resource(),
+            ),
+            "grokbot_lane",
+        ),
+        (
+            evaluate(subject(role=Role.APPRENTICE), Action.SUBMIT_RFI, resource()),
+            "role_allows",
+        ),
+        (
+            evaluate(
+                subject(role=Role.JOURNEYMAN, area_id=AREA),
+                Action.CREATE_RFI_DRAFT,
+                resource(area_id=OTHER_AREA),
+            ),
+            "area_scope",
+        ),
+        (
+            evaluate(
+                subject(role=Role.APPRENTICE),
+                Action.HANDLE_MATERIAL,
+                resource(type="ticket", assigned_to_id=None),
+            ),
+            "assigned_only",
+        ),
+        (
+            evaluate(
+                subject(role=Role.FOREMAN, crew_ids=frozenset({CREW})),
+                Action.SUBMIT_RFI,
+                resource(created_by_id=OTHER, crew_foreman_id=OTHER),
+            ),
+            "chain_owns",
+        ),
+        (
+            evaluate(
+                subject(role=Role.GENERAL_FOREMAN),
+                Action.SUBMIT_RFI,
+                resource(status="answered"),
+            ),
+            "status_guard",
+        ),
+        (
+            evaluate(
+                subject(role=Role.GENERAL_FOREMAN),
+                Action.SET_PRIORITY,
+                resource(
+                    priority="work_stopped", work_stopped=True, status="ball_in_court"
+                ),
+                ctx={"priority": "standard", "allow_demote": False},
+            ),
+            "work_stop_writer",
+        ),
+        (
+            evaluate(
+                subject(project_id=JOB),
+                Action.SUBMIT_RFI,
+                resource(project_id=OTHER_JOB),
+            ),
+            "same_project",
+        ),
+    )
+    for walk, name in cases:
+        decision, steps = walk
+        assert_stop(steps, name)
+        last = [step for step in steps if step.applicable][-1]
+        assert last.policy == name
+        assert last.effect == "deny"
+        after = [step.policy for step in steps if step.seq > last.seq]
+        assert after == []
+        assert name in DENY_READ
+        if name == "area_scope":
+            assert steps[3].policy == "role_allows"
+            assert steps[3].effect == "allow"
+
+
+def test_coverage_report_gold_walks_have_no_dead_rules():
+    names = tuple(policy.name for policy in FIELD_POLICY_SET.ranked())
+    report = field_coverage_report()
+    assert report.combining == "deny_overrides"
+    for walk in gold_evaluates():
+        report.record(walk, policy_names=names)
+    assert report.never_seen() == []
+    assert report.never_deny() == []
+    assert report.dead_rules == []
+    assert set(report.hits) >= set(names)
+    assert report.hits["chain_owns"].stop >= 1
+    assert report.hits["status_guard"].skipped_after_stop >= 1
+
+
+def test_grok_sees_denied_and_policy_only():
+    decision, steps = evaluate(
+        subject(role=Role.GENERAL_FOREMAN, actor_type=ActorType.GROKBOT),
+        Action.SUBMIT_RFI,
+        resource(),
+    )
+    assert_stop(steps, "grokbot_lane")
+    body = grok_denied(decision)
+    assert body == {"denied": True, "policy": "grokbot_lane"}
+    assert set(body) == {"denied", "policy"}
+    assert format_trace(steps) not in str(body)
+    assert "reason" not in body
+    assert "steps" not in body
+
+
+def test_walk_helpers_stay_off_phone_and_grok():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    forbidden = ("format_trace", "stop_policy", "assert_stop")
+    swift = list((root / "ios").rglob("*.swift")) if (root / "ios").exists() else []
+    for path in swift + [
+        root / "backend" / "app" / "main.py",
+        root / "backend" / "app" / "grokbot.py",
+        root / "backend" / "app" / "field_chain.py",
+    ]:
+        text = path.read_text()
+        for name in forbidden:
+            assert name not in text, f"{name} leaked into {path}"
+
+
+def test_three_writes_hang_require_access():
+    import inspect
+
+    from app import main
+
+    assert HUNG_WRITES == frozenset(
+        {"create_rfi_draft", "submit_rfi", "set_priority"}
+    )
+    sources = (
+        inspect.getsource(main.create_rfi_draft),
+        inspect.getsource(main.pe_submit_rfi),
+        inspect.getsource(main.pe_set_priority),
+    )
+    for src in sources:
+        assert "require_access(" in src
+        assert src.index("require_access(") < src.index("except AccessDenied")

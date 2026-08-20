@@ -487,6 +487,11 @@ FIELD_POLICY_SET = PolicySet(
     ),
 )
 FIELD_CHAIN = FIELD_POLICY_SET
+if FIELD_POLICY_SET.combining is not Combining.DENY_OVERRIDES:
+    raise TypeError(
+        "FIELD_POLICY_SET combining is deny_overrides. "
+        "A later ALLOW does not cancel a DENY."
+    )
 
 
 def invoke_rule(
@@ -643,6 +648,14 @@ AUDIT_LINE_FORBIDDEN_KEYS = frozenset(
     }
 )
 AUDIT_ALLOW_ACTIONS = frozenset({Action.SUBMIT_RFI.value, Action.SET_PRIORITY.value})
+HUNG_WRITES = frozenset(
+    {
+        Action.CREATE_RFI_DRAFT.value,
+        Action.SUBMIT_RFI.value,
+        Action.SET_PRIORITY.value,
+    }
+)
+DENY_LOG_FIELDS = ("policy", "action", "role", "actor_type", "project_id", "seq")
 
 
 def format_audit_line(log: EvaluationLog) -> str:
@@ -685,12 +698,40 @@ reject_audit_line(
 )
 
 
+def stop_seq(log: EvaluationLog) -> int | None:
+    for step in log.steps:
+        if step.effect == "deny":
+            return step.seq
+    return None
+
+
+def deny_log_fields(log: EvaluationLog) -> dict[str, object]:
+    """Production deny fields for hung writes. Line stays five keys."""
+    return {
+        "policy": log.decision.policy,
+        "action": log.action,
+        "role": log.role,
+        "actor_type": log.actor_type,
+        "project_id": str(log.resource_project_id),
+        "seq": stop_seq(log),
+    }
+
+
+def grok_denied(decision: Decision) -> dict[str, object]:
+    """Grokbot tool result. Denied + policy name only. No walk."""
+    return {"denied": True, "policy": decision.policy}
+
+
 def emit_audit_line(log: EvaluationLog) -> str:
     line = format_audit_line(log)
     reject_audit_line(line)
-    if log.decision.allowed and log.action not in AUDIT_ALLOW_ACTIONS:
+    if log.decision.allowed:
+        if log.action not in AUDIT_ALLOW_ACTIONS:
+            return line
+        _LOG.info(line)
         return line
-    _LOG.info(line)
+    extras = deny_log_fields(log) if log.action in HUNG_WRITES else {}
+    _LOG.info(line, extra=extras)
     return line
 
 
