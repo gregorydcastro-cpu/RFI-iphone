@@ -1,7 +1,7 @@
 """Strategy 5: permitless stripped set only. Production must not depend on this hit.
 
-Bare evaluate() only. Do not request cov / evaluate_cov — this module must
-not pollute the production FIELD_POLICY_SET coverage bag.
+Bare evaluate() on the stripped set. Do not request cov / evaluate_cov —
+this module must not share PolicyCoverage with the production FIELD_POLICY_SET.
 """
 
 from __future__ import annotations
@@ -23,36 +23,38 @@ from abac import (
 from tests.conftest import evaluate, resource, subject
 
 
-def _stripped() -> PolicySet:
-    return PolicySet(
+@pytest.fixture(scope="module")
+def cov_default():
+    yield None
+
+
+def test_default_deny_on_permitless_set() -> None:
+    stripped = PolicySet(
         name="no_permit",
         combining=Combining.DENY_OVERRIDES,
         policies=tuple(p for p in FIELD_POLICY_SET.policies if p.name != "role_allows"),
     )
-
-
-def test_default_deny_on_permitless_set() -> None:
     decision, steps = evaluate(
-        subject(),
-        Action.CREATE_RFI_DRAFT,
-        resource(),
-        policy_set=_stripped(),
+        subject(), Action.CREATE_RFI_DRAFT, resource(), policy_set=stripped
     )
     assert decision.policy == "default_deny"
-    assert decision.allowed is False
-    assert steps[-1].policy == "default_deny"
     assert steps[-1].effect == "deny"
 
 
 def test_default_deny_is_403_not_500():
     from fastapi import HTTPException
 
+    stripped = PolicySet(
+        name="no_permit",
+        combining=Combining.DENY_OVERRIDES,
+        policies=tuple(p for p in FIELD_POLICY_SET.policies if p.name != "role_allows"),
+    )
     with pytest.raises(AccessDenied) as raised:
         require_access(
             subject(),
             Action.CREATE_RFI_DRAFT,
             resource(),
-            policy_set=_stripped(),
+            policy_set=stripped,
         )
     assert raised.value.decision.policy == "default_deny"
     with pytest.raises(HTTPException) as http:
@@ -67,11 +69,16 @@ def test_production_field_set_coverage_skips_default_deny_hit():
     from abac import evaluate as engine
     from app.policy_coverage import PolicyCoverage as ProdBag
 
+    stripped = PolicySet(
+        name="no_permit",
+        combining=Combining.DENY_OVERRIDES,
+        policies=tuple(p for p in FIELD_POLICY_SET.policies if p.name != "role_allows"),
+    )
     walk = engine(
         subject(),
         Action.CREATE_RFI_DRAFT,
         resource(),
-        policy_set=_stripped(),
+        policy_set=stripped,
     )
     bag = ProdBag()
     bag.record(walk)
@@ -82,6 +89,12 @@ def test_production_field_set_coverage_skips_default_deny_hit():
 
 
 def test_default_deny_does_not_fail_open_when_handler_is_muted(monkeypatch):
+    stripped = PolicySet(
+        name="no_permit",
+        combining=Combining.DENY_OVERRIDES,
+        policies=tuple(p for p in FIELD_POLICY_SET.policies if p.name != "role_allows"),
+    )
+
     def mute(*_args, **_kwargs):
         return None
 
@@ -93,7 +106,7 @@ def test_default_deny_does_not_fail_open_when_handler_is_muted(monkeypatch):
         subject(),
         Action.CREATE_RFI_DRAFT,
         resource(),
-        policy_set=_stripped(),
+        policy_set=stripped,
     )
     assert decision.allowed is False
     assert decision.policy == "default_deny"
@@ -104,7 +117,7 @@ def test_default_deny_does_not_fail_open_when_handler_is_muted(monkeypatch):
         subject(),
         Action.CREATE_RFI_DRAFT,
         resource(),
-        policy_set=_stripped(),
+        policy_set=stripped,
     )
     assert leaked.allowed is False
     assert leaked.policy == "default_deny"

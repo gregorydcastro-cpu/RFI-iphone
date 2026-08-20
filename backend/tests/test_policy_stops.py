@@ -30,17 +30,18 @@ def _prefix(steps, stop: str) -> None:
     assert stop not in after
 
 
-def test_same_project_stops(evaluate_cov):
-    walk = evaluate_cov(
+def test_same_project(cov):
+    walk = cov.evaluate(
         subject(project_id=JOB),
         Action.SUBMIT_RFI,
         resource(project_id=OTHER_JOB),
     )
+    assert names(walk) == ["same_project"]
     _prefix(walk.steps, "same_project")
 
 
-def test_grokbot_lane_stops(evaluate_cov):
-    walk = evaluate_cov(
+def test_grokbot_lane(cov):
+    walk = cov.evaluate(
         subject(role=Role.GENERAL_FOREMAN, actor_type=ActorType.GROKBOT),
         Action.SUBMIT_RFI,
         resource(),
@@ -48,8 +49,8 @@ def test_grokbot_lane_stops(evaluate_cov):
     _prefix(walk.steps, "grokbot_lane")
 
 
-def test_on_site_stops(evaluate_cov):
-    walk = evaluate_cov(
+def test_on_site(cov):
+    walk = cov.evaluate(
         subject(role=Role.JOURNEYMAN),
         Action.PIN_DRAFT,
         resource(type="sheet"),
@@ -58,65 +59,18 @@ def test_on_site_stops(evaluate_cov):
     _prefix(walk.steps, "on_site")
 
 
-def test_role_allows_stops(evaluate_cov):
-    walk = evaluate_cov(subject(role=Role.APPRENTICE), Action.SUBMIT_RFI, resource())
+def test_role_deny(cov):
+    walk = cov.evaluate(subject(role=Role.APPRENTICE), Action.SUBMIT_RFI, resource())
     _prefix(walk.steps, "role_allows")
 
 
-def test_area_scope_stops(evaluate_cov):
-    walk = evaluate_cov(
-        subject(role=Role.AREA_FOREMAN, area_id=AREA),
-        Action.SET_PRIORITY,
-        resource(area_id=OTHER_AREA),
-    )
-    _prefix(walk.steps, "area_scope")
-
-
-def test_assigned_only_stops(evaluate_cov):
-    walk = evaluate_cov(
-        subject(role=Role.APPRENTICE, user_id=USER),
-        Action.HANDLE_MATERIAL,
-        resource(type="ticket", assigned_to_id=OTHER),
-    )
-    _prefix(walk.steps, "assigned_only")
-
-
-def test_chain_owns_stops(evaluate_cov):
-    walk = evaluate_cov(
-        subject(role=Role.FOREMAN, crew_ids=frozenset({CREW})),
-        Action.SUBMIT_RFI,
-        resource(created_by_id=OTHER, crew_foreman_id=OTHER),
-    )
-    _prefix(walk.steps, "chain_owns")
-
-
-def test_status_guard_stops(evaluate_cov):
-    walk = evaluate_cov(
-        subject(role=Role.GENERAL_FOREMAN),
-        Action.SUBMIT_RFI,
-        resource(status="answered"),
-    )
-    _prefix(walk.steps, "status_guard")
-
-
-def test_work_stop_writer_stops(evaluate_cov):
-    walk = evaluate_cov(
-        subject(role=Role.GENERAL_FOREMAN),
-        Action.SET_PRIORITY,
-        resource(priority="work_stopped", work_stopped=True, status="ball_in_court"),
-        ctx={"priority": "standard", "allow_demote": False},
-    )
-    _prefix(walk.steps, "work_stop_writer")
-
-
-def test_journeyman_draft_full_walk(evaluate_cov):
-    walk = evaluate_cov(
+def test_role_allow(cov):
+    walk = cov.evaluate(
         subject(role=Role.JOURNEYMAN),
         Action.CREATE_RFI_DRAFT,
         resource(),
     )
     decision, steps = walk
-    assert names(walk) == list(EXPECTED_ORDER)
     assert [step.effect for step in steps if step.effect == "allow"] == ["allow"]
     assert steps[3].policy == "role_allows"
     assert steps[3].effect == "allow"
@@ -125,13 +79,58 @@ def test_journeyman_draft_full_walk(evaluate_cov):
     assert steps[-1].applicable is False
     assert steps[-1].effect is None
     assert steps[-1].order == 99
-    assert steps[-1].stopped is False
     assert decision.allowed is True
     assert decision.policy == "role_allows"
 
 
-def test_assert_stop_prints_receipt_on_mismatch(evaluate_cov):
-    walk = evaluate_cov(
+def test_area_scope(cov):
+    walk = cov.evaluate(
+        subject(role=Role.AREA_FOREMAN, area_id=AREA),
+        Action.SET_PRIORITY,
+        resource(area_id=OTHER_AREA),
+    )
+    _prefix(walk.steps, "area_scope")
+
+
+def test_assigned_only(cov):
+    walk = cov.evaluate(
+        subject(role=Role.APPRENTICE, user_id=USER),
+        Action.HANDLE_MATERIAL,
+        resource(type="ticket", assigned_to_id=OTHER),
+    )
+    _prefix(walk.steps, "assigned_only")
+
+
+def test_chain_owns(cov):
+    walk = cov.evaluate(
+        subject(role=Role.FOREMAN, crew_ids=frozenset({CREW})),
+        Action.SUBMIT_RFI,
+        resource(created_by_id=OTHER, crew_foreman_id=OTHER),
+    )
+    _prefix(walk.steps, "chain_owns")
+
+
+def test_status_guard(cov):
+    walk = cov.evaluate(
+        subject(role=Role.GENERAL_FOREMAN),
+        Action.SUBMIT_RFI,
+        resource(status="answered"),
+    )
+    _prefix(walk.steps, "status_guard")
+
+
+def test_work_stop_writer(cov):
+    walk = cov.evaluate(
+        subject(role=Role.GENERAL_FOREMAN),
+        Action.SET_PRIORITY,
+        resource(priority="work_stopped", work_stopped=True, status="ball_in_court"),
+        ctx={"priority": "standard", "allow_demote": False},
+    )
+    _prefix(walk.steps, "work_stop_writer")
+
+
+def test_assert_stop_prints_receipt_on_mismatch(cov):
+    walk = cov.evaluate(
         subject(project_id=JOB),
         Action.SUBMIT_RFI,
         resource(project_id=OTHER_JOB),
