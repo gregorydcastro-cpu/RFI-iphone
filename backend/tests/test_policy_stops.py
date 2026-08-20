@@ -19,8 +19,11 @@ from abac import (
     Role,
     Subject,
     SUBJECT_FIELD_ORDER,
+    TRACE_FIELD_ORDER,
     evaluate,
+    raise_http,
     reject_env_field_order,
+    reject_evaluation_trace_shape,
     reject_frozen_env_now,
     reject_subject_actor_type,
     reject_subject_crew_ids,
@@ -207,6 +210,26 @@ def test_subject_actor_type_is_required():
         reject_subject_actor_type(SoftHuman)
 
 
+def test_evaluation_trace_shape_is_law():
+    from dataclasses import fields
+
+    reject_evaluation_trace_shape(EvaluationTrace)
+    assert tuple(item.name for item in fields(EvaluationTrace)) == TRACE_FIELD_ORDER
+    log = evaluate(
+        subject(project_id=JOB),
+        Action.SUBMIT_RFI,
+        resource(project_id=OTHER_JOB),
+    )
+    step = first_stop(log)
+    assert step.seq == 1
+    assert step.policy == "same_project"
+    assert step.order == 10
+    assert step.applicable is True
+    assert step.effect == "deny"
+    assert step.reason == "not on this job"
+    assert step.stopped is True
+
+
 def test_wrong_job_stops_at_same_project(cov: PolicyCoverage):
     log = cov.record(evaluate(
         subject(project_id=JOB),
@@ -254,7 +277,12 @@ def test_journeyman_draft_allow_walks_full_set(cov: PolicyCoverage):
     ]
     assert log.traces[-1].policy == "default_deny"
     assert log.traces[-1].applicable is False
-    allows = [step for step in log.traces if step.decision and step.decision.allowed]
+    allows = [step for step in log.traces if step.effect == "allow"]
+    assert [step.seq for step in log.traces] == list(range(1, 11))
+    assert [step.order for step in log.traces] == [10, 20, 30, 40, 50, 60, 70, 80, 90, 99]
+    assert log.traces[-1].effect is None
+    assert log.traces[-1].reason is None
+    assert log.traces[-1].stopped is False
     assert len(allows) == 1
     assert allows[0].policy == "role_allows"
     assert log.decision.allowed is True
@@ -270,7 +298,7 @@ def test_area_foreman_other_area_stops_after_role(cov: PolicyCoverage):
     assert names(log) == list(EXPECTED_ORDER[:5])
     assert first_stop(log).policy == "area_scope"
     assert log.traces[3].policy == "role_allows"
-    assert log.traces[3].decision.effect is Effect.ALLOW
+    assert log.traces[3].effect == "allow"
 
 
 def test_gf_skips_area_and_still_walks(cov: PolicyCoverage):
@@ -312,7 +340,7 @@ def test_work_stopped_demote_without_flag(cov: PolicyCoverage):
     ))
     assert names(log) == list(EXPECTED_ORDER[:9])
     assert first_stop(log).policy == "work_stop_writer"
-    assert log.traces[-1].decision.effect is Effect.DENY
+    assert log.traces[-1].effect == "deny"
     assert log.decision.policy == "work_stop_writer"
     assert "default_deny" not in names(log)
 
@@ -321,17 +349,37 @@ def test_work_stop_action_always_denied_at_writer(cov: PolicyCoverage):
     log = cov.record(evaluate(subject(role=Role.GENERAL_FOREMAN), Action.WORK_STOP, resource()))
     assert names(log) == list(EXPECTED_ORDER[:9])
     assert first_stop(log).policy == "work_stop_writer"
-    assert first_stop(log).decision.reason == "use set_priority; do not flip work_stopped"
+    assert first_stop(log).reason == "use set_priority; do not flip work_stopped"
     assert "default_deny" not in names(log)
 
 
 def test_require_access_raises_with_trace_stop(cov: PolicyCoverage):
+    from fastapi import HTTPException
+
+    audit: list = []
     with pytest.raises(AccessDenied) as raised:
-        require_access(subject(role=Role.APPRENTICE), Action.SUBMIT_RFI, resource())
+        require_access(
+            subject(role=Role.APPRENTICE),
+            Action.SUBMIT_RFI,
+            resource(),
+            audit=audit,
+        )
     cov.record(raised.value)
     assert raised.value.decision.policy == "role_allows"
     assert first_stop(raised.value).policy == "role_allows"
     assert names(raised.value) == list(EXPECTED_ORDER[:4])
+    assert raised.value.trace == tuple(audit)
+    assert first_stop(raised.value).effect == "deny"
+    assert first_stop(raised.value).stopped is True
+    with pytest.raises(HTTPException) as http:
+        raise_http(raised.value)
+    assert http.value.status_code == 403
+    assert http.value.detail == {
+        "policy": "role_allows",
+        "reason": "apprentice cannot submit_rfi",
+    }
+    assert "trace" not in http.value.detail
+    assert "seq" not in http.value.detail
 
 
 def test_off_site_pin_stops_before_role(cov: PolicyCoverage):
@@ -368,9 +416,9 @@ def test_journeyman_create_other_area_later_deny_wins(cov: PolicyCoverage):
     assert first_stop(log).policy == "area_scope"
     assert "assigned_only" not in names(log)
     assert log.traces[3].policy == "role_allows"
-    assert log.traces[3].decision.effect is Effect.ALLOW
-    assert log.traces[3].decision.reason == "journeyman may create_rfi_draft"
-    assert first_stop(log).decision.reason == "outside your area"
+    assert log.traces[3].effect == "allow"
+    assert log.traces[3].reason == "journeyman may create_rfi_draft"
+    assert first_stop(log).reason == "outside your area"
 
 
 def test_apprentice_handle_unassigned_stops_at_assigned_only(cov: PolicyCoverage):
@@ -381,10 +429,10 @@ def test_apprentice_handle_unassigned_stops_at_assigned_only(cov: PolicyCoverage
     ))
     assert names(log) == list(EXPECTED_ORDER[:6])
     assert first_stop(log).policy == "assigned_only"
-    assert first_stop(log).decision.reason == "not your ticket"
+    assert first_stop(log).reason == "not your ticket"
     assert log.traces[3].policy == "role_allows"
-    assert log.traces[3].decision.effect is Effect.ALLOW
-    assert log.traces[3].decision.reason == "apprentice may handle_material"
+    assert log.traces[3].effect == "allow"
+    assert log.traces[3].reason == "apprentice may handle_material"
 
 
 def test_apprentice_handle_other_ticket_stops_at_assigned_only(cov: PolicyCoverage):
@@ -395,7 +443,7 @@ def test_apprentice_handle_other_ticket_stops_at_assigned_only(cov: PolicyCovera
     ))
     assert names(log) == list(EXPECTED_ORDER[:6])
     assert first_stop(log).policy == "assigned_only"
-    assert first_stop(log).decision.reason == "not your ticket"
+    assert first_stop(log).reason == "not your ticket"
     assert "chain_owns" not in names(log)
 
 
@@ -419,7 +467,7 @@ def test_journeyman_handle_stops_at_role(cov: PolicyCoverage):
     ))
     assert names(log) == list(EXPECTED_ORDER[:4])
     assert first_stop(log).policy == "role_allows"
-    assert first_stop(log).decision.reason == "journeyman cannot handle_material"
+    assert first_stop(log).reason == "journeyman cannot handle_material"
     assert "assigned_only" not in names(log)
 
 
@@ -432,7 +480,9 @@ def test_apprentice_handle_own_ticket_allows(cov: PolicyCoverage):
     assert names(log) == list(EXPECTED_ORDER)
     assigned = next(step for step in log.traces if step.policy == "assigned_only")
     assert assigned.applicable is False
-    assert assigned.decision is None
+    assert assigned.effect is None
+    assert assigned.reason is None
+    assert assigned.stopped is False
     assert log.decision.allowed is True
     assert log.decision.policy == "role_allows"
     assert log.decision.reason == "apprentice may handle_material"

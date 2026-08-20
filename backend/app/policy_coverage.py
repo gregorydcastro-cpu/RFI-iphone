@@ -106,17 +106,12 @@ class PolicyCoverage:
             if step.stopped:
                 self.stops.add(step.policy)
                 self.stop_counts[step.policy] += 1
-            if not step.applicable:
+            if not step.applicable or step.effect is None:
                 self.na.add(step.policy)
                 self.effects[step.policy].add("n/a")
                 self.hit_counts[step.policy]["n/a"] += 1
                 continue
-            if step.decision is None:
-                self.na.add(step.policy)
-                self.effects[step.policy].add("n/a")
-                self.hit_counts[step.policy]["n/a"] += 1
-                continue
-            if step.decision.allowed:
+            if step.effect == "allow":
                 self.allows.add(step.policy)
                 self.effects[step.policy].add("allow")
                 self.hit_counts[step.policy]["allow"] += 1

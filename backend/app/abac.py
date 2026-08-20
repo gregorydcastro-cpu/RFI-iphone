@@ -10,6 +10,7 @@ from typing import Any, Callable, Literal
 from uuid import UUID
 
 SlaUnit = Literal["business_days", "calendar_days"]
+TraceEffect = Literal["allow", "deny"]
 
 
 class Role(str, Enum):
@@ -219,12 +220,38 @@ class Decision:
         return self.effect is Effect.ALLOW
 
 
+TRACE_FIELD_ORDER = (
+    "seq",
+    "policy",
+    "order",
+    "applicable",
+    "effect",
+    "reason",
+    "stopped",
+)
+
+
 @dataclass(frozen=True)
 class EvaluationTrace:
+    seq: int
     policy: str
+    order: int
     applicable: bool
-    decision: Decision | None = None
-    stopped: bool | None = False
+    effect: TraceEffect | None
+    reason: str | None
+    stopped: bool
+
+
+def reject_evaluation_trace_shape(cls: type) -> None:
+    names = tuple(item.name for item in fields(cls))
+    if names != TRACE_FIELD_ORDER:
+        raise TypeError(f"EvaluationTrace field order is law: {TRACE_FIELD_ORDER}")
+    params = getattr(cls, "__dataclass_params__", None)
+    if params is None or not params.frozen:
+        raise TypeError("EvaluationTrace must be frozen")
+
+
+reject_evaluation_trace_shape(EvaluationTrace)
 
 
 @dataclass(frozen=True)
@@ -470,6 +497,31 @@ def _log(
     )
 
 
+def _trace_effect(decision: Decision | None) -> TraceEffect | None:
+    if decision is None:
+        return None
+    return "allow" if decision.allowed else "deny"
+
+
+def _step(
+    seq: int,
+    policy: Policy,
+    *,
+    applicable: bool,
+    decision: Decision | None,
+    stopped: bool,
+) -> EvaluationTrace:
+    return EvaluationTrace(
+        seq=seq,
+        policy=policy.name,
+        order=policy.order,
+        applicable=applicable,
+        effect=_trace_effect(decision),
+        reason=None if decision is None else decision.reason,
+        stopped=stopped,
+    )
+
+
 def evaluate(
     subject: Subject,
     action: Action,
@@ -483,22 +535,43 @@ def evaluate(
     env = env or Env()
     traces: list[EvaluationTrace] = []
     allow: Decision | None = None
+    seq = 0
     for policy in policy_set.ranked():
+        seq += 1
         if policy.name == "default_deny" and allow is not None:
-            traces.append(EvaluationTrace(policy.name, False, None, None))
+            traces.append(
+                _step(seq, policy, applicable=False, decision=None, stopped=False)
+            )
             continue
         result = invoke_rule(policy.rule, subject, action, resource, env, ctx)
         if result is None:
-            traces.append(EvaluationTrace(policy.name, False, None, None))
+            traces.append(
+                _step(seq, policy, applicable=False, decision=None, stopped=False)
+            )
             continue
         if result.effect is Effect.DENY:
-            traces.append(EvaluationTrace(policy.name, True, result, True))
+            traces.append(
+                _step(seq, policy, applicable=True, decision=result, stopped=True)
+            )
             return _log(subject, action, resource, traces, result)
         allow = result
-        traces.append(EvaluationTrace(policy.name, True, result, False))
+        traces.append(
+            _step(seq, policy, applicable=True, decision=result, stopped=False)
+        )
     if allow is None:
         decision = _deny("default_deny", "denied")
-        traces.append(EvaluationTrace("default_deny", True, decision, True))
+        seq += 1
+        traces.append(
+            EvaluationTrace(
+                seq=seq,
+                policy="default_deny",
+                order=99,
+                applicable=True,
+                effect="deny",
+                reason="denied",
+                stopped=True,
+            )
+        )
         return _log(subject, action, resource, traces, decision)
     return _log(subject, action, resource, traces, allow)
 
