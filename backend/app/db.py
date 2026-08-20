@@ -39,7 +39,7 @@ def configure(url: str) -> None:
 
 
 def apply_rfis_work_stopped_law(bind=None) -> None:
-    """Add work_stopped + index. CHECK is NOT VALID — do not VALIDATE here."""
+    """Expand work_stopped + indexes. CHECK is NOT VALID — do not VALIDATE here."""
     bind = bind or engine
     insp = inspect(bind)
     if "rfis" not in insp.get_table_names():
@@ -59,6 +59,14 @@ def apply_rfis_work_stopped_law(bind=None) -> None:
                 text(
                     "CREATE INDEX IF NOT EXISTS rfis_project_status_idx "
                     "ON rfis (project_id, status)"
+                )
+            )
+        if "uq_rfis_project_rfi_number" not in indexes:
+            conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_rfis_project_rfi_number "
+                    "ON rfis (project_id, rfi_number) "
+                    "WHERE rfi_number IS NOT NULL"
                 )
             )
         if bind.dialect.name == "postgresql":

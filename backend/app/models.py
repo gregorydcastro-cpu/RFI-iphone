@@ -18,6 +18,7 @@ from sqlalchemy import (
     UniqueConstraint,
     false,
     func,
+    text,
 )
 from sqlalchemy.dialects.sqlite import JSON
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -320,6 +321,14 @@ class RFI(Base):
     __table_args__ = (
         UniqueConstraint("project_id", "rfi_display", name="uq_project_rfi_display"),
         Index("rfis_project_status_idx", "project_id", "status"),
+        Index(
+            "uq_rfis_project_rfi_number",
+            "project_id",
+            "rfi_number",
+            unique=True,
+            sqlite_where=text("rfi_number IS NOT NULL"),
+            postgresql_where=text("rfi_number IS NOT NULL"),
+        ),
         CheckConstraint(
             "(work_stopped AND priority = 'work_stopped') "
             "OR (NOT work_stopped AND priority IS DISTINCT FROM 'work_stopped')",
