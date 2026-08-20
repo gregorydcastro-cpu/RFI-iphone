@@ -465,10 +465,71 @@ def start_impact_review(
     )
 
 
-def draft_change_order(db: Session, rfi_id: str, summary: str) -> DraftChangeOrder:
+MATERIAL_UOMS = frozenset({"EA", "LF", "SF", "BOX", "SET"})
+
+
+def _require_official_response(rfi: RFI, action: str) -> None:
+    if not (rfi.official_response or "").strip():
+        raise PEError(f"Official response is required before {action}.")
+
+
+def normalize_material_lines(lines: list | None, summary: str | None) -> list[dict]:
+    rows: list[dict] = []
+    for raw in lines or []:
+        if not isinstance(raw, dict):
+            raise PEError("Each material line must be an object.")
+        description = str(raw.get("description") or "").strip()
+        uom = str(raw.get("uom") or "").strip().upper()
+        try:
+            qty = float(raw.get("qty"))
+        except (TypeError, ValueError) as exc:
+            raise PEError("Material qty must be a number greater than 0.") from exc
+        if not description:
+            raise PEError("Each material line needs a description.")
+        if qty <= 0:
+            raise PEError("Material qty must be greater than 0.")
+        if uom not in MATERIAL_UOMS:
+            raise PEError(f"Material uom must be one of {', '.join(sorted(MATERIAL_UOMS))}.")
+        rows.append({"description": description, "qty": qty, "uom": uom})
+    if not rows:
+        text = (summary or "").strip()
+        if not text:
+            raise PEError("At least one material line is required.")
+        rows = [{"description": text, "qty": 1.0, "uom": "EA"}]
+    return rows
+
+
+def draft_change_order(
+    db: Session,
+    rfi_id: str,
+    summary: str,
+    *,
+    title: str | None = None,
+    cost_amount: float | None = None,
+    schedule_days: int | None = None,
+    notes: str | None = None,
+    source: str = "pe_helper",
+    actor: str = "pe",
+) -> DraftChangeOrder:
     rfi = _rfi(db, rfi_id)
     _require(rfi, {"impact_review", "answered"}, "draft a change order")
-    row = DraftChangeOrder(rfi_id=rfi.id, status="draft", summary=summary)
+    _require_official_response(rfi, "drafting a change order")
+    heading = (title or summary or "").strip()
+    if not heading:
+        raise PEError("Change order title is required.")
+    if cost_amount is not None and cost_amount < 0:
+        raise PEError("cost_amount cannot be negative.")
+    if schedule_days is not None and schedule_days < 0:
+        raise PEError("schedule_days cannot be negative.")
+    row = DraftChangeOrder(
+        rfi_id=rfi.id,
+        status="draft",
+        title=heading,
+        summary=(summary or heading).strip(),
+        cost_amount=cost_amount,
+        schedule_days=schedule_days,
+        notes=(notes or "").strip() or None,
+    )
     db.add(row)
     db.add(
         RFIEvent(
@@ -476,17 +537,39 @@ def draft_change_order(db: Session, rfi_id: str, summary: str) -> DraftChangeOrd
             event_type="follow_on_draft",
             from_status=rfi.status,
             to_status=rfi.status,
-            payload={"actor": "pe", "kind": "change_order", "status": "draft"},
+            payload={
+                "actor": actor,
+                "source": source,
+                "kind": "change_order",
+                "status": "draft",
+                "title": heading,
+            },
         )
     )
     db.commit()
     return row
 
 
-def draft_material_order(db: Session, rfi_id: str, summary: str) -> DraftMaterialOrder:
+def draft_material_order(
+    db: Session,
+    rfi_id: str,
+    summary: str | None = None,
+    *,
+    lines: list | None = None,
+    source: str = "pe_helper",
+    actor: str = "pe",
+) -> DraftMaterialOrder:
     rfi = _rfi(db, rfi_id)
     _require(rfi, {"impact_review", "answered"}, "draft a material order")
-    row = DraftMaterialOrder(rfi_id=rfi.id, status="draft", summary=summary)
+    _require_official_response(rfi, "drafting a material order")
+    normalized = normalize_material_lines(lines, summary)
+    rollup = (summary or "").strip() or f"{len(normalized)} material line(s). Draft only."
+    row = DraftMaterialOrder(
+        rfi_id=rfi.id,
+        status="draft",
+        summary=rollup,
+        lines=normalized,
+    )
     db.add(row)
     db.add(
         RFIEvent(
@@ -494,24 +577,48 @@ def draft_material_order(db: Session, rfi_id: str, summary: str) -> DraftMateria
             event_type="follow_on_draft",
             from_status=rfi.status,
             to_status=rfi.status,
-            payload={"actor": "pe", "kind": "material_order", "status": "draft"},
+            payload={
+                "actor": actor,
+                "source": source,
+                "kind": "material_order",
+                "status": "draft",
+                "line_count": len(normalized),
+            },
         )
     )
     db.commit()
     return row
 
 
-def close_rfi(db: Session, rfi_id: str, official_response: str | None = None) -> PEResult:
+def close_rfi(
+    db: Session,
+    rfi_id: str,
+    official_response: str | None = None,
+    *,
+    source: str = "pe_helper",
+    actor: str = "pe",
+) -> PEResult:
     rfi = _rfi(db, rfi_id)
+    if rfi.status in {"draft", "void"}:
+        raise PEError(f"Cannot close from status {rfi.status}.")
     _require(rfi, {"impact_review", "answered"}, "close")
-    if official_response:
-        text_body = official_response.strip()
-        if ANSWER_DISCLAIMER.lower() not in text_body.lower():
-            text_body = f"{text_body} {ANSWER_DISCLAIMER}"
-        rfi.official_response = text_body
-    if work_stopped(rfi.priority):
-        rfi.priority = "standard"
+    text_body = (official_response or rfi.official_response or "").strip()
+    if not text_body:
+        raise PEError("Official response is required to close.")
+    if ANSWER_DISCLAIMER.lower() not in text_body.lower():
+        text_body = f"{text_body} {ANSWER_DISCLAIMER}"
+    rfi.official_response = text_body
+    rfi.priority = "standard"
     rfi.closed_at = utc_now()
-    _event(db, rfi, "closed")
+    _event(db, rfi, "closed", actor=actor, source=source, action="close")
     db.commit()
-    return PEResult(True, rfi.id, rfi.status, rfi.rfi_display, message="Closed.")
+    return PEResult(
+        True,
+        rfi.id,
+        rfi.status,
+        rfi.rfi_display,
+        message="Closed.",
+        assigned=rfi.assigned,
+        priority=rfi.priority,
+        work_stopped=False,
+    )

@@ -109,6 +109,18 @@ struct APIClient {
         )
     }
 
+    func gcDraftChangeOrder(rfiID: String, body: GCDraftChangeOrderBody) async throws -> GCDraftResultDTO {
+        try await post("/gc/rfis/\(rfiID)/draft_change_order", body: body, headers: Self.gcHeaders)
+    }
+
+    func gcDraftMaterialOrder(rfiID: String, body: GCDraftMaterialOrderBody) async throws -> GCDraftResultDTO {
+        try await post("/gc/rfis/\(rfiID)/draft_material_order", body: body, headers: Self.gcHeaders)
+    }
+
+    func gcClose(rfiID: String) async throws -> DesignActionResultDTO {
+        try await post("/gc/rfis/\(rfiID)/close", body: EmptyBody(), headers: Self.gcHeaders)
+    }
+
     func rfiGraph(projectID: String? = nil) async throws -> GraphResponseDTO {
         var items: [URLQueryItem] = []
         if let projectID, !projectID.isEmpty {

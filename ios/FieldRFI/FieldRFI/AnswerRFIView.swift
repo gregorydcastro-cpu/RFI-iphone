@@ -163,7 +163,7 @@ struct AnswerRFIView: View {
                 .tracking(0.8)
                 .foregroundStyle(FieldTheme.muted)
             if rfi.status == "impact_review" {
-                Text("Impact review started. Draft CO / material order stay off this screen. Close is not available here.")
+                Text("Impact review started. Open this row from RFI Graph to draft a CO/PO or close.")
                     .font(.footnote)
                     .foregroundStyle(FieldTheme.muted)
             } else {

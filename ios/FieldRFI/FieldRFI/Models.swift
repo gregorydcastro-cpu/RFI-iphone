@@ -118,6 +118,9 @@ struct RFIDTO: Codable, Identifiable {
     let submitted_at: String?
     let official_response: String?
     let responded_at: String?
+    let closed_at: String?
+    let draft_change_orders: [DraftChangeOrderDTO]?
+    let draft_material_orders: [DraftMaterialOrderDTO]?
     let pins: [RFIPinDetailDTO]?
     let refs: [RFIRefDetailDTO]?
     let missing_for_submit: [String]?
@@ -178,6 +181,55 @@ struct PESubmitBody: Codable {
     let assigned_to_company_id: String?
     let assignee: String?
     let comment: String?
+}
+
+struct DraftChangeOrderDTO: Codable, Identifiable {
+    let id: String
+    let status: String
+    let title: String?
+    let summary: String?
+    let cost_amount: Double?
+    let schedule_days: Int?
+    let notes: String?
+}
+
+struct DraftMaterialLineDTO: Codable {
+    let description: String
+    let qty: Double
+    let uom: String
+}
+
+struct DraftMaterialOrderDTO: Codable, Identifiable {
+    let id: String
+    let status: String
+    let summary: String?
+    let lines: [DraftMaterialLineDTO]?
+    let line_count: Int?
+}
+
+struct GCDraftChangeOrderBody: Codable {
+    let title: String
+    let cost_amount: Double?
+    let schedule_days: Int?
+    let notes: String?
+}
+
+struct GCDraftMaterialOrderBody: Codable {
+    let lines: [DraftMaterialLineDTO]
+}
+
+struct GCDraftResultDTO: Codable {
+    let ok: Bool
+    let rfi_id: String
+    let status: String
+    let rfi_display: String?
+    let draft_id: String
+    let draft_status: String
+    let kind: String
+    let title: String?
+    let line_count: Int?
+    let message: String
+    let disclaimer: String
 }
 
 struct DesignAnswerBody: Codable {

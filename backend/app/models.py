@@ -287,7 +287,11 @@ class DraftChangeOrder(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     rfi_id: Mapped[str] = mapped_column(String(36), ForeignKey("rfis.id"), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
+    title: Mapped[Optional[str]] = mapped_column(String(240), nullable=True)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
+    cost_amount: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    schedule_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
@@ -298,6 +302,7 @@ class DraftMaterialOrder(Base):
     rfi_id: Mapped[str] = mapped_column(String(36), ForeignKey("rfis.id"), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
     summary: Mapped[str] = mapped_column(Text, nullable=False)
+    lines: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

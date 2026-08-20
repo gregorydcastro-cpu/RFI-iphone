@@ -47,6 +47,9 @@ from app.pe import (
     approve_internal_review,
     last_event_is_internal_approve,
     missing_for_submit,
+    close_rfi,
+    draft_change_order,
+    draft_material_order,
     record_official_response,
     request_clarification,
     start_impact_review,
@@ -65,6 +68,10 @@ from app.schemas import (
     DesignAnswerBody,
     DesignClarifyBody,
     DraftResult,
+    GCCloseBody,
+    GCDraftChangeOrderBody,
+    GCDraftMaterialOrderBody,
+    GCDraftResult,
     GraphResponse,
     GraphRow,
     PEApproveBody,
@@ -718,11 +725,25 @@ def _rfi_out(rfi: RFI, db: Session) -> RFIOut:
         missing_for_submit=_missing_for_submit(rfi, db),
         last_internal_review=last_event_is_internal_approve(db, rfi.id),
         draft_change_orders=[
-            {"id": row.id, "status": row.status, "summary": row.summary}
+            {
+                "id": row.id,
+                "status": row.status,
+                "title": row.title,
+                "summary": row.summary,
+                "cost_amount": row.cost_amount,
+                "schedule_days": row.schedule_days,
+                "notes": row.notes,
+            }
             for row in db.scalars(select(DraftChangeOrder).where(DraftChangeOrder.rfi_id == rfi.id))
         ],
         draft_material_orders=[
-            {"id": row.id, "status": row.status, "summary": row.summary}
+            {
+                "id": row.id,
+                "status": row.status,
+                "summary": row.summary,
+                "lines": row.lines or [],
+                "line_count": len(row.lines or []),
+            }
             for row in db.scalars(
                 select(DraftMaterialOrder).where(DraftMaterialOrder.rfi_id == rfi.id)
             )
@@ -884,6 +905,88 @@ def gc_start_impact_review(
         result = start_impact_review(
             db, rfi_id, source="gc_http", actor="gc"
         )
+    except PEError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return _action_result(result, db)
+
+
+@app.post("/gc/rfis/{rfi_id}/draft_change_order", response_model=GCDraftResult)
+def gc_draft_change_order(
+    rfi_id: str,
+    body: GCDraftChangeOrderBody,
+    _: str = Depends(require_gc),
+    db: Session = Depends(get_db),
+) -> GCDraftResult:
+    try:
+        row = draft_change_order(
+            db,
+            rfi_id,
+            body.title,
+            title=body.title,
+            cost_amount=body.cost_amount,
+            schedule_days=body.schedule_days,
+            notes=body.notes,
+            source="gc_http",
+            actor="gc",
+        )
+    except PEError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    rfi = db.get(RFI, rfi_id)
+    return GCDraftResult(
+        ok=True,
+        rfi_id=rfi_id,
+        status=rfi.status if rfi else "",
+        rfi_display=rfi.rfi_display if rfi else None,
+        draft_id=row.id,
+        draft_status=row.status,
+        kind="change_order",
+        title=row.title,
+        message="Draft change order saved. Not approved. Does not authorize work.",
+        disclaimer=ANSWER_DISCLAIMER,
+    )
+
+
+@app.post("/gc/rfis/{rfi_id}/draft_material_order", response_model=GCDraftResult)
+def gc_draft_material_order(
+    rfi_id: str,
+    body: GCDraftMaterialOrderBody,
+    _: str = Depends(require_gc),
+    db: Session = Depends(get_db),
+) -> GCDraftResult:
+    try:
+        row = draft_material_order(
+            db,
+            rfi_id,
+            lines=[line.model_dump() for line in body.lines],
+            source="gc_http",
+            actor="gc",
+        )
+    except PEError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    rfi = db.get(RFI, rfi_id)
+    return GCDraftResult(
+        ok=True,
+        rfi_id=rfi_id,
+        status=rfi.status if rfi else "",
+        rfi_display=rfi.rfi_display if rfi else None,
+        draft_id=row.id,
+        draft_status=row.status,
+        kind="material_order",
+        line_count=len(row.lines or []),
+        message="Draft material order saved. Not ordered.",
+        disclaimer=ANSWER_DISCLAIMER,
+    )
+
+
+@app.post("/gc/rfis/{rfi_id}/close", response_model=DesignActionResult)
+def gc_close_rfi(
+    rfi_id: str,
+    body: GCCloseBody = GCCloseBody(),
+    _: str = Depends(require_gc),
+    db: Session = Depends(get_db),
+) -> DesignActionResult:
+    try:
+        result = close_rfi(db, rfi_id, source="gc_http", actor="gc")
     except PEError as exc:
         raise HTTPException(422, str(exc)) from exc
     return _action_result(result, db)

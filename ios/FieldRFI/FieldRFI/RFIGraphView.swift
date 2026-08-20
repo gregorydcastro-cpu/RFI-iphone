@@ -130,9 +130,16 @@ struct RFIGraphView: View {
                     graphRow(row, draft: draft)
                 }
                 .buttonStyle(.plain)
-            } else if ["submitted", "ball_in_court", "answered"].contains(row.status) {
+            } else if ["submitted", "ball_in_court"].contains(row.status) {
                 NavigationLink {
                     AnswerRFIView(rfiID: row.id)
+                } label: {
+                    graphRow(row, draft: draft)
+                }
+                .buttonStyle(.plain)
+            } else if ["answered", "impact_review"].contains(row.status) {
+                NavigationLink {
+                    GCImpactView(rfiID: row.id)
                 } label: {
                     graphRow(row, draft: draft)
                 }
@@ -167,7 +174,7 @@ struct RFIGraphView: View {
                         .foregroundStyle(FieldTheme.orange)
                         .clipShape(Capsule())
                 }
-                if row.status == "answered" {
+                if ["answered", "impact_review"].contains(row.status) {
                     Text("Impact")
                         .font(.caption2.weight(.bold))
                         .padding(.horizontal, 6)

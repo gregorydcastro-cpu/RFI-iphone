@@ -345,6 +345,71 @@ class DesignClarifyBody(BaseModel):
         return value.strip()
 
 
+class GCDraftChangeOrderBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    cost_amount: Optional[float] = None
+    schedule_days: Optional[int] = None
+    notes: Optional[str] = None
+
+    @field_validator("title")
+    @classmethod
+    def strip_title(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("notes")
+    @classmethod
+    def strip_notes(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return value.strip() or None
+
+
+class GCMaterialLine(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    description: str
+    qty: float = Field(gt=0)
+    uom: str
+
+    @field_validator("description")
+    @classmethod
+    def strip_description(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("uom")
+    @classmethod
+    def upper_uom(cls, value: str) -> str:
+        return value.strip().upper()
+
+
+class GCDraftMaterialOrderBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    lines: list[GCMaterialLine] = Field(min_length=1)
+
+
+class GCCloseBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    comment: Optional[str] = None
+
+
+class GCDraftResult(BaseModel):
+    ok: bool
+    rfi_id: str
+    status: str
+    rfi_display: Optional[str]
+    draft_id: str
+    draft_status: str = "draft"
+    kind: str
+    title: Optional[str] = None
+    line_count: Optional[int] = None
+    message: str
+    disclaimer: str
+
+
 class DesignActionResult(BaseModel):
     ok: bool
     rfi_id: str
