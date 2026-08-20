@@ -302,13 +302,37 @@ def pytest_xdist_make_scheduler(config, log):
     return LoadFileScheduling(config, log)
 
 
+@pytest.hookimpl(hookwrapper=True, tryfirst=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    setattr(item, f"rep_{report.when}", report)
+
+
+def _module_had_skips(request: pytest.FixtureRequest) -> bool:
+    """Skipped outcomes on this module’s items only. Not the whole session."""
+    module = request.module
+    for item in getattr(request.session, "items", ()):
+        if getattr(item, "module", None) is not module:
+            continue
+        for when in ("setup", "call", "teardown"):
+            report = getattr(item, f"rep_{when}", None)
+            if report is not None and report.skipped:
+                return True
+    return False
+
+
 @pytest.fixture(scope="module")
 def cov(request: pytest.FixtureRequest) -> PolicyCoverage:
     """One bag per test module. Teardown fails if a rule never applied."""
     coverage = PolicyCoverage()
+    failed_before = request.session.testsfailed
     yield coverage
-    if request.session.testsfailed:
+    failed_here = request.session.testsfailed - failed_before
+    if failed_here:
         return
+    if coverage.report().never_applicable() and _module_had_skips(request):
+        pytest.skip("coverage incomplete because tests were skipped")
     bags = getattr(request.config, "_rfi_cov_bags", None)
     if bags is None:
         request.config._rfi_cov_bags = []

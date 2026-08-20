@@ -184,6 +184,25 @@ class PolicyCoverage:
 
         return self.record(walk_evaluate(*args, **kwargs))
 
+    def report(self) -> "PolicyCoverageReport":
+        return PolicyCoverageReport(self)
+
+
+class PolicyCoverageReport:
+    """Read-only view used by module teardown. Not the JSON dump."""
+
+    def __init__(self, coverage: PolicyCoverage) -> None:
+        self._coverage = coverage
+
+    def never_applicable(self) -> list[str]:
+        return [
+            name
+            for name in FIELD_LANES
+            if self._coverage.hit_counts[name].get("allow", 0)
+            + self._coverage.hit_counts[name].get("deny", 0)
+            == 0
+        ]
+
 
 def _hits_to_dict(coverage: PolicyCoverage, worker: str | None = None) -> dict[str, Any]:
     return PolicyCoverageData(

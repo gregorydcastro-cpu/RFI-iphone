@@ -119,6 +119,34 @@ def test_default_deny_stop_is_off_the_production_bag():
     assert_policy_coverage(stray)
 
 
+def test_report_never_applicable_lists_unapplied_lanes():
+    empty = PolicyCoverage()
+    assert set(empty.report().never_applicable()) == set(FIELD_LANES)
+    coverage = _green_bag()
+    assert coverage.report().never_applicable() == []
+    coverage.hit_counts["assigned_only"]["deny"] = 0
+    assert "assigned_only" in coverage.report().never_applicable()
+
+
+def test_module_had_skips_looks_at_this_module_only():
+    from types import SimpleNamespace
+
+    from tests.conftest import _module_had_skips
+
+    this = object()
+    other = object()
+    other_skip = SimpleNamespace(module=other, rep_call=SimpleNamespace(skipped=True))
+    here_pass = SimpleNamespace(module=this, rep_call=SimpleNamespace(skipped=False))
+    request = SimpleNamespace(
+        module=this,
+        session=SimpleNamespace(items=[other_skip, here_pass]),
+    )
+    assert _module_had_skips(request) is False
+    here_skip = SimpleNamespace(module=this, rep_call=SimpleNamespace(skipped=True))
+    request.session.items.append(here_skip)
+    assert _module_had_skips(request) is True
+
+
 def test_line_coverage_is_not_assigned_only_denied():
     coverage = _green_bag()
     coverage.stops.discard("assigned_only")
