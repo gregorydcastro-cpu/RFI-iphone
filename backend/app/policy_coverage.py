@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from app.abac import AccessDenied, EvaluationLog, EvaluationTrace
 
-SCHEMA = 1
+CURRENT_SCHEMA = 2
+SCHEMA = CURRENT_SCHEMA
 
 EXPECTED_ORDER = (
     "same_project",
@@ -61,6 +63,25 @@ class PolicyCoverageData:
         if raw.get("policy_set") != "field_lanes":
             raise ValueError(f"refusing to merge {raw.get('policy_set')}")
         return cls(**{k: raw[k] for k in cls.__dataclass_fields__})
+
+
+def migrate_v2_to_v3(raw: dict) -> dict:
+    out = deepcopy(raw)
+    hits = {}
+    for name, row in out["hits"].items():
+        nxt = dict(row)
+        if "stopped" not in nxt and "stop" in nxt:
+            nxt["stopped"] = nxt["stop"]
+        nxt.setdefault("stopped", 0)
+        nxt.pop("stop", None)  # only after copy
+        hits[name] = nxt
+    out["hits"] = hits
+    out["schema"] = 3
+    return out
+
+
+# stay on 2 — v2→v3 (stop→stopped) is not registered yet
+MIGRATIONS: dict[int, Callable[[dict], dict]] = {}
 
 
 def write_coverage(path: Path, data: PolicyCoverageData) -> None:

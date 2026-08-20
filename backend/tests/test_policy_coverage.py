@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import fields
 from pathlib import Path
 
 import pytest
 
 from app.policy_coverage import (
+    CURRENT_SCHEMA,
+    MIGRATIONS,
     REQUIRED_STOPS,
     SCHEMA,
     PolicyCoverage,
@@ -15,6 +18,7 @@ from app.policy_coverage import (
     _hits_to_dict,
     _merge_hits,
     assert_policy_coverage,
+    migrate_v2_to_v3,
     read_coverage,
     write_coverage,
 )
@@ -28,6 +32,7 @@ def test_created_at_uses_default_factory():
     assert first.created_at
     assert second.created_at
     assert first.schema == SCHEMA
+    assert first.schema == CURRENT_SCHEMA == 2
     assert first.policy_set == "field_lanes"
 
 
@@ -102,3 +107,49 @@ def test_line_coverage_is_not_assigned_only_denied():
     coverage.na.add("default_deny")
     with pytest.raises(AssertionError, match="assigned_only"):
         assert_policy_coverage(coverage)
+
+
+def test_migrate_v2_to_v3_is_not_registered():
+    assert CURRENT_SCHEMA == 2
+    assert 2 not in MIGRATIONS
+    assert migrate_v2_to_v3 not in MIGRATIONS.values()
+
+
+def test_migrate_v2_to_v3_is_n_to_n_plus_one_and_does_not_mutate():
+    raw = {
+        "schema": 2,
+        "hits": {
+            "same_project": {"deny": 2, "stop": 2},
+            "role_allows": {"allow": 1},
+        },
+        "decisions": {"deny": 2},
+        "stops": {"same_project": 2},
+    }
+    snapshot = deepcopy(raw)
+    out = migrate_v2_to_v3(raw)
+    assert raw == snapshot
+    assert out["schema"] == raw["schema"] + 1 == 3
+    assert out["hits"]["same_project"]["stopped"] == 2
+    assert out["hits"]["same_project"]["deny"] == 2
+    assert "stop" not in out["hits"]["same_project"]
+    assert out["hits"]["role_allows"]["stopped"] == 0
+    assert out["hits"]["role_allows"]["allow"] == 1
+    assert "stop" not in out["hits"]["role_allows"]
+    assert raw["hits"]["same_project"]["stop"] == 2
+
+
+def test_migrate_v2_to_v3_already_v3_keeps_counts():
+    raw = {
+        "schema": 3,
+        "hits": {"same_project": {"deny": 4, "stopped": 4, "n/a": 1}},
+        "decisions": {"deny": 4},
+        "stops": {"same_project": 4},
+    }
+    snapshot = deepcopy(raw)
+    out = migrate_v2_to_v3(raw)
+    assert raw == snapshot
+    assert out["schema"] == 3
+    assert out["hits"]["same_project"]["stopped"] == 4
+    assert out["hits"]["same_project"]["deny"] == 4
+    assert out["hits"]["same_project"]["n/a"] == 1
+    assert "stop" not in out["hits"]["same_project"]
