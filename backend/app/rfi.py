@@ -2,6 +2,18 @@
 
 Hang ABAC on create_rfi_draft, submit_rfi, and set_priority only.
 403 body is {policy, reason}. Grokbot never numbers, closes, or work-stops.
+
+Invariant 1 — work_stopped ⇔ priority = work_stopped
+  True iff priority is work_stopped. False iff standard or urgent.
+  Enforce on create, edit, and in the DB (rfis_work_stopped_priority_chk,
+  NOT VALID this pass). Only set_priority writes the pair. Grokbot must
+  not set work_stopped. Demote still needs allow_demote.
+
+Invariant 2 — rfi_number assigned only on first submit
+  Null until the first PE submit. Never assigned in a draft, never
+  invented in SQL, never rfi_number + N. Resubmit after
+  needs_clarification keeps the same number. first_submitted_at is the
+  sticky clock for that first submit.
 """
 
 from __future__ import annotations
@@ -18,6 +30,17 @@ from app.models import RFI, RFIEvent, RFIPin, RFIRef
 from app.pe import set_priority, submit_for_design
 
 WRITES = ("create_rfi_draft", "submit_rfi", "set_priority")
+WORK_STOPPED_PRIORITY = "work_stopped"
+
+
+def pair_holds(priority: str, work_stopped: bool) -> bool:
+    """Invariant 1. work_stopped true iff priority is work_stopped."""
+    return bool(work_stopped) is (priority == WORK_STOPPED_PRIORITY)
+
+
+def is_first_submit(rfi: RFI) -> bool:
+    """Invariant 2. rfi_number is null until the first PE submit."""
+    return rfi.rfi_number is None
 
 
 def grok_subject(project_id: str | UUID) -> Subject:
@@ -63,9 +86,12 @@ __all__ = (
     "RFIEvent",
     "RFIPin",
     "RFIRef",
+    "WORK_STOPPED_PRIORITY",
     "WRITES",
     "age_rfis",
     "grok_subject",
+    "is_first_submit",
+    "pair_holds",
     "require_access",
     "set_priority",
     "submit_rfi",

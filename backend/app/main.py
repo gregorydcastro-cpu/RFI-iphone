@@ -41,7 +41,7 @@ from app.access import (
     require_access,
     resource_from_rfi,
 )
-from app.rfi import grok_subject
+from app.rfi import grok_subject, pair_holds
 from app.rfi import submit_rfi as run_submit_rfi
 from app.field_chain import (
     FieldError,
@@ -802,6 +802,8 @@ def create_rfi_draft(
         )
     except GrokbotError as exc:
         raise HTTPException(422, str(exc)) from exc
+    if not pair_holds(drafted.priority, False):
+        raise HTTPException(422, "Grokbot must not set work_stopped.")
 
     rfi_id = str(uuid.uuid4())
     preflight = {

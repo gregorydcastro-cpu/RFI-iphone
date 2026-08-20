@@ -157,7 +157,7 @@ def normalize_priority(
 
 
 def write_priority_pair(rfi: RFI, priority: str) -> None:
-    """Persist work_stopped iff priority is work_stopped. Public writer is set_priority."""
+    """Invariant 1 persist. Public writer is set_priority. Do not call from Grok."""
     rfi.priority = priority
     rfi.work_stopped = priority == "work_stopped"
 
@@ -432,7 +432,7 @@ def submit_for_design(
     rfi.assigned_to_user_id = user_id
     rfi.assigned_to_company_id = company_id
 
-    first_submit = rfi.rfi_display is None
+    first_submit = rfi.rfi_number is None
     now = utc_now()
     if first_submit:
         number, display = next_rfi_number(db, rfi.project_id)

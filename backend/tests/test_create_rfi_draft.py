@@ -77,6 +77,8 @@ def test_create_draft_rejects_forbidden_and_extra_keys(client):
         "official_response": "Proceed",
         "submitted_at": "2026-08-20T00:00:00Z",
         "closed_at": "2026-08-20T00:00:00Z",
+        "work_stopped": True,
+        "first_submitted_at": "2026-08-20T00:00:00Z",
     }.items():
         payload = _envelope()
         payload[key] = value

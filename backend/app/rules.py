@@ -50,8 +50,9 @@ def validate_draft_payload(raw: dict[str, Any]) -> None:
         raise DraftValidationError(
             "Forbidden draft keys: "
             + ", ".join(forbidden)
-            + ". Do not set status, rfi_number, rfi_display, due_at, "
-            "official_response, or submit/close fields from the draft path."
+            +             ". Do not set status, rfi_number, rfi_display, due_at, "
+            "official_response, work_stopped, or submit/close fields "
+            "from the draft path."
         )
 
 

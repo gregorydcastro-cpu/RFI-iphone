@@ -48,6 +48,8 @@ FORBIDDEN_DRAFT_KEYS = frozenset(
         "official_response",
         "submitted_at",
         "closed_at",
+        "work_stopped",
+        "first_submitted_at",
         "submit",
         "submitted",
         "void",
