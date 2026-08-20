@@ -20,8 +20,8 @@ EXPECTED_ORDER = (
     "role_allows",
     "area_scope",
     "assigned_only",
-    "chain_owns",
     "status_guard",
+    "chain_owns",
     "work_stop_writer",
     "default_deny",
 )
@@ -34,8 +34,8 @@ REQUIRED_STOPS = {
     "role_allows",
     "area_scope",
     "assigned_only",
-    "chain_owns",
     "status_guard",
+    "chain_owns",
     "work_stop_writer",
 }
 

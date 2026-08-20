@@ -91,6 +91,28 @@ def first_stop(walk) -> EvaluationTrace:
     raise AssertionError("walk never stopped")
 
 
+def gold_rows(walk) -> list[tuple]:
+    """seq, policy, n/a | DENY, optional reason, STOP."""
+    rows: list[tuple] = []
+    for step in _traces(walk):
+        if step.effect is None and step.applicable is False:
+            rows.append((step.seq, step.policy, "n/a"))
+            continue
+        if step.effect == "deny" and step.stopped:
+            rows.append((step.seq, step.policy, "DENY", step.reason, "STOP"))
+            continue
+        rows.append(
+            (
+                step.seq,
+                step.policy,
+                "ALLOW" if step.effect == "allow" else step.effect,
+                step.reason,
+                "STOP" if step.stopped else None,
+            )
+        )
+    return rows
+
+
 def test_policy_set_rank_is_fixed():
     assert tuple(policy.name for policy in FIELD_POLICY_SET.ranked()) == EXPECTED_ORDER
 
@@ -279,6 +301,10 @@ def test_grokbot_submit_never_reaches_role(cov: PolicyCoverage):
         Action.SUBMIT_RFI,
         resource(),
     ))
+    assert gold_rows(log) == [
+        (1, "same_project", "n/a"),
+        (2, "grokbot_lane", "DENY", "Grokbot may only create_rfi_draft", "STOP"),
+    ]
     assert first_stop(log).policy == "grokbot_lane"
     assert log.decision.policy == "grokbot_lane"
     assert "role_allows" not in names(log)
@@ -286,7 +312,12 @@ def test_grokbot_submit_never_reaches_role(cov: PolicyCoverage):
 
 def test_apprentice_submit_stops_at_role(cov: PolicyCoverage):
     log = cov.record(evaluate(subject(role=Role.APPRENTICE), Action.SUBMIT_RFI, resource()))
-    assert names(log) == list(EXPECTED_ORDER[:4])
+    assert gold_rows(log) == [
+        (1, "same_project", "n/a"),
+        (2, "grokbot_lane", "n/a"),
+        (3, "on_site", "n/a"),
+        (4, "role_allows", "DENY", "apprentice cannot submit_rfi", "STOP"),
+    ]
     assert first_stop(log).policy == "role_allows"
     assert log.decision.policy == "role_allows"
 
@@ -346,7 +377,7 @@ def test_foreman_other_crew_stops_at_chain_owns(cov: PolicyCoverage):
         Action.SUBMIT_RFI,
         resource(created_by_id=OTHER, crew_foreman_id=OTHER),
     ))
-    assert names(log) == list(EXPECTED_ORDER[:7])
+    assert names(log) == list(EXPECTED_ORDER[:8])
     assert first_stop(log).policy == "chain_owns"
     assert log.decision.policy == "chain_owns"
 
@@ -357,7 +388,7 @@ def test_submit_from_answered_stops_at_status(cov: PolicyCoverage):
         Action.SUBMIT_RFI,
         resource(status="answered"),
     ))
-    assert names(log) == list(EXPECTED_ORDER[:8])
+    assert names(log) == list(EXPECTED_ORDER[:7])
     assert first_stop(log).policy == "status_guard"
     assert log.decision.policy == "status_guard"
 
@@ -396,9 +427,14 @@ def test_require_access_raises_with_trace_stop(cov: PolicyCoverage):
             audit=audit,
         )
     cov.record(raised.value)
+    assert gold_rows(raised.value) == [
+        (1, "same_project", "n/a"),
+        (2, "grokbot_lane", "n/a"),
+        (3, "on_site", "n/a"),
+        (4, "role_allows", "DENY", "apprentice cannot submit_rfi", "STOP"),
+    ]
     assert raised.value.decision.policy == "role_allows"
     assert first_stop(raised.value).policy == "role_allows"
-    assert names(raised.value) == list(EXPECTED_ORDER[:4])
     assert raised.value.trace == tuple(audit)
     assert first_stop(raised.value).effect == "deny"
     assert first_stop(raised.value).stopped is True
@@ -409,6 +445,7 @@ def test_require_access_raises_with_trace_stop(cov: PolicyCoverage):
         "policy": "role_allows",
         "reason": "apprentice cannot submit_rfi",
     }
+    assert http.value.detail["policy"] == first_stop(raised.value).policy
     assert "trace" not in http.value.detail
     assert "seq" not in http.value.detail
 
