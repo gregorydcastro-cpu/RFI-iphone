@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app import db as dbmod
 from app.ids import (
@@ -76,7 +76,7 @@ def _events(rfi_id: str) -> list[RFIEvent]:
             db.scalars(
                 select(RFIEvent)
                 .where(RFIEvent.rfi_id == rfi_id)
-                .order_by(RFIEvent.created_at, RFIEvent.id)
+                .order_by(RFIEvent.created_at, text("rowid"))
             )
         )
     finally:
