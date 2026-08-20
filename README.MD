@@ -47,6 +47,7 @@ Useful endpoints:
 - `GET /search_rfis?project_id=&query=&sheet_number=&grid=&status_in=&limit=`
 - `POST /create_rfi_draft` with a `preflight_rfi` envelope
 - `GET /rfis/{id}`
+- `GET /rfi_graph` (optional `project_id`) — weekly log / age buckets. Drafts, closed, and void are off the open list.
 
 `create_rfi_draft` result: `{ok, rfi_id, status:"draft", rfi_display:null, missing_for_submit, message}`. Typical `missing_for_submit` includes `internal_review`.
 
@@ -70,4 +71,10 @@ This cloud VM cannot run the iOS simulator. On a Mac:
 7. Confirm the result: **status is `draft`**, **display number is null**, and `missing_for_submit` includes `internal_review`.
 8. Tap Draft again with a similar note. The app should show the open match and refuse to duplicate.
 
-Not in this slice: submit, holiday cache, Prometheus, aging, `set_priority`.
+## RFI Graph (weekly log)
+
+The iOS **RFI Graph** tab is the meeting / pipeline view. Open RFIs are ordered `work_stopped → escalated → overdue → due_soon → gc_holding → missing_due → on_cycle`. Harbor Yard rows labeled **SAMPLE** are PE-seeded examples so the graph is not empty. The ILSB E-803 vivarium RFI stays a **draft with no number** and appears only under **Drafts (no number)**.
+
+`days_open` is `floor(life_hours/24)` in **UTC** (not project-TZ business days; no holiday calendar).
+
+Not in this slice: submit, holiday cache, Prometheus, `set_priority`, `age_rfis` as a job. Age buckets are computed on read.

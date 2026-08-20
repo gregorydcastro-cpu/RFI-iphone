@@ -157,6 +157,8 @@ class RFI(Base):
     schedule_impact: Mapped[str] = mapped_column(String(32), nullable=False)
     proposed_solution: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     grok_preflight: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    assigned: Mapped[Optional[str]] = mapped_column(String(160), nullable=True)
+    is_sample: Mapped[bool] = mapped_column(default=False)
     due_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     official_response: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

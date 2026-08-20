@@ -4,9 +4,21 @@ import SwiftUI
 struct FieldRFIApp: App {
     var body: some Scene {
         WindowGroup {
-            NavigationStack {
-                NewRFIView()
+            TabView {
+                NavigationStack {
+                    NewRFIView()
+                }
+                .tabItem {
+                    Label("New RFI", systemImage: "plus.rectangle.on.folder")
+                }
+                NavigationStack {
+                    RFIGraphView()
+                }
+                .tabItem {
+                    Label("RFI Graph", systemImage: "list.bullet.rectangle")
+                }
             }
+            .tint(FieldTheme.orange)
         }
     }
 }

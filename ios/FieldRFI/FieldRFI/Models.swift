@@ -112,6 +112,45 @@ struct RFIDTO: Codable, Identifiable {
     let proposed_solution: String?
 }
 
+struct GraphRowDTO: Codable, Identifiable {
+    let id: String
+    let project_id: String
+    let project_name: String
+    let rfi_display: String?
+    let rfi_number: Int?
+    let subject: String
+    let sheet_number: String?
+    let status: String
+    let priority: String
+    let work_stopped: Bool
+    let assigned: String?
+    let due_at: String?
+    let days_open: Int
+    let age_bucket: String?
+    let is_sample: Bool
+    let is_draft: Bool
+}
+
+struct StatusMachineDTO: Codable {
+    let main: [String]
+    let branches: [String]
+    let note: String
+}
+
+struct GraphResponseDTO: Codable {
+    let ok: Bool
+    let generated_at: String
+    let timezone: String
+    let days_open_rule: String
+    let sample_notice: String
+    let status_machine: StatusMachineDTO
+    let bucket_order: [String]
+    let bucket_counts: [String: Int]
+    let open: [GraphRowDTO]
+    let drafts: [GraphRowDTO]
+    let closed_or_void_count: Int
+}
+
 struct APIError: LocalizedError {
     let message: String
     var errorDescription: String? { message }

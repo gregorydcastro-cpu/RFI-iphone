@@ -8,8 +8,36 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 ALLOWED_PRIORITIES = ("standard", "urgent", "work_stopped")
 DRAFT_PRIORITIES = ("standard", "urgent")
 IMPACT_VALUES = ("unknown", "none", "possible")
-OPEN_STATUSES = ("draft", "submitted", "ball_in_court")
-ALL_STATUSES = ("draft", "submitted", "ball_in_court", "closed", "void")
+OPEN_STATUSES = (
+    "draft",
+    "internal_review",
+    "submitted",
+    "ball_in_court",
+    "needs_clarification",
+    "answered",
+    "impact_review",
+)
+ALL_STATUSES = OPEN_STATUSES + ("closed", "void")
+GRAPH_EXCLUDED = ("draft", "closed", "void")
+AGE_BUCKET_ORDER = (
+    "work_stopped",
+    "escalated",
+    "overdue",
+    "due_soon",
+    "gc_holding",
+    "missing_due",
+    "on_cycle",
+)
+STATUS_MACHINE_MAIN = (
+    "draft",
+    "internal_review",
+    "submitted",
+    "ball_in_court",
+    "answered",
+    "impact_review",
+    "closed",
+)
+STATUS_MACHINE_BRANCHES = ("needs_clarification", "void")
 
 FORBIDDEN_DRAFT_KEYS = frozenset(
     {
@@ -152,6 +180,39 @@ class SheetRevisionOut(BaseModel):
     page_width: Optional[int] = None
     page_height: Optional[int] = None
     is_current: bool = False
+
+
+class GraphRow(BaseModel):
+    id: str
+    project_id: str
+    project_name: str
+    rfi_display: Optional[str]
+    rfi_number: Optional[int]
+    subject: str
+    sheet_number: Optional[str]
+    status: str
+    priority: str
+    work_stopped: bool
+    assigned: Optional[str]
+    due_at: Optional[str]
+    days_open: int
+    age_bucket: Optional[str]
+    is_sample: bool
+    is_draft: bool
+
+
+class GraphResponse(BaseModel):
+    ok: bool
+    generated_at: str
+    timezone: str
+    days_open_rule: str
+    sample_notice: str
+    status_machine: dict
+    bucket_order: list[str]
+    bucket_counts: dict[str, int]
+    open: list[GraphRow]
+    drafts: list[GraphRow]
+    closed_or_void_count: int
 
 
 class RFIOut(BaseModel):

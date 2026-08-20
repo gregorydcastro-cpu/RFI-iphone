@@ -43,6 +43,7 @@ from app.ids import (
     SHEET_S302_ID,
 )
 from app.db import ASSETS_DIR
+from app.sample_seed import seed_sample_graph_rfis
 from app.models import (
     DrawingSet,
     Location,
@@ -300,6 +301,7 @@ def seed_demo(db: Session) -> None:
     seed_harbor_yard(db, sizes)
     seed_ilsb_catalog(db, sizes)
     ingest_ilsb_draft(db)
+    seed_sample_graph_rfis(db)
 
 
 def has_demo_project(db: Session) -> bool:

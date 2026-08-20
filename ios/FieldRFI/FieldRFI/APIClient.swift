@@ -59,6 +59,14 @@ struct APIClient {
         try await get("/rfis/\(id)")
     }
 
+    func rfiGraph(projectID: String? = nil) async throws -> GraphResponseDTO {
+        var items: [URLQueryItem] = []
+        if let projectID, !projectID.isEmpty {
+            items.append(URLQueryItem(name: "project_id", value: projectID))
+        }
+        return try await get("/rfi_graph", query: items)
+    }
+
     private func get<T: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
         var components = URLComponents(url: baseURL.appending(path: path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty {

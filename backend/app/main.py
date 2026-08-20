@@ -14,6 +14,15 @@ from sqlalchemy.orm import Session, selectinload
 
 from app import db as dbmod
 from app.db import get_db, init_db
+from app.aging import (
+    DAYS_OPEN_RULE,
+    age_bucket,
+    as_naive_utc,
+    bucket_rank,
+    days_open,
+    utc_now,
+    work_stopped,
+)
 from app.grokbot import GrokbotError, draft_from_preflight
 from app.models import (
     Organization,
@@ -28,8 +37,13 @@ from app.models import (
 )
 from app.rules import DraftValidationError, is_open_status, validate_draft_payload
 from app.schemas import (
+    AGE_BUCKET_ORDER,
     ALL_STATUSES,
+    STATUS_MACHINE_BRANCHES,
+    STATUS_MACHINE_MAIN,
     DraftResult,
+    GraphResponse,
+    GraphRow,
     PreflightEnvelope,
     ProjectOut,
     RFIOut,
@@ -146,12 +160,15 @@ def _search_query(
     grid: str | None,
     status_in: list[str] | None,
     limit: int,
+    exclude_sample: bool = True,
 ) -> list[RFI]:
     stmt = (
         select(RFI)
         .options(selectinload(RFI.refs), selectinload(RFI.pins))
         .where(RFI.project_id == project_id)
     )
+    if exclude_sample:
+        stmt = stmt.where(RFI.is_sample.is_(False))
     if status_in:
         stmt = stmt.where(RFI.status.in_(status_in))
     if query:
@@ -198,6 +215,7 @@ def search_rfis(
     grid: str | None = None,
     status_in: str | None = Query(None, description="Comma-separated statuses"),
     limit: int = Query(10, ge=1, le=25),
+    exclude_sample: bool = Query(True, description="Hide PE SAMPLE meeting-log rows"),
     db: Session = Depends(get_db),
 ) -> SearchResponse:
     project = db.get(Project, project_id)
@@ -209,7 +227,9 @@ def search_rfis(
         bad = [s for s in statuses if s not in ALL_STATUSES]
         if bad:
             raise HTTPException(422, f"Unknown status_in values: {', '.join(bad)}")
-    rows = _search_query(db, project_id, query, sheet_number, grid, statuses, limit)
+    rows = _search_query(
+        db, project_id, query, sheet_number, grid, statuses, limit, exclude_sample
+    )
     hits = [
         SearchHit(
             id=rfi.id,
@@ -226,6 +246,94 @@ def search_rfis(
         for rfi in rows
     ]
     return SearchResponse(ok=True, count=len(hits), rfis=hits)
+
+
+def _primary_sheet(rfi: RFI) -> str | None:
+    for ref in rfi.refs:
+        if ref.sheet_revision_id and ref.sheet_number:
+            return ref.sheet_number
+    sheets = _sheet_numbers_for(rfi)
+    return sheets[0] if sheets else None
+
+
+def _graph_row(rfi: RFI, project_name: str, now) -> GraphRow:
+    bucket = age_bucket(
+        status=rfi.status, priority=rfi.priority, due_at=rfi.due_at, now=now
+    )
+    due = as_naive_utc(rfi.due_at)
+    return GraphRow(
+        id=rfi.id,
+        project_id=rfi.project_id,
+        project_name=project_name,
+        rfi_display=rfi.rfi_display,
+        rfi_number=rfi.rfi_number,
+        subject=rfi.subject,
+        sheet_number=_primary_sheet(rfi),
+        status=rfi.status,
+        priority=rfi.priority,
+        work_stopped=work_stopped(rfi.priority),
+        assigned=rfi.assigned,
+        due_at=due.isoformat() + "Z" if due else None,
+        days_open=days_open(rfi.created_at, now),
+        age_bucket=bucket,
+        is_sample=bool(rfi.is_sample),
+        is_draft=rfi.status == "draft",
+    )
+
+
+@app.get("/rfi_graph", response_model=GraphResponse)
+def rfi_graph(
+    project_id: str | None = None,
+    db: Session = Depends(get_db),
+) -> GraphResponse:
+    now = utc_now()
+    stmt = select(RFI, Project.name).join(Project, Project.id == RFI.project_id)
+    if project_id:
+        if not db.get(Project, project_id):
+            raise HTTPException(404, "Project not found.")
+        stmt = stmt.where(RFI.project_id == project_id)
+    stmt = stmt.options(selectinload(RFI.refs), selectinload(RFI.pins))
+    pairs = db.execute(stmt).all()
+
+    open_rows: list[GraphRow] = []
+    drafts: list[GraphRow] = []
+    closed_or_void = 0
+    for rfi, project_name in pairs:
+        row = _graph_row(rfi, project_name, now)
+        if rfi.status == "draft":
+            drafts.append(row)
+        elif rfi.status in ("closed", "void"):
+            closed_or_void += 1
+        else:
+            open_rows.append(row)
+
+    open_rows.sort(key=lambda row: (bucket_rank(row.age_bucket), row.subject))
+    drafts.sort(key=lambda row: row.subject)
+    counts = {bucket: 0 for bucket in AGE_BUCKET_ORDER}
+    for row in open_rows:
+        if row.age_bucket in counts:
+            counts[row.age_bucket] += 1
+
+    return GraphResponse(
+        ok=True,
+        generated_at=now.isoformat() + "Z",
+        timezone="UTC",
+        days_open_rule=DAYS_OPEN_RULE,
+        sample_notice=(
+            "Open rows marked SAMPLE / is_sample are PE-seeded examples, "
+            "not live ILSB field RFIs. The E-803 vivarium draft is real and unnumbered."
+        ),
+        status_machine={
+            "main": list(STATUS_MACHINE_MAIN),
+            "branches": list(STATUS_MACHINE_BRANCHES),
+            "note": "Sample diagram of the locked machine. Not live counts.",
+        },
+        bucket_order=list(AGE_BUCKET_ORDER),
+        bucket_counts=counts,
+        open=open_rows,
+        drafts=drafts,
+        closed_or_void_count=closed_or_void,
+    )
 
 
 def _missing_for_submit() -> list[str]:
