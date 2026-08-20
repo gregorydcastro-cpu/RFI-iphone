@@ -71,8 +71,48 @@ class ProjectRFISettings(Base):
     )
     rfi_prefix: Mapped[str] = mapped_column(String(16), default="RFI")
     number_width: Mapped[int] = mapped_column(Integer, default=4)
+    standard_due_days: Mapped[int] = mapped_column(Integer, default=7)
+    urgent_due_hours: Mapped[int] = mapped_column(Integer, default=72)
+    work_stopped_due_hours: Mapped[int] = mapped_column(Integer, default=24)
+    escalate_after_overdue_hours: Mapped[int] = mapped_column(Integer, default=48)
 
     project: Mapped[Project] = relationship(back_populates="rfi_settings")
+
+
+class ProjectCalendar(Base):
+    __tablename__ = "project_calendars"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("projects.id"), nullable=False, unique=True
+    )
+    timezone: Mapped[str] = mapped_column(String(64), default="America/New_York")
+    weekend_days: Mapped[list] = mapped_column(JSON, default=lambda: [5, 6])
+    standard_sla_unit: Mapped[str] = mapped_column(String(32), default="business_days")
+    due_time: Mapped[str] = mapped_column(String(8), default="17:00")
+    roll_to_business_day: Mapped[bool] = mapped_column(default=False)
+
+    project: Mapped[Project] = relationship()
+
+
+class ProjectHoliday(Base):
+    __tablename__ = "project_holidays"
+    __table_args__ = (
+        UniqueConstraint("project_id", "on_date", name="uq_project_holiday_date"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("projects.id"), nullable=False
+    )
+    on_date: Mapped[date] = mapped_column(Date, nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    source: Mapped[str] = mapped_column(String(32), default="manual")
+    catalog_date_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    active: Mapped[bool] = mapped_column(default=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
 
 class DrawingSet(Base):

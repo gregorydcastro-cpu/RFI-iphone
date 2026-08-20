@@ -14,10 +14,20 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.aging import utc_now, work_stopped
+from app.calendar import (
+    DEFAULT_TZ,
+    as_aware_utc,
+    localize_forward,
+    parse_due_time,
+    to_naive_utc,
+    zone,
+)
+from app.holiday_cache import holiday_cache
 from app.models import (
     Company,
     DraftChangeOrder,
     DraftMaterialOrder,
+    ProjectCalendar,
     ProjectRFISettings,
     RFI,
     RFIEvent,
@@ -29,19 +39,16 @@ ANSWER_DISCLAIMER = (
     "An answer is not a change order and does not authorize work."
 )
 
-# Legacy calendar-day map kept for SAMPLE seed comments. First-submit due_at
-# uses hours for urgent/work_stopped and a 17:00 UTC clock for standard.
 SLA_DAYS = {"standard": 7, "urgent": 3, "work_stopped": 1}
 URGENT_DUE_HOURS = 72
 WORK_STOPPED_DUE_HOURS = 24
 STANDARD_DUE_DAYS = 7
-STANDARD_DUE_HOUR = 17
-STANDARD_DUE_MINUTE = 0
 PRIORITY_CONFIRM_COMMENT = "Confirmed on submit."
+PRIORITY_RANK = {"standard": 0, "urgent": 1, "work_stopped": 2}
 DUE_AT_RULE = (
-    "urgent: now_utc + 72h; work_stopped: now_utc + 24h; "
-    "standard: +7 calendar days at 17:00 UTC. "
-    "Project timezone is not seeded (still OFF)."
+    "urgent/work_stopped: now_utc + settings hours (elapsed UTC); "
+    "standard: +standard_due_days business days at project_calendars.due_time "
+    "in project TZ (default America/New_York 17:00), converted to UTC."
 )
 
 SUBMITTABLE = frozenset({"draft", "internal_review", "needs_clarification"})
@@ -77,6 +84,7 @@ class PEResult:
     assigned_to_company_id: str | None = None
     priority: str | None = None
     work_stopped: bool = False
+    reminted: bool = False
 
 
 def _rfi(db: Session, rfi_id: str) -> RFI:
@@ -148,14 +156,71 @@ def normalize_priority(
     return value
 
 
-def compute_due_at(priority: str, now: datetime | None = None) -> datetime:
-    moment = now or utc_now()
-    if priority == "work_stopped":
-        return moment + timedelta(hours=WORK_STOPPED_DUE_HOURS)
-    if priority == "urgent":
-        return moment + timedelta(hours=URGENT_DUE_HOURS)
-    day = moment.date() + timedelta(days=STANDARD_DUE_DAYS)
-    return datetime(day.year, day.month, day.day, STANDARD_DUE_HOUR, STANDARD_DUE_MINUTE, 0)
+def _settings(db: Session, project_id: str) -> ProjectRFISettings | None:
+    return db.scalar(
+        select(ProjectRFISettings).where(ProjectRFISettings.project_id == project_id)
+    )
+
+
+def validate_sla_windows(settings: ProjectRFISettings) -> None:
+    standard_days = int(settings.standard_due_days or 0)
+    urgent_hours = int(settings.urgent_due_hours or 0)
+    stop_hours = int(settings.work_stopped_due_hours or 0)
+    if standard_days < 1 or urgent_hours < 1 or stop_hours < 1:
+        raise PEError(
+            "SLA windows must each be >= 1 "
+            "(standard_due_days, urgent_due_hours, work_stopped_due_hours)."
+        )
+    if not (stop_hours <= urgent_hours <= standard_days * 24):
+        raise PEError(
+            "SLA windows must satisfy work_stopped_due_hours <= "
+            "urgent_due_hours <= standard_due_days * 24."
+        )
+
+
+def compute_due_at(
+    db: Session,
+    project_id: str,
+    priority: str,
+    work_stopped_flag: bool | None = None,
+    *,
+    now: datetime | None = None,
+    allow_demote: bool = True,
+) -> datetime:
+    stopped = work_stopped(priority) if work_stopped_flag is None else work_stopped_flag
+    normalized = normalize_priority(priority, stopped, allow_demote=allow_demote)
+    moment = as_aware_utc(now or utc_now())
+    settings = _settings(db, project_id)
+    calendar = db.scalar(
+        select(ProjectCalendar).where(ProjectCalendar.project_id == project_id)
+    )
+    standard_days = (
+        max(int(settings.standard_due_days), 1) if settings else STANDARD_DUE_DAYS
+    )
+    urgent_hours = (
+        max(int(settings.urgent_due_hours), 1) if settings else URGENT_DUE_HOURS
+    )
+    stop_hours = (
+        max(int(settings.work_stopped_due_hours), 1) if settings else WORK_STOPPED_DUE_HOURS
+    )
+    if settings:
+        validate_sla_windows(settings)
+    if normalized == "work_stopped":
+        return to_naive_utc(moment + timedelta(hours=stop_hours))
+    if normalized == "urgent":
+        return to_naive_utc(moment + timedelta(hours=urgent_hours))
+
+    lookup = holiday_cache.get(db, project_id)
+    tz = zone(calendar.timezone if calendar else lookup.timezone_name or DEFAULT_TZ)
+    local = moment.astimezone(tz)
+    unit = (calendar.standard_sla_unit if calendar else lookup.standard_sla_unit) or "business_days"
+    if unit == "calendar_days":
+        due_date = local.date() + timedelta(days=standard_days)
+    else:
+        due_date = lookup.add_business_days(local.date(), standard_days)
+    due_time = parse_due_time(calendar.due_time if calendar else lookup.due_time)
+    due_local = localize_forward(due_date, due_time, tz)
+    return to_naive_utc(due_local)
 
 
 def has_pin_or_ref(rfi: RFI) -> bool:
@@ -234,6 +299,66 @@ def approve_internal_review(
     )
 
 
+def set_priority(
+    db: Session,
+    rfi_id: str,
+    priority: str,
+    work_stopped_flag: bool,
+    *,
+    allow_demote: bool = False,
+    source: str = "pe_helper",
+    actor: str = "pe",
+) -> PEResult:
+    rfi = _rfi(db, rfi_id)
+    new = normalize_priority(priority, work_stopped_flag, allow_demote=allow_demote)
+    old = rfi.priority
+    old_rank = PRIORITY_RANK.get(old, 0)
+    new_rank = PRIORITY_RANK.get(new, 0)
+    if new_rank < old_rank and not allow_demote:
+        raise PEError("Lowering priority requires allow_demote.")
+    rfi.priority = new
+    reminted = False
+    if new_rank > old_rank and rfi.status in {"submitted", "ball_in_court"}:
+        rfi.due_at = compute_due_at(
+            db,
+            rfi.project_id,
+            new,
+            work_stopped(new),
+            now=utc_now(),
+            allow_demote=allow_demote,
+        )
+        reminted = True
+    db.add(
+        RFIEvent(
+            rfi_id=rfi.id,
+            event_type="priority_change",
+            from_status=rfi.status,
+            to_status=rfi.status,
+            payload={
+                "actor": actor,
+                "source": source,
+                "from_priority": old,
+                "to_priority": new,
+                "due_at_reminted": reminted,
+                "allow_demote": allow_demote,
+            },
+        )
+    )
+    db.commit()
+    return PEResult(
+        True,
+        rfi.id,
+        rfi.status,
+        rfi.rfi_display,
+        message="Priority updated.",
+        due_at=rfi.due_at,
+        assigned=rfi.assigned,
+        priority=rfi.priority,
+        work_stopped=work_stopped(rfi.priority),
+        reminted=reminted,
+    )
+
+
 def next_rfi_number(db: Session, project_id: str) -> tuple[int, str]:
     settings = db.scalar(
         select(ProjectRFISettings).where(ProjectRFISettings.project_id == project_id)
@@ -306,7 +431,14 @@ def submit_for_design(
         rfi.rfi_number = number
         rfi.rfi_display = display
         rfi.submitted_at = now
-        rfi.due_at = compute_due_at(rfi.priority, now)
+        rfi.due_at = compute_due_at(
+            db,
+            rfi.project_id,
+            rfi.priority,
+            work_stopped(rfi.priority),
+            now=now,
+            allow_demote=True,
+        )
 
     note = (comment or "").strip()
     _event(

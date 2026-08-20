@@ -303,6 +303,31 @@ class PEApproveResult(BaseModel):
     message: str
 
 
+class PESetPriorityBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    priority: str
+    work_stopped: bool
+    allow_demote: bool = False
+
+    @field_validator("priority")
+    @classmethod
+    def strip_priority(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class PESetPriorityResult(BaseModel):
+    ok: bool
+    rfi_id: str
+    status: str
+    rfi_display: Optional[str]
+    priority: str
+    work_stopped: bool
+    due_at: Optional[str] = None
+    reminted: bool = False
+    message: str
+
+
 class AssigneeUserOut(BaseModel):
     id: str
     name: str

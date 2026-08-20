@@ -26,7 +26,10 @@ def client(tmp_path, monkeypatch):
     dbmod.configure(f"sqlite:///{db_path}")
     dbmod.init_db()
 
+    from app.holiday_cache import holiday_cache
     from app.seed import seed_demo
+
+    holiday_cache.clear()
 
     session = dbmod.SessionLocal()
     try:

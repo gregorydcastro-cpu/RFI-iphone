@@ -126,11 +126,11 @@ def test_graph_can_filter_ilsb_and_keeps_machine_sample(client):
     assert ils["status_machine"]["main"][0] == "draft"
     assert "needs_clarification" in ils["status_machine"]["branches"]
     assert "void" in ils["status_machine"]["branches"]
-    assert ils["timezone"] == "UTC"
+    assert ils["timezone"] == "America/New_York"
     assert "business days" in ils["days_open_rule"]
 
 
-def test_days_open_is_calendar_floor_hours(client):
+def test_days_open_fallback_and_age_buckets(client):
     now = utc_now()
     assert days_open(now - timedelta(hours=23), now) == 0
     assert days_open(now - timedelta(hours=25), now) == 1
@@ -154,7 +154,7 @@ def test_days_open_is_calendar_floor_hours(client):
         due_at=now - timedelta(hours=1),
         now=now,
     )
-    assert stopped == "work_stopped"
+    assert stopped == "escalated"
     assert age_bucket(status="draft", priority="standard", due_at=None, now=now) is None
     assert age_bucket(status="closed", priority="standard", due_at=None, now=now) is None
     assert age_bucket(status="void", priority="standard", due_at=None, now=now) is None

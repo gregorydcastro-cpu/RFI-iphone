@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select, text
 
@@ -141,7 +142,7 @@ def test_pe_http_approve_then_submit_new_draft(client):
     assert body["assigned"]
     assert body["assigned_to_user_id"] == str(USER_SAMPLE_AE_ID)
     assert body["work_stopped"] is False
-    assert "17:00 UTC" in body["due_at_rule"]
+    assert "America/New_York" in body["due_at_rule"]
     assert DUE_AT_RULE.split(";")[0] in body["due_at_rule"]
 
     detail = client.get(f"/rfis/{rfi_id}").json()
@@ -323,9 +324,12 @@ def test_pe_may_set_work_stopped_and_due_at_uses_hours_or_1700(client):
     standard = client.post(
         f"/pe/rfis/{other}/submit", json=_submit_body(), headers=PE_HEADERS
     ).json()
-    due_std = datetime.fromisoformat(standard["due_at"].replace("Z", ""))
-    assert due_std.hour == 17
-    assert due_std.minute == 0
+    due_std = datetime.fromisoformat(standard["due_at"].replace("Z", "")).replace(
+        tzinfo=ZoneInfo("UTC")
+    )
+    local = due_std.astimezone(ZoneInfo("America/New_York"))
+    assert local.hour == 17
+    assert local.minute == 0
 
 
 def test_ilsb_like_new_draft_submit_leaves_e803_unnumbered(client):

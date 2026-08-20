@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.drawings import ensure_demo_drawings, png_size
+from app.holiday_cache import holiday_cache
 from app.ids import (
     COMPANY_CASTRO_ID,
     COMPANY_SAMPLE_AE_ID,
@@ -13,8 +14,16 @@ from app.ids import (
     DEMO_ORG_NAME,
     DEMO_PROJECT_NAME,
     DRAWING_SET_ID,
+    HARBOR_CALENDAR_ID,
+    HARBOR_HOLIDAY_LABOR_2026_ID,
+    HARBOR_HOLIDAY_THANKS_2026_ID,
+    HARBOR_HOLIDAY_VETERANS_2026_ID,
     ILSB_ADDRESS,
     ILSB_ARCHITECT,
+    ILSB_CALENDAR_ID,
+    ILSB_HOLIDAY_LABOR_2026_ID,
+    ILSB_HOLIDAY_THANKS_2026_ID,
+    ILSB_HOLIDAY_VETERANS_2026_ID,
     ILSB_LOC_ID,
     ILSB_ORG_ID,
     ILSB_ORG_NAME,
@@ -56,6 +65,8 @@ from app.models import (
     Location,
     Organization,
     Project,
+    ProjectCalendar,
+    ProjectHoliday,
     ProjectRFISettings,
     RFI,
     RFIEvent,
@@ -106,6 +117,10 @@ def seed_harbor_yard(db: Session, sizes: dict[str, tuple[int, int]]) -> None:
         project_id=str(PROJECT_ID),
         rfi_prefix="RFI",
         number_width=4,
+        standard_due_days=7,
+        urgent_due_hours=72,
+        work_stopped_due_hours=24,
+        escalate_after_overdue_hours=48,
     )
     drawing_set = DrawingSet(
         id=str(DRAWING_SET_ID),
@@ -166,6 +181,10 @@ def seed_ilsb_catalog(db: Session, sizes: dict[str, tuple[int, int]]) -> None:
         project_id=str(ILSB_PROJECT_ID),
         rfi_prefix="RFI",
         number_width=4,
+        standard_due_days=7,
+        urgent_due_hours=72,
+        work_stopped_due_hours=24,
+        escalate_after_overdue_hours=48,
     )
     drawing_set = DrawingSet(
         id=str(ILSB_SET_ID),
@@ -353,11 +372,89 @@ def seed_pe_roster(db: Session) -> None:
     db.commit()
 
 
+_SEEDED_HOLIDAYS = (
+    (date(2026, 9, 7), "Labor Day"),
+    (date(2026, 11, 11), "Veterans Day"),
+    (date(2026, 11, 26), "Thanksgiving"),
+)
+
+
+def _ensure_calendar(
+    db: Session,
+    *,
+    project_id,
+    calendar_id,
+    holiday_ids: tuple,
+) -> None:
+    if not db.get(Project, str(project_id)):
+        return
+    if db.scalar(select(ProjectCalendar).where(ProjectCalendar.project_id == str(project_id))) is None:
+        db.add(
+            ProjectCalendar(
+                id=str(calendar_id),
+                project_id=str(project_id),
+                timezone="America/New_York",
+                weekend_days=[5, 6],
+                standard_sla_unit="business_days",
+                due_time="17:00",
+                roll_to_business_day=False,
+            )
+        )
+    for holiday_id, (on_date, name) in zip(holiday_ids, _SEEDED_HOLIDAYS, strict=True):
+        exists = db.scalar(
+            select(ProjectHoliday).where(
+                ProjectHoliday.project_id == str(project_id),
+                ProjectHoliday.on_date == on_date,
+            )
+        )
+        if exists:
+            continue
+        db.add(
+            ProjectHoliday(
+                id=str(holiday_id),
+                project_id=str(project_id),
+                on_date=on_date,
+                name=name,
+                source="manual",
+                active=True,
+            )
+        )
+
+
+def seed_project_calendars(db: Session) -> None:
+    """Idempotent Harbor Yard + ILSB calendars. In-process holidays only."""
+    _ensure_calendar(
+        db,
+        project_id=PROJECT_ID,
+        calendar_id=HARBOR_CALENDAR_ID,
+        holiday_ids=(
+            HARBOR_HOLIDAY_LABOR_2026_ID,
+            HARBOR_HOLIDAY_VETERANS_2026_ID,
+            HARBOR_HOLIDAY_THANKS_2026_ID,
+        ),
+    )
+    _ensure_calendar(
+        db,
+        project_id=ILSB_PROJECT_ID,
+        calendar_id=ILSB_CALENDAR_ID,
+        holiday_ids=(
+            ILSB_HOLIDAY_LABOR_2026_ID,
+            ILSB_HOLIDAY_VETERANS_2026_ID,
+            ILSB_HOLIDAY_THANKS_2026_ID,
+        ),
+    )
+    db.commit()
+    for project_id in (PROJECT_ID, ILSB_PROJECT_ID):
+        if db.get(Project, str(project_id)):
+            holiday_cache.refresh(db, str(project_id))
+
+
 def seed_demo(db: Session) -> None:
     paths = ensure_demo_drawings(ASSETS_DIR)
     sizes = {name: png_size(path) for name, path in paths.items()}
     seed_harbor_yard(db, sizes)
     seed_ilsb_catalog(db, sizes)
+    seed_project_calendars(db)
     seed_pe_roster(db)
     ingest_ilsb_draft(db)
     seed_sample_graph_rfis(db)

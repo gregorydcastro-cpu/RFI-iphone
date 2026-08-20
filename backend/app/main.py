@@ -17,6 +17,7 @@ from app import db as dbmod
 from app.db import get_db, init_db
 from app.aging import (
     DAYS_OPEN_RULE,
+    DEFAULT_ESCALATE_AFTER_HOURS,
     age_bucket,
     as_naive_utc,
     bucket_rank,
@@ -24,6 +25,8 @@ from app.aging import (
     utc_now,
     work_stopped,
 )
+from app.calendar import DEFAULT_TZ
+from app.holiday_cache import holiday_cache
 from app.grokbot import GrokbotError, draft_from_preflight
 from app.models import (
     Company,
@@ -31,6 +34,7 @@ from app.models import (
     DraftMaterialOrder,
     Organization,
     Project,
+    ProjectRFISettings,
     RFI,
     RFIAttachment,
     RFIEvent,
@@ -52,6 +56,7 @@ from app.pe import (
     draft_material_order,
     record_official_response,
     request_clarification,
+    set_priority,
     start_impact_review,
     submit_for_design,
 )
@@ -76,6 +81,8 @@ from app.schemas import (
     GraphRow,
     PEApproveBody,
     PEApproveResult,
+    PESetPriorityBody,
+    PESetPriorityResult,
     PESubmitBody,
     PESubmitResult,
     PreflightEnvelope,
@@ -324,9 +331,26 @@ def _primary_sheet(rfi: RFI) -> str | None:
     return sheets[0] if sheets else None
 
 
-def _graph_row(rfi: RFI, project_name: str, now) -> GraphRow:
+def _project_clock(db: Session, project_id: str) -> tuple:
+    lookup = holiday_cache.get(db, project_id)
+    settings = db.scalar(
+        select(ProjectRFISettings).where(ProjectRFISettings.project_id == project_id)
+    )
+    escalate = (
+        int(settings.escalate_after_overdue_hours)
+        if settings and settings.escalate_after_overdue_hours is not None
+        else DEFAULT_ESCALATE_AFTER_HOURS
+    )
+    return lookup, escalate
+
+
+def _graph_row(rfi: RFI, project_name: str, now, lookup, escalate_hours: int) -> GraphRow:
     bucket = age_bucket(
-        status=rfi.status, priority=rfi.priority, due_at=rfi.due_at, now=now
+        status=rfi.status,
+        priority=rfi.priority,
+        due_at=rfi.due_at,
+        now=now,
+        escalate_after_overdue_hours=escalate_hours,
     )
     due = as_naive_utc(rfi.due_at)
     return GraphRow(
@@ -342,7 +366,7 @@ def _graph_row(rfi: RFI, project_name: str, now) -> GraphRow:
         work_stopped=work_stopped(rfi.priority),
         assigned=rfi.assigned,
         due_at=due.isoformat() + "Z" if due else None,
-        days_open=days_open(rfi.created_at, now),
+        days_open=days_open(submitted_at=rfi.submitted_at, now=now, lookup=lookup),
         age_bucket=bucket,
         is_sample=bool(rfi.is_sample),
         is_draft=rfi.status == "draft" or (
@@ -365,11 +389,15 @@ def rfi_graph(
     stmt = stmt.options(selectinload(RFI.refs), selectinload(RFI.pins))
     pairs = db.execute(stmt).all()
 
+    clocks: dict[str, tuple] = {}
     open_rows: list[GraphRow] = []
     drafts: list[GraphRow] = []
     closed_or_void = 0
     for rfi, project_name in pairs:
-        row = _graph_row(rfi, project_name, now)
+        if rfi.project_id not in clocks:
+            clocks[rfi.project_id] = _project_clock(db, rfi.project_id)
+        lookup, escalate_hours = clocks[rfi.project_id]
+        row = _graph_row(rfi, project_name, now, lookup, escalate_hours)
         if rfi.status == "draft" or (
             rfi.status == "internal_review" and rfi.rfi_display is None
         ):
@@ -386,10 +414,15 @@ def rfi_graph(
         if row.age_bucket in counts:
             counts[row.age_bucket] += 1
 
+    zones = {lookup.timezone_name for lookup, _ in clocks.values()}
+    graph_tz = next(iter(zones)) if len(zones) == 1 else DEFAULT_TZ
+    if project_id and clocks:
+        graph_tz = clocks[project_id][0].timezone_name
+
     return GraphResponse(
         ok=True,
         generated_at=now.isoformat() + "Z",
-        timezone="UTC",
+        timezone=graph_tz,
         days_open_rule=DAYS_OPEN_RULE,
         sample_notice=(
             "Open rows marked SAMPLE / is_sample are PE-seeded examples, "
@@ -833,6 +866,38 @@ def pe_submit_rfi(
         priority=result.priority or "",
         work_stopped=result.work_stopped,
         due_at_rule=DUE_AT_RULE,
+        message=result.message,
+    )
+
+
+@app.post("/pe/rfis/{rfi_id}/set_priority", response_model=PESetPriorityResult)
+def pe_set_priority(
+    rfi_id: str,
+    body: PESetPriorityBody,
+    _: str = Depends(require_pe),
+    db: Session = Depends(get_db),
+) -> PESetPriorityResult:
+    try:
+        result = set_priority(
+            db,
+            rfi_id,
+            body.priority,
+            body.work_stopped,
+            allow_demote=body.allow_demote,
+            source="pe_http",
+            actor="pe",
+        )
+    except PEError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return PESetPriorityResult(
+        ok=True,
+        rfi_id=result.rfi_id,
+        status=result.status,
+        rfi_display=result.rfi_display,
+        priority=result.priority or "",
+        work_stopped=result.work_stopped,
+        due_at=_iso(result.due_at),
+        reminted=result.reminted,
         message=result.message,
     )
 

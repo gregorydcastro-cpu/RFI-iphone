@@ -166,7 +166,7 @@ def seed_sample_graph_rfis(db: Session) -> None:
         assigned="Sample superintendent",
         created_at=now - timedelta(days=6),
         submitted_at=now - timedelta(days=5),
-        due_at=now - timedelta(hours=8),
+        due_at=now + timedelta(hours=3),
         rev_id=REV_S301_C_ID,
         sheet_number="S301",
         revision="C",
