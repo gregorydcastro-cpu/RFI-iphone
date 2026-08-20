@@ -206,6 +206,38 @@ def load_ticket(
     return ticket, resource_from_ticket(db, ticket)
 
 
+def handle_material(db: Session, actor: Subject, ticket_id: UUID) -> DraftMaterialOrder:
+    ticket, mapped = load_ticket(db, ticket_id)
+    require_access(
+        actor,
+        Action.HANDLE_MATERIAL,
+        Resource(
+            type="ticket",
+            project_id=mapped.project_id,
+            area_id=mapped.area_id,
+            assigned_to_id=mapped.assigned_to_id,
+            status=mapped.status,
+        ),
+    )
+    return ticket
+
+
+def flag_up(db: Session, actor: Subject, ticket_id: UUID) -> DraftMaterialOrder:
+    ticket, mapped = load_ticket(db, ticket_id)
+    require_access(
+        actor,
+        Action.FLAG_UP,
+        Resource(
+            type="ticket",
+            project_id=mapped.project_id,
+            area_id=mapped.area_id,
+            assigned_to_id=mapped.assigned_to_id,
+            status=mapped.status,
+        ),
+    )
+    return ticket
+
+
 def subject_from_assignment(
     db: Session,
     assignment: ProjectAssignment,

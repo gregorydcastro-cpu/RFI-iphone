@@ -33,6 +33,8 @@ from app.access import (
     Env,
     Resource,
     as_uuid,
+    flag_up,
+    handle_material,
     load_rfi,
     must_uuid,
     raise_http,
@@ -1390,7 +1392,14 @@ def field_handle_ticket(
         raise HTTPException(404, "Ticket not found.")
     rfi = db.get(RFI, row.rfi_id)
     actor = _field_actor(db, rfi.project_id, x_user_id, x_field_role)
-    _gate(db, actor, "handle_material", rfi=rfi, ticket=row)
+    subject = subject_for(db, actor, project_id=rfi.project_id)
+    try:
+        handle_material(db, subject, must_uuid(ticket_id))
+    except AccessDenied as exc:
+        raise_http(exc)
+    except KeyError:
+        raise HTTPException(404, "Ticket not found.")
+    # existing handle rules after this (picked/dropped/photo). Do not skip assign or approve.
     row.handled_at = utc_now()
     row.status = "handled"
     db.commit()
@@ -1411,7 +1420,13 @@ def field_flag_ticket(
         raise HTTPException(404, "Ticket not found.")
     rfi = db.get(RFI, row.rfi_id)
     actor = _field_actor(db, rfi.project_id, x_user_id, x_field_role)
-    _gate(db, actor, "flag_material", rfi=rfi, ticket=row)
+    subject = subject_for(db, actor, project_id=rfi.project_id)
+    try:
+        flag_up(db, subject, must_uuid(ticket_id))
+    except AccessDenied as exc:
+        raise_http(exc)
+    except KeyError:
+        raise HTTPException(404, "Ticket not found.")
     if not (body.note or "").strip():
         raise HTTPException(422, "A flag note is required.")
     db.add(
