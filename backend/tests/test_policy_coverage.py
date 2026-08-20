@@ -19,6 +19,7 @@ from app.policy_coverage import (
     PolicyCoverageData,
     _hits_to_dict,
     _merge_hits,
+    absorb_hits,
     assert_policy_coverage,
     migrate_v2_to_v3,
     read_coverage,
@@ -207,6 +208,36 @@ def test_module_was_subset_compares_collected_to_defined():
         SimpleNamespace(module=module, name="test_assigned_only")
     )
     assert _module_was_subset(request) is False
+
+
+def test_absorb_hits_unions_without_evaluate():
+    left = PolicyCoverage()
+    left.seen.add("same_project")
+    left.denies.add("same_project")
+    left.hit_counts["same_project"]["deny"] = 1
+    left.stop_counts["same_project"] = 1
+    right = PolicyCoverage()
+    right.seen.add("assigned_only")
+    right.denies.add("assigned_only")
+    right.hit_counts["assigned_only"]["deny"] = 2
+    right.stop_counts["assigned_only"] = 2
+    absorb_hits(left, right)
+    assert left.hit_counts["same_project"]["deny"] == 1
+    assert left.hit_counts["assigned_only"]["deny"] == 2
+    assert left.stops == {"same_project", "assigned_only"}
+
+
+def test_is_stops_module_only_policy_stops():
+    from types import SimpleNamespace
+
+    from tests.conftest import _is_stops_module
+
+    assert _is_stops_module(
+        SimpleNamespace(module=SimpleNamespace(__file__="/x/test_policy_stops.py"))
+    )
+    assert not _is_stops_module(
+        SimpleNamespace(module=SimpleNamespace(__file__="/x/test_role_matrix.py"))
+    )
 
 
 def test_empty_bag_fails_completeness_and_includes_format():

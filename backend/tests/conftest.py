@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 from collections.abc import Iterable
 from pathlib import Path
 from uuid import UUID
@@ -31,8 +32,8 @@ from app.policy_coverage import (
     _hits_to_dict,
     _merge_hits,
     _traces,
+    absorb_hits,
     assert_policy_coverage,
-    read_coverage,
     write_coverage,
 )
 
@@ -286,8 +287,8 @@ def _is_subset_run(config) -> bool:
     return bool(keyword.strip())
 
 
-def _cov_dump_path(config, worker_id: str) -> Path:
-    return Path(config.rootpath) / f"rfi-cov-{worker_id}.json"
+def _cov_dump_path(worker_id: str) -> Path:
+    return Path(tempfile.gettempdir()) / f"rfi-cov-{worker_id}.json"
 
 
 def pytest_configure(config):
@@ -296,7 +297,7 @@ def pytest_configure(config):
 
 
 def pytest_xdist_make_scheduler(config, log):
-    """Keep each test file on one worker so a session coverage bag stays whole."""
+    """Keep each test file on one worker so a module coverage bag stays whole."""
     from xdist.scheduler import LoadFileScheduling
 
     return LoadFileScheduling(config, log)
@@ -347,26 +348,39 @@ def _module_was_subset(request: pytest.FixtureRequest) -> bool:
     return len(collected) < len(defined)
 
 
+def _is_stops_module(request: pytest.FixtureRequest) -> bool:
+    path = getattr(request.module, "__file__", "") or ""
+    return Path(path).name == "test_policy_stops.py"
+
+
 @pytest.fixture(scope="session")
-def cov(request: pytest.FixtureRequest) -> PolicyCoverage:
-    """One production bag per session. Teardown must not bury a failed stop."""
+def cov_summary() -> PolicyCoverage:
+    """Print rollup only. Not the completeness gate."""
+    coverage = PolicyCoverage()
+    yield coverage
+    coverage.seal()
+    print("\n" + coverage.format())
+
+
+@pytest.fixture(scope="module")
+def cov(request: pytest.FixtureRequest, cov_summary: PolicyCoverage) -> PolicyCoverage:
     coverage = PolicyCoverage()
     failed_before = request.session.testsfailed
     yield coverage
     coverage.seal()
-    failed_here = request.session.testsfailed - failed_before
-    if failed_here:
-        return
-    incomplete = coverage.report().never_applicable()
-    if incomplete and (
-        _session_had_skips(request) or _is_subset_run(request.config)
-    ):
-        pytest.skip("coverage incomplete because tests were skipped")
+    absorb_hits(cov_summary, coverage)
     bags = getattr(request.config, "_rfi_cov_bags", None)
     if bags is None:
         request.config._rfi_cov_bags = []
         bags = request.config._rfi_cov_bags
     bags.append(_hits_to_dict(coverage, worker=_worker_id(request.config)))
+    failed_here = request.session.testsfailed - failed_before
+    if failed_here:
+        return
+    if not _is_stops_module(request):
+        return
+    if coverage.report().never_applicable() and _module_had_skips(request):
+        pytest.skip("coverage incomplete because tests were skipped")
     assert_policy_coverage(coverage)
 
 
@@ -393,28 +407,22 @@ def pytest_sessionfinish(session, exitstatus):
         workeroutput = getattr(config, "workeroutput", None)
         if workeroutput is not None:
             workeroutput["rfi_cov_bags"] = bags
-            return
         worker = _worker_id(config) or "gw?"
-        write_coverage(
-            _cov_dump_path(config, worker),
-            PolicyCoverageData.from_json(
-                bags[0] if len(bags) == 1 else _hits_to_dict(_merge_hits(bags), worker=worker)
+        if bags:
+            write_coverage(
+                _cov_dump_path(worker),
+                PolicyCoverageData.from_json(
+                    bags[0]
+                    if len(bags) == 1
+                    else _hits_to_dict(_merge_hits(bags), worker=worker)
+                ),
             )
-            if bags
-            else PolicyCoverageData(worker=worker),
-        )
         return
     if exitstatus != 0:
         return
-    if _is_subset_run(config):
-        return
     bags = list(getattr(config, "_rfi_cov_merged", []) or [])
     if not bags:
-        dumps = sorted(Path(config.rootpath).glob("rfi-cov-gw*.json"))
-        if dumps:
-            bags = [read_coverage(path).to_json() for path in dumps]
-        else:
-            return
+        return
     assert_policy_coverage(_merge_hits(bags))
 
 

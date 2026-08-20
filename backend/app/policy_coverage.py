@@ -260,6 +260,20 @@ def _merge_hits(bags: list[dict[str, Any]]) -> PolicyCoverage:
     return merged
 
 
+def absorb_hits(dst: PolicyCoverage, src: PolicyCoverage) -> None:
+    """Merge src counts into dst. Not evaluate. Not a walk."""
+    merged = _merge_hits([_hits_to_dict(dst), _hits_to_dict(src)])
+    dst.seen = set(merged.seen)
+    dst.stops = set(merged.stops)
+    dst.allows = set(merged.allows)
+    dst.denies = set(merged.denies)
+    dst.na = set(merged.na)
+    dst.effects = merged.effects
+    dst.hit_counts = merged.hit_counts
+    dst.stop_counts = merged.stop_counts
+    dst.decision_counts = merged.decision_counts
+
+
 def assert_policy_coverage(coverage: PolicyCoverage) -> None:
     receipt = coverage.format()
     leaked = [

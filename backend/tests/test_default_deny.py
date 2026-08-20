@@ -1,7 +1,7 @@
 """Strategy 5: permitless stripped set only. Production must not depend on this hit.
 
-Bare evaluate() on the stripped set. Do not request session cov / evaluate_cov —
-stripped-set hits must not write into the production PolicyCoverage bag.
+Bare evaluate() on the stripped set. No shared bag — do not request cov /
+evaluate_cov / cov_summary. Stripped-set hits must not pollute production.
 """
 
 from __future__ import annotations
