@@ -35,8 +35,7 @@ from app.policy_coverage import (
     assert_policy_coverage,
     coverage_from_data,
     dump_from_bag,
-    merge_coverage,
-    read_coverage,
+    merge_after_migrate,
     write_coverage,
 )
 
@@ -414,13 +413,11 @@ def pytest_sessionfinish(session, exitstatus):
         return
     if exitstatus != 0:
         return
-    paths = sorted(COV_DIR.glob("gw*.json"))
-    if not paths:
+    if not list(COV_DIR.glob("gw*.json")):
         return
-    bags = [read_coverage(path).to_json() for path in paths]
-    merged = merge_coverage(bags)
-    write_coverage(COV_DIR / "merged.json", PolicyCoverageData.from_json(merged))
-    assert_policy_coverage(coverage_from_data(PolicyCoverageData.from_json(merged)))
+    merged = merge_after_migrate(sorted(COV_DIR.glob("gw*.json")))
+    write_coverage(COV_DIR / "merged.json", merged)
+    assert_policy_coverage(coverage_from_data(merged))
 
 
 @pytest.fixture()

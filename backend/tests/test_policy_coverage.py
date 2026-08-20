@@ -24,6 +24,8 @@ from app.policy_coverage import (
     absorb_hits,
     assert_policy_coverage,
     dump_from_bag,
+    load_parts,
+    merge_after_migrate,
     merge_coverage,
     migrate,
     migrate_v1_to_v2,
@@ -338,9 +340,33 @@ def test_truncated_json_fails_the_merge(tmp_path: Path):
     write_coverage(good, PolicyCoverageData())
     bad = tmp_path / "gw1.json"
     bad.write_text('{"schema": 2, "policy_set": "field_lanes"')
-    with pytest.raises(ValueError):
-        bags = [read_coverage(path).to_json() for path in sorted(tmp_path.glob("gw*.json"))]
-        merge_coverage(bags)
+    with pytest.raises((ValueError, json.JSONDecodeError)):
+        merge_after_migrate(sorted(tmp_path.glob("gw*.json")))
+
+
+def test_load_parts_each_is_schema_2(tmp_path: Path):
+    v1 = tmp_path / "gw0.json"
+    v1.write_text(json.dumps({"schema": 1, "hits": {"same_project": {"deny": 1}}}))
+    current = tmp_path / "gw1.json"
+    write_coverage(current, PolicyCoverageData())
+    parts = load_parts(sorted(tmp_path.glob("gw*.json")))
+    assert [part.schema for part in parts] == [CURRENT_SCHEMA, CURRENT_SCHEMA]
+    assert all(part.policy_set == "field_lanes" for part in parts)
+
+
+def test_one_unmigratable_file_fails_merge_after_migrate(tmp_path: Path):
+    write_coverage(tmp_path / "gw0.json", PolicyCoverageData())
+    (tmp_path / "gw1.json").write_text(json.dumps({"schema": 0, "hits": {}}))
+    with pytest.raises(ValueError, match="missing migration step"):
+        merge_after_migrate(sorted(tmp_path.glob("gw*.json")))
+    (tmp_path / "gw1.json").write_text(json.dumps({"schema": 99, "hits": {}}))
+    with pytest.raises(ValueError, match="upgrade the test runner"):
+        merge_after_migrate(sorted(tmp_path.glob("gw*.json")))
+
+
+def test_controller_uses_merge_after_migrate():
+    source = Path(__file__).resolve().parents[0] / "conftest.py"
+    assert 'merge_after_migrate(sorted(COV_DIR.glob("gw*.json")))' in source.read_text()
 
 
 def test_migrate_deepcopy_rejects_non_object_and_bad_schema():
@@ -449,11 +475,11 @@ def test_merge_coverage_adds_ints_never_average_or_max():
         "stops": {"same_project": 3},
     }
     merged = merge_coverage([left, right])
-    assert merged["hits"]["same_project"]["deny"] == 5
-    assert merged["hits"]["same_project"]["skipped_after_stop"] == 5
-    assert merged["decisions"]["deny"] == 5
-    assert merged["stops"]["same_project"] == 5
-    assert merged["hits"]["mystery_lane"]["deny"] == 1
+    assert merged.hits["same_project"]["deny"] == 5
+    assert merged.hits["same_project"]["skipped_after_stop"] == 5
+    assert merged.decisions["deny"] == 5
+    assert merged.stops["same_project"] == 5
+    assert merged.hits["mystery_lane"]["deny"] == 1
 
 
 def test_merge_coverage_empty_hits_are_zeros():
@@ -466,10 +492,10 @@ def test_merge_coverage_empty_hits_are_zeros():
         "stops": {},
     }
     merged = merge_coverage([empty, empty])
-    assert merged["hits"] == {}
-    assert merged["decisions"] == {}
-    assert merged["stops"] == {}
-    assert merge_coverage([])["hits"] == {}
+    assert merged.hits == {}
+    assert merged.decisions == {}
+    assert merged.stops == {}
+    assert merge_coverage([]).hits == {}
 
 
 def test_merge_coverage_incompatible_combining_raises():

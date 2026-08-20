@@ -179,17 +179,30 @@ def read_coverage(path: Path) -> PolicyCoverageData:
     return PolicyCoverageData.from_json(json.loads(path.read_text()))
 
 
+def load_parts(paths: list[Path]) -> list[PolicyCoverageData]:
+    return [read_coverage(p) for p in paths]  # each is schema 2
+
+
+def merge_after_migrate(paths: list[Path]) -> PolicyCoverageData:
+    return merge_coverage(load_parts(paths))
+
+
 def dump_from_bag(
     coverage: PolicyCoverage, path: Path, worker: str | None = None
 ) -> None:
     write_coverage(path, PolicyCoverageData.from_json(_hits_to_dict(coverage, worker=worker)))
 
 
-def merge_coverage(bags: list[dict[str, Any]]) -> dict[str, Any]:
+def merge_coverage(
+    bags: list[PolicyCoverageData] | list[dict[str, Any]],
+) -> PolicyCoverageData:
     """Add ints only. Never average or max. Empty hits merge as zeros."""
     if not bags:
-        return PolicyCoverageData(hits={}, decisions={}, stops={}).to_json()
-    loaded = [migrate(bag) for bag in bags]
+        return PolicyCoverageData(hits={}, decisions={}, stops={})
+    raws = [
+        bag.to_json() if isinstance(bag, PolicyCoverageData) else bag for bag in bags
+    ]
+    loaded = [migrate(bag) for bag in raws]
     policy_set = loaded[0].get("policy_set", "field_lanes")
     combining = loaded[0].get("combining", "deny_overrides")
     for bag in loaded[1:]:
@@ -215,7 +228,7 @@ def merge_coverage(bags: list[dict[str, Any]]) -> dict[str, Any]:
         hits=hits,
         decisions=decisions,
         stops=stops,
-    ).to_json()
+    )
 
 
 def coverage_from_data(data: PolicyCoverageData) -> PolicyCoverage:
@@ -370,7 +383,7 @@ def _hits_to_dict(coverage: PolicyCoverage, worker: str | None = None) -> dict[s
 
 
 def _merge_hits(bags: list[dict[str, Any]]) -> PolicyCoverage:
-    return coverage_from_data(PolicyCoverageData.from_json(merge_coverage(bags)))
+    return coverage_from_data(merge_coverage(bags))
 
 
 def absorb_hits(dst: PolicyCoverage, src: PolicyCoverage) -> None:
