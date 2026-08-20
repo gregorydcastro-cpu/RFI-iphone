@@ -144,6 +144,27 @@ def test_write_refuses_old_schema() -> None:
         write_coverage(Path("/tmp/rfi-cov-old.json"), data)
 
 
+def test_normalize_does_not_add_deny_onto_existing_stop() -> None:
+    raw = {
+        "schema": CURRENT_SCHEMA,
+        "policy_set": "field_lanes",
+        "hits": {"same_project": {"deny": 3, "stop": 1}},
+    }
+    out = migrate(raw)
+    assert out["schema"] == CURRENT_SCHEMA
+    assert out["hits"]["same_project"]["stop"] == 1
+    assert out["hits"]["same_project"]["deny"] == 3
+    assert out["hits"]["same_project"]["skipped_after_stop"] == 0
+
+
+def test_normalize_is_not_a_substitute_for_a_missing_step() -> None:
+    with pytest.raises(CoverageSchemaError, match="missing migration step"):
+        migrate({"schema": 0, "hits": {}})
+    assert CURRENT_SCHEMA == 2
+    assert 2 not in MIGRATIONS
+    assert 3 not in MIGRATIONS
+
+
 def test_v1_step_does_not_overwrite_existing_stop() -> None:
     raw = deepcopy(V1)
     raw["hits"]["same_project"]["stop"] = 9

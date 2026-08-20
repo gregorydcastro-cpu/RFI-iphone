@@ -9,6 +9,9 @@ New policy_set value is reject on read, not a bump.
 Keep every step from 1. file>code refuse. file<code migrate then merge.
 Every step: n→n+1; already-n+1→n+1 same counts; no input mutation;
 result schema is exactly n+1. Walker rejects in-place and landing != src+1.
+migrate = normalize ∘ step_k ∘ … ∘ step_1. Do not use normalize as a missing step.
+Planned ladder, NOT shipped: v2 stop; v3 stopped (copy if missing);
+v4 stop removed from dataclass (already popped in v3). CURRENT_SCHEMA stays 2.
 """
 
 from __future__ import annotations
@@ -63,23 +66,23 @@ def _require(raw: dict[str, Any], key: str) -> dict[str, Any]:
 
 
 def _ensure_hit_row(row: Any) -> dict[str, int]:
+    """Current v2. Do not add deny onto an existing stop."""
     if not isinstance(row, dict):
         raise CoverageSchemaError("hit row must be an object")
     out = dict(row)
-    for key in ("seen", "applicable", "allow", "deny", "skipped_after_stop"):
-        if key not in out:
-            out[key] = 0
-        else:
-            out[key] = _as_int(out[key], default=0)
+    for key in ("seen", "applicable", "allow", "deny"):
+        out[key] = _as_int(out[key], default=0) if key in out else 0
     if "stop" not in row:
-        out["stop"] = out["deny"]
+        out["stop"] = out.get("deny", 0)
     else:
         out["stop"] = _as_int(out["stop"], default=0)
+    out.setdefault("skipped_after_stop", 0)
+    out["skipped_after_stop"] = _as_int(out["skipped_after_stop"], default=0)
     return out
 
 
 def _normalize_current(raw: dict[str, Any]) -> dict[str, Any]:
-    """Fill missing current-schema keys. Never bump. Never add counts."""
+    """Fill missing current-schema keys. Never bump. Never a missing step."""
     out = _copy(raw)
     if out.get("schema") != CURRENT_SCHEMA:
         raise CoverageSchemaError("normalize is current-schema only")
@@ -148,8 +151,10 @@ def migrate_v2_to_v3(raw: dict) -> dict:
     return out
 
 
-# stay on 2 — v2→v3 (stop→stopped rename) is not registered yet.
-# Counter meaning change must bump and must not reuse "stop".
+# Planned ladder, NOT shipped. CURRENT_SCHEMA stays 2.
+# v2: stop (fill from deny if missing; do not add deny onto existing stop)
+# v3: stopped (copy stop→stopped if missing; pop stop) — migrate_v2_to_v3 exists, unregistered
+# v4: stop removed from dataclass (already popped in v3)
 MIGRATIONS: dict[int, Callable[[dict], dict]] = {
     1: migrate_v1_to_v2,
 }
@@ -164,7 +169,7 @@ for _n, _step in MIGRATIONS.items():
 
 
 def migrate(raw: Any) -> dict[str, Any]:
-    """Schema walk is law. deepcopy first. Steps must land on schema+1."""
+    """normalize ∘ step_k ∘ … ∘ step_1. Do not use normalize as a missing step."""
     out = _copy(raw)
     schema = out.get("schema", None)
     if schema is None or type(schema) is not int:
