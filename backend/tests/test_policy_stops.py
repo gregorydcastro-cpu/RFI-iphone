@@ -19,6 +19,7 @@ from abac import (
     Subject,
     evaluate,
     reject_frozen_env_now,
+    reject_subject_crew_ids,
     require_access,
 )
 from app.policy_coverage import EXPECTED_ORDER, PolicyCoverage, _traces
@@ -101,6 +102,38 @@ def test_env_now_is_factory_not_import_stamp():
 
     with pytest.raises(TypeError, match="class-body"):
         reject_frozen_env_now(FrozenNow)
+
+
+def test_subject_crew_ids_is_per_instance_frozenset():
+    from dataclasses import MISSING, dataclass, field, fields
+    from uuid import UUID
+
+    crew = next(item for item in fields(Subject) if item.name == "crew_ids")
+    assert crew.default is MISSING
+    assert crew.default_factory is frozenset
+    assert Subject.__dataclass_params__.frozen is True
+    reject_subject_crew_ids(Subject)
+
+    @dataclass(frozen=True)
+    class SharedCrew:
+        crew_ids: frozenset[UUID] = frozenset()
+
+    with pytest.raises(TypeError, match="class-body"):
+        reject_subject_crew_ids(SharedCrew)
+
+    @dataclass(frozen=True)
+    class MutableCrew:
+        crew_ids: set[UUID] = field(default_factory=set)
+
+    with pytest.raises(TypeError, match="mutable"):
+        reject_subject_crew_ids(MutableCrew)
+
+    @dataclass
+    class Thawed:
+        crew_ids: frozenset[UUID] = field(default_factory=frozenset)
+
+    with pytest.raises(TypeError, match="frozen"):
+        reject_subject_crew_ids(Thawed)
 
 
 def test_wrong_job_stops_at_same_project(cov: PolicyCoverage):

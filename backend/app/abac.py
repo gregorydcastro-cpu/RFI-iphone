@@ -86,6 +86,26 @@ class Subject:
     crew_ids: frozenset[UUID] = field(default_factory=frozenset)
 
 
+def reject_subject_crew_ids(cls: type) -> None:
+    """crew_ids is a per-instance frozenset factory. Frozen Subject only."""
+    params = getattr(cls, "__dataclass_params__", None)
+    if params is None or not params.frozen:
+        raise TypeError("Subject must be frozen")
+    crew = next(item for item in fields(cls) if item.name == "crew_ids")
+    if crew.default is not MISSING:
+        raise TypeError("Subject.crew_ids must not share a class-body frozenset")
+    if crew.default_factory is MISSING:
+        raise TypeError("Subject.crew_ids must use field(default_factory=frozenset)")
+    if crew.default_factory is set:
+        raise TypeError("Subject.crew_ids must not be a mutable default")
+    sample = crew.default_factory()
+    if type(sample) is not frozenset:
+        raise TypeError("Subject.crew_ids factory must produce a frozenset")
+
+
+reject_subject_crew_ids(Subject)
+
+
 @dataclass(frozen=True)
 class Resource:
     type: str  # rfi | material_order | sheet | ticket
