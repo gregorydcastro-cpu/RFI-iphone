@@ -4,66 +4,31 @@ from __future__ import annotations
 
 import pytest
 
-from uuid import UUID
-
-from abac import Action, ActorType, Env, Resource, Role, Subject
+from abac import Action, ActorType, Env, Role
+from tests.conftest import (
+    AREA,
+    CREW,
+    OTHER,
+    OTHER_AREA,
+    OTHER_JOB,
+    USER,
+    assert_stop,
+    resource,
+    subject,
+)
 from tests.coverage_abac import PolicyCoverage, assert_policy_coverage
-from tests.test_policy_stops import assert_stop
-
-JOB = UUID("00000000-0000-4000-8000-000000000010")
-OTHER_JOB = UUID("00000000-0000-4000-8000-000000000110")
-AREA = UUID("00000000-0000-4000-8000-000000000401")
-OTHER_AREA = UUID("00000000-0000-4000-8000-000000000402")
-USER = UUID("00000000-0000-4000-8000-000000000001")
-CREW = UUID("00000000-0000-4000-8000-000000000002")
-OTHER = UUID("00000000-0000-4000-8000-000000000003")
-COMPANY = UUID("00000000-0000-4000-8000-000000000301")
-
-
-def subject(
-    *,
-    role: Role = Role.JOURNEYMAN,
-    actor_type: ActorType = ActorType.HUMAN,
-    project_id: UUID = JOB,
-    area_id: UUID | None = AREA,
-    user_id: UUID = USER,
-    crew_ids: frozenset[UUID] | None = None,
-    company_id: UUID = COMPANY,
-) -> Subject:
-    return Subject(
-        user_id=user_id,
-        company_id=company_id,
-        project_id=project_id,
-        role=role,
-        area_id=area_id,
-        actor_type=actor_type,
-        crew_ids=crew_ids if crew_ids is not None else frozenset(),
-    )
-
-
-def resource(
-    *,
-    type: str = "rfi",
-    project_id: UUID = JOB,
-    area_id: UUID | None = AREA,
-    status: str | None = "draft",
-    **kwargs,
-) -> Resource:
-    return Resource(
-        type=type, project_id=project_id, area_id=area_id, status=status, **kwargs
-    )
 
 
 @pytest.fixture(scope="module")
-def cov():
+def walk_cov():
     c = PolicyCoverage()
     yield c
     assert_policy_coverage(c)
 
 
-def test_same_project_deny(cov: PolicyCoverage) -> None:
-    decision, steps = cov.evaluate(
-        subject(project_id=JOB),
+def test_same_project_deny(walk_cov: PolicyCoverage) -> None:
+    decision, steps = walk_cov.evaluate(
+        subject(),
         Action.CREATE_RFI_DRAFT,
         resource(project_id=OTHER_JOB),
     )
@@ -71,8 +36,8 @@ def test_same_project_deny(cov: PolicyCoverage) -> None:
     assert decision.allowed is False
 
 
-def test_grokbot_lane_deny(cov: PolicyCoverage) -> None:
-    decision, steps = cov.evaluate(
+def test_grokbot_lane_deny(walk_cov: PolicyCoverage) -> None:
+    decision, steps = walk_cov.evaluate(
         subject(role=Role.GENERAL_FOREMAN, actor_type=ActorType.GROKBOT),
         Action.SUBMIT_RFI,
         resource(),
@@ -81,8 +46,8 @@ def test_grokbot_lane_deny(cov: PolicyCoverage) -> None:
     assert decision.allowed is False
 
 
-def test_on_site_deny(cov: PolicyCoverage) -> None:
-    decision, steps = cov.evaluate(
+def test_on_site_deny(walk_cov: PolicyCoverage) -> None:
+    decision, steps = walk_cov.evaluate(
         subject(role=Role.JOURNEYMAN),
         Action.PIN_DRAFT,
         resource(type="sheet"),
@@ -92,8 +57,8 @@ def test_on_site_deny(cov: PolicyCoverage) -> None:
     assert decision.allowed is False
 
 
-def test_role_allows_deny(cov: PolicyCoverage) -> None:
-    decision, steps = cov.evaluate(
+def test_role_allows_deny(walk_cov: PolicyCoverage) -> None:
+    decision, steps = walk_cov.evaluate(
         subject(role=Role.APPRENTICE),
         Action.SUBMIT_RFI,
         resource(),
@@ -102,8 +67,8 @@ def test_role_allows_deny(cov: PolicyCoverage) -> None:
     assert decision.allowed is False
 
 
-def test_role_allows_allow(cov: PolicyCoverage) -> None:
-    decision, steps = cov.evaluate(
+def test_role_allows_allow(walk_cov: PolicyCoverage) -> None:
+    decision, steps = walk_cov.evaluate(
         subject(role=Role.JOURNEYMAN),
         Action.CREATE_RFI_DRAFT,
         resource(),
@@ -113,8 +78,8 @@ def test_role_allows_allow(cov: PolicyCoverage) -> None:
     assert not any(step.effect == "deny" for step in steps)
 
 
-def test_area_scope_deny(cov: PolicyCoverage) -> None:
-    decision, steps = cov.evaluate(
+def test_area_scope_deny(walk_cov: PolicyCoverage) -> None:
+    decision, steps = walk_cov.evaluate(
         subject(role=Role.AREA_FOREMAN, area_id=AREA),
         Action.SET_PRIORITY,
         resource(area_id=OTHER_AREA),
@@ -125,8 +90,8 @@ def test_area_scope_deny(cov: PolicyCoverage) -> None:
     assert steps[3].effect == "allow"
 
 
-def test_assigned_only_deny(cov: PolicyCoverage) -> None:
-    decision, steps = cov.evaluate(
+def test_assigned_only_deny(walk_cov: PolicyCoverage) -> None:
+    decision, steps = walk_cov.evaluate(
         subject(role=Role.APPRENTICE, user_id=USER),
         Action.HANDLE_MATERIAL,
         resource(type="ticket", assigned_to_id=OTHER),
@@ -135,8 +100,8 @@ def test_assigned_only_deny(cov: PolicyCoverage) -> None:
     assert decision.allowed is False
 
 
-def test_chain_owns_deny(cov: PolicyCoverage) -> None:
-    decision, steps = cov.evaluate(
+def test_chain_owns_deny(walk_cov: PolicyCoverage) -> None:
+    decision, steps = walk_cov.evaluate(
         subject(role=Role.FOREMAN, crew_ids=frozenset({CREW})),
         Action.SUBMIT_RFI,
         resource(created_by_id=OTHER, crew_foreman_id=OTHER),
@@ -145,8 +110,8 @@ def test_chain_owns_deny(cov: PolicyCoverage) -> None:
     assert decision.allowed is False
 
 
-def test_status_guard_deny(cov: PolicyCoverage) -> None:
-    decision, steps = cov.evaluate(
+def test_status_guard_deny(walk_cov: PolicyCoverage) -> None:
+    decision, steps = walk_cov.evaluate(
         subject(role=Role.FOREMAN),
         Action.SUBMIT_RFI,
         resource(status="answered"),
@@ -155,8 +120,8 @@ def test_status_guard_deny(cov: PolicyCoverage) -> None:
     assert decision.allowed is False
 
 
-def test_work_stop_writer_deny(cov: PolicyCoverage) -> None:
-    decision, steps = cov.evaluate(
+def test_work_stop_writer_deny(walk_cov: PolicyCoverage) -> None:
+    decision, steps = walk_cov.evaluate(
         subject(role=Role.AREA_FOREMAN),
         Action.SET_PRIORITY,
         resource(priority="work_stopped", work_stopped=True, status="ball_in_court"),
@@ -207,7 +172,7 @@ def test_deny_only_rules_never_return_allow() -> None:
         chain_owns(s, Action.SUBMIT_RFI, r, env),
         status_guard(s, Action.SUBMIT_RFI, r, env),
         work_stop_writer(s, Action.SET_PRIORITY, r, env),
-        same_project(subject(project_id=JOB), resource(project_id=OTHER_JOB)),
+        same_project(subject(), resource(project_id=OTHER_JOB)),
         assigned_only(
             subject(role=Role.APPRENTICE, user_id=USER),
             Action.HANDLE_MATERIAL,

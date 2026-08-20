@@ -101,12 +101,19 @@ def _traces(walk) -> tuple[EvaluationTrace, ...]:
         return walk.steps
     if isinstance(walk, AccessDenied):
         return walk.trace
-    if hasattr(walk, "steps"):
-        return walk.steps
+    steps = getattr(walk, "steps", None)
+    if steps is not None and not callable(steps):
+        return tuple(steps)
     if hasattr(walk, "traces"):
         return walk.traces
-    if hasattr(walk, "trace"):
+    if hasattr(walk, "trace") and not isinstance(walk, tuple):
         return walk.trace
+    if isinstance(walk, tuple) and len(walk) == 2:
+        maybe = walk[1]
+        if isinstance(maybe, (list, tuple)) and (
+            len(maybe) == 0 or hasattr(maybe[0], "policy")
+        ):
+            return tuple(maybe)
     return tuple(walk)
 
 
