@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
 from uuid import UUID
 
 import pytest
@@ -13,7 +12,6 @@ from abac import (
     ActorType,
     Effect,
     Env,
-    EvaluationLog,
     EvaluationTrace,
     FIELD_POLICY_SET,
     Resource,
@@ -22,19 +20,7 @@ from abac import (
     evaluate,
     require_access,
 )
-
-EXPECTED_ORDER = (
-    "same_project",
-    "grokbot_lane",
-    "on_site",
-    "role_allows",
-    "area_scope",
-    "assigned_only",
-    "chain_owns",
-    "status_guard",
-    "work_stop_writer",
-    "default_deny",
-)
+from app.policy_coverage import EXPECTED_ORDER, PolicyCoverage, _traces
 
 JOB = UUID("00000000-0000-4000-8000-000000000010")
 OTHER_JOB = UUID("00000000-0000-4000-8000-000000000110")
@@ -82,18 +68,6 @@ def resource(
     )
 
 
-def _traces(walk) -> tuple[EvaluationTrace, ...]:
-    if isinstance(walk, EvaluationLog):
-        return walk.traces
-    if isinstance(walk, AccessDenied):
-        return walk.trace
-    if hasattr(walk, "traces"):
-        return walk.traces
-    if hasattr(walk, "trace"):
-        return walk.trace
-    return tuple(walk)
-
-
 def names(walk) -> list[str]:
     return [step.policy for step in _traces(walk)]
 
@@ -103,72 +77,6 @@ def first_stop(walk) -> EvaluationTrace:
         if step.stopped:
             return step
     raise AssertionError("walk never stopped")
-
-
-class PolicyCoverage:
-    """Receipt of which policies this module actually walked."""
-
-    def __init__(self) -> None:
-        self.seen: set[str] = set()
-        self.stops: set[str] = set()
-        self.allows: set[str] = set()
-        self.denies: set[str] = set()
-        self.na: set[str] = set()
-        self.effects: dict[str, set[str]] = defaultdict(set)
-
-    def record(self, walk):
-        for step in _traces(walk):
-            self.seen.add(step.policy)
-            if step.stopped:
-                self.stops.add(step.policy)
-            if not step.applicable:
-                self.na.add(step.policy)
-                self.effects[step.policy].add("n/a")
-                continue
-            if step.decision is None:
-                self.na.add(step.policy)
-                self.effects[step.policy].add("n/a")
-                continue
-            if step.decision.allowed:
-                self.allows.add(step.policy)
-                self.effects[step.policy].add("allow")
-            else:
-                self.denies.add(step.policy)
-                self.effects[step.policy].add("deny")
-        return walk
-
-
-def assert_policy_coverage(coverage: PolicyCoverage) -> None:
-    missing = [name for name in EXPECTED_ORDER if name not in coverage.seen]
-    assert missing == [], f"policies never walked: {missing}"
-    required_stops = {
-        "same_project",
-        "grokbot_lane",
-        "on_site",
-        "role_allows",
-        "area_scope",
-        "assigned_only",
-        "chain_owns",
-        "status_guard",
-        "work_stop_writer",
-        "default_deny",
-    }
-    missing_stops = sorted(required_stops - coverage.stops)
-    assert missing_stops == [], f"policies never stopped: {missing_stops}"
-    assert "default_deny" in coverage.na
-    assert "default_deny" in coverage.denies
-    assert "default_deny" not in coverage.allows
-
-
-@pytest.fixture(scope="module")
-def cov(request: pytest.FixtureRequest) -> PolicyCoverage:
-    coverage = PolicyCoverage()
-    failed_before = request.session.testsfailed
-    yield coverage
-    failed_here = request.session.testsfailed - failed_before
-    if failed_here:
-        return
-    assert_policy_coverage(coverage)
 
 
 def test_policy_set_rank_is_fixed():
@@ -406,8 +314,8 @@ def test_apprentice_handle_own_ticket_allows(cov: PolicyCoverage):
     assert log.decision.reason == "apprentice may handle_material"
 
 
-def test_default_deny_is_deny_only_when_nothing_permitted(cov: PolicyCoverage):
-    from abac import Policy, PolicySet, Combining, default_deny, same_project
+def test_default_deny_is_deny_only_when_nothing_permitted():
+    from abac import Combining, Policy, PolicySet, default_deny, same_project
 
     empty = PolicySet(
         name="empty",
@@ -417,12 +325,12 @@ def test_default_deny_is_deny_only_when_nothing_permitted(cov: PolicyCoverage):
             Policy(name="default_deny", rule=default_deny, order=99),
         ),
     )
-    log = cov.record(evaluate(
+    log = evaluate(
         subject(project_id=JOB),
         Action.VIEW_PRINT,
         resource(project_id=JOB),
         policy_set=empty,
-    ))
+    )
     assert names(log) == ["same_project", "default_deny"]
     assert first_stop(log).policy == "default_deny"
     assert log.decision.allowed is False
