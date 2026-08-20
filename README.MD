@@ -77,4 +77,6 @@ The iOS **RFI Graph** tab is the meeting / pipeline view. Open RFIs are ordered 
 
 `days_open` is `floor(life_hours/24)` in **UTC** (not project-TZ business days; no holiday calendar).
 
-Not in this slice: submit, holiday cache, Prometheus, `set_priority`, `age_rfis` as a job. Age buckets are computed on read.
+Both actors are simulated in `backend/tests/test_rfi_e2e.py` (Field/Grokbot HTTP + PE/design helpers). The Mac simulator is not required. Those PE helpers are not Grok tools.
+
+Not in this slice: submit as a Grok tool, holiday cache, Prometheus, `set_priority`, `age_rfis` as a job. Age buckets are computed on read. The existing ILSB E-803 draft is never submitted.

@@ -25,6 +25,8 @@ from app.aging import (
 )
 from app.grokbot import GrokbotError, draft_from_preflight
 from app.models import (
+    DraftChangeOrder,
+    DraftMaterialOrder,
     Organization,
     Project,
     RFI,
@@ -604,6 +606,12 @@ def get_rfi(rfi_id: str, db: Session = Depends(get_db)) -> RFIOut:
         schedule_impact=rfi.schedule_impact,
         proposed_solution=rfi.proposed_solution,
         grok_preflight=rfi.grok_preflight,
+        assigned=rfi.assigned,
+        official_response=rfi.official_response,
+        responded_at=rfi.responded_at.isoformat() + "Z" if rfi.responded_at else None,
+        due_at=rfi.due_at.isoformat() + "Z" if rfi.due_at else None,
+        submitted_at=rfi.submitted_at.isoformat() + "Z" if rfi.submitted_at else None,
+        closed_at=rfi.closed_at.isoformat() + "Z" if rfi.closed_at else None,
         pins=[
             {
                 "id": pin.id,
@@ -629,4 +637,14 @@ def get_rfi(rfi_id: str, db: Session = Depends(get_db)) -> RFIOut:
         ],
         attachment_count=len(rfi.attachments),
         missing_for_submit=_missing_for_submit() if rfi.status == "draft" else [],
+        draft_change_orders=[
+            {"id": row.id, "status": row.status, "summary": row.summary}
+            for row in db.scalars(select(DraftChangeOrder).where(DraftChangeOrder.rfi_id == rfi.id))
+        ],
+        draft_material_orders=[
+            {"id": row.id, "status": row.status, "summary": row.summary}
+            for row in db.scalars(
+                select(DraftMaterialOrder).where(DraftMaterialOrder.rfi_id == rfi.id)
+            )
+        ],
     )

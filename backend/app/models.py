@@ -161,6 +161,7 @@ class RFI(Base):
     is_sample: Mapped[bool] = mapped_column(default=False)
     due_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     official_response: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    responded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
@@ -235,6 +236,26 @@ class RFIEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     rfi: Mapped[RFI] = relationship(back_populates="events")
+
+
+class DraftChangeOrder(Base):
+    __tablename__ = "draft_change_orders"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    rfi_id: Mapped[str] = mapped_column(String(36), ForeignKey("rfis.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class DraftMaterialOrder(Base):
+    __tablename__ = "draft_material_orders"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    rfi_id: Mapped[str] = mapped_column(String(36), ForeignKey("rfis.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
 class SuggestedRFI(Base):

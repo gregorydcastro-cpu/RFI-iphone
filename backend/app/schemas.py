@@ -228,7 +228,15 @@ class RFIOut(BaseModel):
     schedule_impact: str
     proposed_solution: Optional[str]
     grok_preflight: Optional[dict]
+    assigned: Optional[str] = None
+    official_response: Optional[str] = None
+    responded_at: Optional[str] = None
+    due_at: Optional[str] = None
+    submitted_at: Optional[str] = None
+    closed_at: Optional[str] = None
     pins: list[dict]
     refs: list[dict]
     attachment_count: int
     missing_for_submit: list[str]
+    draft_change_orders: list[dict] = Field(default_factory=list)
+    draft_material_orders: list[dict] = Field(default_factory=list)
