@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from uuid import UUID
 
-from rfi.core import Event, Pin, RFI, Store, WriteError, as_uuid
+from rfi.core import Event, Pin, RFI, Store, WriteError, as_uuid, _pin_from_dict
 
 # Open on the main machine, internal_review through impact_review.
 # needs_clarification is still open work. Drafts are leftover, not carried.
@@ -158,3 +158,118 @@ def search_open_on_sheet(store: Store, sheet_id: UUID | str) -> list[RFI]:
         if any(pin.sheet_revision_id in rev_ids for pin in rfi.pins):
             found.append(rfi)
     return found
+
+
+def search_open_on_revision(store: Store, revision_id: UUID | str) -> list[RFI]:
+    """Open RFIs pinned to this revision. Leftover drafts stay on the old print."""
+    wanted = as_uuid(revision_id)
+    store.get_revision(wanted)
+    found: list[RFI] = []
+    for rfi in store.rfis.values():
+        if rfi.status not in SEARCH_OPEN:
+            continue
+        if any(pin.sheet_revision_id == wanted for pin in rfi.pins):
+            found.append(rfi)
+    return found
+
+
+def previous_revision_id(store: Store, revision_id: UUID | str) -> UUID:
+    """The print before this one on the same sheet. Self if this is the first."""
+    rev = store.get_revision(revision_id)
+    siblings = [
+        row
+        for row in store.revisions.values()
+        if row.sheet_id == rev.sheet_id and row.id != rev.id
+    ]
+    older = [row for row in siblings if not row.is_current]
+    if older:
+        return older[-1].id
+    return rev.id
+
+
+@dataclass
+class PreflightAsk:
+    leftover: list[RFI]
+    carried: list[RFI]
+    match: RFI | None = None
+
+
+def _norm_question(text: str) -> str:
+    return " ".join((text or "").strip().lower().split()).rstrip("?.!")
+
+
+def _pin_matches(rfi: RFI, asked: Pin | None) -> bool:
+    if asked is None:
+        return False
+    label = (asked.label or "").strip().lower()
+    for pin in rfi.pins:
+        if label and (pin.label or "").strip().lower() == label:
+            return True
+        if abs(pin.x - asked.x) <= 1e-6 and abs(pin.y - asked.y) <= 1e-6:
+            return True
+    return False
+
+
+def _question_matches(rfi: RFI, question: str | None) -> bool:
+    if not question or not question.strip():
+        return False
+    return _norm_question(rfi.question) == _norm_question(question)
+
+
+def _unique(rows: list[RFI]) -> list[RFI]:
+    seen: dict[str, RFI] = {}
+    for row in rows:
+        seen.setdefault(row.id, row)
+    return list(seen.values())
+
+
+def _first_match(
+    rows: list[RFI], *, question: str | None, pin: dict | None, store: Store
+) -> RFI | None:
+    asked = None
+    if pin and pin.get("sheet_revision_id") is not None:
+        asked = _pin_from_dict(store, pin)
+    for row in rows:
+        if _question_matches(row, question) or _pin_matches(row, asked):
+            return row
+    return None
+
+
+def preflight_ask(
+    store: Store,
+    *,
+    previous_revision_id: UUID | str,
+    question: str | None = None,
+    pin: dict | None = None,
+) -> PreflightAsk:
+    """After a new print. Search leftovers on the previous rev and carried opens.
+
+    Ask only. Does not create, number, submit, or close.
+    """
+    prev = store.get_revision(previous_revision_id)
+    on_prev = search_open_on_revision(store, prev.id)
+    leftover = [
+        row
+        for row in on_prev
+        if row.status in LEFTOVER_STATUSES or row.rfi_number is None
+    ]
+    on_sheet = search_open_on_sheet(store, prev.sheet_id)
+    carried = [row for row in on_sheet if row.status in CARRY_STATUSES]
+    candidates = _unique(leftover + carried)
+    return PreflightAsk(
+        leftover=leftover,
+        carried=carried,
+        match=_first_match(candidates, question=question, pin=pin, store=store),
+    )
+
+
+def preflight_match(
+    store: Store, *, question: str, pin: dict | None
+) -> RFI | None:
+    """Used by create_rfi_draft when the actor is Grokbot."""
+    if not pin or pin.get("sheet_revision_id") is None:
+        return None
+    prev = previous_revision_id(store, pin["sheet_revision_id"])
+    return preflight_ask(
+        store, previous_revision_id=prev, question=question, pin=pin
+    ).match

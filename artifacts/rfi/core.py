@@ -299,10 +299,20 @@ def create_rfi_draft(
     priority: str = "standard",
     env: Env | None = None,
 ) -> RFI:
-    """One question. Optional pin/refs. Status draft only. Number stays null."""
+    """One question. Optional pin/refs. Status draft only. Number stays null.
+
+    Grokbot searches leftover drafts and carried opens first. A pin/question
+    match returns that row. Never submit, number, or close from here.
+    """
     chosen = (priority or "standard").strip().lower()
     if chosen not in DRAFT_PRIORITIES:
         raise WriteError("create_rfi_draft cannot write work_stopped")
+    if subject.actor_type is ActorType.GROKBOT:
+        from rfi.compare import preflight_match
+
+        existing = preflight_match(store, question=question, pin=pin)
+        if existing is not None:
+            return existing
     require_access(
         subject,
         Action.CREATE_RFI_DRAFT,
@@ -510,7 +520,12 @@ def age_rfis(store: Store, *, now: datetime | None = None) -> list[Event]:
 
 def run_demo() -> dict:
     """journeyman pin draft → grokbot blocked → RFI-1 → work-stopped → one cycle event."""
-    from rfi.compare import apply_carry_forward, compare_revisions, search_open_on_sheet
+    from rfi.compare import (
+        apply_carry_forward,
+        compare_revisions,
+        preflight_ask,
+        search_open_on_sheet,
+    )
 
     job_id = UUID("00000000-0000-4000-8000-000000000010")
     area = UUID("00000000-0000-4000-8000-000000000401")
@@ -627,6 +642,51 @@ def run_demo() -> dict:
     carried = apply_carry_forward(store, diff, actor_id=foreman)
     apply_carry_forward(store, diff, actor_id=foreman)
     open_on_sheet = search_open_on_sheet(store, sheet.id)
+    ask = preflight_ask(
+        store,
+        previous_revision_id=rev27.id,
+        question=leftover_draft.question,
+        pin={
+            "sheet_revision_id": rev27.id,
+            "x": 0.31,
+            "y": 0.48,
+            "label": "leftover",
+        },
+    )
+    before_preflight = len(store.rfis)
+    grok_leftover = create_rfi_draft(
+        store,
+        grok,
+        question=leftover_draft.question,
+        pin={
+            "sheet_revision_id": rev28.id,
+            "x": 0.31,
+            "y": 0.48,
+            "label": "leftover",
+        },
+    )
+    grok_carried = create_rfi_draft(
+        store,
+        grok,
+        question="Clearance at grid A-3?",
+        pin={
+            "sheet_revision_id": rev28.id,
+            "x": 0.28,
+            "y": 0.52,
+            "label": "A-3",
+        },
+    )
+    grok_fresh = create_rfi_draft(
+        store,
+        grok,
+        question="New hatch after Bulletin 46?",
+        pin={
+            "sheet_revision_id": rev28.id,
+            "x": 0.8,
+            "y": 0.8,
+            "label": "new",
+        },
+    )
     ball_status = stopped.status
     stopped_flag = stopped.work_stopped
     due_at = stopped.due_at
@@ -711,4 +771,14 @@ def run_demo() -> dict:
         "due_unchanged": closed.due_at == due_at,
         "number_unchanged": closed.rfi_number == number,
         "leftover_still_draft": leftover_draft.status == "draft",
+        "preflight_leftover_ids": {row.id for row in ask.leftover},
+        "preflight_carried_ids": {row.id for row in ask.carried},
+        "grok_leftover_id": grok_leftover.id,
+        "grok_carried_id": grok_carried.id,
+        "grok_fresh_id": grok_fresh.id,
+        "grok_fresh_status": grok_fresh.status,
+        "grok_fresh_number": grok_fresh.rfi_number,
+        "preflight_did_not_spawn": grok_leftover.id == leftover_draft.id
+        and grok_carried.id == stopped.id
+        and len(store.rfis) == before_preflight + 1,
     }

@@ -38,6 +38,13 @@ def main() -> int:
         facts["due_unchanged"] is True,
         facts["number_unchanged"] is True,
         facts["leftover_still_draft"] is True,
+        facts["leftover_draft"].id in facts["preflight_leftover_ids"],
+        facts["rfi"].id in facts["preflight_carried_ids"],
+        facts["grok_leftover_id"] == facts["leftover_draft"].id,
+        facts["grok_carried_id"] == facts["rfi"].id,
+        facts["grok_fresh_status"] == "draft",
+        facts["grok_fresh_number"] is None,
+        facts["preflight_did_not_spawn"] is True,
     )
     print("journeyman drafted on pin A-3 status=draft number=None")
     print(f"grokbot submit blocked policy={facts['grokbot_policy']}")
@@ -50,6 +57,10 @@ def main() -> int:
     print(
         f"compare carried {facts['carried_pins']} pin; "
         f"leftover drafts stay on rev 27; pin_carried x2 is no-op"
+    )
+    print(
+        "preflight: grok leftover/carried matches returned; "
+        f"fresh draft {facts['grok_fresh_status']} number=None"
     )
     print(
         f"impact_review: grok MO draft {facts['mo_status']}; "

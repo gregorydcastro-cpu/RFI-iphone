@@ -13,8 +13,11 @@ from rfi.access import (
 )
 from rfi.compare import (
     CompareError,
+    PreflightAsk,
     apply_carry_forward,
     compare_revisions,
+    preflight_ask,
+    search_open_on_revision,
     search_open_on_sheet,
 )
 from rfi.impact import (
@@ -50,6 +53,7 @@ __all__ = (
     "ChangeOrder",
     "CompareError",
     "Env",
+    "PreflightAsk",
     "MATERIAL_UOMS",
     "MaterialLine",
     "MaterialOrder",
@@ -73,8 +77,10 @@ __all__ = (
     "suggest_impact_none",
     "evaluate",
     "pair_holds",
+    "preflight_ask",
     "require_access",
     "run_demo",
+    "search_open_on_revision",
     "search_open_on_sheet",
     "set_priority",
     "submit_rfi",

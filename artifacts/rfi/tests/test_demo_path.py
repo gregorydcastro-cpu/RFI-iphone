@@ -47,6 +47,11 @@ def test_demo_path() -> None:
     assert facts["mo_status"] == "draft"
     assert facts["closed_status"] == "closed"
     assert facts["leftover_still_draft"] is True
+    assert facts["grok_leftover_id"] == facts["leftover_draft"].id
+    assert facts["grok_carried_id"] == facts["rfi"].id
+    assert facts["grok_fresh_status"] == "draft"
+    assert facts["grok_fresh_number"] is None
+    assert facts["preflight_did_not_spawn"] is True
 
 
 def test_grokbot_can_only_draft() -> None:
