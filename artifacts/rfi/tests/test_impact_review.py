@@ -29,7 +29,7 @@ from rfi.impact import (
     record_answer,
     suggest_impact_none,
 )
-from rfi.tests.conftest import AREA, COMPANY, JOB, OTHER, USER, resource, subject
+from rfi.tests.conftest import AREA, COMPANY, JOB, OTHER, OTHER_JOB, USER, resource, subject
 
 
 def _foreman() -> Subject:
@@ -154,8 +154,14 @@ def test_grokbot_drafts_mo_cannot_enter_or_close() -> None:
     assert walk.decision.allowed is True
     mo = draft_material_order(store, grok, rfi.id, sku="225A", qty=1)
     assert mo.status == "draft"
-    assert mo.sheet_revision_id == store._rev_a.id
+    assert mo.source == "grokbot"
+    assert mo.sheet_revision_id == store._rev_b.id
+    assert mo.asked_revision_id == store._rev_a.id
     assert mo.current_revision_id == store._rev_b.id
+    assert mo.project_id == rfi.project_id
+    assert mo.area_id == rfi.area_id
+    assert mo.lines[0].description == "225A"
+    assert mo.lines[0].uom == "EA"
     with pytest.raises(AccessDenied) as denied:
         close_rfi(store, grok, rfi.id)
     assert denied.value.decision.policy == "grokbot_lane"
@@ -260,7 +266,12 @@ def test_first_draft_from_answered_does_not_need_enter() -> None:
     co = draft_change_order(store, _foreman(), rfi.id, description="Different fixture.")
     assert co.status == "draft"
     assert co.rfi_id == rfi.id
-    assert co.sheet_revision_id == store._rev_a.id
+    assert co.co_number is None
+    assert co.source == "human"
+    assert co.project_id == rfi.project_id
+    assert co.area_id == rfi.area_id
+    assert co.sheet_revision_id == store._rev_b.id
+    assert co.asked_revision_id == store._rev_a.id
     assert co.current_revision_id == store._rev_b.id
     assert rfi.status == "impact_review"
     mo = draft_material_order(store, _grok(), rfi.id, sku="225A", qty=1)
@@ -296,3 +307,122 @@ def test_one_rfi_many_co_drafts_each_one_change() -> None:
             rfi.id,
             description="Move the panel. Reroute the homerun.",
         )
+
+
+def test_search_before_insert_returns_existing_draft() -> None:
+    store = Store()
+    rfi = _answered(store)
+    first = draft_change_order(
+        store,
+        _foreman(),
+        rfi.id,
+        title="Relocate panel 214",
+        description="Answer moved the panel off the old hatch.",
+    )
+    again = draft_change_order(
+        store,
+        _foreman(),
+        rfi.id,
+        title="relocate panel 214,",
+        description="Answer moved the panel off the old hatch.",
+    )
+    assert again.id == first.id
+    assert len([row for row in store.change_orders.values() if row.rfi_id == rfi.id]) == 1
+    mo = draft_material_order(
+        store,
+        _grok(),
+        rfi.id,
+        lines=[{"description": "225A breaker", "qty": 1, "uom": "EA"}],
+    )
+    twin = draft_material_order(
+        store, _grok(), rfi.id, sku="225A breaker", qty=1, uom="EA"
+    )
+    assert twin.id == mo.id
+    extra = draft_material_order(
+        store,
+        _grok(),
+        rfi.id,
+        lines=[{"description": "2 in conduit", "qty": 10, "uom": "LF"}],
+    )
+    assert extra.id == mo.id
+    assert [line.uom for line in mo.lines] == ["EA", "LF"]
+
+
+def test_grokbot_cannot_set_status_other_than_draft() -> None:
+    store = Store()
+    rfi = _answered(store)
+    with pytest.raises(ImpactError, match="Grokbot may only write draft"):
+        draft_change_order(
+            store,
+            _grok(),
+            rfi.id,
+            title="Relocate panel 214",
+            description="Scope change from the answer.",
+            status="submitted",
+        )
+    with pytest.raises(ImpactError, match="Grokbot may only write draft"):
+        draft_material_order(
+            store, _grok(), rfi.id, sku="225A", qty=1, status="submitted"
+        )
+    row = draft_change_order(
+        store,
+        _grok(),
+        rfi.id,
+        title="Relocate panel 214",
+        description="Scope change from the answer.",
+    )
+    assert row.status == "draft"
+    assert row.source == "grokbot"
+    assert row.co_number is None
+
+
+def test_reject_empty_description_wrong_job_and_retarget() -> None:
+    store = Store()
+    rfi = _answered(store)
+    with pytest.raises(ImpactError, match="description is empty"):
+        draft_change_order(
+            store, _foreman(), rfi.id, title="Relocate panel 214", description=""
+        )
+    other_sheet = store.add_sheet(
+        Sheet(id=uuid4(), project_id=OTHER_JOB, sheet_number="E-999")
+    )
+    other_rev = store.add_revision(
+        SheetRevision(id=uuid4(), sheet_id=other_sheet.id, revision="1", is_current=True)
+    )
+    with pytest.raises(ImpactError, match="not this job"):
+        draft_change_order(
+            store,
+            _foreman(),
+            rfi.id,
+            title="Relocate panel 214",
+            description="Scope change from the answer.",
+            sheet_revision_id=other_rev.id,
+        )
+    with pytest.raises(ImpactError, match="cannot retarget"):
+        draft_change_order(
+            store,
+            _foreman(),
+            rfi.id,
+            title="Relocate panel 214",
+            description="Scope change from the answer.",
+            project_id=OTHER_JOB,
+        )
+
+
+def test_closed_and_void_cannot_draft() -> None:
+    store = Store()
+    rfi = _answered(store)
+    rfi.status = "closed"
+    with pytest.raises(AccessDenied) as denied:
+        draft_change_order(
+            store,
+            _foreman(),
+            rfi.id,
+            title="Relocate panel 214",
+            description="Too late.",
+        )
+    assert denied.value.decision.policy == "status_guard"
+    rfi.status = "void"
+    with pytest.raises(AccessDenied) as denied:
+        draft_material_order(store, _grok(), rfi.id, sku="225A", qty=1)
+    assert denied.value.decision.policy == "status_guard"

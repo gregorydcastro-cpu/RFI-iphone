@@ -13,15 +13,18 @@ from __future__ import annotations
 
 from uuid import UUID, uuid4
 
-from rfi.access import Action, require_access
+from rfi.access import Action, ActorType, require_access
 from rfi.core import (
+    MATERIAL_UOMS,
     ChangeOrder,
     Event,
+    MaterialLine,
     MaterialOrder,
     Pin,
     RFI,
     Store,
     WriteError,
+    as_uuid,
     resource_for,
 )
 
@@ -69,17 +72,159 @@ def record_answer(store: Store, rfi_id: str, response: str) -> RFI:
     raise ImpactError("record_answer is for ball_in_court or submitted")
 
 
-def _cite_revisions(store: Store, rfi: RFI) -> tuple[UUID | None, UUID | None]:
-    """Asked print first. Current print if a pin was carried."""
-    if not rfi.pins:
-        return None, None
-    asked = rfi.pins[0].sheet_revision_id
+def _cite_revisions(
+    store: Store, rfi: RFI, pin: Pin | None
+) -> tuple[UUID | None, UUID | None, UUID | None]:
+    """Prefer current if pins were carried; else the pin's revision."""
+    asked = pin.sheet_revision_id if pin is not None else (
+        rfi.pins[0].sheet_revision_id if rfi.pins else None
+    )
     current = None
-    for pin in rfi.pins:
-        rev = store.revisions.get(pin.sheet_revision_id)
+    for item in rfi.pins:
+        rev = store.revisions.get(item.sheet_revision_id)
         if rev is not None and rev.is_current:
             current = rev.id
-    return asked, current or asked
+    preferred = current or asked
+    return preferred, asked, current or asked
+
+
+def _revision_on_job(store: Store, revision_id: UUID, project_id: UUID) -> None:
+    rev = store.revisions.get(revision_id)
+    if rev is None:
+        raise ImpactError("sheet_revision_id is not this job")
+    sheet = store.sheets.get(rev.sheet_id)
+    if sheet is None or sheet.project_id != project_id:
+        raise ImpactError("sheet_revision_id is not this job")
+
+
+def _norm_title(text: str) -> str:
+    return " ".join((text or "").strip().lower().split()).rstrip(".,;:")
+
+
+def _source_of(subject) -> str:
+    return "grokbot" if subject.actor_type is ActorType.GROKBOT else "human"
+
+
+def _force_draft(subject, status: str | None) -> str:
+    if status is not None and status != "draft":
+        if subject.actor_type is ActorType.GROKBOT:
+            raise ImpactError("Grokbot may only write draft")
+        raise ImpactError("status always draft from this handler")
+    return "draft"
+
+
+def _refuse_retarget(
+    rfi: RFI, project_id: UUID | str | None, area_id: UUID | str | None
+) -> None:
+    if project_id is not None and as_uuid(project_id) != rfi.project_id:
+        raise ImpactError("cannot retarget another job")
+    if area_id is not None and rfi.area_id is not None and as_uuid(area_id) != rfi.area_id:
+        raise ImpactError("cannot retarget another job")
+
+
+def _append_note(row: ChangeOrder | MaterialOrder, note: str) -> None:
+    text = (note or "").strip()
+    if not text:
+        return
+    if row.notes and text in row.notes:
+        return
+    row.notes = f"{row.notes}\n{text}" if row.notes else text
+
+
+def _cos_for(store: Store, rfi_id: str) -> list[ChangeOrder]:
+    return [row for row in store.change_orders.values() if row.rfi_id == rfi_id]
+
+
+def _mos_for(store: Store, rfi_id: str) -> list[MaterialOrder]:
+    return [row for row in store.material_orders.values() if row.rfi_id == rfi_id]
+
+
+def _existing_co_draft(store: Store, rfi_id: str, title: str) -> ChangeOrder | None:
+    key = _norm_title(title)
+    for row in _cos_for(store, rfi_id):
+        if row.status == "draft" and _norm_title(row.title) == key:
+            return row
+    return None
+
+
+def _twin_co_on_pin(
+    store: Store, rfi_id: str, pin_id: str | None, title: str, description: str
+) -> ChangeOrder | None:
+    if pin_id is None:
+        return None
+    key = _norm_title(description) or _norm_title(title)
+    for row in _cos_for(store, rfi_id):
+        if row.status != "draft" or row.pin_id != pin_id:
+            continue
+        if _norm_title(row.title) == _norm_title(title) or _norm_title(row.description) == key:
+            return row
+    return None
+
+
+def _existing_mo_draft(
+    store: Store, rfi_id: str, key: str, pin_id: str | None
+) -> MaterialOrder | None:
+    needle = _norm_title(key)
+    for row in _mos_for(store, rfi_id):
+        if row.status != "draft":
+            continue
+        first = _norm_title(row.lines[0].description) if row.lines else _norm_title(row.sku)
+        if needle and first == needle:
+            return row
+        if pin_id is not None and row.pin_id == pin_id:
+            return row
+    return None
+
+
+def _as_lines(
+    *,
+    lines: list | None,
+    sku: str | None,
+    description: str | None,
+    qty: float | None,
+    uom: str,
+) -> list[MaterialLine]:
+    raw = list(lines or [])
+    if not raw:
+        text = (sku or description or "").strip()
+        if not text:
+            raise ImpactError("one impact claim: what to buy")
+        raw = [{"description": text, "qty": 1.0 if qty is None else qty, "uom": uom}]
+    built: list[MaterialLine] = []
+    for item in raw:
+        if isinstance(item, MaterialLine):
+            desc, amount, unit = item.description, item.qty, item.uom
+        else:
+            desc = (item.get("description") or item.get("sku") or "").strip()
+            amount = item.get("qty")
+            unit = item.get("uom") or uom
+        if not desc:
+            raise ImpactError("one impact claim: what to buy")
+        try:
+            number = float(amount)
+        except (TypeError, ValueError) as exc:
+            raise ImpactError("qty must be a number") from exc
+        if number <= 0:
+            raise ImpactError("qty must be greater than 0")
+        code = (unit or "EA").strip().upper()
+        if code not in MATERIAL_UOMS:
+            raise ImpactError("uom must be EA|LF|SF|BOX|SET")
+        built.append(MaterialLine(description=desc, qty=number, uom=code))
+    if not built:
+        raise ImpactError("one impact claim: what to buy")
+    return built
+
+
+def _merge_lines(row: MaterialOrder, incoming: list[MaterialLine]) -> None:
+    seen = {_norm_title(line.description) for line in row.lines}
+    for line in incoming:
+        if _norm_title(line.description) in seen:
+            continue
+        row.lines.append(line)
+        seen.add(_norm_title(line.description))
+    if row.lines:
+        row.sku = row.lines[0].description
+        row.qty = row.lines[0].qty
 
 
 def _pin_by_id(rfi: RFI, pin_id: str | None) -> Pin | None:
@@ -126,20 +271,26 @@ def _one_change(description: str) -> str:
     return text
 
 
-def _ensure_review(store: Store, rfi: RFI) -> None:
-    """First draft may move answered → impact_review. Enter may do it instead."""
+def _ensure_review(store: Store, rfi: RFI, *, actor_id: UUID | None = None) -> None:
+    """First successful draft moves answered → impact_review. No due_at rewrite."""
     _assert_draftable(rfi)
     if rfi.status == "impact_review":
         return
+    stopped = rfi.work_stopped
+    due = rfi.due_at
+    number = rfi.rfi_number
     store.add_event(
         Event(
             rfi_id=rfi.id,
             event_type="impact_started",
             from_status=rfi.status,
             to_status="impact_review",
+            actor_id=actor_id,
         )
     )
     rfi.status = "impact_review"
+    if rfi.work_stopped != stopped or rfi.due_at != due or rfi.rfi_number != number:
+        raise ImpactError("impact review must not rewrite the pair, due, or number")
 
 
 def enter_impact_review(store: Store, subject, rfi_id: str) -> RFI:
@@ -191,27 +342,62 @@ def draft_change_order(
     subject,
     rfi_id: str,
     *,
-    description: str,
+    description: str | None = None,
+    title: str | None = None,
     qty: float | None = None,
+    rough_qty: float | None = None,
+    cost_code: str | None = None,
     pin_id: str | None = None,
+    sheet_revision_id: UUID | None = None,
+    project_id: UUID | str | None = None,
+    area_id: UUID | str | None = None,
+    status: str | None = None,
 ) -> ChangeOrder:
-    """Draft only. Never submitted. work_stopped does not block. One change."""
+    """Child of an answered RFI. Scope/method only. Search before insert."""
     rfi = store.get_rfi(rfi_id)
     require_access(subject, Action.DRAFT_CHANGE_ORDER, resource_for(rfi))
     _assert_draftable(rfi)
-    claim = _one_change(description)
-    _ensure_review(store, rfi)
-    asked, current = _cite_revisions(store, rfi)
+    _refuse_retarget(rfi, project_id, area_id)
+    _force_draft(subject, status)
+    if description is not None and not description.strip():
+        raise ImpactError("description is empty")
+    heading = _one_change(title or description or "")
+    body = (description or title or "").strip()
+    if not body:
+        raise ImpactError("description is empty")
+    if sheet_revision_id is not None:
+        _revision_on_job(store, as_uuid(sheet_revision_id), rfi.project_id)
+    _ensure_review(store, rfi, actor_id=subject.user_id)
+    existing = _existing_co_draft(store, rfi.id, heading)
     pin = _pin_by_id(rfi, pin_id)
+    if existing is None:
+        existing = _twin_co_on_pin(
+            store, rfi.id, pin.id if pin else None, heading, body
+        )
+    if existing is not None:
+        _append_note(existing, body if _norm_title(body) != _norm_title(existing.description) else "repeat draft")
+        return existing
+    preferred, asked, current = _cite_revisions(store, rfi, pin)
+    if preferred is not None:
+        _revision_on_job(store, preferred, rfi.project_id)
+    estimate = rough_qty if rough_qty is not None else qty
     row = ChangeOrder(
         id=str(uuid4()),
         rfi_id=rfi.id,
-        description=claim,
-        qty=qty,
+        project_id=rfi.project_id,
+        area_id=rfi.area_id,
+        title=heading,
+        description=body,
+        cost_code=(cost_code or "").strip() or None,
+        rough_qty=estimate,
+        qty=estimate,
         status="draft",
-        sheet_revision_id=asked,
+        source=_source_of(subject),
+        sheet_revision_id=preferred,
+        asked_revision_id=asked,
         current_revision_id=current,
         pin_id=pin.id if pin else None,
+        co_number=None,
     )
     store.change_orders[row.id] = row
     _mark_impact(rfi, IMPACT_CHANGE)
@@ -221,7 +407,7 @@ def draft_change_order(
             event_type="co_drafted",
             actor_id=subject.user_id,
             from_revision_id=asked,
-            to_revision_id=current,
+            to_revision_id=preferred,
         )
     )
     return row
@@ -232,29 +418,51 @@ def draft_material_order(
     subject,
     rfi_id: str,
     *,
-    sku: str,
-    qty: float,
-    area_id: UUID | None = None,
+    sku: str | None = None,
+    description: str | None = None,
+    qty: float | None = None,
+    uom: str = "EA",
+    lines: list | None = None,
+    area_id: UUID | str | None = None,
     pin_id: str | None = None,
+    sheet_revision_id: UUID | None = None,
+    project_id: UUID | str | None = None,
+    status: str | None = None,
 ) -> MaterialOrder:
-    """Draft only. Never a PO. work_stopped does not block. Cites revisions."""
+    """Child buy list. Draft only. Same gate and search-before-insert as the CO."""
     rfi = store.get_rfi(rfi_id)
     require_access(subject, Action.DRAFT_MATERIAL_ORDER, resource_for(rfi))
     _assert_draftable(rfi)
-    part = (sku or "").strip()
-    if not part:
-        raise ImpactError("one impact claim: what to buy")
-    _ensure_review(store, rfi)
-    asked, current = _cite_revisions(store, rfi)
+    _refuse_retarget(rfi, project_id, area_id)
+    _force_draft(subject, status)
+    built = _as_lines(
+        lines=lines, sku=sku, description=description, qty=qty, uom=uom
+    )
+    if sheet_revision_id is not None:
+        _revision_on_job(store, as_uuid(sheet_revision_id), rfi.project_id)
+    _ensure_review(store, rfi, actor_id=subject.user_id)
     pin = _pin_by_id(rfi, pin_id)
+    key = built[0].description
+    existing = _existing_mo_draft(store, rfi.id, key, pin.id if pin else None)
+    if existing is not None:
+        _merge_lines(existing, built)
+        _append_note(existing, "repeat draft")
+        return existing
+    preferred, asked, current = _cite_revisions(store, rfi, pin)
+    if preferred is not None:
+        _revision_on_job(store, preferred, rfi.project_id)
     row = MaterialOrder(
         id=str(uuid4()),
         rfi_id=rfi.id,
-        sku=part,
-        qty=float(qty),
+        project_id=rfi.project_id,
+        lines=built,
+        sku=built[0].description,
+        qty=built[0].qty,
         status="draft",
-        area_id=area_id if area_id is not None else rfi.area_id,
-        sheet_revision_id=asked,
+        source=_source_of(subject),
+        area_id=rfi.area_id,
+        sheet_revision_id=preferred,
+        asked_revision_id=asked,
         current_revision_id=current,
         pin_id=pin.id if pin else None,
     )
@@ -266,7 +474,7 @@ def draft_material_order(
             event_type="mo_drafted",
             actor_id=subject.user_id,
             from_revision_id=asked,
-            to_revision_id=current,
+            to_revision_id=preferred,
         )
     )
     return row

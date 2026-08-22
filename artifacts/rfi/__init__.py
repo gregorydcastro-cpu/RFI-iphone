@@ -26,6 +26,10 @@ from rfi.impact import (
     suggest_impact_none,
 )
 from rfi.core import (
+    MATERIAL_UOMS,
+    ChangeOrder,
+    MaterialLine,
+    MaterialOrder,
     RFI,
     Sheet,
     SheetRevision,
@@ -43,8 +47,12 @@ __all__ = (
     "AccessDenied",
     "Action",
     "ActorType",
+    "ChangeOrder",
     "CompareError",
     "Env",
+    "MATERIAL_UOMS",
+    "MaterialLine",
+    "MaterialOrder",
     "RFI",
     "Resource",
     "Role",

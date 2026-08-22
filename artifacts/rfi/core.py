@@ -85,25 +85,49 @@ class SheetRevision:
 class ChangeOrder:
     id: str
     rfi_id: str
+    project_id: UUID
+    title: str
     description: str
+    area_id: UUID | None = None
+    cost_code: str | None = None
+    rough_qty: float | None = None
     qty: float | None = None
     status: str = "draft"
+    source: str = "human"
     sheet_revision_id: UUID | None = None
+    asked_revision_id: UUID | None = None
     current_revision_id: UUID | None = None
     pin_id: str | None = None
+    notes: str | None = None
+    co_number: int | None = None
+
+
+MATERIAL_UOMS = frozenset({"EA", "LF", "SF", "BOX", "SET"})
+
+
+@dataclass
+class MaterialLine:
+    description: str
+    qty: float
+    uom: str = "EA"
 
 
 @dataclass
 class MaterialOrder:
     id: str
     rfi_id: str
-    sku: str
-    qty: float
+    project_id: UUID
+    lines: list[MaterialLine] = field(default_factory=list)
+    sku: str = ""
+    qty: float = 0.0
     status: str = "draft"
+    source: str = "human"
     area_id: UUID | None = None
     sheet_revision_id: UUID | None = None
+    asked_revision_id: UUID | None = None
     current_revision_id: UUID | None = None
     pin_id: str | None = None
+    notes: str | None = None
 
 
 @dataclass
@@ -680,8 +704,8 @@ def run_demo() -> dict:
         "work_stopped_after_enter": work_stopped_after_enter,
         "close_while_stopped": close_while_stopped,
         "mo_status": mo.status,
-        "mo_asked": mo.sheet_revision_id,
-        "mo_current": mo.current_revision_id,
+        "mo_asked": mo.asked_revision_id,
+        "mo_current": mo.sheet_revision_id,
         "closed_status": closed.status,
         "closed_number": closed.rfi_number,
         "due_unchanged": closed.due_at == due_at,
