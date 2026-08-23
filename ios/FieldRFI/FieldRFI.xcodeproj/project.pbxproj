@@ -41,6 +41,8 @@
 		A100000000000000000036 /* ShopCrew.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000036 /* ShopCrew.swift */; };
 		A100000000000000000037 /* TaskBoard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000037 /* TaskBoard.swift */; };
 		A100000000000000000038 /* TaskAssignView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000038 /* TaskAssignView.swift */; };
+		A100000000000000000039 /* MeetingBoard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000039 /* MeetingBoard.swift */; };
+		A100000000000000000040 /* MeetingCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000040 /* MeetingCalendarView.swift */; };
 		A100000000000000000010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000010 /* Assets.xcassets */; };
 		A100000000000000000028 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000028 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
@@ -81,6 +83,8 @@
 		B100000000000000000036 /* ShopCrew.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopCrew.swift; sourceTree = "<group>"; };
 		B100000000000000000037 /* TaskBoard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskBoard.swift; sourceTree = "<group>"; };
 		B100000000000000000038 /* TaskAssignView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskAssignView.swift; sourceTree = "<group>"; };
+		B100000000000000000039 /* MeetingBoard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingBoard.swift; sourceTree = "<group>"; };
+		B100000000000000000040 /* MeetingCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingCalendarView.swift; sourceTree = "<group>"; };
 		B100000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B100000000000000000011 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B100000000000000000028 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -141,6 +145,8 @@
 				B100000000000000000036 /* ShopCrew.swift */,
 				B100000000000000000037 /* TaskBoard.swift */,
 				B100000000000000000038 /* TaskAssignView.swift */,
+				B100000000000000000039 /* MeetingBoard.swift */,
+				B100000000000000000040 /* MeetingCalendarView.swift */,
 				B100000000000000000027 /* ForemanInboxView.swift */,
 				B100000000000000000010 /* Assets.xcassets */,
 				B100000000000000000011 /* Info.plist */,
@@ -260,6 +266,8 @@
 				A100000000000000000036 /* ShopCrew.swift in Sources */,
 				A100000000000000000037 /* TaskBoard.swift in Sources */,
 				A100000000000000000038 /* TaskAssignView.swift in Sources */,
+				A100000000000000000039 /* MeetingBoard.swift in Sources */,
+				A100000000000000000040 /* MeetingCalendarView.swift in Sources */,
 				A100000000000000000027 /* ForemanInboxView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

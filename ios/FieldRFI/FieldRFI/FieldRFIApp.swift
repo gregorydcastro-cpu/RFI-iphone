@@ -42,6 +42,12 @@ struct FieldRFIApp: App {
                     Label("Tasks", systemImage: "checkmark.circle")
                 }
                 NavigationStack {
+                    MeetingCalendarView()
+                }
+                .tabItem {
+                    Label("Meet", systemImage: "calendar")
+                }
+                NavigationStack {
                     ForemanInboxView()
                 }
                 .tabItem {
