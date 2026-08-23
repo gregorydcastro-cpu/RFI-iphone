@@ -57,7 +57,7 @@ This cloud VM cannot run the iOS simulator. On a Mac:
 
 1. Start the backend on port 8000.
 2. Open `ios/FieldRFI/FieldRFI.xcodeproj` in Xcode 15+ (iOS 17).
-3. Run **Field RFI** on an iPhone simulator.
+3. Run **GC Field Log** (`com.castro.fieldrfi`) on an iPhone simulator.
 4. The simulator talks to `http://127.0.0.1:8000`. On a physical device, expand **Server** on the New RFI screen and set the Mac’s LAN URL.
 
 ## Test plan (New RFI screen)

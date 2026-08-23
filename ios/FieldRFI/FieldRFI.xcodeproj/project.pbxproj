@@ -277,7 +277,7 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_EXPAND_BUILD_SETTINGS = YES;
 				INFOPLIST_FILE = FieldRFI/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Field RFI";
+				INFOPLIST_KEY_CFBundleDisplayName = "GC Field Log";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UIRequiresFullScreen = YES;
@@ -307,7 +307,7 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_EXPAND_BUILD_SETTINGS = YES;
 				INFOPLIST_FILE = FieldRFI/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Field RFI";
+				INFOPLIST_KEY_CFBundleDisplayName = "GC Field Log";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UIRequiresFullScreen = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
