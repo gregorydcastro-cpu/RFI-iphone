@@ -14,7 +14,7 @@ struct PhotoStripView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionLabel("Photos")
-            Text("Camera or photos already on this phone. Personal library is optional. No iCloud required.")
+            Text("Company iPhone default: camera or photos already in this app. Personal phone: your library works if this phone has one. Apple ID is not required.")
                 .font(.caption)
                 .foregroundStyle(FieldTheme.muted)
             ScrollView(.horizontal, showsIndicators: false) {
@@ -67,7 +67,7 @@ struct PhotoStripView: View {
                         VStack(spacing: 6) {
                             Image(systemName: "photo.on.rectangle")
                                 .font(.title2.weight(.semibold))
-                            Text("Optional")
+                            Text("Library")
                                 .font(.caption2.weight(.semibold))
                         }
                         .foregroundStyle(FieldTheme.orange)

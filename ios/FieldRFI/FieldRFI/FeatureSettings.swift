@@ -319,7 +319,7 @@ struct FeatureSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Company shop iPhone on \(ShopCrew.jobName). Pick who you are. The person above sets what their direct reports can see and do. Default is one step. A GF can grant a named apprentice a direct line. No personal Apple ID required. Not MDM. Not Procore.")
+                Text("Company iPhone is the default. Personal phone is allowed. Pick who you are on \(ShopCrew.jobName). The person above sets what their direct reports can see and do. A personal Apple ID is not required. Not MDM. Not Procore.")
                     .font(.subheadline)
                     .foregroundStyle(FieldTheme.ink)
 

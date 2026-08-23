@@ -153,7 +153,7 @@ final class FieldSession: ObservableObject {
     }
 }
 
-/// Shared company shop iPhone. Pick who you are. No personal Apple ID required.
+/// Company iPhone is the default. Personal phone is allowed. Pick who you are.
 struct ShopSeatPicker: View {
     @EnvironmentObject private var session: FieldSession
 
@@ -163,7 +163,7 @@ struct ShopSeatPicker: View {
                 .font(.caption.weight(.semibold))
                 .tracking(0.8)
                 .foregroundStyle(FieldTheme.muted)
-            Text("Company shop iPhone on \(ShopCrew.jobName). Pick who you are, then use the app. No personal Apple ID or iCloud required.")
+            Text("Company iPhone is the default. Personal phone is allowed. On a shared shop handset, pick who you are on \(ShopCrew.jobName). A personal Apple ID is not required.")
                 .font(.caption)
                 .foregroundStyle(FieldTheme.muted)
             ForEach(ShopCrew.members) { member in

@@ -71,12 +71,12 @@ struct InAppJobPhotoPicker: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Photos on this phone stay in the app. No personal Apple ID or iCloud required.")
+                    Text("Photos stay in this app. Company iPhone is the default. A personal library still works if this phone has one.")
                         .font(.subheadline)
                         .foregroundStyle(FieldTheme.ink)
                     let jobs = store.index.filter { $0.kind == .jpeg }
                     if jobs.isEmpty {
-                        Text("No job photos on this phone yet. Use the camera on the shop iPhone. Personal photo library is optional.")
+                        Text("No job photos in the app yet. Use the camera, or the library on a personal phone.")
                             .font(.footnote)
                             .foregroundStyle(FieldTheme.muted)
                     }
