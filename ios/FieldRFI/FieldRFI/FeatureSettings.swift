@@ -253,6 +253,15 @@ final class FeatureSettings: ObservableObject {
         sendTargets(for: fromID).contains(where: { $0.user_id == toID })
     }
 
+    /// Optional all-Foremen group text. Not tool find. Apprentice needs a GF direct line.
+    func mayGroupMessageForemen(from userID: String?) -> Bool {
+        guard allowsSend(userID), let me = ShopCrew.member(byID: userID) else { return false }
+        if me.role == "apprentice" {
+            return hasDirectLine(me.user_id)
+        }
+        return true
+    }
+
     func canAssign(from actorID: String?, toUser targetID: String) -> Bool {
         mayAssign(from: actorID, to: targetID)
     }

@@ -19,6 +19,14 @@ enum ShopCrew {
         return members.first(where: { $0.user_id == id })
     }
 
+    static func isForemanRole(_ role: String) -> Bool {
+        ["foreman", "area_foreman", "general_foreman"].contains(role)
+    }
+
+    static var foremen: [CrewMemberDTO] {
+        members.filter { isForemanRole($0.role) }
+    }
+
     static func rank(_ role: String) -> Int {
         switch role {
         case "general_foreman": return 0

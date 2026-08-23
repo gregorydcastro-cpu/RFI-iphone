@@ -21,6 +21,10 @@ struct ForemanInboxView: View {
                 }
             }
 
+            Section("All Foremen") {
+                ForemanGroupMessageComposer()
+            }
+
             Section("Incoming") {
                 let incoming = incomingPackets
                 if incoming.isEmpty {

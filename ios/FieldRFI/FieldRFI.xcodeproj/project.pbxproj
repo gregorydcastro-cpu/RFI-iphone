@@ -47,6 +47,7 @@
 		A100000000000000000042 /* ToolBoard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000042 /* ToolBoard.swift */; };
 		A100000000000000000043 /* ToolCheckoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000043 /* ToolCheckoutView.swift */; };
 		A100000000000000000044 /* CrewCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000044 /* CrewCardView.swift */; };
+		A100000000000000000045 /* ForemanGroupMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000045 /* ForemanGroupMessageView.swift */; };
 		A100000000000000000010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000010 /* Assets.xcassets */; };
 		A100000000000000000028 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000028 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
@@ -93,6 +94,7 @@
 		B100000000000000000042 /* ToolBoard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolBoard.swift; sourceTree = "<group>"; };
 		B100000000000000000043 /* ToolCheckoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolCheckoutView.swift; sourceTree = "<group>"; };
 		B100000000000000000044 /* CrewCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrewCardView.swift; sourceTree = "<group>"; };
+		B100000000000000000045 /* ForemanGroupMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForemanGroupMessageView.swift; sourceTree = "<group>"; };
 		B100000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B100000000000000000011 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B100000000000000000028 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -159,6 +161,7 @@
 				B100000000000000000042 /* ToolBoard.swift */,
 				B100000000000000000043 /* ToolCheckoutView.swift */,
 				B100000000000000000044 /* CrewCardView.swift */,
+				B100000000000000000045 /* ForemanGroupMessageView.swift */,
 				B100000000000000000027 /* ForemanInboxView.swift */,
 				B100000000000000000010 /* Assets.xcassets */,
 				B100000000000000000011 /* Info.plist */,
@@ -284,6 +287,7 @@
 				A100000000000000000042 /* ToolBoard.swift in Sources */,
 				A100000000000000000043 /* ToolCheckoutView.swift in Sources */,
 				A100000000000000000044 /* CrewCardView.swift in Sources */,
+				A100000000000000000045 /* ForemanGroupMessageView.swift in Sources */,
 				A100000000000000000027 /* ForemanInboxView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

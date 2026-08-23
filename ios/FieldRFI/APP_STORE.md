@@ -53,6 +53,7 @@ Do not invent a production host. Leave Release empty until there is a real `http
 - Access: the person above assigns what their direct reports can see and do. Default is one step: GF → Area Foreman → Foreman → Journeyman → Apprentice. A GF can grant a named apprentice a direct line (assistant / material check). That apprentice cannot open the skip. Persist on this phone. On-device UI only. Not a backend ABAC.
 - Company iPhone is the default. Personal phone is allowed. Both work. Shared shop handset: pick who you are. Photos stay on this phone in the app. A personal Apple ID is not required and is not blocked. No MDM or device-management portal.
 - Tools: short shop list on G-Line Shop Test (name, optional vendor/brand). Check out to an existing mock crew name, search, see who has it, check in. Find opens that one person's crew card and one-step-up contact. It does not blast every Foreman. On this phone. No barcode hardware. No Procore.
+- Optional group text to all Foremen on G-Line Shop Test lands in the on-device inbox. Separate from tool find. Apprentices cannot skip to all Foremen unless the GF granted a direct line.
 - Meetings: date/time, who, short note on G-Line Shop Test. Upcoming list and an in-app reminder on any tab in the hour before. Dated tasks show on that calendar day; assignees get an in-app due-today banner. No Apple Calendar sync. No local-notification permission required.
 - Grokbot drafts only on the backend.
 - Do not invent drawing numbers.

@@ -9,6 +9,7 @@ enum FieldPacketKind: String, Codable, CaseIterable {
     case materialAsk
     case printPhoto
     case task
+    case groupMessage
 
     var title: String {
         switch self {
@@ -17,6 +18,7 @@ enum FieldPacketKind: String, Codable, CaseIterable {
         case .materialAsk: return "Material list"
         case .printPhoto: return "Print / photo"
         case .task: return "Task"
+        case .groupMessage: return "All Foremen"
         }
     }
 }
@@ -83,7 +85,7 @@ final class FieldOutbox: ObservableObject {
     @discardableResult
     func sendToForeman(_ packet: FieldPacket) -> FieldPacket {
         var row = packet
-        if row.kind != .task,
+        if row.kind != .task, row.kind != .groupMessage,
            !FeatureSettings.shared.maySend(from: row.createdByUserID, to: row.sentToUserID),
            let from = ShopCrew.member(byID: row.createdByUserID),
            let boss = ShopCrew.oneStepUp(from: from) {
@@ -117,5 +119,48 @@ final class FieldOutbox: ObservableObject {
     /// Same-phone v1: field and foreman share this device.
     func sentOnDevice() -> [FieldPacket] {
         packets.filter(\.isSent)
+    }
+
+    /// Optional all-hands to every Foreman seat. Not tool find. Does not rewrite to one-step-up.
+    @discardableResult
+    func sendGroupToForemen(note: String, from: CrewMemberDTO) -> [FieldPacket] {
+        guard FeatureSettings.shared.mayGroupMessageForemen(from: from.user_id) else { return [] }
+        let text = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return [] }
+        let targets = ShopCrew.foremen.filter { $0.user_id != from.user_id }
+        guard !targets.isEmpty else { return [] }
+        var sent: [FieldPacket] = []
+        let now = Date()
+        for target in targets {
+            let row = FieldPacket(
+                id: UUID().uuidString,
+                kind: .groupMessage,
+                projectID: ShopCrew.jobID,
+                projectName: ShopCrew.jobName,
+                sheetNumber: nil,
+                revision: nil,
+                sheetRevisionID: nil,
+                pinLabel: nil,
+                xNorm: nil,
+                yNorm: nil,
+                note: text,
+                materialLines: [],
+                photoCount: 0,
+                createdByUserID: from.user_id,
+                createdByName: from.name,
+                createdByRole: from.role,
+                sentToUserID: target.user_id,
+                sentToName: target.name,
+                createdAt: now,
+                sentAt: now,
+                rfiID: nil,
+                status: "sent_to_foreman"
+            )
+            packets.insert(row, at: 0)
+            sent.append(row)
+        }
+        save()
+        objectWillChange.send()
+        return sent
     }
 }
