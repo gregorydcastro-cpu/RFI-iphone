@@ -113,10 +113,12 @@ final class MaterialBoard: ObservableObject {
     func assignedTickets(for session: FieldSession) -> [MaterialListRecord] {
         let open = history.filter { $0.status == .sent || $0.status == .backOrdered }
         if session.isApprentice, let me = session.userID {
+            return open.filter { $0.assignedToUserID == me }
+        }
+        if session.role == "journeyman",
+           let apprentice = FeatureSettings.shared.pairedApprentice(ofJourneyman: session.userID) {
             return open.filter {
-                $0.assignedToUserID == me
-                    || $0.assignedToUserID == "local-pickup"
-                    || $0.assignedToUserID == nil
+                $0.assignedToUserID == apprentice.user_id || $0.assignedToUserID == session.userID
             }
         }
         return open
@@ -219,7 +221,7 @@ final class MaterialBoard: ObservableObject {
         held.sentToName = target.name
         held.createdByUserID = session.userID ?? held.createdByUserID
         held.createdByName = session.assignment?.name ?? held.createdByName
-        if let apprentice = session.crew.first(where: { $0.role == "apprentice" }) {
+        if let apprentice = FeatureSettings.shared.pickupAssignee(for: session.userID) {
             held.assignedToUserID = apprentice.user_id
             held.assignedToName = apprentice.name
         } else {

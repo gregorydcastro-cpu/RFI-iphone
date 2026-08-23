@@ -184,6 +184,11 @@ struct MaterialAskView: View {
     private var assignedTickets: some View {
         VStack(alignment: .leading, spacing: 10) {
             sectionLabel("2. Assigned tickets — handle")
+            if let pair = FeatureSettings.shared.pickupAssignee(for: session.userID) {
+                Text("Pickup goes to \(pair.name) on the journeyman/apprentice pair.")
+                    .font(.caption)
+                    .foregroundStyle(FieldTheme.muted)
+            }
             let tickets = board.assignedTickets(for: session)
             if tickets.isEmpty {
                 Text(session.isApprentice
@@ -242,7 +247,8 @@ struct MaterialAskView: View {
                 .font(.caption2)
                 .foregroundStyle(FieldTheme.muted)
 
-            if showHandle && model.canPick(session: session) && row.status != .picked {
+            if showHandle && model.canPick(session: session) && row.status != .picked
+                && (row.assignedToUserID == nil || row.assignedToUserID == session.userID) {
                 Button("Handle — mark picked") {
                     model.markPicked(id: row.id)
                 }

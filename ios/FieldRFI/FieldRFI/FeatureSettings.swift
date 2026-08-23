@@ -94,11 +94,14 @@ final class FeatureSettings: ObservableObject {
     @Published private(set) var byUser: [String: FeatureFlags] = [:]
     @Published private(set) var byRole: [String: FeatureFlags] = [:]
     @Published private(set) var directLines: Set<String> = []
+    /// apprentice user id → journeyman user id
+    @Published private(set) var pairs: [String: String] = [:]
 
     private let key = "gcfieldlog.features.v2"
 
     init() {
         load()
+        ensureDefaultPairs()
     }
 
     func flags(for userID: String?) -> FeatureFlags {
@@ -165,9 +168,73 @@ final class FeatureSettings: ObservableObject {
         return rows
     }
 
+    func pairedApprentice(ofJourneyman journeymanID: String?) -> CrewMemberDTO? {
+        guard let journeymanID,
+              let apprenticeID = pairs.first(where: { $0.value == journeymanID })?.key
+        else { return nil }
+        return ShopCrew.member(byID: apprenticeID)
+    }
+
+    func pairedJourneyman(ofApprentice apprenticeID: String?) -> CrewMemberDTO? {
+        guard let apprenticeID, let journeymanID = pairs[apprenticeID] else { return nil }
+        return ShopCrew.member(byID: journeymanID)
+    }
+
+    func pickupAssignee(for userID: String?) -> CrewMemberDTO? {
+        guard let me = ShopCrew.member(byID: userID) else {
+            return ShopCrew.members.first(where: { $0.role == "apprentice" })
+        }
+        if me.role == "journeyman", let apprentice = pairedApprentice(ofJourneyman: me.user_id) {
+            return apprentice
+        }
+        if me.role == "apprentice" {
+            return me
+        }
+        if let journeyman = ShopCrew.members.first(where: { $0.role == "journeyman" }),
+           let apprentice = pairedApprentice(ofJourneyman: journeyman.user_id) {
+            return apprentice
+        }
+        return ShopCrew.members.first(where: { $0.role == "apprentice" })
+    }
+
+    func canSetPair(from actorID: String?) -> Bool {
+        guard let actor = ShopCrew.member(byID: actorID) else { return false }
+        return ["general_foreman", "area_foreman", "foreman"].contains(actor.role)
+    }
+
+    func setPair(apprenticeID: String, journeymanID: String, by actorID: String?) {
+        guard canSetPair(from: actorID),
+              let apprentice = ShopCrew.member(byID: apprenticeID),
+              let journeyman = ShopCrew.member(byID: journeymanID),
+              apprentice.role == "apprentice",
+              journeyman.role == "journeyman"
+        else { return }
+        pairs = pairs.filter { $0.key != apprenticeID && $0.value != journeymanID }
+        pairs[apprenticeID] = journeymanID
+        save()
+    }
+
+    func ensureDefaultPairs() {
+        guard pairs.isEmpty else { return }
+        for apprentice in ShopCrew.members where apprentice.role == "apprentice" {
+            if let boss = ShopCrew.oneStepUp(from: apprentice), boss.role == "journeyman" {
+                pairs[apprentice.user_id] = boss.user_id
+            }
+        }
+        if !pairs.isEmpty {
+            save()
+        }
+    }
+
     func assignTargets(for userID: String?) -> [CrewMemberDTO] {
         guard let me = ShopCrew.member(byID: userID) else { return [] }
         var rows = ShopCrew.directReports(of: me)
+        if me.role == "journeyman" {
+            rows.removeAll { $0.role == "apprentice" }
+            if let apprentice = pairedApprentice(ofJourneyman: me.user_id) {
+                rows.append(apprentice)
+            }
+        }
         if me.role == "general_foreman" {
             for apprentice in ShopCrew.members where apprentice.role == "apprentice" && hasDirectLine(apprentice.user_id) {
                 if !rows.contains(where: { $0.user_id == apprentice.user_id }) {
@@ -226,10 +293,11 @@ final class FeatureSettings: ObservableObject {
         byUser = box.byUser
         byRole = box.byRole
         directLines = Set(box.directLines ?? [])
+        pairs = box.pairs ?? [:]
     }
 
     private func save() {
-        let box = Box(byUser: byUser, byRole: byRole, directLines: Array(directLines))
+        let box = Box(byUser: byUser, byRole: byRole, directLines: Array(directLines), pairs: pairs)
         if let data = try? JSONEncoder().encode(box) {
             UserDefaults.standard.set(data, forKey: key)
         }
@@ -240,6 +308,7 @@ final class FeatureSettings: ObservableObject {
         var byUser: [String: FeatureFlags]
         var byRole: [String: FeatureFlags]
         var directLines: [String]?
+        var pairs: [String: String]?
     }
 }
 
@@ -257,6 +326,8 @@ struct FeatureSettingsView: View {
                 seatPicker
 
                 mineReadOnly
+
+                pairingSection
 
                 if let me, me.role == "general_foreman" {
                     directLineSection(me)
@@ -292,6 +363,56 @@ struct FeatureSettingsView: View {
 
     private var below: [CrewMemberDTO] {
         features.assignTargets(for: session.userID)
+    }
+
+    private var pairingSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionLabel("Journeyman / apprentice pair")
+            Text("Material pickup and similar assigns go to this pair on \(ShopCrew.jobName). Existing mock names only.")
+                .font(.caption)
+                .foregroundStyle(FieldTheme.muted)
+            ForEach(ShopCrew.members.filter { $0.role == "journeyman" }) { journeyman in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(journeyman.name)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(FieldTheme.ink)
+                    if features.canSetPair(from: session.userID) {
+                        ForEach(ShopCrew.members.filter { $0.role == "apprentice" }) { apprentice in
+                            Button {
+                                features.setPair(
+                                    apprenticeID: apprentice.user_id,
+                                    journeymanID: journeyman.user_id,
+                                    by: session.userID
+                                )
+                            } label: {
+                                HStack {
+                                    Text(apprentice.name)
+                                        .foregroundStyle(FieldTheme.ink)
+                                    Spacer()
+                                    if features.pairedApprentice(ofJourneyman: journeyman.user_id)?.user_id == apprentice.user_id {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(FieldTheme.orange)
+                                    }
+                                }
+                                .padding(12)
+                                .background(Color.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(FieldTheme.rule, lineWidth: 1))
+                            }
+                        }
+                    } else if let apprentice = features.pairedApprentice(ofJourneyman: journeyman.user_id) {
+                        Text("Paired with \(apprentice.name). You cannot change this.")
+                            .font(.footnote)
+                            .foregroundStyle(FieldTheme.muted)
+                    } else if let me, me.role == "apprentice",
+                              let journeyman = features.pairedJourneyman(ofApprentice: me.user_id) {
+                        Text("Paired with \(journeyman.name). You cannot change this.")
+                            .font(.footnote)
+                            .foregroundStyle(FieldTheme.muted)
+                    }
+                }
+            }
+        }
     }
 
     private func directLineSection(_ me: CrewMemberDTO) -> some View {

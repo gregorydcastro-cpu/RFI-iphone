@@ -123,7 +123,7 @@ struct TaskAssignView: View {
                 DatePicker("Due", selection: $dueAt, displayedComponents: .date)
             }
             sectionLabel("Crew on \(ShopCrew.jobName)")
-            Text("Assign one step down on \(ShopCrew.jobName). Skip-level only if the GF granted that apprentice a direct line.")
+            Text("Assign one step down on \(ShopCrew.jobName). Journeyman assigns to their paired apprentice. Skip-level only if the GF granted a direct line.")
                 .font(.caption)
                 .foregroundStyle(FieldTheme.muted)
             ForEach(assignTargets) { member in
