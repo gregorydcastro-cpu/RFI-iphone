@@ -36,6 +36,7 @@ struct FieldRFIApp: App {
             }
             .environmentObject(session)
             .tint(FieldTheme.orange)
+            .onAppear { session.ensureLocalSeat() }
         }
     }
 }

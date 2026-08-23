@@ -33,7 +33,11 @@ final class FieldSession: ObservableObject {
     }
 
     var canCaptureField: Bool {
-        !isApprentice && (canDraftRFI || ["journeyman", "foreman", "area_foreman", "general_foreman"].contains(role))
+        !isApprentice && (
+            canDraftRFI
+                || assignment == nil
+                || ["journeyman", "foreman", "area_foreman", "general_foreman"].contains(role)
+        )
     }
 
     func sendTarget() -> (id: String, name: String)? {
@@ -44,17 +48,29 @@ final class FieldSession: ObservableObject {
            let me = assignment {
             return (me.user_id, me.name)
         }
-        return nil
+        return ("local-foreman", "Foreman")
+    }
+
+    func ensureLocalSeat() {
+        if userID == nil {
+            userID = "local-field"
+        }
     }
 
     var banner: String {
-        guard let assignment else { return "Sign in to a seat on this job." }
+        guard let assignment else {
+            return "On this phone. Send-to-foreman is local. No API host required."
+        }
         let area = assignment.area_name ?? "the job"
         let boss = assignment.boss_name.map { "Reports to \($0)" } ?? "General Foreman"
         return "\(assignment.name)  ·  \(assignment.role.replacingOccurrences(of: "_", with: " "))  ·  \(area). \(boss)."
     }
 
     func load(client: APIClient, projectID: String) async {
+        guard APIClient.hasServerHost else {
+            ensureLocalSeat()
+            return
+        }
         do {
             let loaded = try await client.crew(projectID: projectID)
             crew = loaded.members
@@ -72,6 +88,7 @@ final class FieldSession: ObservableObject {
 
     func select(userID: String, client: APIClient, projectID: String) async {
         self.userID = userID
+        guard APIClient.hasServerHost else { return }
         assignment = try? await client.assignment(projectID: projectID, userID: userID)
     }
 

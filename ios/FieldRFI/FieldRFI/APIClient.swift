@@ -9,16 +9,38 @@ struct APIClient {
         self.baseURL = baseURL
     }
 
-    /// Info.plist / `FIELD_API_BASE_URL` build setting. Debug may use localhost HTTP.
-    /// Release must be `https://` and fails closed if the key is missing or still `http`.
+    /// Empty is legal. v1 send-to-foreman is local and needs no host.
+    /// Debug may use localhost HTTP when a caller actually hits the server.
+    static let localOnlyMarker = URL(string: "field-rfi://local")!
+
     static var defaultBaseURL: URL {
-        if let url = configuredBaseURL() {
-            return url
-        }
+        configuredBaseURL() ?? debugOrLocalMarker
+    }
+
+    static var defaultBaseURLString: String {
+        configuredBaseURL()?.absoluteString ?? {
+            #if DEBUG
+            return "http://127.0.0.1:8000"
+            #else
+            return ""
+            #endif
+        }()
+    }
+
+    /// Info.plist has a non-empty URL. Empty Release is legal; local outbox does not need this.
+    static var hasServerHost: Bool {
+        configuredBaseURL() != nil
+    }
+
+    static func isMissingHost(_ error: Error) -> Bool {
+        (error as? APIError)?.message.contains("No API host") == true
+    }
+
+    private static var debugOrLocalMarker: URL {
         #if DEBUG
         return URL(string: "http://127.0.0.1:8000")!
         #else
-        return URL(string: "https://field-api-base-url-missing.invalid")!
+        return localOnlyMarker
         #endif
     }
 
@@ -31,6 +53,7 @@ struct APIClient {
         return url
     }
 
+    /// Fail closed only when a caller needs a server.
     static func assertReleaseBaseURL(_ url: URL) throws {
         #if DEBUG
         _ = url
@@ -41,10 +64,10 @@ struct APIClient {
             || host.isEmpty
             || host == "localhost"
             || host == "127.0.0.1"
-            || host.hasSuffix(".invalid")
+            || scheme == "field-rfi"
         if closed {
             throw APIError(
-                message: "FIELD_API_BASE_URL must be https:// in Release. Set the build setting at archive time. This build will not call http or localhost."
+                message: "No API host. Send-to-foreman is local. This action needs https:// FIELD_API_BASE_URL — not http, not localhost."
             )
         }
         #endif

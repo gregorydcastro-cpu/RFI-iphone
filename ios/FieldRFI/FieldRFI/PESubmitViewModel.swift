@@ -4,7 +4,7 @@ import SwiftUI
 @MainActor
 final class PESubmitViewModel: ObservableObject {
     let rfiID: String
-    @Published var baseURLString = APIClient.defaultBaseURL.absoluteString
+    @Published var baseURLString = APIClient.defaultBaseURLString
     @Published var rfi: RFIDTO?
     @Published var roster: AssigneeRosterDTO?
     @Published var priority = "standard"
@@ -107,7 +107,6 @@ final class PESubmitViewModel: ObservableObject {
         do {
             let result = try await client.peSubmit(
                 rfiID: rfiID,
-                extraHeaders: extraHeaders,
                 body: PESubmitBody(
                     priority: priority == "work_stopped" ? "urgent" : priority,
                     work_stopped: false,
@@ -116,7 +115,8 @@ final class PESubmitViewModel: ObservableObject {
                     assigned_to_company_id: selectedCompanyID,
                     assignee: selectedUser?.name,
                     comment: comment.trimmingCharacters(in: .whitespacesAndNewlines)
-                )
+                ),
+                extraHeaders: extraHeaders
             )
             submitResult = result
             rfi = try await client.rfi(id: rfiID)

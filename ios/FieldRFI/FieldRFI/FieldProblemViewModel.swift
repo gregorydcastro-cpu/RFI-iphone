@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 final class FieldProblemViewModel: ObservableObject {
-    @Published var baseURLString = APIClient.defaultBaseURL.absoluteString
+    @Published var baseURLString = APIClient.defaultBaseURLString
     @Published var projects: [ProjectDTO] = []
     @Published var revisions: [SheetRevisionDTO] = []
     @Published var selectedProject: ProjectDTO?
@@ -22,13 +22,15 @@ final class FieldProblemViewModel: ObservableObject {
 
     func canSend(session: FieldSession) -> Bool {
         session.sendTarget() != nil
-            && selectedProject != nil
             && !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && (pin != nil || !photos.isEmpty)
     }
 
     func loadCatalog() async {
         errorMessage = nil
+        if baseURLString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return
+        }
         do {
             let rows = try await client.projects()
             projects = rows
@@ -39,7 +41,9 @@ final class FieldProblemViewModel: ObservableObject {
             }
             await loadRevisions()
         } catch {
-            errorMessage = error.localizedDescription
+            if !APIClient.isMissingHost(error) {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
@@ -58,7 +62,9 @@ final class FieldProblemViewModel: ObservableObject {
                 ?? rows.first
             await loadDrawing()
         } catch {
-            errorMessage = error.localizedDescription
+            if !APIClient.isMissingHost(error) {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
@@ -80,7 +86,8 @@ final class FieldProblemViewModel: ObservableObject {
     }
 
     func sendToForeman(session: FieldSession) {
-        guard let project = selectedProject, let target = session.sendTarget() else {
+        session.ensureLocalSeat()
+        guard let target = session.sendTarget() else {
             errorMessage = "No foreman on this crew. Assign a seat that reports to a foreman."
             return
         }
@@ -89,8 +96,8 @@ final class FieldProblemViewModel: ObservableObject {
         let packet = FieldPacket(
             id: UUID().uuidString,
             kind: .fieldProblem,
-            projectID: project.id,
-            projectName: project.name,
+            projectID: selectedProject?.id ?? "local-job",
+            projectName: selectedProject?.name ?? "This job",
             sheetNumber: selectedRevision?.sheet_number,
             revision: selectedRevision?.revision,
             sheetRevisionID: selectedRevision?.id,

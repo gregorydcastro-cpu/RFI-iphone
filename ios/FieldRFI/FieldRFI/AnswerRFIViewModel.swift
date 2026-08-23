@@ -4,7 +4,7 @@ import SwiftUI
 @MainActor
 final class AnswerRFIViewModel: ObservableObject {
     let rfiID: String
-    @Published var baseURLString = APIClient.defaultBaseURL.absoluteString
+    @Published var baseURLString = APIClient.defaultBaseURLString
     @Published var rfi: RFIDTO?
     @Published var responseText = ""
     @Published var wantsClarification = false

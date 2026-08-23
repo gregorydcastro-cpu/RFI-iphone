@@ -87,10 +87,20 @@ final class FieldOutbox: ObservableObject {
     }
 
     func incoming(for userID: String) -> [FieldPacket] {
-        packets.filter { $0.sentToUserID == userID && $0.isSent }
+        let mine = packets.filter { $0.sentToUserID == userID && $0.isSent }
+        if !mine.isEmpty { return mine }
+        if userID == "local-field" || userID == "local-foreman" {
+            return packets.filter { $0.isSent && ($0.sentToUserID == "local-foreman" || $0.sentToUserID == "local-field") }
+        }
+        return mine
     }
 
     func outgoing(for userID: String) -> [FieldPacket] {
         packets.filter { $0.createdByUserID == userID }
+    }
+
+    /// Same-phone v1: field and foreman share this device.
+    func sentOnDevice() -> [FieldPacket] {
+        packets.filter(\.isSent)
     }
 }

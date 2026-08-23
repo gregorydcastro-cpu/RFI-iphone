@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 final class NewRFIViewModel: ObservableObject {
-    @Published var baseURLString = APIClient.defaultBaseURL.absoluteString
+    @Published var baseURLString = APIClient.defaultBaseURLString
     @Published var projects: [ProjectDTO] = []
     @Published var revisions: [SheetRevisionDTO] = []
     @Published var selectedProject: ProjectDTO?
@@ -46,7 +46,6 @@ final class NewRFIViewModel: ObservableObject {
 
     func canSendToForeman(session: FieldSession) -> Bool {
         session.sendTarget() != nil
-            && selectedProject != nil
             && !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && (pin != nil || !photos.isEmpty || savedRFI != nil)
             && !isSubmitting
@@ -56,6 +55,9 @@ final class NewRFIViewModel: ObservableObject {
         isLoadingCatalog = true
         errorMessage = nil
         defer { isLoadingCatalog = false }
+        if baseURLString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return
+        }
         do {
             let rows = try await client.projects()
             projects = rows
@@ -66,7 +68,9 @@ final class NewRFIViewModel: ObservableObject {
             }
             await loadRevisions()
         } catch {
-            errorMessage = error.localizedDescription
+            if !APIClient.isMissingHost(error) {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
@@ -89,7 +93,9 @@ final class NewRFIViewModel: ObservableObject {
                 ?? rows.first
             await loadDrawing()
         } catch {
-            errorMessage = error.localizedDescription
+            if !APIClient.isMissingHost(error) {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
@@ -102,7 +108,9 @@ final class NewRFIViewModel: ObservableObject {
             drawingData = try await client.drawing(revisionID: revision.id)
         } catch {
             drawingData = nil
-            errorMessage = error.localizedDescription
+            if !APIClient.isMissingHost(error) {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
@@ -242,7 +250,8 @@ final class NewRFIViewModel: ObservableObject {
     }
 
     func sendToForeman(session: FieldSession) {
-        guard let project = selectedProject, let target = session.sendTarget() else {
+        session.ensureLocalSeat()
+        guard let target = session.sendTarget() else {
             errorMessage = "No foreman on this crew."
             return
         }
@@ -251,8 +260,8 @@ final class NewRFIViewModel: ObservableObject {
         let packet = FieldPacket(
             id: UUID().uuidString,
             kind: .rfi,
-            projectID: project.id,
-            projectName: project.name,
+            projectID: selectedProject?.id ?? "local-job",
+            projectName: selectedProject?.name ?? "This job",
             sheetNumber: selectedRevision?.sheet_number,
             revision: selectedRevision?.revision,
             sheetRevisionID: selectedRevision?.id,

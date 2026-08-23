@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 final class MaterialAskViewModel: ObservableObject {
-    @Published var baseURLString = APIClient.defaultBaseURL.absoluteString
+    @Published var baseURLString = APIClient.defaultBaseURLString
     @Published var projects: [ProjectDTO] = []
     @Published var selectedProject: ProjectDTO?
     @Published var note = ""
@@ -28,7 +28,7 @@ final class MaterialAskViewModel: ObservableObject {
     }
 
     func canSend(session: FieldSession) -> Bool {
-        session.sendTarget() != nil && selectedProject != nil && !readyLines.isEmpty
+        session.sendTarget() != nil && !readyLines.isEmpty
     }
 
     func addLine() {
@@ -45,6 +45,9 @@ final class MaterialAskViewModel: ObservableObject {
 
     func loadCatalog() async {
         errorMessage = nil
+        if baseURLString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return
+        }
         do {
             let rows = try await client.projects()
             projects = rows
@@ -53,12 +56,15 @@ final class MaterialAskViewModel: ObservableObject {
                     ?? rows.first
             }
         } catch {
-            errorMessage = error.localizedDescription
+            if !APIClient.isMissingHost(error) {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
     func sendToForeman(session: FieldSession) {
-        guard let project = selectedProject, let target = session.sendTarget() else {
+        session.ensureLocalSeat()
+        guard let target = session.sendTarget() else {
             errorMessage = "No foreman on this crew."
             return
         }
@@ -70,8 +76,8 @@ final class MaterialAskViewModel: ObservableObject {
         let packet = FieldPacket(
             id: UUID().uuidString,
             kind: .materialAsk,
-            projectID: project.id,
-            projectName: project.name,
+            projectID: selectedProject?.id ?? "local-job",
+            projectName: selectedProject?.name ?? "This job",
             sheetNumber: nil,
             revision: nil,
             sheetRevisionID: nil,

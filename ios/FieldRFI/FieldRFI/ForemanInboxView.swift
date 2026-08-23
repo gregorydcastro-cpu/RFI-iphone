@@ -18,7 +18,7 @@ struct ForemanInboxView: View {
             }
 
             Section("Incoming") {
-                let incoming = session.userID.map { outbox.incoming(for: $0) } ?? []
+                let incoming = incomingPackets
                 if incoming.isEmpty {
                     Text("Nothing sent to this seat yet.")
                         .foregroundStyle(FieldTheme.muted)
@@ -29,7 +29,7 @@ struct ForemanInboxView: View {
             }
 
             Section("Sent from this phone") {
-                let outgoing = session.userID.map { outbox.outgoing(for: $0) } ?? []
+                let outgoing = outgoingPackets
                 if outgoing.isEmpty {
                     Text("No packets sent.")
                         .foregroundStyle(FieldTheme.muted)
@@ -46,14 +46,31 @@ struct ForemanInboxView: View {
         .toolbarBackground(FieldTheme.steel, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
-        .onAppear { outbox.load() }
+        .onAppear {
+            session.ensureLocalSeat()
+            outbox.load()
+        }
         .task {
+            session.ensureLocalSeat()
+            outbox.load()
+            guard APIClient.hasServerHost else { return }
             let client = APIClient()
             if let project = try? await client.projects(),
                let first = project.first(where: { $0.name.contains("ILSB") }) ?? project.first {
                 await session.load(client: client, projectID: first.id)
             }
         }
+    }
+
+    private var incomingPackets: [FieldPacket] {
+        if session.assignment == nil {
+            return outbox.sentOnDevice()
+        }
+        return session.userID.map { outbox.incoming(for: $0) } ?? []
+    }
+
+    private var outgoingPackets: [FieldPacket] {
+        session.userID.map { outbox.outgoing(for: $0) } ?? outbox.packets
     }
 
     private func packetRow(_ row: FieldPacket) -> some View {

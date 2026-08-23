@@ -2,7 +2,7 @@ import Foundation
 
 @MainActor
 final class RFIGraphViewModel: ObservableObject {
-    @Published var baseURLString = APIClient.defaultBaseURL.absoluteString
+    @Published var baseURLString = APIClient.defaultBaseURLString
     @Published var graph: GraphResponseDTO?
     @Published var isLoading = false
     @Published var errorMessage: String?
