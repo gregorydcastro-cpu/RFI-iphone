@@ -4,7 +4,6 @@ from sqlalchemy import delete
 
 from app import db as dbmod
 from app.ids import (
-    SHOP_DRAFT_RFI_ID,
     USER_GREG_PE_ID,
     USER_HARBOR_AF_ID,
     USER_HARBOR_AF_ROOF_ID,
@@ -40,14 +39,23 @@ def field_headers(role: str, *, pe: bool = False) -> dict:
 
 
 def clear_seeded_shop_draft() -> None:
-    """Remove the seeded E-101 open draft so a test can create a fresh one."""
+    """Remove non-sample open RFIs so a test can create a fresh E-101 draft."""
+    from sqlalchemy import select
+
     db = dbmod.SessionLocal()
     try:
-        rid = str(SHOP_DRAFT_RFI_ID)
-        if db.get(RFI, rid):
+        ids = list(
+            db.scalars(
+                select(RFI.id).where(
+                    RFI.is_sample.is_(False),
+                    RFI.status.in_(("draft", "submitted", "ball_in_court")),
+                )
+            )
+        )
+        if ids:
             for model in (RFIPin, RFIRef, RFIEvent, RFIAttachment):
-                db.execute(delete(model).where(model.rfi_id == rid))
-            db.execute(delete(RFI).where(RFI.id == rid))
+                db.execute(delete(model).where(model.rfi_id.in_(ids)))
+            db.execute(delete(RFI).where(RFI.id.in_(ids)))
             db.commit()
     finally:
         db.close()

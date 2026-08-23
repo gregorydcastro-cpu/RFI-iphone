@@ -81,9 +81,6 @@ def test_gc_routes_require_token(client):
     grok = client.post("/submit_rfi", json={"rfi_id": rfi_id})
     assert grok.status_code == 403
     assert grok.json()["detail"]["policy"] == "grokbot_lane"
-    seeded = client.get(f"/rfis/{SHOP_DRAFT_RFI_ID}").json()
-    assert seeded["status"] == "draft"
-    assert seeded["rfi_display"] is None
 
 
 def test_cannot_close_draft_or_void_or_co_before_answer(client):

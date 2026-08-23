@@ -80,7 +80,7 @@ def test_search_shop_e101_finds_seeded_draft(client):
         "/search_rfis",
         params={
             "project_id": str(PROJECT_ID),
-            "query": "shop lighting",
+            "query": "fixture type",
         },
     )
     assert by_query.json()["count"] >= 1
@@ -133,7 +133,7 @@ def test_create_on_e101_stops_when_open_draft_exists(client):
         params={
             "project_id": str(PROJECT_ID),
             "sheet_number": DEMO_SHEET_NUMBER,
-            "query": "shop lighting",
+            "query": "fixture type",
         },
     )
     assert search.json()["count"] >= 1
