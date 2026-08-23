@@ -4,6 +4,15 @@ Field tool. Journeyman or foreman captures a pin or photo, drafts an RFI or a fi
 
 Apple contact: glineracing@gmail.com · (508) 505-1836
 
+App Store listing URLs (not an API host):
+
+| | |
+|---|---|
+| Support URL | https://glineracing.store/ |
+| Marketing URL | https://glineracing.store/ |
+
+Do not set `FIELD_API_BASE_URL` to this. It is listing copy only.
+
 ## What this Linux cut cannot do
 
 Linux cannot archive or upload to App Store Connect. Remaining blockers after this UI cut:
@@ -28,7 +37,7 @@ Empty `FIELD_API_BASE_URL` is legal. The app launches. Local outbox, foreman inb
 
 Fail closed **only** when a caller actually needs a server and the URL is missing, `http`, or localhost in Release. Catalog / drawing / PE / graph calls throw. They do not fall back to `http://127.0.0.1:8000`. ATS does not allow arbitrary HTTP.
 
-Do not invent a production host. Leave Release empty until there is a real `https://` server.
+Do not invent a production host. Leave Release empty until there is a real `https://` server. Do not use https://glineracing.store/ as `FIELD_API_BASE_URL`.
 
 ## v1 law (do not regress)
 
