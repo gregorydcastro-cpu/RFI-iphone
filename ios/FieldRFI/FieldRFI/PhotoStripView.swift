@@ -8,17 +8,40 @@ struct PhotoStripView: View {
     var onRemove: (PickedPhoto) -> Void
 
     @State private var pickerItems: [PhotosPickerItem] = []
+    @State private var showCamera = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionLabel("Photos")
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
+                    Button {
+                        showCamera = true
+                    } label: {
+                        VStack(spacing: 6) {
+                            Image(systemName: "camera")
+                                .font(.title2.weight(.semibold))
+                            Text("Camera")
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .foregroundStyle(FieldTheme.orange)
+                        .frame(width: 84, height: 84)
+                        .background(FieldTheme.paper)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(FieldTheme.orange.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [4]))
+                        )
+                    }
+                    .sheet(isPresented: $showCamera) {
+                        CameraPicker(onCapture: onAdd)
+                    }
+
                     PhotosPicker(selection: $pickerItems, maxSelectionCount: 6, matching: .images) {
                         VStack(spacing: 6) {
-                            Image(systemName: "plus")
+                            Image(systemName: "photo.on.rectangle")
                                 .font(.title2.weight(.semibold))
-                            Text("Add")
+                            Text("Library")
                                 .font(.caption2.weight(.semibold))
                         }
                         .foregroundStyle(FieldTheme.orange)

@@ -22,6 +22,7 @@ final class NewRFIViewModel: ObservableObject {
     @Published var tickets: [MaterialTicketDTO] = []
     @Published var submitResult: PESubmitResultDTO?
     @Published var isSubmitting = false
+    @Published var sentToForemanName: String?
 
     var client: APIClient {
         APIClient(baseURL: URL(string: baseURLString) ?? APIClient.defaultBaseURL)
@@ -36,11 +37,19 @@ final class NewRFIViewModel: ObservableObject {
     }
 
     func canShowSubmit(session: FieldSession) -> Bool {
-        session.canSubmitRFI
+        false
     }
 
     func canHumanSubmit(session: FieldSession) -> Bool {
-        session.canSubmitRFI && savedRFI?.status == "draft" && submitResult == nil && !isSubmitting
+        false
+    }
+
+    func canSendToForeman(session: FieldSession) -> Bool {
+        session.sendTarget() != nil
+            && selectedProject != nil
+            && !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && (pin != nil || !photos.isEmpty || savedRFI != nil)
+            && !isSubmitting
     }
 
     func loadCatalog() async {
@@ -151,6 +160,7 @@ final class NewRFIViewModel: ObservableObject {
         duplicate = nil
         draftResult = nil
         savedRFI = nil
+        sentToForemanName = nil
         defer { isDrafting = false }
 
         let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -228,32 +238,43 @@ final class NewRFIViewModel: ObservableObject {
     }
 
     func submitDraft(session: FieldSession) async {
-        guard session.canSubmitRFI, let rfi = savedRFI else { return }
-        isSubmitting = true
-        errorMessage = nil
-        defer { isSubmitting = false }
-        do {
-            let headers = session.fieldHeaders()
-            if rfi.status == "draft" {
-                _ = try await client.peApproveInternalReview(rfiID: rfi.id, extraHeaders: headers)
-            }
-            let result = try await client.peSubmit(
-                rfiID: rfi.id,
-                body: PESubmitBody(
-                    priority: rfi.priority,
-                    work_stopped: false,
-                    require_internal_review: true,
-                    assigned_to_user_id: rfi.assigned_to_user_id,
-                    assigned_to_company_id: rfi.assigned_to_company_id,
-                    assignee: rfi.assigned,
-                    comment: "Foreman submit from New RFI. Grokbot did not submit."
-                ),
-                extraHeaders: headers
-            )
-            submitResult = result
-            savedRFI = try await client.rfi(id: rfi.id)
-        } catch {
-            errorMessage = error.localizedDescription
+        errorMessage = "Field v1 does not submit or set work-stopped. Send the draft to the foreman."
+    }
+
+    func sendToForeman(session: FieldSession) {
+        guard let project = selectedProject, let target = session.sendTarget() else {
+            errorMessage = "No foreman on this crew."
+            return
         }
+        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let packet = FieldPacket(
+            id: UUID().uuidString,
+            kind: .rfi,
+            projectID: project.id,
+            projectName: project.name,
+            sheetNumber: selectedRevision?.sheet_number,
+            revision: selectedRevision?.revision,
+            sheetRevisionID: selectedRevision?.id,
+            pinLabel: pin?.label ?? (gridLabel.isEmpty ? nil : gridLabel),
+            xNorm: pin?.x_norm,
+            yNorm: pin?.y_norm,
+            note: trimmed,
+            materialLines: [],
+            photoCount: photos.count,
+            createdByUserID: session.userID ?? "",
+            createdByName: session.assignment?.name ?? "Field",
+            createdByRole: session.role,
+            sentToUserID: target.id,
+            sentToName: target.name,
+            createdAt: Date(),
+            sentAt: nil,
+            rfiID: savedRFI?.id,
+            status: "draft"
+        )
+        _ = FieldOutbox.shared.sendToForeman(packet)
+        submitResult = nil
+        errorMessage = nil
+        sentToForemanName = target.name
     }
 }

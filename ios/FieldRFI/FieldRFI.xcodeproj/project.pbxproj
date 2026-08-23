@@ -24,7 +24,15 @@
 		A100000000000000000018 /* GCImpactView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000018 /* GCImpactView.swift */; };
 		A100000000000000000019 /* GCImpactViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000019 /* GCImpactViewModel.swift */; };
 		A100000000000000000020 /* FieldSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000020 /* FieldSession.swift */; };
+		A100000000000000000021 /* FieldOutbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000021 /* FieldOutbox.swift */; };
+		A100000000000000000022 /* CameraPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000022 /* CameraPicker.swift */; };
+		A100000000000000000023 /* FieldProblemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000023 /* FieldProblemView.swift */; };
+		A100000000000000000024 /* FieldProblemViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000024 /* FieldProblemViewModel.swift */; };
+		A100000000000000000025 /* MaterialAskView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000025 /* MaterialAskView.swift */; };
+		A100000000000000000026 /* MaterialAskViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000026 /* MaterialAskViewModel.swift */; };
+		A100000000000000000027 /* ForemanInboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000027 /* ForemanInboxView.swift */; };
 		A100000000000000000010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000010 /* Assets.xcassets */; };
+		A100000000000000000028 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000028 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -46,8 +54,16 @@
 		B100000000000000000018 /* GCImpactView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GCImpactView.swift; sourceTree = "<group>"; };
 		B100000000000000000019 /* GCImpactViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GCImpactViewModel.swift; sourceTree = "<group>"; };
 		B100000000000000000020 /* FieldSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldSession.swift; sourceTree = "<group>"; };
+		B100000000000000000021 /* FieldOutbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldOutbox.swift; sourceTree = "<group>"; };
+		B100000000000000000022 /* CameraPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPicker.swift; sourceTree = "<group>"; };
+		B100000000000000000023 /* FieldProblemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldProblemView.swift; sourceTree = "<group>"; };
+		B100000000000000000024 /* FieldProblemViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldProblemViewModel.swift; sourceTree = "<group>"; };
+		B100000000000000000025 /* MaterialAskView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaterialAskView.swift; sourceTree = "<group>"; };
+		B100000000000000000026 /* MaterialAskViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaterialAskViewModel.swift; sourceTree = "<group>"; };
+		B100000000000000000027 /* ForemanInboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForemanInboxView.swift; sourceTree = "<group>"; };
 		B100000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B100000000000000000011 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B100000000000000000028 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -77,6 +93,8 @@
 				B100000000000000000003 /* Models.swift */,
 				B100000000000000000004 /* APIClient.swift */,
 				B100000000000000000020 /* FieldSession.swift */,
+				B100000000000000000021 /* FieldOutbox.swift */,
+				B100000000000000000022 /* CameraPicker.swift */,
 				B100000000000000000005 /* NewRFIViewModel.swift */,
 				B100000000000000000006 /* NewRFIView.swift */,
 				B100000000000000000007 /* DrawingCanvasView.swift */,
@@ -89,8 +107,14 @@
 				B100000000000000000017 /* AnswerRFIViewModel.swift */,
 				B100000000000000000018 /* GCImpactView.swift */,
 				B100000000000000000019 /* GCImpactViewModel.swift */,
+				B100000000000000000023 /* FieldProblemView.swift */,
+				B100000000000000000024 /* FieldProblemViewModel.swift */,
+				B100000000000000000025 /* MaterialAskView.swift */,
+				B100000000000000000026 /* MaterialAskViewModel.swift */,
+				B100000000000000000027 /* ForemanInboxView.swift */,
 				B100000000000000000010 /* Assets.xcassets */,
 				B100000000000000000011 /* Info.plist */,
+				B100000000000000000028 /* PrivacyInfo.xcprivacy */,
 			);
 			path = FieldRFI;
 			sourceTree = "<group>";
@@ -162,6 +186,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A100000000000000000010 /* Assets.xcassets in Resources */,
+				A100000000000000000028 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -177,6 +202,8 @@
 				A100000000000000000003 /* Models.swift in Sources */,
 				A100000000000000000004 /* APIClient.swift in Sources */,
 				A100000000000000000020 /* FieldSession.swift in Sources */,
+				A100000000000000000021 /* FieldOutbox.swift in Sources */,
+				A100000000000000000022 /* CameraPicker.swift in Sources */,
 				A100000000000000000005 /* NewRFIViewModel.swift in Sources */,
 				A100000000000000000006 /* NewRFIView.swift in Sources */,
 				A100000000000000000007 /* DrawingCanvasView.swift in Sources */,
@@ -189,6 +216,11 @@
 				A100000000000000000017 /* AnswerRFIViewModel.swift in Sources */,
 				A100000000000000000018 /* GCImpactView.swift in Sources */,
 				A100000000000000000019 /* GCImpactViewModel.swift in Sources */,
+				A100000000000000000023 /* FieldProblemView.swift in Sources */,
+				A100000000000000000024 /* FieldProblemViewModel.swift in Sources */,
+				A100000000000000000025 /* MaterialAskView.swift in Sources */,
+				A100000000000000000026 /* MaterialAskViewModel.swift in Sources */,
+				A100000000000000000027 /* ForemanInboxView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -250,7 +282,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.castro.fieldrfi;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -276,7 +308,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.castro.fieldrfi;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

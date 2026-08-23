@@ -11,15 +11,27 @@ struct FieldRFIApp: App {
                     NewRFIView()
                 }
                 .tabItem {
-                    Label(session.canHandleMaterial && !session.canDraftRFI ? "Material" : "New RFI", systemImage: "plus.rectangle.on.folder")
+                    Label(session.isApprentice ? "Tickets" : "RFI", systemImage: "plus.rectangle.on.folder")
                 }
-                if session.canViewRFIGraph {
+                if session.canCaptureField || session.assignment == nil {
                     NavigationStack {
-                        RFIGraphView()
+                        FieldProblemView()
                     }
                     .tabItem {
-                        Label("RFI Graph", systemImage: "list.bullet.rectangle")
+                        Label("Problem", systemImage: "exclamationmark.triangle")
                     }
+                    NavigationStack {
+                        MaterialAskView()
+                    }
+                    .tabItem {
+                        Label("Material", systemImage: "shippingbox")
+                    }
+                }
+                NavigationStack {
+                    ForemanInboxView()
+                }
+                .tabItem {
+                    Label("Foreman", systemImage: "person.2")
                 }
             }
             .environmentObject(session)

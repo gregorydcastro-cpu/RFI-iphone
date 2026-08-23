@@ -71,11 +71,7 @@ struct AnswerRFIView: View {
             HStack {
                 Text(rfi.status)
                 Text("·")
-                Text(rfi.priority)
-                if rfi.work_stopped == true {
-                    Text("· work stopped")
-                        .foregroundStyle(FieldTheme.orange)
-                }
+                Text(rfi.priority == "work_stopped" ? "urgent" : rfi.priority)
             }
             .font(.caption)
             .foregroundStyle(FieldTheme.muted)

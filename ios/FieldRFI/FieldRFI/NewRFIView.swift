@@ -95,7 +95,7 @@ struct NewRFIView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     sectionLabel("Note")
-                    Text("One question. Grokbot will cite the sheet, revision, and grid. An answer is not a CO.")
+                    Text("One question. Grokbot cites the sheet, revision, and grid. Then send it to the foreman. An answer is not a CO.")
                         .font(.footnote)
                         .foregroundStyle(FieldTheme.muted)
                     TextEditor(text: $model.note)
@@ -134,26 +134,20 @@ struct NewRFIView: View {
                         .foregroundStyle(FieldTheme.muted)
                 }
 
-                if model.canShowSubmit(session: session) {
+                if session.canCaptureField {
                     Button {
-                        Task { await model.submitDraft(session: session) }
+                        model.sendToForeman(session: session)
                     } label: {
-                        HStack {
-                            if model.isSubmitting {
-                                ProgressView()
-                                    .tint(.white)
-                            }
-                            Text(model.isSubmitting ? "Submitting…" : "Submit")
-                                .font(.headline)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(model.canHumanSubmit(session: session) ? FieldTheme.steel : FieldTheme.steel.opacity(0.35))
-                        .foregroundStyle(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        Text(session.sendTarget().map { "Send to \($0.name)" } ?? "Send to foreman")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(model.canSendToForeman(session: session) ? FieldTheme.steel : FieldTheme.steel.opacity(0.35))
+                            .foregroundStyle(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
                     }
-                    .disabled(!model.canHumanSubmit(session: session))
-                    Text("Submit is Foreman or above. A human hits this. Grokbot never does.")
+                    .disabled(!model.canSendToForeman(session: session))
+                    Text("Sends the capture to the foreman. Does not submit, number, or set work-stopped. The foreman enters Procore later.")
                         .font(.caption)
                         .foregroundStyle(FieldTheme.muted)
                 }
@@ -175,10 +169,10 @@ struct NewRFIView: View {
                         tone: .success
                     )
                 }
-                if let submitted = model.submitResult {
+                if let name = model.sentToForemanName {
                     banner(
-                        title: "Submitted",
-                        body: "Number: \(submitted.rfi_display ?? "none")\nStatus: \(submitted.status)",
+                        title: "Sent to \(name)",
+                        body: "Handoff only. No RFI number. No work-stopped. Foreman enters Procore later.",
                         tone: .success
                     )
                 }
@@ -255,7 +249,7 @@ struct NewRFIView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Handle material")
                 .font(.title3.weight(.semibold))
-            Text("Apprentice lane: assigned tickets only. No RFI draft. No submit. No order. No work-stop.")
+            Text("Apprentice lane: assigned tickets only. No RFI draft. No submit. No PO. No work-stop.")
                 .font(.footnote)
                 .foregroundStyle(FieldTheme.muted)
             pickerBlock(
@@ -319,7 +313,7 @@ struct NewRFIView: View {
             Text("Field / PM draft")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(FieldTheme.orange)
-            Text("Pin a sheet revision, add photos and one note, then draft. Grokbot writes suggested_rfis or a draft — never a submitted RFI.")
+            Text("Pin a sheet revision or take a photo, draft one question, then send it to the foreman. Grokbot never submits. This app does not talk to Procore.")
                 .font(.subheadline)
                 .foregroundStyle(FieldTheme.ink)
         }

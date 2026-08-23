@@ -253,10 +253,10 @@ struct DraftChangeOrderDTO: Codable, Identifiable {
     let notes: String?
 }
 
-struct DraftMaterialLineDTO: Codable {
-    let description: String
-    let qty: Double
-    let uom: String
+struct DraftMaterialLineDTO: Codable, Hashable {
+    var description: String
+    var qty: Double
+    var uom: String
 }
 
 struct DraftMaterialOrderDTO: Codable, Identifiable {

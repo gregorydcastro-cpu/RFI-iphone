@@ -19,9 +19,9 @@ struct PESubmitView: View {
                 }
                 if let rfi = model.rfi {
                     draftSummary(rfi)
-                    if session.canSubmitRFI {
-                        priorityBlock
-                    }
+                if session.canSubmitRFI {
+                    priorityBlock
+                }
                     if session.canSubmitRFI {
                         reviewBlock
                         assigneeBlock
@@ -81,10 +81,6 @@ struct PESubmitView: View {
                 Text(rfi.status)
                 Text("·")
                 Text(rfi.priority)
-                if rfi.work_stopped == true {
-                    Text("· work stopped")
-                        .foregroundStyle(FieldTheme.orange)
-                }
             }
             .font(.caption)
             .foregroundStyle(FieldTheme.muted)
@@ -110,26 +106,14 @@ struct PESubmitView: View {
         VStack(alignment: .leading, spacing: 8) {
             sectionLabel("Priority")
             Picker("Priority", selection: Binding(
-                get: { model.priority },
+                get: { model.priority == "work_stopped" ? "urgent" : model.priority },
                 set: { model.syncPriority(fromPriority: $0) }
             )) {
                 Text("Standard").tag("standard")
                 Text("Urgent").tag("urgent")
-                if session.canWorkStop {
-                    Text("Work stopped").tag("work_stopped")
-                }
             }
             .pickerStyle(.segmented)
-            if session.canWorkStop {
-                Toggle(
-                    "Work stopped",
-                    isOn: Binding(
-                        get: { model.workStopped },
-                        set: { model.syncWorkStopped($0) }
-                    )
-                )
-            }
-            Text("Priority and work-stopped stay on set_priority. Grokbot never sets them.")
+            Text("Field v1 does not set work-stopped. Grokbot never does either.")
                 .font(.caption)
                 .foregroundStyle(FieldTheme.muted)
         }

@@ -27,7 +27,7 @@ struct RFIGraphView: View {
                     Text("Drafts (no number)")
                         .font(.headline)
                         .padding(.top, 8)
-                    Text("Drafts stay off the meeting graph until a PE submits. Tap a draft to open the PE Submit screen.")
+                    Text("Drafts stay unnumbered. Field sends them to the foreman. This app does not submit or set work-stopped.")
                         .font(.footnote)
                         .foregroundStyle(FieldTheme.muted)
                     ForEach(graph.drafts) { row in
@@ -98,7 +98,7 @@ struct RFIGraphView: View {
             Text("Age buckets")
                 .font(.headline)
             HStack(alignment: .bottom, spacing: 6) {
-                ForEach(graph.bucket_order, id: \.self) { bucket in
+                ForEach(graph.bucket_order.filter { $0 != "work_stopped" }, id: \.self) { bucket in
                     let count = graph.bucket_counts[bucket] ?? 0
                     VStack(spacing: 4) {
                         Text("\(count)")
@@ -135,32 +135,7 @@ struct RFIGraphView: View {
     }
 
     private func actorLink(_ row: GraphRowDTO, draft: Bool = false) -> some View {
-        Group {
-            if session.canSubmitRFI && ["draft", "internal_review", "needs_clarification"].contains(row.status) {
-                NavigationLink {
-                    PESubmitView(rfiID: row.id)
-                } label: {
-                    graphRow(row, draft: draft)
-                }
-                .buttonStyle(.plain)
-            } else if ["submitted", "ball_in_court"].contains(row.status) {
-                NavigationLink {
-                    AnswerRFIView(rfiID: row.id)
-                } label: {
-                    graphRow(row, draft: draft)
-                }
-                .buttonStyle(.plain)
-            } else if ["answered", "impact_review"].contains(row.status) {
-                NavigationLink {
-                    GCImpactView(rfiID: row.id)
-                } label: {
-                    graphRow(row, draft: draft)
-                }
-                .buttonStyle(.plain)
-            } else {
-                graphRow(row, draft: draft)
-            }
-        }
+        graphRow(row, draft: draft)
     }
 
     private func graphRow(_ row: GraphRowDTO, draft: Bool = false) -> some View {
@@ -169,33 +144,6 @@ struct RFIGraphView: View {
                 Text(row.rfi_display ?? "no number")
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(draft ? FieldTheme.muted : FieldTheme.ink)
-                if session.canSubmitRFI && (draft || ["draft", "internal_review", "needs_clarification"].contains(row.status)) {
-                    Text("PE Submit")
-                        .font(.caption2.weight(.bold))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(FieldTheme.steel.opacity(0.12))
-                        .foregroundStyle(FieldTheme.steel)
-                        .clipShape(Capsule())
-                }
-                if ["submitted", "ball_in_court"].contains(row.status) {
-                    Text("Answer")
-                        .font(.caption2.weight(.bold))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(FieldTheme.orange.opacity(0.14))
-                        .foregroundStyle(FieldTheme.orange)
-                        .clipShape(Capsule())
-                }
-                if ["answered", "impact_review"].contains(row.status) {
-                    Text("Impact")
-                        .font(.caption2.weight(.bold))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color(red: 0.25, green: 0.40, blue: 0.70).opacity(0.14))
-                        .foregroundStyle(Color(red: 0.25, green: 0.40, blue: 0.70))
-                        .clipShape(Capsule())
-                }
                 if row.is_sample {
                     Text("SAMPLE")
                         .font(.caption2.weight(.bold))
@@ -223,11 +171,7 @@ struct RFIGraphView: View {
                 Text("·")
                 Text(row.status)
                 Text("·")
-                Text(row.priority)
-                if row.work_stopped {
-                    Text("· work stopped")
-                        .foregroundStyle(FieldTheme.orange)
-                }
+                Text(row.priority == "work_stopped" ? "urgent" : row.priority)
             }
             .font(.caption)
             .foregroundStyle(FieldTheme.muted)
@@ -251,7 +195,6 @@ struct RFIGraphView: View {
 
     private func bucketColor(_ bucket: String) -> Color {
         switch bucket {
-        case "work_stopped": return Color.red
         case "escalated": return FieldTheme.orange
         case "overdue": return Color(red: 0.75, green: 0.28, blue: 0.18)
         case "due_soon": return Color(red: 0.80, green: 0.55, blue: 0.10)

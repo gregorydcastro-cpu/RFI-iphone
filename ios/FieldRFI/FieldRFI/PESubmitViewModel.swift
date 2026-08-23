@@ -50,15 +50,13 @@ final class PESubmitViewModel: ObservableObject {
     }
 
     func syncPriority(fromPriority value: String) {
-        priority = value
-        workStopped = value == "work_stopped"
+        priority = value == "work_stopped" ? "urgent" : value
+        workStopped = false
     }
 
     func syncWorkStopped(_ stopped: Bool) {
-        workStopped = stopped
-        if stopped {
-            priority = "work_stopped"
-        } else if priority == "work_stopped" {
+        workStopped = false
+        if priority == "work_stopped" {
             priority = "standard"
         }
     }
@@ -111,8 +109,8 @@ final class PESubmitViewModel: ObservableObject {
                 rfiID: rfiID,
                 extraHeaders: extraHeaders,
                 body: PESubmitBody(
-                    priority: priority,
-                    work_stopped: workStopped,
+                    priority: priority == "work_stopped" ? "urgent" : priority,
+                    work_stopped: false,
                     require_internal_review: requireInternalReview,
                     assigned_to_user_id: selectedUserID,
                     assigned_to_company_id: selectedCompanyID,

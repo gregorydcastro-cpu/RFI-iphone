@@ -28,7 +28,23 @@ final class FieldSession: ObservableObject {
     }
 
     var canViewRFIGraph: Bool {
-        assignment?.capabilities["view_rfi_graph"] == true
+        ["foreman", "area_foreman", "general_foreman"].contains(role)
+            || assignment?.capabilities["view_rfi_graph"] == true
+    }
+
+    var canCaptureField: Bool {
+        !isApprentice && (canDraftRFI || ["journeyman", "foreman", "area_foreman", "general_foreman"].contains(role))
+    }
+
+    func sendTarget() -> (id: String, name: String)? {
+        if let id = assignment?.reports_to_user_id, let name = assignment?.boss_name, !id.isEmpty {
+            return (id, name)
+        }
+        if ["foreman", "area_foreman", "general_foreman"].contains(role),
+           let me = assignment {
+            return (me.user_id, me.name)
+        }
+        return nil
     }
 
     var banner: String {
