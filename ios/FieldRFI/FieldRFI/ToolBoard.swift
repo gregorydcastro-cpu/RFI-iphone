@@ -17,7 +17,9 @@ struct ShopTool: Identifiable, Codable, Hashable {
     func matches(_ query: String) -> Bool {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if q.isEmpty { return true }
-        return name.lowercased().contains(q) || vendor.lowercased().contains(q)
+        return name.lowercased().contains(q)
+            || vendor.lowercased().contains(q)
+            || (holderName?.lowercased().contains(q) ?? false)
     }
 }
 
@@ -44,6 +46,15 @@ final class ToolBoard: ObservableObject {
 
     func tool(id: String) -> ShopTool? {
         tools.first(where: { $0.id == id })
+    }
+
+    func holder(of tool: ShopTool) -> CrewMemberDTO? {
+        ShopCrew.member(byID: tool.holderUserID)
+    }
+
+    func heldBy(_ userID: String) -> [ShopTool] {
+        tools.filter { $0.holderUserID == userID }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     func checkOut(id: String, to member: CrewMemberDTO) {

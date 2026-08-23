@@ -8,13 +8,13 @@ struct ToolCheckoutView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Shop tools on \(ShopCrew.jobName). Check out to a crew name already in the app. Search by name or vendor. On this phone. No barcode. No Procore.")
+                Text("Shop tools on \(ShopCrew.jobName). Check out to a crew name already in the app. Search by name or vendor. Find opens the one person who has it — not every Foreman. On this phone. No barcode. No Procore.")
                     .font(.subheadline)
                     .foregroundStyle(FieldTheme.ink)
 
                 ShopSeatPicker()
 
-                TextField("Search name or vendor", text: $query)
+                TextField("Search name, vendor, or who has it", text: $query)
                     .textFieldStyle(.roundedBorder)
 
                 let rows = board.matching(query)
@@ -52,8 +52,17 @@ struct ToolCheckoutView: View {
                 Text("Out with \(holder)")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(FieldTheme.orange)
+                if let person = board.holder(of: tool) {
+                    NavigationLink {
+                        CrewCardView(member: person, highlightToolName: tool.name)
+                    } label: {
+                        Text("Find \(person.name)")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(FieldTheme.orange)
+                    }
+                }
             } else {
-                Text("In the shop")
+                Text("In the shop. No holder to open.")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color(red: 0.16, green: 0.45, blue: 0.28))
             }
