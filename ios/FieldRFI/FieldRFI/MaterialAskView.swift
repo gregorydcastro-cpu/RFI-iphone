@@ -8,22 +8,22 @@ struct MaterialAskView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Material list. Hold it on this phone, then send it to the foreman. Not a PO. Not submitted. Not Procore.")
+                Text(model.canOrder(session: session)
+                     ? "Order material on a held list, then send it to the foreman. Not a PO. Not submitted. Not Procore."
+                     : "Assigned tickets only. Handle pickup. Do not order. Do not submit. Not a PO. Not Procore.")
                     .font(.subheadline)
                     .foregroundStyle(FieldTheme.ink)
 
                 jobChrome
+                statusStrip
 
                 if model.canOrder(session: session) {
                     composer
                     sendButton
-                } else {
-                    Text("Apprentice lane: pick up assigned lists. Do not order. Do not submit.")
-                        .font(.footnote)
-                        .foregroundStyle(FieldTheme.muted)
                 }
 
-                history
+                assignedTickets
+                pickedTickets
 
                 if let error = model.errorMessage {
                     Text(error).font(.footnote).foregroundStyle(.red)
@@ -46,15 +46,38 @@ struct MaterialAskView: View {
             Text(MaterialListRecord.shopTestName)
                 .font(.headline)
                 .foregroundStyle(FieldTheme.ink)
-            Text("Sample / mock job only. Not a PO.")
+            Text("Sample / mock job only.")
                 .font(.caption)
                 .foregroundStyle(FieldTheme.muted)
         }
     }
 
+    private var statusStrip: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionLabel("Status")
+            HStack(spacing: 8) {
+                ForEach(board.statusCounts(), id: \.0) { item in
+                    VStack(spacing: 2) {
+                        Text("\(item.1)")
+                            .font(.headline)
+                            .foregroundStyle(FieldTheme.ink)
+                        Text(item.0.label)
+                            .font(.caption2)
+                            .foregroundStyle(FieldTheme.muted)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(FieldTheme.rule, lineWidth: 1))
+                }
+            }
+        }
+    }
+
     private var composer: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionLabel("Held list")
+            sectionLabel("1. Order — held list")
             ForEach($board.held.lines) { $line in
                 VStack(alignment: .leading, spacing: 8) {
                     TextField("What to buy", text: $line.description)
@@ -115,7 +138,7 @@ struct MaterialAskView: View {
             }
             .disabled(!model.canSend(session: session))
 
-            Text("The list stays on this tab. The foreman inbox gets a copy. The foreman orders later. Grokbot never submits a PO.")
+            Text("Sends the list to the foreman inbox and opens an assigned pickup ticket. The foreman orders later. Grokbot never submits a PO.")
                 .font(.caption)
                 .foregroundStyle(FieldTheme.muted)
 
@@ -137,21 +160,38 @@ struct MaterialAskView: View {
         }
     }
 
-    private var history: some View {
+    private var assignedTickets: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionLabel("On this job")
-            if board.history.isEmpty {
-                Text("No lists sent yet. Add lines and send, or pick up a list sent to this phone.")
+            sectionLabel("2. Assigned tickets — handle")
+            let tickets = board.assignedTickets(for: session)
+            if tickets.isEmpty {
+                Text(session.isApprentice
+                     ? "No pickup tickets assigned yet."
+                     : "Send a list to create a pickup ticket on this phone.")
                     .font(.footnote)
                     .foregroundStyle(FieldTheme.muted)
             }
-            ForEach(board.history) { row in
-                listCard(row)
+            ForEach(tickets) { row in
+                ticketCard(row, showHandle: true)
             }
         }
     }
 
-    private func listCard(_ row: MaterialListRecord) -> some View {
+    private var pickedTickets: some View {
+        let rows = board.pickedTickets
+        return Group {
+            if !rows.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    sectionLabel("Picked")
+                    ForEach(rows) { row in
+                        ticketCard(row, showHandle: false)
+                    }
+                }
+            }
+        }
+    }
+
+    private func ticketCard(_ row: MaterialListRecord, showHandle: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(row.jobName)
@@ -177,27 +217,25 @@ struct MaterialAskView: View {
                     .font(.caption)
                     .foregroundStyle(FieldTheme.orange)
             }
-            Text(row.sentToName.map { "\(row.createdByName) → \($0)" } ?? row.createdByName)
+            Text(assignmentLine(row))
                 .font(.caption2)
                 .foregroundStyle(FieldTheme.muted)
 
-            if row.status == .sent || row.status == .backOrdered {
-                if model.canPick(session: session) && row.status != .picked {
-                    Button("Mark picked") {
-                        model.markPicked(id: row.id)
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(FieldTheme.steel)
+            if showHandle && model.canPick(session: session) && row.status != .picked {
+                Button("Handle — mark picked") {
+                    model.markPicked(id: row.id)
                 }
-                if model.canOrder(session: session) && row.status != .backOrdered {
-                    TextField("Back-order note", text: flagBinding(row.id))
-                        .textFieldStyle(.roundedBorder)
-                    Button("Flag back-order") {
-                        model.flagBackOrder(id: row.id, session: session)
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(FieldTheme.orange)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(FieldTheme.steel)
+            }
+            if showHandle && model.canFlag(session: session) && row.status != .backOrdered && row.status != .picked {
+                TextField("Back-order note", text: flagBinding(row.id))
+                    .textFieldStyle(.roundedBorder)
+                Button("Flag back-order") {
+                    model.flagBackOrder(id: row.id, session: session)
                 }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(FieldTheme.orange)
             }
         }
         .padding(12)
@@ -205,6 +243,14 @@ struct MaterialAskView: View {
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(FieldTheme.rule, lineWidth: 1))
+    }
+
+    private func assignmentLine(_ row: MaterialListRecord) -> String {
+        let dest = row.sentToName.map { "\(row.createdByName) → \($0)" } ?? row.createdByName
+        if let name = row.assignedToName {
+            return "\(dest)  ·  assigned \(name)"
+        }
+        return dest
     }
 
     private func flagBinding(_ id: String) -> Binding<String> {

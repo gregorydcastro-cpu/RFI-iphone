@@ -3,6 +3,7 @@ import SwiftUI
 struct ForemanInboxView: View {
     @EnvironmentObject private var session: FieldSession
     @ObservedObject private var outbox = FieldOutbox.shared
+    @ObservedObject private var board = MaterialBoard.shared
 
     var body: some View {
         List {
@@ -80,7 +81,7 @@ struct ForemanInboxView: View {
                     .font(.caption.weight(.bold))
                     .foregroundStyle(FieldTheme.orange)
                 Spacer()
-                Text(row.isSent ? "sent" : "draft")
+                Text(materialStatus(row))
                     .font(.caption2)
                     .foregroundStyle(FieldTheme.muted)
             }
@@ -110,5 +111,12 @@ struct ForemanInboxView: View {
                 .foregroundStyle(FieldTheme.muted)
         }
         .padding(.vertical, 4)
+    }
+
+    private func materialStatus(_ row: FieldPacket) -> String {
+        if row.kind == .materialAsk, let status = board.status(forListID: row.id) {
+            return status.label
+        }
+        return row.isSent ? "sent" : "draft"
     }
 }

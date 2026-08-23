@@ -11,7 +11,7 @@ struct FieldRFIApp: App {
                     NewRFIView()
                 }
                 .tabItem {
-                    Label(session.isApprentice ? "Tickets" : "RFI", systemImage: "plus.rectangle.on.folder")
+                    Label("RFI", systemImage: "plus.rectangle.on.folder")
                 }
                 if session.canCaptureField || session.assignment == nil {
                     NavigationStack {

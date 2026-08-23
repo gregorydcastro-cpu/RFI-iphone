@@ -247,64 +247,14 @@ struct NewRFIView: View {
 
     private var apprenticeHandleChrome: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Handle material")
+            Text("Apprentice lane")
                 .font(.title3.weight(.semibold))
-            Text("Apprentice lane: assigned tickets only. No RFI draft. No submit. No PO. No work-stop.")
+            Text("Pick up assigned material tickets on the Material tab. Handle only. Do not order. Do not submit. No PO. No work-stop. No Procore.")
                 .font(.footnote)
                 .foregroundStyle(FieldTheme.muted)
-            pickerBlock(
-                title: "Project",
-                value: model.selectedProject?.name ?? "Select a project"
-            ) {
-                ForEach(model.projects) { project in
-                    Button {
-                        model.selectedProject = project
-                        Task {
-                            await session.load(client: model.client, projectID: project.id)
-                            await model.loadTickets(session: session)
-                        }
-                    } label: {
-                        Label(project.name, systemImage: project.id == model.selectedProject?.id ? "checkmark" : "")
-                    }
-                }
-            }
-            if model.tickets.isEmpty {
-                Text("No tickets assigned to you.")
-                    .font(.subheadline)
-                    .foregroundStyle(FieldTheme.muted)
-            }
-            ForEach(model.tickets) { ticket in
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(ticket.summary)
-                        .font(.subheadline)
-                    Text(ticket.status)
-                        .font(.caption)
-                        .foregroundStyle(FieldTheme.muted)
-                    if ticket.handled_at == nil {
-                        Button("Mark handled") {
-                            Task { await model.handleTicket(ticket, session: session) }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(FieldTheme.orange)
-                        Button("Flag missing / wrong / extra") {
-                            Task { await model.flagTicket(ticket, session: session) }
-                        }
-                        .font(.footnote)
-                    } else {
-                        Text("Handled")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(Color(red: 0.16, green: 0.45, blue: 0.28))
-                    }
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(FieldTheme.rule, lineWidth: 1))
-            }
-            if let error = model.errorMessage {
-                banner(title: "Could not handle", body: error, tone: .error)
-            }
+            Text(session.banner)
+                .font(.footnote)
+                .foregroundStyle(FieldTheme.ink)
         }
     }
 

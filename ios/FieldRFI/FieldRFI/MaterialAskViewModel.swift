@@ -21,7 +21,11 @@ final class MaterialAskViewModel: ObservableObject {
     }
 
     func canPick(session: FieldSession) -> Bool {
-        session.isApprentice || session.assignment == nil
+        session.isApprentice || session.assignment == nil || session.canHandleMaterial
+    }
+
+    func canFlag(session: FieldSession) -> Bool {
+        session.sendTarget() != nil
     }
 
     func addLine() {

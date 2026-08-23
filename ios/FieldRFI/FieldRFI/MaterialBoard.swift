@@ -53,6 +53,9 @@ struct MaterialListRecord: Identifiable, Codable, Hashable {
     var updatedAt: Date
     var sentAt: Date?
     var flagNote: String?
+    var assignedToUserID: String?
+    var assignedToName: String?
+    var handledAt: Date?
 
     static let shopTestID = "g-line-shop-test"
     static let shopTestName = "G-Line Shop Test"
@@ -80,7 +83,10 @@ struct MaterialListRecord: Identifiable, Codable, Hashable {
             createdAt: Date(),
             updatedAt: Date(),
             sentAt: nil,
-            flagNote: nil
+            flagNote: nil,
+            assignedToUserID: nil,
+            assignedToName: nil,
+            handledAt: nil
         )
     }
 }
@@ -102,6 +108,37 @@ final class MaterialBoard: ObservableObject {
 
     var history: [MaterialListRecord] {
         lists.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    func assignedTickets(for session: FieldSession) -> [MaterialListRecord] {
+        let open = history.filter { $0.status == .sent || $0.status == .backOrdered }
+        if session.isApprentice, let me = session.userID {
+            return open.filter {
+                $0.assignedToUserID == me
+                    || $0.assignedToUserID == "local-pickup"
+                    || $0.assignedToUserID == nil
+            }
+        }
+        return open
+    }
+
+    var pickedTickets: [MaterialListRecord] {
+        history.filter { $0.status == .picked }
+    }
+
+    func statusCounts() -> [(MaterialListStatus, Int)] {
+        let heldCount = held.readyLines.isEmpty ? 0 : 1
+        return [
+            (.held, heldCount),
+            (.sent, lists.filter { $0.status == .sent }.count),
+            (.picked, lists.filter { $0.status == .picked }.count),
+            (.backOrdered, lists.filter { $0.status == .backOrdered }.count),
+        ]
+    }
+
+    func status(forListID id: String) -> MaterialListStatus? {
+        if held.id == id { return held.status }
+        return lists.first(where: { $0.id == id })?.status
     }
 
     func load() {
@@ -163,6 +200,13 @@ final class MaterialBoard: ObservableObject {
         held.sentToName = target.name
         held.createdByUserID = session.userID ?? held.createdByUserID
         held.createdByName = session.assignment?.name ?? held.createdByName
+        if let apprentice = session.crew.first(where: { $0.role == "apprentice" }) {
+            held.assignedToUserID = apprentice.user_id
+            held.assignedToName = apprentice.name
+        } else {
+            held.assignedToUserID = "local-pickup"
+            held.assignedToName = "Pickup"
+        }
         held.updatedAt = Date()
         let sent = held
         lists.insert(sent, at: 0)
@@ -195,6 +239,7 @@ final class MaterialBoard: ObservableObject {
     func markPicked(id: String) {
         guard let index = lists.firstIndex(where: { $0.id == id }) else { return }
         lists[index].status = .picked
+        lists[index].handledAt = Date()
         lists[index].updatedAt = Date()
         save()
     }
