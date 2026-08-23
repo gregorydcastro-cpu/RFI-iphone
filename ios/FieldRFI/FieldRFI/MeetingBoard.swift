@@ -48,6 +48,11 @@ final class MeetingBoard: ObservableObject {
         return rows.filter { $0.createdByUserID == userID || $0.withUserID == userID }
     }
 
+    func onDay(_ day: Date, calendar: Calendar = .current) -> [ShopMeeting] {
+        meetings.filter { calendar.isDate($0.startsAt, inSameDayAs: day) }
+            .sorted { $0.startsAt < $1.startsAt }
+    }
+
     func tick() {
         objectWillChange.send()
     }

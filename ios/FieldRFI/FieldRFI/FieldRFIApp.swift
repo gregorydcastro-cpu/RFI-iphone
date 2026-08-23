@@ -4,6 +4,7 @@ import SwiftUI
 struct FieldRFIApp: App {
     @StateObject private var session = FieldSession()
     @ObservedObject private var meetings = MeetingBoard.shared
+    @ObservedObject private var tasks = TaskBoard.shared
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -64,14 +65,17 @@ struct FieldRFIApp: App {
             .onAppear {
                 session.ensureLocalSeat()
                 meetings.tick()
+                tasks.tick()
             }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     meetings.tick()
+                    tasks.tick()
                 }
             }
             .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { _ in
                 meetings.tick()
+                tasks.tick()
             }
         }
     }

@@ -49,8 +49,8 @@ Do not invent a production host. Leave Release empty until there is a real `http
 - Material is a first-class held list (description, qty, UOM EA|LF|SF|BOX|SET), sent to the foreman. Not a one-off ask. Not a PO. Not submitted. Not Procore. Apprentices pick up; they do not order or submit. Status: held, sent, picked, back-ordered.
 - Prints and job pictures use the same send-to-foreman inbox. Foreman markup is local. Not a ticket that skips the inbox. Do not invent drawing numbers.
 - Grok takeoff counts visible devices on catalog sheet EL107_N Rev 27 and writes the G-Line Shop Test held material list. If there is no sheet image or PDF, it writes no quantities. On-device only. Grokbot still cannot submit, number, close, or set work_stopped.
-- Tasks: assign to an existing mock crew name on G-Line Shop Test, assignee checks off on this phone, assigner sees verification. Same local inbox. Not an RFI.
-- Meetings: date/time, who, short note on G-Line Shop Test. Upcoming list and an in-app reminder on any tab in the hour before. No Apple Calendar sync. No local-notification permission required.
+- Tasks: assign to an existing mock crew name on G-Line Shop Test, assignee checks off on this phone, assigner sees verification. Same local inbox. Not an RFI. Due date is optional and does not block assign or check-off.
+- Meetings: date/time, who, short note on G-Line Shop Test. Upcoming list and an in-app reminder on any tab in the hour before. Dated tasks show on that calendar day; assignees get an in-app due-today banner. No Apple Calendar sync. No local-notification permission required.
 - Grokbot drafts only on the backend.
 - Do not invent drawing numbers.
 - Do not invent a production API host. Empty Release URL is legal.

@@ -6,6 +6,8 @@ struct TaskAssignView: View {
     @State private var title = ""
     @State private var note = ""
     @State private var assigneeID: String?
+    @State private var hasDueDate = false
+    @State private var dueAt = Date()
     @State private var message: String?
     @State private var error: String?
 
@@ -90,6 +92,10 @@ struct TaskAssignView: View {
                 .textFieldStyle(.roundedBorder)
             TextField("Note (optional)", text: $note)
                 .textFieldStyle(.roundedBorder)
+            Toggle("Due date (optional)", isOn: $hasDueDate)
+            if hasDueDate {
+                DatePicker("Due", selection: $dueAt, displayedComponents: .date)
+            }
             Menu {
                 ForEach(ShopCrew.members.filter { $0.user_id != me?.user_id }) { member in
                     Button {
@@ -181,6 +187,11 @@ struct TaskAssignView: View {
             Text("\(row.assignedByName) → \(row.assignedToName)")
                 .font(.caption2)
                 .foregroundStyle(FieldTheme.muted)
+            if let dueAt = row.dueAt {
+                Text("Due \(dueDay.string(from: dueAt))")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(row.isDueToday && row.status == .assigned ? FieldTheme.orange : FieldTheme.muted)
+            }
             if row.status == .done {
                 Text("Verified: \(row.checkedOffByName ?? row.assignedToName) checked it off.")
                     .font(.footnote.weight(.semibold))
@@ -217,15 +228,25 @@ struct TaskAssignView: View {
         guard let me, let assigneeID,
               let to = ShopCrew.members.first(where: { $0.user_id == assigneeID })
         else { return }
-        if board.assign(title: title, note: note, from: me, to: to) != nil {
-            message = "Assigned to \(to.name). They check it off on this phone."
+        if board.assign(title: title, note: note, from: me, to: to, dueAt: hasDueDate ? dueAt : nil) != nil {
+            message = hasDueDate
+                ? "Assigned to \(to.name). Shows on the calendar that day."
+                : "Assigned to \(to.name). They check it off on this phone."
             error = nil
             title = ""
             note = ""
+            hasDueDate = false
         } else {
             error = "Need a task and an assignee on \(ShopCrew.jobName)."
         }
     }
+
+    private let dueDay: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .none
+        return f
+    }()
 
     private func sectionLabel(_ text: String) -> some View {
         Text(text.uppercased())

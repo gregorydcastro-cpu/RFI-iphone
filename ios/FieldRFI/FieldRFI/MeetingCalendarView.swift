@@ -1,9 +1,11 @@
 import SwiftUI
 
-/// In-app reminder in the hour before a meeting. No Apple Calendar. No push host.
+/// In-app reminder: meetings in the next hour, and tasks due today for this seat.
+/// No Apple Calendar. No push host.
 struct MeetingSoonBanner: View {
     @EnvironmentObject private var session: FieldSession
-    @ObservedObject private var board = MeetingBoard.shared
+    @ObservedObject private var meetings = MeetingBoard.shared
+    @ObservedObject private var tasks = TaskBoard.shared
 
     private let clock: DateFormatter = {
         let f = DateFormatter()
@@ -13,19 +15,33 @@ struct MeetingSoonBanner: View {
     }()
 
     var body: some View {
-        let rows = board.soon(for: session.userID)
-        if rows.isEmpty {
+        let soon = meetings.soon(for: session.userID)
+        let due = tasks.dueToday(for: session.userID)
+        if soon.isEmpty && due.isEmpty {
             EmptyView()
         } else {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("STARTING SOON")
-                    .font(.caption.weight(.semibold))
-                    .tracking(0.8)
-                    .foregroundStyle(.white)
-                ForEach(rows) { row in
-                    Text("\(clock.string(from: row.startsAt))  ·  \(row.withName)\(row.note.isEmpty ? "" : "  ·  \(row.note)")")
-                        .font(.subheadline.weight(.semibold))
+            VStack(alignment: .leading, spacing: 6) {
+                if !soon.isEmpty {
+                    Text("STARTING SOON")
+                        .font(.caption.weight(.semibold))
+                        .tracking(0.8)
                         .foregroundStyle(.white)
+                    ForEach(soon) { row in
+                        Text("\(clock.string(from: row.startsAt))  ·  \(row.withName)\(row.note.isEmpty ? "" : "  ·  \(row.note)")")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                    }
+                }
+                if !due.isEmpty {
+                    Text("DUE TODAY")
+                        .font(.caption.weight(.semibold))
+                        .tracking(0.8)
+                        .foregroundStyle(.white)
+                    ForEach(due) { row in
+                        Text("\(row.title)  ·  \(row.assignedToName)")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -39,10 +55,12 @@ struct MeetingSoonBanner: View {
 struct MeetingCalendarView: View {
     @EnvironmentObject private var session: FieldSession
     @ObservedObject private var board = MeetingBoard.shared
+    @ObservedObject private var tasks = TaskBoard.shared
     @State private var startsAt = Date().addingTimeInterval(60 * 60)
     @State private var withID: String?
     @State private var note = ""
     @State private var message: String?
+    @State private var day = Date()
 
     private let clock: DateFormatter = {
         let f = DateFormatter()
@@ -54,9 +72,35 @@ struct MeetingCalendarView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Meetings on \(ShopCrew.jobName). On this phone only. Not an RFI. No Apple Calendar sync. No Procore.")
+                Text("Meetings and dated tasks on \(ShopCrew.jobName). On this phone only. Not an RFI. No Apple Calendar sync. No Procore.")
                     .font(.subheadline)
                     .foregroundStyle(FieldTheme.ink)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    sectionLabel("On this day")
+                    DatePicker("Day", selection: $day, displayedComponents: .date)
+                    let dayMeetings = board.onDay(day)
+                    let dayTasks = tasks.dueOn(day)
+                    if dayMeetings.isEmpty && dayTasks.isEmpty {
+                        Text("Nothing on this day.")
+                            .font(.footnote)
+                            .foregroundStyle(FieldTheme.muted)
+                    }
+                    ForEach(dayMeetings) { row in
+                        dayCard(
+                            time: clock.string(from: row.startsAt),
+                            title: "Meeting  ·  \(row.createdByName) with \(row.withName)",
+                            detail: row.note
+                        )
+                    }
+                    ForEach(dayTasks) { row in
+                        dayCard(
+                            time: "Due \(dayStamp.string(from: row.dueAt ?? day))",
+                            title: "Task  ·  \(row.title)",
+                            detail: "\(row.assignedByName) → \(row.assignedToName)  ·  \(row.status.label)"
+                        )
+                    }
+                }
 
                 VStack(alignment: .leading, spacing: 10) {
                     sectionLabel("Set a meeting")
@@ -148,6 +192,34 @@ struct MeetingCalendarView: View {
     private var me: CrewMemberDTO? {
         ShopCrew.members.first(where: { $0.user_id == session.userID })
             ?? ShopCrew.members.first
+    }
+
+    private let dayStamp: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .none
+        return f
+    }()
+
+    private func dayCard(time: String, title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(time)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(FieldTheme.ink)
+            Text(title)
+                .font(.footnote)
+                .foregroundStyle(FieldTheme.muted)
+            if !detail.isEmpty {
+                Text(detail)
+                    .font(.footnote)
+                    .foregroundStyle(FieldTheme.ink)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(FieldTheme.rule, lineWidth: 1))
     }
 
     private var canSave: Bool {

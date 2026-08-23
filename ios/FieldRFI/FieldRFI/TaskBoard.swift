@@ -28,6 +28,14 @@ struct FieldTask: Identifiable, Codable, Hashable {
     var createdAt: Date
     var doneAt: Date?
     var checkedOffByName: String?
+    var dueAt: Date? = nil
+
+    func isDue(on day: Date, calendar: Calendar = .current) -> Bool {
+        guard let dueAt else { return false }
+        return calendar.isDate(dueAt, inSameDayAs: day)
+    }
+
+    var isDueToday: Bool { isDue(on: Date()) }
 }
 
 @MainActor
@@ -56,12 +64,28 @@ final class TaskBoard: ObservableObject {
         tasks.first(where: { $0.id == id })
     }
 
+    func dueOn(_ day: Date) -> [FieldTask] {
+        tasks.filter { $0.isDue(on: day) }
+            .sorted { ($0.dueAt ?? .distantFuture) < ($1.dueAt ?? .distantFuture) }
+    }
+
+    func dueToday(for userID: String?) -> [FieldTask] {
+        let rows = dueOn(Date()).filter { $0.status == .assigned }
+        guard let userID, !userID.isEmpty, userID != "local-field" else { return rows }
+        return rows.filter { $0.assignedToUserID == userID }
+    }
+
+    func tick() {
+        objectWillChange.send()
+    }
+
     @discardableResult
     func assign(
         title: String,
         note: String,
         from: CrewMemberDTO,
-        to: CrewMemberDTO
+        to: CrewMemberDTO,
+        dueAt: Date? = nil
     ) -> FieldTask? {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, from.user_id != to.user_id else { return nil }
@@ -78,7 +102,8 @@ final class TaskBoard: ObservableObject {
             status: .assigned,
             createdAt: Date(),
             doneAt: nil,
-            checkedOffByName: nil
+            checkedOffByName: nil,
+            dueAt: dueAt
         )
         tasks.insert(row, at: 0)
         save()
