@@ -10,10 +10,10 @@ App Store listing URLs (not an API host):
 
 | | |
 |---|---|
-| Support URL | https://gcfieldlog.com/ when that page exists |
-| Marketing URL | https://gcfieldlog.com/ when that page exists |
+| Support URL | https://gcfieldlog.com |
+| Marketing URL | https://gcfieldlog.com |
 
-Do not list this product on https://glineracing.store/. Do not set `FIELD_API_BASE_URL` to glineracing.store or gcfieldlog.com. Those are listing / domain notes only.
+Site draft in progress. Do not use https://glineracing.store/ for this product. Do not set `FIELD_API_BASE_URL` to gcfieldlog.com or glineracing.store. Listing URLs only. Display name stays **GC Field Log**. Bundle stays `com.castro.fieldrfi`.
 
 ## What this Linux cut cannot do
 
