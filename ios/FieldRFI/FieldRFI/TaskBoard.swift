@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 
 /// On-device task assign + check-off. Not an RFI. No submit, number, close, or work_stopped.
 enum FieldTaskStatus: String, Codable {
@@ -29,6 +30,7 @@ struct FieldTask: Identifiable, Codable, Hashable {
     var doneAt: Date?
     var checkedOffByName: String?
     var dueAt: Date? = nil
+    var proofPhotoID: String? = nil
 
     func isDue(on day: Date, calendar: Calendar = .current) -> Bool {
         guard let dueAt else { return false }
@@ -112,9 +114,18 @@ final class TaskBoard: ObservableObject {
     }
 
     @discardableResult
-    func checkOff(id: String, by: CrewMemberDTO) -> FieldTask? {
+    func checkOff(id: String, by: CrewMemberDTO, proofJPEG: Data? = nil) -> FieldTask? {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return nil }
         guard tasks[index].assignedToUserID == by.user_id else { return nil }
+        if let proofJPEG, !proofJPEG.isEmpty {
+            let att = FieldAttachmentStore.shared.save(
+                packetID: id,
+                kind: .jpeg,
+                filename: "proof-\(id.prefix(8)).jpg",
+                data: proofJPEG
+            )
+            tasks[index].proofPhotoID = att.id
+        }
         tasks[index].status = .done
         tasks[index].doneAt = Date()
         tasks[index].checkedOffByName = by.name
@@ -123,10 +134,18 @@ final class TaskBoard: ObservableObject {
         return tasks[index]
     }
 
+    func proofImage(for task: FieldTask) -> UIImage? {
+        guard let id = task.proofPhotoID,
+              let att = FieldAttachmentStore.shared.index.first(where: { $0.id == id })
+        else { return nil }
+        return FieldAttachmentStore.shared.previewImage(for: att)
+    }
+
     private func packet(for task: FieldTask) -> FieldPacket {
         let body: String
         if task.status == .done {
-            body = "Checked off: \(task.title). \(task.checkedOffByName ?? task.assignedToName) marked it done."
+            let photo = task.proofPhotoID == nil ? "" : " Proof photo on this phone."
+            body = "Checked off: \(task.title). \(task.checkedOffByName ?? task.assignedToName) marked it done.\(photo)"
         } else {
             body = task.note.isEmpty ? task.title : "\(task.title)\n\(task.note)"
         }
@@ -143,7 +162,7 @@ final class TaskBoard: ObservableObject {
             yNorm: nil,
             note: body,
             materialLines: [],
-            photoCount: 0,
+            photoCount: task.proofPhotoID == nil ? 0 : 1,
             createdByUserID: task.assignedByUserID,
             createdByName: task.assignedByName,
             createdByRole: "",

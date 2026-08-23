@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ForemanInboxView: View {
     @EnvironmentObject private var session: FieldSession
@@ -112,7 +113,7 @@ struct ForemanInboxView: View {
                 if !row.materialLines.isEmpty {
                     Text("· \(row.materialLines.count) line(s)")
                 }
-                if row.kind == .printPhoto {
+                if row.kind == .printPhoto || (row.kind == .task && row.photoCount > 0) {
                     Text("· \(row.attachedPrints) print(s) · \(row.photoCount) photo(s)")
                 }
             }
@@ -126,6 +127,14 @@ struct ForemanInboxView: View {
             Text("\(row.createdByName) → \(row.sentToName)")
                 .font(.caption2)
                 .foregroundStyle(FieldTheme.muted)
+            if row.kind == .task, let task = tasks.task(id: row.id), let image = tasks.proofImage(for: task) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, minHeight: 80, maxHeight: 120)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
         }
         .padding(.vertical, 4)
     }

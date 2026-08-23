@@ -3,6 +3,7 @@ import SwiftUI
 struct MaterialAskView: View {
     @StateObject private var model = MaterialAskViewModel()
     @ObservedObject private var board = MaterialBoard.shared
+    @ObservedObject private var features = FeatureSettings.shared
     @EnvironmentObject private var session: FieldSession
 
     var body: some View {
@@ -112,19 +113,23 @@ struct MaterialAskView: View {
                 Button("Add line", action: model.addLine)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(FieldTheme.orange)
-                Button("Grok takeoff") {
-                    model.runTakeoff()
+                if features.flags(for: session.userID).takeoff {
+                    Button("Grok takeoff") {
+                        model.runTakeoff()
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(FieldTheme.steel)
                 }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(FieldTheme.steel)
             }
-            Text("Counts plate fixtures on catalog sheet EL107_N Rev 27 only. Writes the held list. Does not submit, number, or set work-stopped. If there is no sheet image, it writes nothing.")
-                .font(.caption)
-                .foregroundStyle(FieldTheme.muted)
-            if let takeoff = model.takeoffMessage {
-                Text(takeoff)
-                    .font(.footnote)
-                    .foregroundStyle(Color(red: 0.16, green: 0.45, blue: 0.28))
+            if features.flags(for: session.userID).takeoff {
+                Text("Counts plate fixtures on catalog sheet EL107_N Rev 27 only. Writes the held list. Does not submit, number, or set work-stopped. If there is no sheet image, it writes nothing.")
+                    .font(.caption)
+                    .foregroundStyle(FieldTheme.muted)
+                if let takeoff = model.takeoffMessage {
+                    Text(takeoff)
+                        .font(.footnote)
+                        .foregroundStyle(Color(red: 0.16, green: 0.45, blue: 0.28))
+                }
             }
 
             VStack(alignment: .leading, spacing: 8) {

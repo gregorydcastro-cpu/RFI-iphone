@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct TaskAssignView: View {
     @EnvironmentObject private var session: FieldSession
@@ -10,6 +11,8 @@ struct TaskAssignView: View {
     @State private var dueAt = Date()
     @State private var message: String?
     @State private var error: String?
+    @State private var proofByTask: [String: PickedPhoto] = [:]
+    @State private var cameraTaskID: String?
 
     var body: some View {
         ScrollView {
@@ -44,6 +47,17 @@ struct TaskAssignView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .onAppear { session.ensureShopSeat() }
+        .sheet(isPresented: Binding(
+            get: { cameraTaskID != nil },
+            set: { if !$0 { cameraTaskID = nil } }
+        )) {
+            CameraPicker { photo in
+                if let id = cameraTaskID {
+                    proofByTask[id] = photo
+                }
+                cameraTaskID = nil
+            }
+        }
     }
 
     private var me: CrewMemberDTO? {
@@ -96,27 +110,34 @@ struct TaskAssignView: View {
             if hasDueDate {
                 DatePicker("Due", selection: $dueAt, displayedComponents: .date)
             }
-            Menu {
-                ForEach(ShopCrew.members.filter { $0.user_id != me?.user_id }) { member in
-                    Button {
-                        assigneeID = member.user_id
-                    } label: {
-                        Text("\(member.name)  ·  \(member.role.replacingOccurrences(of: "_", with: " "))")
+            sectionLabel("Crew on \(ShopCrew.jobName)")
+            Text("Pick who the task is for. Existing mock names only. Harbor Apprentice is on this list.")
+                .font(.caption)
+                .foregroundStyle(FieldTheme.muted)
+            ForEach(ShopCrew.members.filter { $0.user_id != me?.user_id }) { member in
+                Button {
+                    assigneeID = member.user_id
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(member.name)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(FieldTheme.ink)
+                            Text(member.role.replacingOccurrences(of: "_", with: " "))
+                                .font(.caption)
+                                .foregroundStyle(FieldTheme.muted)
+                        }
+                        Spacer()
+                        if assigneeID == member.user_id {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(FieldTheme.orange)
+                        }
                     }
+                    .padding(12)
+                    .background(assigneeID == member.user_id ? FieldTheme.orange.opacity(0.08) : Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(FieldTheme.rule, lineWidth: 1))
                 }
-            } label: {
-                HStack {
-                    Text(ShopCrew.members.first(where: { $0.user_id == assigneeID })?.name ?? "Assign to")
-                        .foregroundStyle(FieldTheme.ink)
-                    Spacer()
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(FieldTheme.muted)
-                }
-                .padding(12)
-                .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(FieldTheme.rule, lineWidth: 1))
             }
             Button {
                 assign()
@@ -196,12 +217,37 @@ struct TaskAssignView: View {
                 Text("Verified: \(row.checkedOffByName ?? row.assignedToName) checked it off.")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color(red: 0.16, green: 0.45, blue: 0.28))
+                if let image = board.proofImage(for: row) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, minHeight: 120, maxHeight: 180)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
             }
             if showCheckOff, row.status == .assigned, let me {
+                if let photo = proofByTask[row.id], let image = UIImage(data: photo.jpegData) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, minHeight: 100, maxHeight: 140)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                Button("Add job photo") {
+                    cameraTaskID = row.id
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(FieldTheme.orange)
                 Button("Mark done") {
-                    if board.checkOff(id: row.id, by: me) != nil {
-                        message = "Checked off. Assigner can see the verification."
+                    let jpeg = proofByTask[row.id]?.jpegData
+                    if board.checkOff(id: row.id, by: me, proofJPEG: jpeg) != nil {
+                        message = jpeg == nil
+                            ? "Checked off. Assigner can see the verification."
+                            : "Checked off with proof photo. Assigner can see it."
                         error = nil
+                        proofByTask[row.id] = nil
                     } else {
                         error = "Only the assignee can check this off."
                     }

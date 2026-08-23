@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct PrintPhotoView: View {
     @StateObject private var model = PrintPhotoViewModel()
     @EnvironmentObject private var session: FieldSession
+    @ObservedObject private var features = FeatureSettings.shared
     @State private var showImporter = false
 
     var body: some View {
@@ -79,18 +80,20 @@ struct PrintPhotoView: View {
                         .textFieldStyle(.roundedBorder)
                 }
 
-                Button("Grok takeoff") {
-                    model.runTakeoff()
-                }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(FieldTheme.steel)
-                Text("Counts devices on catalog sheet EL107_N Rev 27 and writes the G-Line Shop Test material list. Does not submit. If there is no sheet image or PDF, it writes nothing.")
-                    .font(.caption)
-                    .foregroundStyle(FieldTheme.muted)
-                if let takeoff = model.takeoffMessage {
-                    Text(takeoff)
-                        .font(.footnote)
-                        .foregroundStyle(Color(red: 0.16, green: 0.45, blue: 0.28))
+                if features.flags(for: session.userID).takeoff {
+                    Button("Grok takeoff") {
+                        model.runTakeoff()
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(FieldTheme.steel)
+                    Text("Counts devices on catalog sheet EL107_N Rev 27 and writes the G-Line Shop Test material list. Does not submit. If there is no sheet image or PDF, it writes nothing.")
+                        .font(.caption)
+                        .foregroundStyle(FieldTheme.muted)
+                    if let takeoff = model.takeoffMessage {
+                        Text(takeoff)
+                            .font(.footnote)
+                            .foregroundStyle(Color(red: 0.16, green: 0.45, blue: 0.28))
+                    }
                 }
 
                 Button {

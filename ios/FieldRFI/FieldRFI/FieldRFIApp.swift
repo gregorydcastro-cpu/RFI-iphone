@@ -5,10 +5,12 @@ struct FieldRFIApp: App {
     @StateObject private var session = FieldSession()
     @ObservedObject private var meetings = MeetingBoard.shared
     @ObservedObject private var tasks = TaskBoard.shared
+    @ObservedObject private var features = FeatureSettings.shared
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
+            let flags = features.flags(for: session.userID)
             TabView {
                 NavigationStack {
                     NewRFIView()
@@ -24,13 +26,15 @@ struct FieldRFIApp: App {
                         Label("Problem", systemImage: "exclamationmark.triangle")
                     }
                 }
-                NavigationStack {
-                    MaterialAskView()
+                if flags.material {
+                    NavigationStack {
+                        MaterialAskView()
+                    }
+                    .tabItem {
+                        Label("Material", systemImage: "shippingbox")
+                    }
                 }
-                .tabItem {
-                    Label("Material", systemImage: "shippingbox")
-                }
-                if session.canCaptureField || session.assignment == nil {
+                if flags.prints && (session.canCaptureField || session.assignment == nil) {
                     NavigationStack {
                         PrintPhotoView()
                     }
@@ -38,17 +42,21 @@ struct FieldRFIApp: App {
                         Label("Prints", systemImage: "doc.richtext")
                     }
                 }
-                NavigationStack {
-                    TaskAssignView()
+                if flags.tasks {
+                    NavigationStack {
+                        TaskAssignView()
+                    }
+                    .tabItem {
+                        Label("Tasks", systemImage: "checkmark.circle")
+                    }
                 }
-                .tabItem {
-                    Label("Tasks", systemImage: "checkmark.circle")
-                }
-                NavigationStack {
-                    MeetingCalendarView()
-                }
-                .tabItem {
-                    Label("Meet", systemImage: "calendar")
+                if flags.calendar {
+                    NavigationStack {
+                        MeetingCalendarView()
+                    }
+                    .tabItem {
+                        Label("Meet", systemImage: "calendar")
+                    }
                 }
                 NavigationStack {
                     ForemanInboxView()
@@ -56,10 +64,18 @@ struct FieldRFIApp: App {
                 .tabItem {
                     Label("Foreman", systemImage: "person.2")
                 }
+                NavigationStack {
+                    FeatureSettingsView()
+                }
+                .tabItem {
+                    Label("Settings", systemImage: "gearshape")
+                }
             }
             .environmentObject(session)
             .safeAreaInset(edge: .top, spacing: 0) {
-                MeetingSoonBanner()
+                if flags.calendar {
+                    MeetingSoonBanner()
+                }
             }
             .tint(FieldTheme.orange)
             .onAppear {
