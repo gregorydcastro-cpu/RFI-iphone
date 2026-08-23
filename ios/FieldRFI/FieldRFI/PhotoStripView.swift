@@ -9,10 +9,14 @@ struct PhotoStripView: View {
 
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var showCamera = false
+    @State private var showOnPhone = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionLabel("Photos")
+            Text("Camera or photos already on this phone. Personal library is optional. No iCloud required.")
+                .font(.caption)
+                .foregroundStyle(FieldTheme.muted)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     Button {
@@ -37,11 +41,33 @@ struct PhotoStripView: View {
                         CameraPicker(onCapture: onAdd)
                     }
 
+                    Button {
+                        showOnPhone = true
+                    } label: {
+                        VStack(spacing: 6) {
+                            Image(systemName: "iphone")
+                                .font(.title2.weight(.semibold))
+                            Text("On phone")
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .foregroundStyle(FieldTheme.orange)
+                        .frame(width: 84, height: 84)
+                        .background(FieldTheme.paper)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(FieldTheme.orange.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [4]))
+                        )
+                    }
+                    .sheet(isPresented: $showOnPhone) {
+                        InAppJobPhotoPicker(onCapture: onAdd)
+                    }
+
                     PhotosPicker(selection: $pickerItems, maxSelectionCount: 6, matching: .images) {
                         VStack(spacing: 6) {
                             Image(systemName: "photo.on.rectangle")
                                 .font(.title2.weight(.semibold))
-                            Text("Library")
+                            Text("Optional")
                                 .font(.caption2.weight(.semibold))
                         }
                         .foregroundStyle(FieldTheme.orange)

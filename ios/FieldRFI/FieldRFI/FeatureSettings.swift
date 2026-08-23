@@ -319,11 +319,11 @@ struct FeatureSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("The person above sets what their direct reports can see and do on \(ShopCrew.jobName). Default is one step: GF → Area Foreman → Foreman → Journeyman → Apprentice. A GF can grant a named apprentice a direct line. That apprentice cannot open it. Not Procore.")
+                Text("Company shop iPhone on \(ShopCrew.jobName). Pick who you are. The person above sets what their direct reports can see and do. Default is one step. A GF can grant a named apprentice a direct line. No personal Apple ID required. Not MDM. Not Procore.")
                     .font(.subheadline)
                     .foregroundStyle(FieldTheme.ink)
 
-                seatPicker
+                ShopSeatPicker()
 
                 mineReadOnly
 
@@ -431,31 +431,6 @@ struct FeatureSettingsView: View {
                 .background(Color.white)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(FieldTheme.rule, lineWidth: 1))
-            }
-        }
-    }
-
-    private var seatPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionLabel("Who I am")
-            ForEach(ShopCrew.members) { member in
-                Button {
-                    session.pickShopSeat(member)
-                } label: {
-                    HStack {
-                        Text("\(member.name)  ·  \(member.role.replacingOccurrences(of: "_", with: " "))")
-                            .foregroundStyle(FieldTheme.ink)
-                        Spacer()
-                        if member.user_id == session.userID {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(FieldTheme.orange)
-                        }
-                    }
-                    .padding(12)
-                    .background(Color.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(FieldTheme.rule, lineWidth: 1))
-                }
             }
         }
     }

@@ -83,7 +83,7 @@ struct FieldRFIApp: App {
             }
             .tint(FieldTheme.orange)
             .onAppear {
-                session.ensureLocalSeat()
+                session.ensureShopSeat()
                 meetings.tick()
                 tasks.tick()
             }

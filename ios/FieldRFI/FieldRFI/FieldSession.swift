@@ -55,19 +55,25 @@ final class FieldSession: ObservableObject {
         return nil
     }
 
+    private let seatKey = "gcfieldlog.shop-seat.v1"
+
     func ensureLocalSeat() {
-        if userID == nil {
-            userID = "local-field"
-        }
+        ensureShopSeat()
     }
 
     func ensureShopSeat() {
         if crew.isEmpty {
             crew = ShopCrew.members
         }
-        if userID == nil || userID == "local-field" {
-            pickShopSeat(ShopCrew.members.first(where: { $0.role == "journeyman" }) ?? ShopCrew.members[0])
+        if let userID, userID != "local-field", ShopCrew.member(byID: userID) != nil {
+            return
         }
+        if let saved = UserDefaults.standard.string(forKey: seatKey),
+           let member = ShopCrew.member(byID: saved) {
+            pickShopSeat(member)
+            return
+        }
+        pickShopSeat(ShopCrew.members.first(where: { $0.role == "journeyman" }) ?? ShopCrew.members[0])
     }
 
     func pickShopSeat(_ member: CrewMemberDTO) {
@@ -75,6 +81,7 @@ final class FieldSession: ObservableObject {
             crew = ShopCrew.members
         }
         userID = member.user_id
+        UserDefaults.standard.set(member.user_id, forKey: seatKey)
         sendOverrideID = nil
         assignment = AssignmentDTO(
             ok: true,
@@ -143,5 +150,41 @@ final class FieldSession: ObservableObject {
             project_id: assignment?.project_id,
             area_id: assignment?.area_id
         )
+    }
+}
+
+/// Shared company shop iPhone. Pick who you are. No personal Apple ID required.
+struct ShopSeatPicker: View {
+    @EnvironmentObject private var session: FieldSession
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("WHO I AM")
+                .font(.caption.weight(.semibold))
+                .tracking(0.8)
+                .foregroundStyle(FieldTheme.muted)
+            Text("Company shop iPhone on \(ShopCrew.jobName). Pick who you are, then use the app. No personal Apple ID or iCloud required.")
+                .font(.caption)
+                .foregroundStyle(FieldTheme.muted)
+            ForEach(ShopCrew.members) { member in
+                Button {
+                    session.pickShopSeat(member)
+                } label: {
+                    HStack {
+                        Text("\(member.name)  ·  \(member.role.replacingOccurrences(of: "_", with: " "))")
+                            .foregroundStyle(FieldTheme.ink)
+                        Spacer()
+                        if member.user_id == session.userID {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(FieldTheme.orange)
+                        }
+                    }
+                    .padding(12)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(FieldTheme.rule, lineWidth: 1))
+                }
+            }
+        }
     }
 }

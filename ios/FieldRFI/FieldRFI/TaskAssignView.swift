@@ -22,7 +22,7 @@ struct TaskAssignView: View {
                     .font(.subheadline)
                     .foregroundStyle(FieldTheme.ink)
 
-                seatPicker
+                ShopSeatPicker()
 
                 if features.allowsAssign(session.userID) {
                     assignForm
@@ -70,40 +70,6 @@ struct TaskAssignView: View {
     private var me: CrewMemberDTO? {
         ShopCrew.members.first(where: { $0.user_id == session.userID })
             ?? ShopCrew.members.first
-    }
-
-    private var seatPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionLabel("Who I am")
-            Menu {
-                ForEach(ShopCrew.members) { member in
-                    Button {
-                        session.pickShopSeat(member)
-                    } label: {
-                        Label(
-                            "\(member.name)  ·  \(member.role.replacingOccurrences(of: "_", with: " "))",
-                            systemImage: member.user_id == session.userID ? "checkmark" : ""
-                        )
-                    }
-                }
-            } label: {
-                HStack {
-                    Text(me.map { "\($0.name)  ·  \($0.role.replacingOccurrences(of: "_", with: " "))" } ?? "Pick a seat")
-                        .foregroundStyle(FieldTheme.ink)
-                    Spacer()
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(FieldTheme.muted)
-                }
-                .padding(12)
-                .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(FieldTheme.rule, lineWidth: 1))
-            }
-            Text("Same phone. Pick who you are, then assign or check off.")
-                .font(.caption)
-                .foregroundStyle(FieldTheme.muted)
-        }
     }
 
     private var assignForm: some View {
