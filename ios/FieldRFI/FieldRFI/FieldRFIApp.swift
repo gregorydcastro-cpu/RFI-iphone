@@ -27,6 +27,14 @@ struct FieldRFIApp: App {
                 .tabItem {
                     Label("Material", systemImage: "shippingbox")
                 }
+                if session.canCaptureField || session.assignment == nil {
+                    NavigationStack {
+                        PrintPhotoView()
+                    }
+                    .tabItem {
+                        Label("Prints", systemImage: "doc.richtext")
+                    }
+                }
                 NavigationStack {
                     ForemanInboxView()
                 }

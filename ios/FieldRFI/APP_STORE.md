@@ -2,7 +2,7 @@
 
 Listing name: **GC Field Log**. Field Log was taken. Bundle id stays `com.castro.fieldrfi`.
 
-Field tool. Journeyman or foreman captures a pin or photo, drafts an RFI or a field problem, or builds a material list, and sends it to the foreman. Material is first-class: hold lines on a list, send the list to the foreman inbox. Not a PO. Not submitted. The foreman orders or enters it in Procore later. This app does not call the Procore API. Grokbot stays draft-only. The field UI does not set `work_stopped`. Mock job name for new copy is **G-Line Shop Test** only.
+Field tool. Journeyman or foreman captures a pin or photo, drafts an RFI or a field problem, builds a material list, or sends print PDFs and job pictures, and sends it to the foreman inbox. Material is first-class: hold lines, send, apprentice pickup, track, back-order. Prints land in the same inbox; the foreman marks them up on this phone. Not a PO. Not submitted. Not Procore. Grokbot stays draft-only. The field UI does not set `work_stopped`. Mock job name for new copy is **G-Line Shop Test** only.
 
 Apple contact: glineracing@gmail.com · (508) 505-1836
 
@@ -47,6 +47,7 @@ Do not invent a production host. Leave Release empty until there is a real `http
 - No IAP.
 - No work-stopped control in the field UI.
 - Material is a first-class held list (description, qty, UOM EA|LF|SF|BOX|SET), sent to the foreman. Not a one-off ask. Not a PO. Not submitted. Not Procore. Apprentices pick up; they do not order or submit. Status: held, sent, picked, back-ordered.
+- Prints and job pictures use the same send-to-foreman inbox. Foreman markup is local. Not a ticket that skips the inbox. Do not invent drawing numbers.
 - Grokbot drafts only on the backend.
 - Do not invent drawing numbers.
 - Do not invent a production API host. Empty Release URL is legal.

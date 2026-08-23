@@ -32,6 +32,10 @@
 		A100000000000000000026 /* MaterialAskViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000026 /* MaterialAskViewModel.swift */; };
 		A100000000000000000027 /* ForemanInboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000027 /* ForemanInboxView.swift */; };
 		A100000000000000000029 /* MaterialBoard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000029 /* MaterialBoard.swift */; };
+		A100000000000000000030 /* FieldAttachmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000030 /* FieldAttachmentStore.swift */; };
+		A100000000000000000031 /* PrintPhotoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000031 /* PrintPhotoView.swift */; };
+		A100000000000000000032 /* PrintPhotoViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000032 /* PrintPhotoViewModel.swift */; };
+		A100000000000000000033 /* PrintMarkupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000033 /* PrintMarkupView.swift */; };
 		A100000000000000000010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000010 /* Assets.xcassets */; };
 		A100000000000000000028 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000028 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
@@ -63,6 +67,10 @@
 		B100000000000000000026 /* MaterialAskViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaterialAskViewModel.swift; sourceTree = "<group>"; };
 		B100000000000000000027 /* ForemanInboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForemanInboxView.swift; sourceTree = "<group>"; };
 		B100000000000000000029 /* MaterialBoard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaterialBoard.swift; sourceTree = "<group>"; };
+		B100000000000000000030 /* FieldAttachmentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldAttachmentStore.swift; sourceTree = "<group>"; };
+		B100000000000000000031 /* PrintPhotoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrintPhotoView.swift; sourceTree = "<group>"; };
+		B100000000000000000032 /* PrintPhotoViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrintPhotoViewModel.swift; sourceTree = "<group>"; };
+		B100000000000000000033 /* PrintMarkupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrintMarkupView.swift; sourceTree = "<group>"; };
 		B100000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B100000000000000000011 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B100000000000000000028 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -114,6 +122,10 @@
 				B100000000000000000025 /* MaterialAskView.swift */,
 				B100000000000000000026 /* MaterialAskViewModel.swift */,
 				B100000000000000000029 /* MaterialBoard.swift */,
+				B100000000000000000030 /* FieldAttachmentStore.swift */,
+				B100000000000000000031 /* PrintPhotoView.swift */,
+				B100000000000000000032 /* PrintPhotoViewModel.swift */,
+				B100000000000000000033 /* PrintMarkupView.swift */,
 				B100000000000000000027 /* ForemanInboxView.swift */,
 				B100000000000000000010 /* Assets.xcassets */,
 				B100000000000000000011 /* Info.plist */,
@@ -224,6 +236,10 @@
 				A100000000000000000025 /* MaterialAskView.swift in Sources */,
 				A100000000000000000026 /* MaterialAskViewModel.swift in Sources */,
 				A100000000000000000029 /* MaterialBoard.swift in Sources */,
+				A100000000000000000030 /* FieldAttachmentStore.swift in Sources */,
+				A100000000000000000031 /* PrintPhotoView.swift in Sources */,
+				A100000000000000000032 /* PrintPhotoViewModel.swift in Sources */,
+				A100000000000000000033 /* PrintMarkupView.swift in Sources */,
 				A100000000000000000027 /* ForemanInboxView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

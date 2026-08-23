@@ -25,7 +25,7 @@ struct ForemanInboxView: View {
                         .foregroundStyle(FieldTheme.muted)
                 }
                 ForEach(incoming) { row in
-                    packetRow(row)
+                    packetLink(row)
                 }
             }
 
@@ -36,7 +36,7 @@ struct ForemanInboxView: View {
                         .foregroundStyle(FieldTheme.muted)
                 }
                 ForEach(outgoing) { row in
-                    packetRow(row)
+                    packetLink(row)
                 }
             }
         }
@@ -74,6 +74,19 @@ struct ForemanInboxView: View {
         session.userID.map { outbox.outgoing(for: $0) } ?? outbox.packets
     }
 
+    @ViewBuilder
+    private func packetLink(_ row: FieldPacket) -> some View {
+        if row.kind == .printPhoto {
+            NavigationLink {
+                PrintMarkupView(packet: row)
+            } label: {
+                packetRow(row)
+            }
+        } else {
+            packetRow(row)
+        }
+    }
+
     private func packetRow(_ row: FieldPacket) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -97,6 +110,9 @@ struct ForemanInboxView: View {
                 }
                 if !row.materialLines.isEmpty {
                     Text("· \(row.materialLines.count) line(s)")
+                }
+                if row.kind == .printPhoto {
+                    Text("· \(row.attachedPrints) print(s) · \(row.photoCount) photo(s)")
                 }
             }
             .font(.caption)

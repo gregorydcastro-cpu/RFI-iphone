@@ -7,12 +7,14 @@ enum FieldPacketKind: String, Codable, CaseIterable {
     case rfi
     case fieldProblem
     case materialAsk
+    case printPhoto
 
     var title: String {
         switch self {
         case .rfi: return "RFI draft"
         case .fieldProblem: return "Field problem"
         case .materialAsk: return "Material list"
+        case .printPhoto: return "Print / photo"
         }
     }
 }
@@ -40,8 +42,12 @@ struct FieldPacket: Identifiable, Codable, Hashable {
     var sentAt: Date?
     var rfiID: String?
     var status: String
+    var attachmentIDs: [String]? = nil
+    var printCount: Int? = nil
 
     var isSent: Bool { sentAt != nil && status == "sent_to_foreman" }
+    var attachedPrints: Int { printCount ?? 0 }
+    var attachedIDs: [String] { attachmentIDs ?? [] }
 }
 
 @MainActor

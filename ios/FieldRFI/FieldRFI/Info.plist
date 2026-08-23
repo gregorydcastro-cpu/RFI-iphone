@@ -34,9 +34,9 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>The camera captures field photos for RFI drafts, field problems, and material asks sent to the foreman.</string>
+	<string>The camera captures field photos for RFI drafts, field problems, prints, and material lists sent to the foreman.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>The photo library attaches field photos to RFI drafts, field problems, and material asks sent to the foreman.</string>
+	<string>The photo library attaches field photos to RFI drafts, field problems, prints, and material lists sent to the foreman.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Field photos stay on this device with the draft sent to the foreman.</string>
 	<key>UILaunchScreen</key>
