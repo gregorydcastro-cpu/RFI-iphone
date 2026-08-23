@@ -14,6 +14,38 @@ enum ShopCrew {
         member("aaaaaaaa-0000-4000-8000-000000000324", "Harbor Apprentice", "apprentice", reportsTo: "aaaaaaaa-0000-4000-8000-000000000323", boss: "Harbor Journeyman"),
     ]
 
+    static func member(byID id: String?) -> CrewMemberDTO? {
+        guard let id else { return nil }
+        return members.first(where: { $0.user_id == id })
+    }
+
+    static func rank(_ role: String) -> Int {
+        switch role {
+        case "general_foreman": return 0
+        case "area_foreman": return 1
+        case "foreman": return 2
+        case "journeyman": return 3
+        case "apprentice": return 4
+        default: return 99
+        }
+    }
+
+    static func isBelow(_ member: CrewMemberDTO, of boss: CrewMemberDTO) -> Bool {
+        var current = member
+        for _ in 0..<8 {
+            guard let parentID = current.reports_to_user_id,
+                  let parent = member(byID: parentID)
+            else { return false }
+            if parent.user_id == boss.user_id { return true }
+            current = parent
+        }
+        return false
+    }
+
+    static func below(_ boss: CrewMemberDTO) -> [CrewMemberDTO] {
+        members.filter { isBelow($0, of: boss) }
+    }
+
     static func member(
         _ id: String,
         _ name: String,
