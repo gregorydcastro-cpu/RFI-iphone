@@ -8,6 +8,7 @@ enum FieldPacketKind: String, Codable, CaseIterable {
     case fieldProblem
     case materialAsk
     case printPhoto
+    case task
 
     var title: String {
         switch self {
@@ -15,6 +16,7 @@ enum FieldPacketKind: String, Codable, CaseIterable {
         case .fieldProblem: return "Field problem"
         case .materialAsk: return "Material list"
         case .printPhoto: return "Print / photo"
+        case .task: return "Task"
         }
     }
 }

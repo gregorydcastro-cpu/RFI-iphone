@@ -4,6 +4,7 @@ struct ForemanInboxView: View {
     @EnvironmentObject private var session: FieldSession
     @ObservedObject private var outbox = FieldOutbox.shared
     @ObservedObject private var board = MaterialBoard.shared
+    @ObservedObject private var tasks = TaskBoard.shared
 
     var body: some View {
         List {
@@ -132,6 +133,9 @@ struct ForemanInboxView: View {
     private func materialStatus(_ row: FieldPacket) -> String {
         if row.kind == .materialAsk, let status = board.status(forListID: row.id) {
             return status.label
+        }
+        if row.kind == .task, let task = tasks.task(id: row.id) {
+            return task.status.label
         }
         return row.isSent ? "sent" : "draft"
     }

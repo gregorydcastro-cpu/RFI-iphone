@@ -36,6 +36,12 @@ struct FieldRFIApp: App {
                     }
                 }
                 NavigationStack {
+                    TaskAssignView()
+                }
+                .tabItem {
+                    Label("Tasks", systemImage: "checkmark.circle")
+                }
+                NavigationStack {
                     ForemanInboxView()
                 }
                 .tabItem {

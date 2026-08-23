@@ -57,6 +57,36 @@ final class FieldSession: ObservableObject {
         }
     }
 
+    func ensureShopSeat() {
+        if crew.isEmpty {
+            crew = ShopCrew.members
+        }
+        if userID == nil || userID == "local-field" {
+            pickShopSeat(ShopCrew.members.first(where: { $0.role == "journeyman" }) ?? ShopCrew.members[0])
+        }
+    }
+
+    func pickShopSeat(_ member: CrewMemberDTO) {
+        if crew.isEmpty {
+            crew = ShopCrew.members
+        }
+        userID = member.user_id
+        assignment = AssignmentDTO(
+            ok: true,
+            user_id: member.user_id,
+            name: member.name,
+            role: member.role,
+            project_id: ShopCrew.jobID,
+            area_id: nil,
+            area_name: ShopCrew.jobName,
+            reports_to_user_id: member.reports_to_user_id,
+            boss_name: member.boss_name,
+            boss_role: nil,
+            capabilities: [:],
+            chain: []
+        )
+    }
+
     var banner: String {
         guard let assignment else {
             return "On this phone. Send-to-foreman is local. No API host required."
