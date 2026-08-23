@@ -273,7 +273,9 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				FIELD_API_BASE_URL = "http://127.0.0.1:8000";
 				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_EXPAND_BUILD_SETTINGS = YES;
 				INFOPLIST_FILE = FieldRFI/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Field RFI";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
@@ -300,7 +302,9 @@
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				FIELD_API_BASE_URL = "";
 				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_EXPAND_BUILD_SETTINGS = YES;
 				INFOPLIST_FILE = FieldRFI/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Field RFI";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

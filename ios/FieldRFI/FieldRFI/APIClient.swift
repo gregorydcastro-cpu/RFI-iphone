@@ -1,14 +1,53 @@
 import Foundation
 
 struct APIClient {
+    static let baseURLInfoKey = "FIELD_API_BASE_URL"
+
     var baseURL: URL
 
     init(baseURL: URL = APIClient.defaultBaseURL) {
         self.baseURL = baseURL
     }
 
+    /// Info.plist / `FIELD_API_BASE_URL` build setting. Debug may use localhost HTTP.
+    /// Release must be `https://` and fails closed if the key is missing or still `http`.
     static var defaultBaseURL: URL {
-        URL(string: "http://127.0.0.1:8000")!
+        if let url = configuredBaseURL() {
+            return url
+        }
+        #if DEBUG
+        return URL(string: "http://127.0.0.1:8000")!
+        #else
+        return URL(string: "https://field-api-base-url-missing.invalid")!
+        #endif
+    }
+
+    static func configuredBaseURL() -> URL? {
+        let raw = (Bundle.main.object(forInfoDictionaryKey: baseURLInfoKey) as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !raw.isEmpty, let url = URL(string: raw), url.scheme != nil else {
+            return nil
+        }
+        return url
+    }
+
+    static func assertReleaseBaseURL(_ url: URL) throws {
+        #if DEBUG
+        _ = url
+        #else
+        let host = url.host?.lowercased() ?? ""
+        let scheme = url.scheme?.lowercased() ?? ""
+        let closed = scheme != "https"
+            || host.isEmpty
+            || host == "localhost"
+            || host == "127.0.0.1"
+            || host.hasSuffix(".invalid")
+        if closed {
+            throw APIError(
+                message: "FIELD_API_BASE_URL must be https:// in Release. Set the build setting at archive time. This build will not call http or localhost."
+            )
+        }
+        #endif
     }
 
     /// Actor screens only. Grok / New RFI never send these headers.
@@ -34,6 +73,7 @@ struct APIClient {
     }
 
     func drawing(revisionID: String) async throws -> Data {
+        try Self.assertReleaseBaseURL(baseURL)
         let url = baseURL.appending(path: "/sheet-revisions/\(revisionID)/drawing")
         let (data, response) = try await URLSession.shared.data(from: url)
         try Self.validate(response, data: data)
@@ -178,6 +218,7 @@ struct APIClient {
         query: [URLQueryItem] = [],
         headers: [String: String] = [:]
     ) async throws -> T {
+        try Self.assertReleaseBaseURL(baseURL)
         var components = URLComponents(url: baseURL.appending(path: path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty {
             components.queryItems = query
@@ -197,6 +238,7 @@ struct APIClient {
         body: Body,
         headers: [String: String] = [:]
     ) async throws -> T {
+        try Self.assertReleaseBaseURL(baseURL)
         var request = URLRequest(url: baseURL.appending(path: path))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
