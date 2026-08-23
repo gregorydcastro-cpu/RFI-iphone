@@ -39,6 +39,7 @@ struct MaterialAskView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .onAppear { model.appear(session: session) }
+        .onDisappear { model.persistHeld() }
     }
 
     private var jobChrome: some View {
@@ -105,7 +106,7 @@ struct MaterialAskView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(FieldTheme.rule, lineWidth: 1))
             }
-            .onChange(of: board.held.lines) { _, _ in
+            .onChange(of: board.held) { _, _ in
                 model.persistHeld()
             }
 
@@ -122,7 +123,7 @@ struct MaterialAskView: View {
                 }
             }
             if features.flags(for: session.userID).takeoff {
-                Text("Counts plate fixtures on catalog sheet EL107_N Rev 27 only. Writes the held list. Does not submit, number, or set work-stopped. If there is no sheet image, it writes nothing.")
+                Text("Counts plate fixtures on catalog sheet EL107_N Rev 27 only. Writes the held list. Does not submit, number, or set work-stopped. Job photos are not a sheet. If the catalog image is missing, it writes nothing.")
                     .font(.caption)
                     .foregroundStyle(FieldTheme.muted)
                 if let takeoff = model.takeoffMessage {

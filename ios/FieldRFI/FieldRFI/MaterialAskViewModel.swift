@@ -27,7 +27,7 @@ final class MaterialAskViewModel: ObservableObject {
     }
 
     func canFlag(session: FieldSession) -> Bool {
-        FeatureSettings.shared.allowsSend(session.userID) && session.sendTarget() != nil
+        canPick(session: session)
     }
 
     func addLine() {
@@ -87,13 +87,9 @@ final class MaterialAskViewModel: ObservableObject {
     }
 
     func flagBackOrder(id: String, session: FieldSession) {
-        guard FeatureSettings.shared.allowsSend(session.userID) else {
-            errorMessage = "The person above blocked send-to-inbox for this seat."
-            return
-        }
         let note = flagNotes[id] ?? ""
-        guard board.flagBackOrder(id: id, note: note, session: session) != nil else {
-            errorMessage = "Could not send the back-order to the foreman."
+        guard board.flagBackOrder(id: id, note: note, session: session) else {
+            errorMessage = "Could not flag the back-order."
             return
         }
         errorMessage = nil

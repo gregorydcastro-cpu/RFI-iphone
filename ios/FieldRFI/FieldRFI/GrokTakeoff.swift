@@ -1,6 +1,5 @@
 import Foundation
 import UIKit
-import PDFKit
 
 /// On-device takeoff from a sheet already in the app.
 /// Counts symbols on EL107_N Rev 27 only. Does not invent a drawing number.
@@ -24,7 +23,7 @@ enum GrokTakeoff {
         var message: String {
             switch self {
             case .noSheet:
-                return "No sheet image or PDF. Takeoff did not write quantities."
+                return "No catalog sheet image. Takeoff did not write quantities."
             case .noVisibleDevices:
                 return "Sheet is present but no plate fixtures or receptacles are visible. Takeoff did not write quantities."
             }
@@ -57,27 +56,25 @@ enum GrokTakeoff {
     }
 
     static func loadSheetImage() -> CGImage? {
-        if let url = Bundle.main.url(forResource: catalogResource, withExtension: "png"),
-           let data = try? Data(contentsOf: url),
-           !data.isEmpty,
-           let image = UIImage(data: data)?.cgImage {
-            return image
+        guard let url = catalogSheetURL(),
+              let data = try? Data(contentsOf: url),
+              !data.isEmpty,
+              let image = UIImage(data: data)?.cgImage
+        else { return nil }
+        return image
+    }
+
+    /// Only the catalog sheet already in the app. Do not count job photos or other PDFs.
+    static func catalogSheetURL() -> URL? {
+        let bundle = Bundle.main
+        if let url = bundle.url(forResource: catalogResource, withExtension: "png") {
+            return url
         }
-        for file in FieldAttachmentStore.shared.index {
-            if let preview = FieldAttachmentStore.shared.previewImage(for: file)?.cgImage {
-                return preview
-            }
-            if file.kind == .pdf,
-               let data = FieldAttachmentStore.shared.data(for: file),
-               !data.isEmpty,
-               let doc = PDFDocument(data: data),
-               let page = doc.page(at: 0) {
-                let box = page.bounds(for: .mediaBox)
-                let size = CGSize(width: max(box.width, 1), height: max(box.height, 1))
-                if let thumb = page.thumbnail(of: size, for: .mediaBox).cgImage {
-                    return thumb
-                }
-            }
+        if let url = bundle.url(forResource: catalogResource, withExtension: "png", subdirectory: "Catalog") {
+            return url
+        }
+        if let url = bundle.url(forResource: catalogResource, withExtension: "png", subdirectory: "FieldRFI/Catalog") {
+            return url
         }
         return nil
     }

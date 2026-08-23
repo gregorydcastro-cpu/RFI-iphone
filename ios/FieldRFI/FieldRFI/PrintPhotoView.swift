@@ -86,7 +86,7 @@ struct PrintPhotoView: View {
                     }
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(FieldTheme.steel)
-                    Text("Counts devices on catalog sheet EL107_N Rev 27 and writes the G-Line Shop Test material list. Does not submit. If there is no sheet image or PDF, it writes nothing.")
+                    Text("Counts plate fixtures on catalog sheet EL107_N Rev 27 and writes the G-Line Shop Test material list. Does not submit. Job photos are not a sheet. If the catalog image is missing, it writes nothing.")
                         .font(.caption)
                         .foregroundStyle(FieldTheme.muted)
                     if let takeoff = model.takeoffMessage {

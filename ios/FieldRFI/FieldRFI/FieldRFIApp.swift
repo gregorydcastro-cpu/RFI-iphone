@@ -83,9 +83,7 @@ struct FieldRFIApp: App {
             }
             .environmentObject(session)
             .safeAreaInset(edge: .top, spacing: 0) {
-                if flags.calendar {
-                    MeetingSoonBanner()
-                }
+                MeetingSoonBanner()
             }
             .tint(FieldTheme.orange)
             .onAppear {

@@ -241,20 +241,24 @@ final class MaterialBoard: ObservableObject {
     }
 
     @discardableResult
-    func flagBackOrder(id: String, note: String, session: FieldSession) -> FieldPacket? {
+    func flagBackOrder(id: String, note: String, session: FieldSession) -> Bool {
         session.ensureLocalSeat()
-        guard let target = session.sendTarget() else { return nil }
-        guard let index = lists.firstIndex(where: { $0.id == id }) else { return nil }
+        guard let index = lists.firstIndex(where: { $0.id == id }) else { return false }
         var row = lists[index]
         row.status = .backOrdered
         row.flagNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         row.updatedAt = Date()
-        row.sentToUserID = target.id
-        row.sentToName = target.name
+        if FeatureSettings.shared.allowsSend(session.userID), let target = session.sendTarget() {
+            row.sentToUserID = target.id
+            row.sentToName = target.name
+        }
         lists[index] = row
         save()
-        let extra = row.flagNote?.isEmpty == false ? "Back-order: \(row.flagNote!)" : "Back-order"
-        return FieldOutbox.shared.sendToForeman(packet(for: row, extraNote: extra))
+        if FeatureSettings.shared.allowsSend(session.userID), session.sendTarget() != nil {
+            let extra = row.flagNote?.isEmpty == false ? "Back-order: \(row.flagNote!)" : "Back-order"
+            _ = FieldOutbox.shared.sendToForeman(packet(for: row, extraNote: extra))
+        }
+        return true
     }
 
     func markPicked(id: String) {
