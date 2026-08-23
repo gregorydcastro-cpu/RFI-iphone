@@ -96,6 +96,7 @@ struct PrintPhotoView: View {
                     }
                 }
 
+                SendTargetPicker()
                 Button {
                     model.sendToForeman(session: session)
                 } label: {

@@ -93,6 +93,7 @@ final class FeatureSettings: ObservableObject {
 
     @Published private(set) var byUser: [String: FeatureFlags] = [:]
     @Published private(set) var byRole: [String: FeatureFlags] = [:]
+    @Published private(set) var directLines: Set<String> = []
 
     private let key = "gcfieldlog.features.v2"
 
@@ -125,16 +126,72 @@ final class FeatureSettings: ObservableObject {
         return result
     }
 
-    func canAssign(from actorID: String?, toUser targetID: String) -> Bool {
+    func hasDirectLine(_ userID: String?) -> Bool {
+        guard let userID else { return false }
+        return directLines.contains(userID)
+    }
+
+    func canGrantDirectLine(from actorID: String?, to targetID: String) -> Bool {
         guard let actor = ShopCrew.member(byID: actorID),
               let target = ShopCrew.member(byID: targetID)
         else { return false }
-        return ShopCrew.isDirectReport(target, of: actor)
+        return actor.role == "general_foreman"
+            && target.role == "apprentice"
+            && ShopCrew.isBelow(target, of: actor)
+    }
+
+    func setDirectLine(_ targetID: String, on: Bool, by actorID: String?) {
+        guard canGrantDirectLine(from: actorID, to: targetID) else { return }
+        if on {
+            directLines.insert(targetID)
+        } else {
+            directLines.remove(targetID)
+        }
+        save()
+    }
+
+    func sendTargets(for userID: String?) -> [CrewMemberDTO] {
+        guard let me = ShopCrew.member(byID: userID) else { return [] }
+        var rows: [CrewMemberDTO] = []
+        if let boss = ShopCrew.oneStepUp(from: me) {
+            rows.append(boss)
+        }
+        if me.role == "apprentice",
+           hasDirectLine(me.user_id),
+           let gf = ShopCrew.members.first(where: { $0.role == "general_foreman" }),
+           !rows.contains(where: { $0.user_id == gf.user_id }) {
+            rows.append(gf)
+        }
+        return rows
+    }
+
+    func assignTargets(for userID: String?) -> [CrewMemberDTO] {
+        guard let me = ShopCrew.member(byID: userID) else { return [] }
+        var rows = ShopCrew.directReports(of: me)
+        if me.role == "general_foreman" {
+            for apprentice in ShopCrew.members where apprentice.role == "apprentice" && hasDirectLine(apprentice.user_id) {
+                if !rows.contains(where: { $0.user_id == apprentice.user_id }) {
+                    rows.append(apprentice)
+                }
+            }
+        }
+        return rows
+    }
+
+    func mayAssign(from fromID: String?, to toID: String) -> Bool {
+        assignTargets(for: fromID).contains(where: { $0.user_id == toID })
+    }
+
+    func maySend(from fromID: String?, to toID: String) -> Bool {
+        sendTargets(for: fromID).contains(where: { $0.user_id == toID })
+    }
+
+    func canAssign(from actorID: String?, toUser targetID: String) -> Bool {
+        mayAssign(from: actorID, to: targetID)
     }
 
     func canAssign(from actorID: String?, toRole role: String) -> Bool {
-        guard let actor = ShopCrew.member(byID: actorID) else { return false }
-        return ShopCrew.directReports(of: actor).contains(where: { $0.role == role })
+        assignTargets(for: actorID).contains(where: { $0.role == role })
     }
 
     func set(_ flags: FeatureFlags, forUser userID: String, by actorID: String?) {
@@ -168,10 +225,11 @@ final class FeatureSettings: ObservableObject {
         else { return }
         byUser = box.byUser
         byRole = box.byRole
+        directLines = Set(box.directLines ?? [])
     }
 
     private func save() {
-        let box = Box(byUser: byUser, byRole: byRole)
+        let box = Box(byUser: byUser, byRole: byRole, directLines: Array(directLines))
         if let data = try? JSONEncoder().encode(box) {
             UserDefaults.standard.set(data, forKey: key)
         }
@@ -181,6 +239,7 @@ final class FeatureSettings: ObservableObject {
     private struct Box: Codable {
         var byUser: [String: FeatureFlags]
         var byRole: [String: FeatureFlags]
+        var directLines: [String]?
     }
 }
 
@@ -191,13 +250,21 @@ struct FeatureSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("The person above sets what their direct reports can see and do on \(ShopCrew.jobName). One step only: GF → Area Foreman → Foreman → Journeyman → Apprentice. An apprentice cannot address the GF. Not a backend ABAC. Not Procore.")
+                Text("The person above sets what their direct reports can see and do on \(ShopCrew.jobName). Default is one step: GF → Area Foreman → Foreman → Journeyman → Apprentice. A GF can grant a named apprentice a direct line. That apprentice cannot open it. Not Procore.")
                     .font(.subheadline)
                     .foregroundStyle(FieldTheme.ink)
 
                 seatPicker
 
                 mineReadOnly
+
+                if let me, me.role == "general_foreman" {
+                    directLineSection(me)
+                } else if features.hasDirectLine(session.userID) {
+                    Text("Direct line to the GF is on. You cannot open or close it.")
+                        .font(.footnote)
+                        .foregroundStyle(FieldTheme.muted)
+                }
 
                 if let me, !below.isEmpty {
                     roleSection(me)
@@ -224,7 +291,27 @@ struct FeatureSettingsView: View {
     }
 
     private var below: [CrewMemberDTO] {
-        me.map { ShopCrew.directReports(of: $0) } ?? []
+        features.assignTargets(for: session.userID)
+    }
+
+    private func directLineSection(_ me: CrewMemberDTO) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionLabel("Direct line")
+            Text("Default is one step up. Grant a named apprentice a skip to you for assistant or material check. They cannot open it.")
+                .font(.caption)
+                .foregroundStyle(FieldTheme.muted)
+            ForEach(ShopCrew.members.filter { $0.role == "apprentice" }) { member in
+                Toggle("\(member.name)  ·  direct line", isOn: Binding(
+                    get: { features.hasDirectLine(member.user_id) },
+                    set: { features.setDirectLine(member.user_id, on: $0, by: me.user_id) }
+                ))
+                .tint(FieldTheme.orange)
+                .padding(12)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(FieldTheme.rule, lineWidth: 1))
+            }
+        }
     }
 
     private var seatPicker: some View {
@@ -377,5 +464,42 @@ struct FeatureSettingsView: View {
             .font(.caption.weight(.semibold))
             .tracking(0.8)
             .foregroundStyle(FieldTheme.muted)
+    }
+}
+
+/// Extra send target only when the GF granted a direct line. Default is one step up.
+struct SendTargetPicker: View {
+    @EnvironmentObject private var session: FieldSession
+    @ObservedObject private var features = FeatureSettings.shared
+
+    var body: some View {
+        let options = features.sendTargets(for: session.userID)
+        if options.count > 1 {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("SEND TO")
+                    .font(.caption.weight(.semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(FieldTheme.muted)
+                ForEach(options) { member in
+                    Button {
+                        session.sendOverrideID = member.user_id
+                    } label: {
+                        HStack {
+                            Text("\(member.name)  ·  \(member.role.replacingOccurrences(of: "_", with: " "))")
+                                .foregroundStyle(FieldTheme.ink)
+                            Spacer()
+                            if session.sendTarget()?.id == member.user_id {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(FieldTheme.orange)
+                            }
+                        }
+                        .padding(12)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(FieldTheme.rule, lineWidth: 1))
+                    }
+                }
+            }
+        }
     }
 }

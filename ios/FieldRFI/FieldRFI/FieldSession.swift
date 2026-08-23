@@ -6,6 +6,7 @@ final class FieldSession: ObservableObject {
     @Published var userID: String?
     @Published var assignment: AssignmentDTO?
     @Published var crew: [CrewMemberDTO] = []
+    @Published var sendOverrideID: String?
 
     var role: String { assignment?.role ?? "" }
 
@@ -41,14 +42,15 @@ final class FieldSession: ObservableObject {
     }
 
     func sendTarget() -> (id: String, name: String)? {
-        if let me = ShopCrew.member(byID: userID) {
-            if let boss = ShopCrew.oneStepUp(from: me) {
-                return (boss.user_id, boss.name)
-            }
-            return (me.user_id, me.name)
+        let options = FeatureSettings.shared.sendTargets(for: userID)
+        if let id = sendOverrideID, let pick = options.first(where: { $0.user_id == id }) {
+            return (pick.user_id, pick.name)
         }
-        if let id = assignment?.reports_to_user_id, let name = assignment?.boss_name, !id.isEmpty {
-            return (id, name)
+        if let first = options.first {
+            return (first.user_id, first.name)
+        }
+        if let me = ShopCrew.member(byID: userID) {
+            return (me.user_id, me.name)
         }
         return nil
     }
@@ -73,6 +75,7 @@ final class FieldSession: ObservableObject {
             crew = ShopCrew.members
         }
         userID = member.user_id
+        sendOverrideID = nil
         assignment = AssignmentDTO(
             ok: true,
             user_id: member.user_id,

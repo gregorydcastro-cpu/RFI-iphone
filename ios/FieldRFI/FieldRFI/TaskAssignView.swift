@@ -109,8 +109,8 @@ struct TaskAssignView: View {
     private var assignForm: some View {
         VStack(alignment: .leading, spacing: 10) {
             sectionLabel("Assign")
-            if directReports.isEmpty {
-                Text("No direct report one step down. Cannot skip a level.")
+            if assignTargets.isEmpty {
+                Text("No one one step down. A GF can grant a named apprentice a direct line.")
                     .font(.footnote)
                     .foregroundStyle(FieldTheme.muted)
             }
@@ -123,10 +123,10 @@ struct TaskAssignView: View {
                 DatePicker("Due", selection: $dueAt, displayedComponents: .date)
             }
             sectionLabel("Crew on \(ShopCrew.jobName)")
-            Text("Assign one step down on \(ShopCrew.jobName). Apprentice reports to Journeyman. No skip to the GF.")
+            Text("Assign one step down on \(ShopCrew.jobName). Skip-level only if the GF granted that apprentice a direct line.")
                 .font(.caption)
                 .foregroundStyle(FieldTheme.muted)
-            ForEach(directReports) { member in
+            ForEach(assignTargets) { member in
                 Button {
                     assigneeID = member.user_id
                 } label: {
@@ -280,12 +280,12 @@ struct TaskAssignView: View {
             && me != nil
             && assigneeID != nil
             && assigneeID != me?.user_id
-            && directReports.contains(where: { $0.user_id == assigneeID })
+            && assignTargets.contains(where: { $0.user_id == assigneeID })
             && !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private var directReports: [CrewMemberDTO] {
-        me.map { ShopCrew.directReports(of: $0) } ?? []
+    private var assignTargets: [CrewMemberDTO] {
+        features.assignTargets(for: session.userID)
     }
 
     private func assign() {

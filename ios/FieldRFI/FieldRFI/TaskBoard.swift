@@ -92,7 +92,7 @@ final class TaskBoard: ObservableObject {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, from.user_id != to.user_id else { return nil }
         guard FeatureSettings.shared.allowsAssign(from.user_id) else { return nil }
-        guard ShopCrew.isDirectReport(to, of: from) else { return nil }
+        guard FeatureSettings.shared.mayAssign(from: from.user_id, to: to.user_id) else { return nil }
         var row = FieldTask(
             id: UUID().uuidString,
             jobID: ShopCrew.jobID,

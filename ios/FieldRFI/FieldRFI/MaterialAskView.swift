@@ -145,6 +145,7 @@ struct MaterialAskView: View {
 
     private var sendButton: some View {
         VStack(alignment: .leading, spacing: 8) {
+            SendTargetPicker()
             Button {
                 model.sendToForeman(session: session)
             } label: {

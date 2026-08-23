@@ -75,6 +75,7 @@ struct FieldProblemView: View {
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(FieldTheme.rule, lineWidth: 1))
                 }
 
+                SendTargetPicker()
                 Button {
                     model.sendToForeman(session: session)
                 } label: {

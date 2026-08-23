@@ -83,7 +83,9 @@ final class FieldOutbox: ObservableObject {
     @discardableResult
     func sendToForeman(_ packet: FieldPacket) -> FieldPacket {
         var row = packet
-        if row.kind != .task, let from = ShopCrew.member(byID: row.createdByUserID),
+        if row.kind != .task,
+           !FeatureSettings.shared.maySend(from: row.createdByUserID, to: row.sentToUserID),
+           let from = ShopCrew.member(byID: row.createdByUserID),
            let boss = ShopCrew.oneStepUp(from: from) {
             row.sentToUserID = boss.user_id
             row.sentToName = boss.name

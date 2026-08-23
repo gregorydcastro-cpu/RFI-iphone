@@ -135,6 +135,7 @@ struct NewRFIView: View {
                 }
 
                 if session.canCaptureField {
+                    SendTargetPicker()
                     Button {
                         model.sendToForeman(session: session)
                     } label: {
