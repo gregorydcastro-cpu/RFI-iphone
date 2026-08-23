@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from app.ids import (
     COMPANY_SAMPLE_AE_ID,
-    ILSB_RFI_ID,
     PROJECT_ID,
-    REV_S301_C_ID,
+    REV_E101_A_ID,
     SAMPLE_VOID_ID,
+    SHOP_DRAFT_RFI_ID,
     USER_SAMPLE_AE_ID,
 )
+from tests.actors import clear_seeded_shop_draft
 from app.pe import ANSWER_DISCLAIMER
 
 PE_HEADERS = {"X-Field-Actor": "pe", "X-PE-Token": "pe-demo"}
@@ -18,17 +19,18 @@ GC_HEADERS = {"X-Field-Actor": "gc", "X-GC-Token": "gc-demo"}
 
 
 def _answered(client) -> str:
+    clear_seeded_shop_draft()
     note = "Confirm dock embed plate after design answer for GC impact close."
     created = client.post(
         "/create_rfi_draft",
         json={
             "task": "preflight_rfi",
-            "project": {"id": str(PROJECT_ID), "name": "Harbor Yard Warehouse"},
+            "project": {"id": str(PROJECT_ID), "name": "G-Line Shop Test"},
             "sheet_revision": {
-                "id": str(REV_S301_C_ID),
-                "sheet_number": "S301",
-                "revision": "C",
-                "discipline": "Structural",
+                "id": str(REV_E101_A_ID),
+                "sheet_number": "E-101",
+                "revision": "A",
+                "discipline": "E",
             },
             "pin": {"x_norm": 0.29, "y_norm": 0.41, "label": "GC-HTTP"},
             "photos": [],
@@ -56,7 +58,7 @@ def _answered(client) -> str:
     assert submitted.json()["status"] == "ball_in_court"
     answered = client.post(
         f"/design/rfis/{rfi_id}/official_response",
-        json={"official_response": "Use the embed as marked on S301 Rev C."},
+        json={"official_response": "Use the embed as marked on E-101 Rev A."},
         headers=DESIGN_HEADERS,
     )
     assert answered.status_code == 200
@@ -79,18 +81,18 @@ def test_gc_routes_require_token(client):
     grok = client.post("/submit_rfi", json={"rfi_id": rfi_id})
     assert grok.status_code == 403
     assert grok.json()["detail"]["policy"] == "grokbot_lane"
-    e803 = client.get(f"/rfis/{ILSB_RFI_ID}").json()
-    assert e803["status"] == "draft"
-    assert e803["rfi_display"] is None
+    seeded = client.get(f"/rfis/{SHOP_DRAFT_RFI_ID}").json()
+    assert seeded["status"] == "draft"
+    assert seeded["rfi_display"] is None
 
 
 def test_cannot_close_draft_or_void_or_co_before_answer(client):
     draft = client.post(
-        f"/gc/rfis/{ILSB_RFI_ID}/close", json={}, headers=GC_HEADERS
+        f"/gc/rfis/{SHOP_DRAFT_RFI_ID}/close", json={}, headers=GC_HEADERS
     )
     assert draft.status_code == 422
     assert "draft" in draft.json()["detail"]
-    still = client.get(f"/rfis/{ILSB_RFI_ID}").json()
+    still = client.get(f"/rfis/{SHOP_DRAFT_RFI_ID}").json()
     assert still["status"] == "draft"
     assert still["rfi_display"] is None
     assert still["closed_at"] is None
@@ -102,14 +104,14 @@ def test_cannot_close_draft_or_void_or_co_before_answer(client):
     assert "void" in voided.json()["detail"]
 
     co = client.post(
-        f"/gc/rfis/{ILSB_RFI_ID}/draft_change_order",
+        f"/gc/rfis/{SHOP_DRAFT_RFI_ID}/draft_change_order",
         json={"title": "Should not exist"},
         headers=GC_HEADERS,
     )
     assert co.status_code == 422
     assert "official response" in co.json()["detail"].lower() or "draft" in co.json()["detail"]
     po = client.post(
-        f"/gc/rfis/{ILSB_RFI_ID}/draft_material_order",
+        f"/gc/rfis/{SHOP_DRAFT_RFI_ID}/draft_material_order",
         json={"lines": [{"description": "No", "qty": 1, "uom": "EA"}]},
         headers=GC_HEADERS,
     )
@@ -179,9 +181,6 @@ def test_gc_impact_drafts_then_close_leaves_graph(client):
     draft_ids = {row["id"] for row in graph["drafts"]}
     assert rfi_id not in open_ids
     assert rfi_id not in draft_ids
-    e803 = next(row for row in graph["drafts"] if row["id"] == str(ILSB_RFI_ID))
-    assert e803["status"] == "draft"
-    assert e803["rfi_display"] is None
 
 
 def test_material_lines_require_qty_and_uom(client):

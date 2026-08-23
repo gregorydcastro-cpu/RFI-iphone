@@ -7,10 +7,10 @@ import inspect
 import pytest
 
 from abac import AccessDenied, Action, HUNG_WRITES, Role, require_access
-from app.ids import COMPANY_SAMPLE_AE_ID, PROJECT_ID, REV_S301_C_ID, USER_SAMPLE_AE_ID
+from app.ids import COMPANY_SAMPLE_AE_ID, PROJECT_ID, REV_E101_A_ID, USER_SAMPLE_AE_ID
 from app.rfi import WRITES, age_rfis, set_priority, submit_rfi
 from app.rfi import RFI as RfiModel
-from tests.actors import actor_payload, field_headers
+from tests.actors import actor_payload, clear_seeded_shop_draft, field_headers
 from tests.conftest import resource, subject
 
 evaluate = None
@@ -21,12 +21,12 @@ PE_HEADERS = {"X-Field-Actor": "pe", "X-PE-Token": "pe-demo"}
 def _envelope(note: str) -> dict:
     return {
         "task": "preflight_rfi",
-        "project": {"id": str(PROJECT_ID), "name": "Harbor Yard Warehouse"},
+        "project": {"id": str(PROJECT_ID), "name": "G-Line Shop Test"},
         "sheet_revision": {
-            "id": str(REV_S301_C_ID),
-            "sheet_number": "S301",
-            "revision": "C",
-            "discipline": "Structural",
+            "id": str(REV_E101_A_ID),
+            "sheet_number": "E-101",
+            "revision": "A",
+            "discipline": "E",
         },
         "pin": {"x_norm": 0.41, "y_norm": 0.70, "label": "B-4"},
         "photos": [],
@@ -69,9 +69,10 @@ def test_three_writes_hang_require_access():
 
 
 def test_draft_pin_named_403s_and_pe_assigns_number(client):
+    clear_seeded_shop_draft()
     created = client.post(
         "/create_rfi_draft",
-        json=_envelope("Confirm beam clearance at grid B-4 on S301 Rev C."),
+        json=_envelope("Confirm beam clearance at grid B-4 on E-101 Rev A."),
     )
     assert created.status_code == 200
     body = created.json()
@@ -81,7 +82,7 @@ def test_draft_pin_named_403s_and_pe_assigns_number(client):
 
     detail = client.get(f"/rfis/{rfi_id}").json()
     assert detail["rfi_number"] is None
-    assert detail["pins"][0]["sheet_revision_id"] == str(REV_S301_C_ID)
+    assert detail["pins"][0]["sheet_revision_id"] == str(REV_E101_A_ID)
 
     grok = client.post("/submit_rfi", json={"rfi_id": rfi_id})
     assert grok.status_code == 403

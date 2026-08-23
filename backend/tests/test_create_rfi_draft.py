@@ -1,20 +1,20 @@
 from sqlalchemy import select
 
 from app import db as dbmod
-from app.ids import PROJECT_ID, REV_S301_C_ID
+from app.ids import PROJECT_ID, REV_E101_A_ID
 from app.models import RFIEvent
-from tests.actors import actor_payload
+from tests.actors import actor_payload, clear_seeded_shop_draft
 
 
 def _envelope(**overrides):
     payload = {
         "task": "preflight_rfi",
-        "project": {"id": str(PROJECT_ID), "name": "Harbor Yard Warehouse"},
+        "project": {"id": str(PROJECT_ID), "name": "G-Line Shop Test"},
         "sheet_revision": {
-            "id": str(REV_S301_C_ID),
-            "sheet_number": "S301",
-            "revision": "C",
-            "discipline": "Structural",
+            "id": str(REV_E101_A_ID),
+            "sheet_number": "E-101",
+            "revision": "A",
+            "discipline": "E",
         },
         "pin": {"x_norm": 0.41, "y_norm": 0.70, "label": "B-4"},
         "photos": [],
@@ -27,6 +27,7 @@ def _envelope(**overrides):
 
 
 def test_create_draft_success_has_no_human_number(client):
+    clear_seeded_shop_draft()
     response = client.post("/create_rfi_draft", json=_envelope())
     assert response.status_code == 200
     body = response.json()
@@ -47,12 +48,12 @@ def test_create_draft_success_has_no_human_number(client):
     assert rfi["cost_impact"]
     assert rfi["schedule_impact"]
     assert rfi["proposed_solution"]
-    assert "S301" in rfi["question"]
-    assert "Rev C" in rfi["question"]
+    assert "E-101" in rfi["question"]
+    assert "Rev A" in rfi["question"]
     assert "B-4" in rfi["question"]
     assert "not a change order" in rfi["question"].lower()
     assert rfi["grok_preflight"]["envelope"]["task"] == "preflight_rfi"
-    assert rfi["pins"][0]["sheet_revision_id"] == str(REV_S301_C_ID)
+    assert rfi["pins"][0]["sheet_revision_id"] == str(REV_E101_A_ID)
     assert 0 <= rfi["pins"][0]["x_norm"] <= 1
 
     db = dbmod.SessionLocal()
@@ -99,6 +100,7 @@ def test_create_draft_rejects_status_on_pin(client):
 
 
 def test_create_draft_honors_open_rfis_from_search(client):
+    clear_seeded_shop_draft()
     first = client.post("/create_rfi_draft", json=_envelope())
     assert first.status_code == 200
     payload = _envelope(user_note="Different wording on the same clash.")
@@ -107,7 +109,7 @@ def test_create_draft_honors_open_rfis_from_search(client):
             "id": first.json()["rfi_id"],
             "status": "draft",
             "subject": "existing",
-            "sheet_number": "S301",
+            "sheet_number": "E-101",
             "grid": "B-4",
         }
     ]
@@ -137,6 +139,7 @@ def test_create_draft_rejects_multiple_questions(client):
 
 
 def test_create_draft_never_sets_work_stopped(client):
+    clear_seeded_shop_draft()
     payload = _envelope(
         user_note="Work stop at grid B-4 until the beam and duct clearance is confirmed."
     )
@@ -148,6 +151,7 @@ def test_create_draft_never_sets_work_stopped(client):
 
 
 def test_create_draft_stops_on_open_duplicate(client):
+    clear_seeded_shop_draft()
     first = client.post("/create_rfi_draft", json=_envelope())
     assert first.status_code == 200
     first_id = first.json()["rfi_id"]

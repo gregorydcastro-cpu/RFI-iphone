@@ -2,9 +2,9 @@ from datetime import timedelta
 
 from app.aging import age_bucket, days_open, utc_now
 from app.ids import (
-    ILSB_PROJECT_ID,
-    ILSB_RFI_ID,
-    ILSB_SUBJECT,
+    PROJECT_ID,
+    SHOP_DRAFT_RFI_ID,
+    SHOP_DRAFT_SUBJECT,
     SAMPLE_ANSWERED_ID,
     SAMPLE_CLARIFY_ID,
     SAMPLE_CLOSED_ID,
@@ -22,24 +22,24 @@ def test_drafts_and_terminal_excluded_from_open_graph(client):
     graph = client.get("/rfi_graph").json()
     open_ids = {row["id"] for row in graph["open"]}
     draft_ids = {row["id"] for row in graph["drafts"]}
-    assert str(ILSB_RFI_ID) not in open_ids
-    assert str(ILSB_RFI_ID) in draft_ids
+    assert str(SHOP_DRAFT_RFI_ID) not in open_ids
+    assert str(SHOP_DRAFT_RFI_ID) in draft_ids
     assert str(SAMPLE_CLOSED_ID) not in open_ids
     assert str(SAMPLE_VOID_ID) not in open_ids
     assert graph["closed_or_void_count"] >= 2
 
 
-def test_e803_draft_still_unnumbered(client):
-    draft = next(row for row in client.get("/rfi_graph").json()["drafts"] if row["id"] == str(ILSB_RFI_ID))
+def test_shop_draft_still_unnumbered(client):
+    draft = next(row for row in client.get("/rfi_graph").json()["drafts"] if row["id"] == str(SHOP_DRAFT_RFI_ID))
     assert draft["status"] == "draft"
     assert draft["rfi_display"] is None
     assert draft["rfi_number"] is None
-    assert draft["subject"] == ILSB_SUBJECT
+    assert draft["subject"] == SHOP_DRAFT_SUBJECT
     assert draft["is_sample"] is False
-    assert draft["project_id"] == str(ILSB_PROJECT_ID)
-    assert draft["sheet_number"] == "EL107_N"
+    assert draft["project_id"] == str(PROJECT_ID)
+    assert draft["sheet_number"] == "E-101"
 
-    detail = client.get(f"/rfis/{ILSB_RFI_ID}").json()
+    detail = client.get(f"/rfis/{SHOP_DRAFT_RFI_ID}").json()
     assert detail["rfi_display"] is None
     assert detail["status"] == "draft"
 
@@ -119,15 +119,15 @@ def test_sample_buckets_cover_required_cases(client):
     assert counts["on_cycle"] >= 1
 
 
-def test_graph_can_filter_ilsb_and_keeps_machine_sample(client):
-    ils = client.get("/rfi_graph", params={"project_id": str(ILSB_PROJECT_ID)}).json()
-    assert all(row["status"] != "draft" for row in ils["open"])
-    assert any(row["id"] == str(ILSB_RFI_ID) for row in ils["drafts"])
-    assert ils["status_machine"]["main"][0] == "draft"
-    assert "needs_clarification" in ils["status_machine"]["branches"]
-    assert "void" in ils["status_machine"]["branches"]
-    assert ils["timezone"] == "America/New_York"
-    assert "business days" in ils["days_open_rule"]
+def test_graph_can_filter_shop_and_keeps_machine_sample(client):
+    shop = client.get("/rfi_graph", params={"project_id": str(PROJECT_ID)}).json()
+    assert all(row["status"] != "draft" for row in shop["open"])
+    assert any(row["id"] == str(SHOP_DRAFT_RFI_ID) for row in shop["drafts"])
+    assert shop["status_machine"]["main"][0] == "draft"
+    assert "needs_clarification" in shop["status_machine"]["branches"]
+    assert "void" in shop["status_machine"]["branches"]
+    assert shop["timezone"] == "America/New_York"
+    assert "business days" in shop["days_open_rule"]
 
 
 def test_days_open_fallback_and_age_buckets(client):
@@ -163,14 +163,17 @@ def test_days_open_fallback_and_age_buckets(client):
 def test_search_hides_sample_rows_by_default(client):
     hidden = client.get(
         "/search_rfis",
-        params={"project_id": "aaaaaaaa-0000-4000-8000-000000000010"},
+        params={"project_id": str(PROJECT_ID)},
     ).json()
-    assert hidden["count"] == 0
+    assert hidden["count"] == 1
+    assert hidden["rfis"][0]["id"] == str(SHOP_DRAFT_RFI_ID)
+    assert all("[SAMPLE]" not in row["subject"] for row in hidden["rfis"])
     shown = client.get(
         "/search_rfis",
         params={
-            "project_id": "aaaaaaaa-0000-4000-8000-000000000010",
+            "project_id": str(PROJECT_ID),
             "exclude_sample": False,
         },
     ).json()
-    assert shown["count"] >= 1
+    assert shown["count"] > hidden["count"]
+    assert any("[SAMPLE]" in row["subject"] for row in shown["rfis"])

@@ -37,10 +37,10 @@ def test_preflight_splits_leftover_and_carried() -> None:
     store = Store()
     store.add_job(Job(id=JOB))
     sheet = store.add_sheet(
-        Sheet(id=uuid4(), project_id=JOB, sheet_number="EL107_N", discipline="E")
+        Sheet(id=uuid4(), project_id=JOB, sheet_number="E-101", discipline="E")
     )
     old = store.add_revision(
-        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="27", is_current=True)
+        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="A", is_current=True)
     )
     leftover = create_rfi_draft(
         store,
@@ -56,7 +56,7 @@ def test_preflight_splits_leftover_and_carried() -> None:
     )
     submit_rfi(store, _foreman(), numbered.id)
     new = store.add_revision(
-        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="28", is_current=True)
+        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="B", is_current=True)
     )
     apply_carry_forward(
         store, compare_revisions(store, old.id, new.id), actor_id=_foreman().user_id
@@ -75,10 +75,10 @@ def test_grokbot_returns_leftover_match_and_does_not_close() -> None:
     store = Store()
     store.add_job(Job(id=JOB))
     sheet = store.add_sheet(
-        Sheet(id=uuid4(), project_id=JOB, sheet_number="EL107_N", discipline="E")
+        Sheet(id=uuid4(), project_id=JOB, sheet_number="E-101", discipline="E")
     )
     old = store.add_revision(
-        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="27", is_current=True)
+        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="A", is_current=True)
     )
     leftover = create_rfi_draft(
         store,
@@ -87,7 +87,7 @@ def test_grokbot_returns_leftover_match_and_does_not_close() -> None:
         pin={"sheet_revision_id": old.id, "x": 0.31, "y": 0.48, "label": "leftover"},
     )
     new = store.add_revision(
-        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="28", is_current=True)
+        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="B", is_current=True)
     )
     before = len(store.rfis)
     hit = create_rfi_draft(
@@ -111,10 +111,10 @@ def test_grokbot_returns_carried_open_and_does_not_number() -> None:
     store = Store()
     store.add_job(Job(id=JOB))
     sheet = store.add_sheet(
-        Sheet(id=uuid4(), project_id=JOB, sheet_number="EL107_N", discipline="E")
+        Sheet(id=uuid4(), project_id=JOB, sheet_number="E-101", discipline="E")
     )
     old = store.add_revision(
-        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="27", is_current=True)
+        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="A", is_current=True)
     )
     drafted = create_rfi_draft(
         store,
@@ -125,7 +125,7 @@ def test_grokbot_returns_carried_open_and_does_not_number() -> None:
     submitted = submit_rfi(store, _foreman(), drafted.id)
     number = submitted.rfi_number
     new = store.add_revision(
-        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="28", is_current=True)
+        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="B", is_current=True)
     )
     apply_carry_forward(
         store, compare_revisions(store, old.id, new.id), actor_id=_foreman().user_id
@@ -150,10 +150,10 @@ def test_grokbot_creates_only_when_search_finds_no_match() -> None:
     store = Store()
     store.add_job(Job(id=JOB))
     sheet = store.add_sheet(
-        Sheet(id=uuid4(), project_id=JOB, sheet_number="EL107_N", discipline="E")
+        Sheet(id=uuid4(), project_id=JOB, sheet_number="E-101", discipline="E")
     )
     old = store.add_revision(
-        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="27", is_current=True)
+        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="A", is_current=True)
     )
     leftover = create_rfi_draft(
         store,
@@ -162,12 +162,12 @@ def test_grokbot_creates_only_when_search_finds_no_match() -> None:
         pin={"sheet_revision_id": old.id, "x": 0.2, "y": 0.3, "label": "draft"},
     )
     new = store.add_revision(
-        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="28", is_current=True)
+        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="B", is_current=True)
     )
     fresh = create_rfi_draft(
         store,
         _grok(),
-        question="New hatch after Bulletin 46?",
+        question="New fixture after the later print?",
         pin={"sheet_revision_id": new.id, "x": 0.8, "y": 0.8, "label": "new"},
     )
     assert fresh.id != leftover.id

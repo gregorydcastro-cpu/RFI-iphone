@@ -1,7 +1,7 @@
 import Foundation
 
 /// On-device sample only. G-Line Shop Test + E-101 Rev A.
-/// Not Brown. Not ILSB. Not EL107_N. No HTTP.
+/// G-Line Shop Test and E-101 Rev A only. No HTTP.
 enum ShopSampleCatalog {
     static let projectID = MaterialListRecord.shopTestID
     static let projectName = MaterialListRecord.shopTestName
@@ -10,9 +10,6 @@ enum ShopSampleCatalog {
     static let sheetTitle = "Sample lighting plan"
     static let resource = "e-101-rev-a"
     static let takeoffTag = "E-101 Rev A takeoff"
-
-    static let blockedNameBits = ["ilsb", "brown", "harbor yard", "vivarium", "richmond"]
-    static let blockedSheets = ["EL107_N", "E-803", "S301", "S302"]
 
     static var project: ProjectDTO {
         ProjectDTO(
@@ -61,12 +58,11 @@ enum ShopSampleCatalog {
     }
 
     static func isBlockedProject(_ project: ProjectDTO) -> Bool {
-        let blob = "\(project.name) \(project.organization_name) \(project.address ?? "")".lowercased()
-        return blockedNameBits.contains(where: { blob.contains($0) })
+        false
     }
 
     static func isBlockedRevision(_ revision: SheetRevisionDTO) -> Bool {
-        blockedSheets.contains(revision.sheet_number)
+        false
     }
 
     static func allowedProjects(_ rows: [ProjectDTO]) -> [ProjectDTO] {

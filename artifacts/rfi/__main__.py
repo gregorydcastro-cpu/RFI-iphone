@@ -56,7 +56,7 @@ def main() -> int:
     )
     print(
         f"compare carried {facts['carried_pins']} pin; "
-        f"leftover drafts stay on rev 27; pin_carried x2 is no-op"
+        f"leftover drafts stay on Rev A; pin_carried x2 is no-op"
     )
     print(
         "preflight: grok leftover/carried matches returned; "

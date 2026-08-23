@@ -11,11 +11,11 @@ import pytest
 from abac import AccessDenied, Action, HUNG_WRITES, Role, require_access
 from app import db as dbmod
 from app.coverage_schema import CURRENT_SCHEMA
-from app.ids import COMPANY_SAMPLE_AE_ID, PROJECT_ID, REV_S301_C_ID, USER_SAMPLE_AE_ID
+from app.ids import COMPANY_SAMPLE_AE_ID, PROJECT_ID, REV_E101_A_ID, USER_SAMPLE_AE_ID
 from app.models import RFI
 from app.pe import PEError, request_clarification, set_priority
 from app.rfi import WORK_STOPPED_PRIORITY, is_first_submit, pair_holds
-from tests.actors import actor_payload
+from tests.actors import actor_payload, clear_seeded_shop_draft
 from tests.conftest import resource, subject
 
 evaluate = None
@@ -26,12 +26,12 @@ PE_HEADERS = {"X-Field-Actor": "pe", "X-PE-Token": "pe-demo"}
 def _envelope(note: str) -> dict:
     return {
         "task": "preflight_rfi",
-        "project": {"id": str(PROJECT_ID), "name": "Harbor Yard Warehouse"},
+        "project": {"id": str(PROJECT_ID), "name": "G-Line Shop Test"},
         "sheet_revision": {
-            "id": str(REV_S301_C_ID),
-            "sheet_number": "S301",
-            "revision": "C",
-            "discipline": "Structural",
+            "id": str(REV_E101_A_ID),
+            "sheet_number": "E-101",
+            "revision": "A",
+            "discipline": "E",
         },
         "pin": {"x_norm": 0.22, "y_norm": 0.33, "label": "INV"},
         "photos": [],
@@ -68,6 +68,7 @@ def test_invariant_1_pair_holds_on_create_edit_and_db(client) -> None:
     assert not pair_holds("urgent", True)
     assert not pair_holds("work_stopped", False)
 
+    clear_seeded_shop_draft()
     created = client.post(
         "/create_rfi_draft",
         json=_envelope("Confirm curb height at the dock for invariant 1."),
@@ -123,9 +124,10 @@ def test_invariant_1_grokbot_cannot_set_work_stopped(client) -> None:
     denied = client.post("/create_rfi_draft", json=payload)
     assert denied.status_code == 422
 
+    clear_seeded_shop_draft()
     ok = client.post(
         "/create_rfi_draft",
-        json=_envelope("Work is stopped until the beam seat is confirmed on S301."),
+        json=_envelope("Work is stopped until the beam seat is confirmed on E-101."),
     )
     assert ok.status_code == 200
     rfi = client.get(f"/rfis/{ok.json()['rfi_id']}").json()
@@ -135,9 +137,10 @@ def test_invariant_1_grokbot_cannot_set_work_stopped(client) -> None:
 
 
 def test_invariant_2_number_only_on_first_submit_and_stays(client) -> None:
+    clear_seeded_shop_draft()
     created = client.post(
         "/create_rfi_draft",
-        json=_envelope("Confirm stair landing thickness on S301 Rev C for numbering."),
+        json=_envelope("Confirm stair landing thickness on E-101 Rev A for numbering."),
     )
     assert created.status_code == 200
     rfi_id = created.json()["rfi_id"]

@@ -20,7 +20,7 @@ Site draft in progress. Do not use https://glineracing.store/ for this product. 
 Linux cannot archive or upload to App Store Connect. Remaining blockers after this UI cut:
 
 1. **Signing team** — Xcode Automatic signing on a Mac with the Apple team that owns `glineracing@gmail.com`. Bundle id is `com.castro.fieldrfi`. Confirm the team can create an App Store distribution profile.
-2. **Screenshots** — iPhone 6.7" and 6.1" (plus iPad if the family stays 1,2): New RFI with a pin on a catalog sheet, Field problem, Material held list (G-Line Shop Test), Foreman inbox. Do not invent drawing numbers in the shots; use the bundled sample **E-101 Rev A**. Job name stays **G-Line Shop Test**. Do not use EL107_N, Brown, or ILSB.
+2. **Screenshots** — iPhone 6.7" and 6.1" (plus iPad if the family stays 1,2): New RFI with a pin on a catalog sheet, Field problem, Material held list (G-Line Shop Test), Foreman inbox. Do not invent drawing numbers in the shots; use the bundled sample **E-101 Rev A**. Job name stays **G-Line Shop Test**. Use G-Line Shop Test and E-101 Rev A only.
 3. **Privacy nutrition** — `PrivacyInfo.xcprivacy` is in the target. App Store Connect still needs the questionnaire: no tracking, camera and photos for field attachments only, no third-party analytics. Confirm Camera + Photos usage strings match the live screens.
 4. **Archive + review** — Run on a device, archive in Xcode, upload. Review notes: no IAP, no Procore, send-to-foreman is an in-app handoff, not a purchase. Empty `FIELD_API_BASE_URL` is legal for this cut.
 

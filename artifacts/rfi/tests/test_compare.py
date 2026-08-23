@@ -48,7 +48,7 @@ def _foreman() -> Subject:
 
 
 def _pin(store: Store, rfi: RFI, rev: SheetRevision, x: float = 0.28, y: float = 0.52) -> Pin:
-    pin = Pin(sheet_revision_id=rev.id, x=x, y=y, label="Gnotobiotics")
+    pin = Pin(sheet_revision_id=rev.id, x=x, y=y, label="fixture")
     rfi.pins.append(pin)
     return pin
 
@@ -66,14 +66,14 @@ def test_same_sheet_only() -> None:
 def test_carry_open_copy_xy_same_rfi_row() -> None:
     store = Store()
     store.add_job(Job(id=JOB))
-    sheet = _sheet(store, "EL107_N")
-    old = _rev(store, sheet, "27", current=True)
-    new = _rev(store, sheet, "28", current=True)
+    sheet = _sheet(store, "E-101")
+    old = _rev(store, sheet, "A", current=True)
+    new = _rev(store, sheet, "B", current=True)
     drafted = create_rfi_draft(
         store,
         subject(),
-        question="Which E-803 revision?",
-        pin={"sheet_revision_id": old.id, "x": 0.28, "y": 0.52, "label": "cubicles"},
+        question="Which E-101 revision?",
+        pin={"sheet_revision_id": old.id, "x": 0.28, "y": 0.52, "label": "fixture"},
     )
     submitted = submit_rfi(store, _foreman(), drafted.id)
     before = len(store.rfis)
@@ -91,9 +91,9 @@ def test_carry_open_copy_xy_same_rfi_row() -> None:
 
 def test_closed_and_void_stay_on_old_print() -> None:
     store = Store()
-    sheet = _sheet(store, "EL107_N")
-    old = _rev(store, sheet, "27")
-    new = _rev(store, sheet, "28")
+    sheet = _sheet(store, "E-101")
+    old = _rev(store, sheet, "A")
+    new = _rev(store, sheet, "B")
     closed = RFI(
         id="closed",
         project_id=JOB,
@@ -127,9 +127,9 @@ def test_closed_and_void_stay_on_old_print() -> None:
 def test_unnumbered_drafts_are_leftover_not_carried() -> None:
     store = Store()
     store.add_job(Job(id=JOB))
-    sheet = _sheet(store, "EL107_N")
-    old = _rev(store, sheet, "27")
-    new = _rev(store, sheet, "28")
+    sheet = _sheet(store, "E-101")
+    old = _rev(store, sheet, "A")
+    new = _rev(store, sheet, "B")
     draft = create_rfi_draft(
         store,
         subject(),
@@ -149,9 +149,9 @@ def test_unnumbered_drafts_are_leftover_not_carried() -> None:
 def test_already_pinned_on_new_rev_skips_and_second_apply_is_noop() -> None:
     store = Store()
     store.add_job(Job(id=JOB))
-    sheet = _sheet(store, "EL107_N")
-    old = _rev(store, sheet, "27")
-    new = _rev(store, sheet, "28")
+    sheet = _sheet(store, "E-101")
+    old = _rev(store, sheet, "A")
+    new = _rev(store, sheet, "B")
     drafted = create_rfi_draft(
         store,
         subject(),
@@ -172,9 +172,9 @@ def test_already_pinned_on_new_rev_skips_and_second_apply_is_noop() -> None:
 def test_apply_twice_writes_one_pin_carried() -> None:
     store = Store()
     store.add_job(Job(id=JOB))
-    sheet = _sheet(store, "EL107_N")
-    old = _rev(store, sheet, "27")
-    new = _rev(store, sheet, "28")
+    sheet = _sheet(store, "E-101")
+    old = _rev(store, sheet, "A")
+    new = _rev(store, sheet, "B")
     drafted = create_rfi_draft(
         store,
         subject(),
@@ -193,18 +193,18 @@ def test_apply_twice_writes_one_pin_carried() -> None:
 
 def test_new_revision_does_not_spawn_rfis() -> None:
     store = Store()
-    sheet = _sheet(store, "EL107_N")
-    _rev(store, sheet, "27", current=True)
+    sheet = _sheet(store, "E-101")
+    _rev(store, sheet, "A", current=True)
     before = len(store.rfis)
-    _rev(store, sheet, "28", current=True)
+    _rev(store, sheet, "B", current=True)
     assert len(store.rfis) == before
 
 
 def test_search_open_on_sheet_is_preflight_and_skips_closed() -> None:
     store = Store()
     store.add_job(Job(id=JOB))
-    sheet = _sheet(store, "EL107_N")
-    old = _rev(store, sheet, "27")
+    sheet = _sheet(store, "E-101")
+    old = _rev(store, sheet, "A")
     draft = create_rfi_draft(
         store,
         subject(),

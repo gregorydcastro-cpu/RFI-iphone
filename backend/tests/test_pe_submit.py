@@ -10,18 +10,15 @@ from sqlalchemy import select, text
 from app import db as dbmod
 from app.ids import (
     COMPANY_SAMPLE_AE_ID,
-    ILSB_PROJECT_ID,
-    ILSB_REV_27_ID,
-    ILSB_RFI_ID,
     PROJECT_ID,
-    REV_S301_C_ID,
-    REV_S302_A_ID,
+    REV_E101_A_ID,
     SAMPLE_OVERDUE_ID,
+    SHOP_DRAFT_RFI_ID,
     USER_SAMPLE_AE_ID,
 )
 from app.models import RFI, RFIEvent, RFIPin, RFIRef
 from app.pe import DUE_AT_RULE, PRIORITY_CONFIRM_COMMENT, request_clarification
-from tests.actors import actor_payload
+from tests.actors import actor_payload, clear_seeded_shop_draft
 
 PE_HEADERS = {"X-Field-Actor": "pe", "X-PE-Token": "pe-demo"}
 
@@ -29,12 +26,12 @@ PE_HEADERS = {"X-Field-Actor": "pe", "X-PE-Token": "pe-demo"}
 def _envelope(note: str, **overrides):
     payload = {
         "task": "preflight_rfi",
-        "project": {"id": str(PROJECT_ID), "name": "Harbor Yard Warehouse"},
+        "project": {"id": str(PROJECT_ID), "name": "G-Line Shop Test"},
         "sheet_revision": {
-            "id": str(REV_S301_C_ID),
-            "sheet_number": "S301",
-            "revision": "C",
-            "discipline": "Structural",
+            "id": str(REV_E101_A_ID),
+            "sheet_number": "E-101",
+            "revision": "A",
+            "discipline": "E",
         },
         "pin": {"x_norm": 0.33, "y_norm": 0.44, "label": "PE-HTTP"},
         "photos": [],
@@ -46,19 +43,14 @@ def _envelope(note: str, **overrides):
     return payload
 
 
-def _new_draft(client, note: str, *, sheet: str = "S301") -> str:
+def _new_draft(client, note: str, *, sheet: str = "E-101") -> str:
+    clear_seeded_shop_draft()
     revision = {
-        "S301": {
-            "id": str(REV_S301_C_ID),
-            "sheet_number": "S301",
-            "revision": "C",
-            "discipline": "Structural",
-        },
-        "S302": {
-            "id": str(REV_S302_A_ID),
-            "sheet_number": "S302",
+        "E-101": {
+            "id": str(REV_E101_A_ID),
+            "sheet_number": "E-101",
             "revision": "A",
-            "discipline": "Structural",
+            "discipline": "E",
         },
     }[sheet]
     search = client.get(
@@ -107,7 +99,7 @@ def _events(rfi_id: str) -> list[RFIEvent]:
 
 
 def test_pe_http_approve_then_submit_new_draft(client):
-    rfi_id = _new_draft(client, "Confirm embed plate thickness at the dock on S301 Rev C.")
+    rfi_id = _new_draft(client, "Confirm embed plate thickness at the dock on E-101 Rev A.")
     draft = client.get(f"/rfis/{rfi_id}").json()
     assert draft["status"] == "draft"
     assert draft["rfi_display"] is None
@@ -172,13 +164,10 @@ def test_pe_http_approve_then_submit_new_draft(client):
     assert rfi_id not in draft_ids
     numbered = next(row for row in graph["open"] if row["id"] == rfi_id)
     assert numbered["rfi_display"].startswith("RFI-")
-    e803 = next(row for row in graph["drafts"] if row["id"] == str(ILSB_RFI_ID))
-    assert e803["rfi_display"] is None
-    assert e803["status"] == "draft"
 
 
 def test_cannot_submit_without_pe_credentials_or_grok_tool(client):
-    rfi_id = _new_draft(client, "Confirm stair landing thickness on S301 Rev C for PE auth.")
+    rfi_id = _new_draft(client, "Confirm stair landing thickness on E-101 Rev A for PE auth.")
     client.post(f"/pe/rfis/{rfi_id}/approve_internal_review", json={}, headers=PE_HEADERS)
     missing = client.post(f"/pe/rfis/{rfi_id}/submit", json=_submit_body())
     assert missing.status_code == 403
@@ -213,7 +202,7 @@ def test_cannot_submit_empty_question_or_without_pin_or_ref(client):
         db.add(
             RFIPin(
                 rfi_id=empty.id,
-                sheet_revision_id=str(REV_S301_C_ID),
+                sheet_revision_id=str(REV_E101_A_ID),
                 x_norm=0.2,
                 y_norm=0.3,
             )
@@ -260,7 +249,7 @@ def test_cannot_submit_from_ball_in_court(client):
 
 
 def test_cannot_submit_draft_without_internal_review(client):
-    rfi_id = _new_draft(client, "Confirm hoist opening header on S301 Rev C before review.")
+    rfi_id = _new_draft(client, "Confirm hoist opening header on E-101 Rev A before review.")
     skipped = client.post(
         f"/pe/rfis/{rfi_id}/submit", json=_submit_body(), headers=PE_HEADERS
     )
@@ -272,7 +261,7 @@ def test_cannot_submit_draft_without_internal_review(client):
 
 
 def test_first_submit_mints_second_from_needs_clarification_does_not(client):
-    rfi_id = _new_draft(client, "Confirm roof opening curb on S301 Rev C for remint check.")
+    rfi_id = _new_draft(client, "Confirm roof opening curb on E-101 Rev A for remint check.")
     client.post(f"/pe/rfis/{rfi_id}/approve_internal_review", json={}, headers=PE_HEADERS)
     first = client.post(
         f"/pe/rfis/{rfi_id}/submit", json=_submit_body(), headers=PE_HEADERS
@@ -320,8 +309,8 @@ def test_pe_may_set_work_stopped_and_due_at_uses_hours_or_1700(client):
 
     other = _new_draft(
         client,
-        "Confirm lintel bearing at the hoist opening on S302 Rev A.",
-        sheet="S302",
+        "Confirm lintel bearing at the hoist opening on E-101 Rev A.",
+        sheet="E-101",
     )
     client.post(f"/pe/rfis/{other}/approve_internal_review", json={}, headers=PE_HEADERS)
     standard = client.post(
@@ -335,14 +324,14 @@ def test_pe_may_set_work_stopped_and_due_at_uses_hours_or_1700(client):
     assert local.minute == 0
 
 
-def test_ilsb_like_new_draft_submit_leaves_e803_unnumbered(client):
+def test_new_draft_submit_leaves_seeded_shop_draft_unnumbered(client):
     db = dbmod.SessionLocal()
     try:
         copy = RFI(
-            project_id=str(ILSB_PROJECT_ID),
+            project_id=str(PROJECT_ID),
             status="draft",
-            subject="ILSB-like fixture type on EL107_N north corridor",
-            question="Which fixture type is intended on EL107_N at the north corridor?",
+            subject="Fixture type on E-101 shop floor",
+            question="Which fixture type is intended on E-101 at the shop floor?",
             priority="standard",
             cost_impact="unknown",
             schedule_impact="unknown",
@@ -361,19 +350,19 @@ def test_ilsb_like_new_draft_submit_leaves_e803_unnumbered(client):
         db.add(
             RFIRef(
                 rfi_id=copy.id,
-                sheet_revision_id=str(ILSB_REV_27_ID),
-                sheet_number="EL107_N",
-                revision="27",
+                sheet_revision_id=str(REV_E101_A_ID),
+                sheet_number="E-101",
+                revision="A",
                 discipline="E",
             )
         )
         db.add(
             RFIPin(
                 rfi_id=copy.id,
-                sheet_revision_id=str(ILSB_REV_27_ID),
+                sheet_revision_id=str(REV_E101_A_ID),
                 x_norm=0.61,
                 y_norm=0.27,
-                label="north corridor",
+                label="shop floor",
             )
         )
         db.commit()
@@ -392,11 +381,11 @@ def test_ilsb_like_new_draft_submit_leaves_e803_unnumbered(client):
     assert submitted.json()["first_submit"] is True
     assert submitted.json()["rfi_display"].startswith("RFI-")
 
-    seeded = client.get(f"/rfis/{ILSB_RFI_ID}").json()
+    seeded = client.get(f"/rfis/{SHOP_DRAFT_RFI_ID}").json()
     assert seeded["status"] == "draft"
     assert seeded["rfi_display"] is None
-    graph = client.get("/rfi_graph", params={"project_id": str(ILSB_PROJECT_ID)}).json()
-    assert any(row["id"] == str(ILSB_RFI_ID) and row["rfi_display"] is None for row in graph["drafts"])
+    graph = client.get("/rfi_graph", params={"project_id": str(PROJECT_ID)}).json()
+    assert any(row["id"] == str(SHOP_DRAFT_RFI_ID) and row["rfi_display"] is None for row in graph["drafts"])
     assert any(row["id"] == copy_id and row["rfi_display"] for row in graph["open"])
 
 

@@ -7,12 +7,11 @@ from sqlalchemy import select, text
 from app import db as dbmod
 from app.ids import (
     DEMO_PROJECT_NAME,
-    ILSB_RFI_ID,
     PROJECT_ID,
-    REV_S301_C_ID,
-    REV_S302_A_ID,
+    REV_E101_A_ID,
     SAMPLE_OVERDUE_ID,
 )
+from tests.actors import clear_seeded_shop_draft
 from app.models import RFIEvent
 from app.pe import (
     ANSWER_DISCLAIMER,
@@ -32,6 +31,7 @@ def _session():
 
 
 def _search_then_draft(client, *, note: str, rev_id, sheet: str, revision: str, discipline: str):
+    clear_seeded_shop_draft()
     search = client.get(
         "/search_rfis",
         params={
@@ -90,11 +90,11 @@ def _events(rfi_id: str) -> list[RFIEvent]:
 def test_e2e_both_actors_happy_path_closes(client):
     rfi_id = _search_then_draft(
         client,
-        note="Confirm the beam seat elevation at the dock on S301 Rev C.",
-        rev_id=REV_S301_C_ID,
-        sheet="S301",
-        revision="C",
-        discipline="Structural",
+        note="Confirm the beam seat elevation at the dock on E-101 Rev A.",
+        rev_id=REV_E101_A_ID,
+        sheet="E-101",
+        revision="A",
+        discipline="E",
     )
     draft = client.get(f"/rfis/{rfi_id}").json()
     assert draft["status"] == "draft"
@@ -112,7 +112,7 @@ def test_e2e_both_actors_happy_path_closes(client):
         answered = record_official_response(
             db,
             rfi_id,
-            "Revise the beam seat to match the marked condition on S301 Rev C. "
+            "Revise the beam seat to match the marked condition on E-101 Rev A. "
             "Hold work until a change order is issued.",
         )
         assert answered.status == "answered"
@@ -167,19 +167,16 @@ def test_e2e_both_actors_happy_path_closes(client):
     assert rfi_id not in open_ids
     assert rfi_id not in draft_ids
     assert str(SAMPLE_OVERDUE_ID) in open_ids
-    e803 = next(row for row in graph["drafts"] if row["id"] == str(ILSB_RFI_ID))
-    assert e803["rfi_display"] is None
-    assert e803["status"] == "draft"
 
 
 def test_e2e_gc_holding_then_complete(client):
     rfi_id = _search_then_draft(
         client,
-        note="Confirm curb flashing at the roof opening on S302 Rev A.",
-        rev_id=REV_S302_A_ID,
-        sheet="S302",
+        note="Confirm curb flashing at the roof opening on E-101 Rev A.",
+        rev_id=REV_E101_A_ID,
+        sheet="E-101",
         revision="A",
-        discipline="Structural",
+        discipline="E",
     )
 
     db = _session()
@@ -189,7 +186,7 @@ def test_e2e_gc_holding_then_complete(client):
         record_official_response(
             db,
             rfi_id,
-            "Curb as drawn on S302 Rev A. Provide a field photo of the opening.",
+            "Curb as drawn on E-101 Rev A. Provide a field photo of the opening.",
         )
         request_clarification(db, rfi_id, "GC needs the field photo before close.")
         holding = client.get(f"/rfis/{rfi_id}").json()
@@ -210,4 +207,3 @@ def test_e2e_gc_holding_then_complete(client):
     graph = client.get("/rfi_graph").json()
     ids = {row["id"] for row in graph["open"] + graph["drafts"]}
     assert rfi_id not in ids
-    assert any(row["id"] == str(ILSB_RFI_ID) for row in graph["drafts"])

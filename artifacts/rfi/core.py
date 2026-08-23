@@ -539,16 +539,16 @@ def run_demo() -> dict:
         Sheet(
             id=UUID("aaaaaaaa-0000-4000-8000-000000000131"),
             project_id=job_id,
-            sheet_number="EL107_N",
-            title="Electrical Lighting Plan — Level 07 North",
+            sheet_number="E-101",
+            title="Sample lighting plan",
             discipline="E",
         )
     )
-    rev27 = store.add_revision(
+    rev_a = store.add_revision(
         SheetRevision(
             id=UUID("aaaaaaaa-0000-4000-8000-000000000141"),
             sheet_id=sheet.id,
-            revision="27",
+            revision="A",
             is_current=True,
         )
     )
@@ -566,7 +566,7 @@ def run_demo() -> dict:
         journeyman,
         question="Clearance at grid A-3?",
         pin={
-            "sheet_revision_id": rev27.id,
+            "sheet_revision_id": rev_a.id,
             "x": 0.28,
             "y": 0.52,
             "label": "A-3",
@@ -577,7 +577,7 @@ def run_demo() -> dict:
         journeyman,
         question="Same hatch on the old print?",
         pin={
-            "sheet_revision_id": rev27.id,
+            "sheet_revision_id": rev_a.id,
             "x": 0.31,
             "y": 0.48,
             "label": "leftover",
@@ -630,24 +630,24 @@ def run_demo() -> dict:
     later = stopped.due_at + timedelta(seconds=1)
     first = age_rfis(store, now=later)
     replay = age_rfis(store, now=later)
-    rev28 = store.add_revision(
+    rev_b = store.add_revision(
         SheetRevision(
             id=UUID("aaaaaaaa-0000-4000-8000-000000000142"),
             sheet_id=sheet.id,
-            revision="28",
+            revision="B",
             is_current=True,
         )
     )
-    diff = compare_revisions(store, rev27.id, rev28.id)
+    diff = compare_revisions(store, rev_a.id, rev_b.id)
     carried = apply_carry_forward(store, diff, actor_id=foreman)
     apply_carry_forward(store, diff, actor_id=foreman)
     open_on_sheet = search_open_on_sheet(store, sheet.id)
     ask = preflight_ask(
         store,
-        previous_revision_id=rev27.id,
+        previous_revision_id=rev_a.id,
         question=leftover_draft.question,
         pin={
-            "sheet_revision_id": rev27.id,
+            "sheet_revision_id": rev_a.id,
             "x": 0.31,
             "y": 0.48,
             "label": "leftover",
@@ -659,7 +659,7 @@ def run_demo() -> dict:
         grok,
         question=leftover_draft.question,
         pin={
-            "sheet_revision_id": rev28.id,
+            "sheet_revision_id": rev_b.id,
             "x": 0.31,
             "y": 0.48,
             "label": "leftover",
@@ -670,7 +670,7 @@ def run_demo() -> dict:
         grok,
         question="Clearance at grid A-3?",
         pin={
-            "sheet_revision_id": rev28.id,
+            "sheet_revision_id": rev_b.id,
             "x": 0.28,
             "y": 0.52,
             "label": "A-3",
@@ -679,9 +679,9 @@ def run_demo() -> dict:
     grok_fresh = create_rfi_draft(
         store,
         grok,
-        question="New hatch after Bulletin 46?",
+        question="New fixture after the later print?",
         pin={
-            "sheet_revision_id": rev28.id,
+            "sheet_revision_id": rev_b.id,
             "x": 0.8,
             "y": 0.8,
             "label": "new",
@@ -747,16 +747,16 @@ def run_demo() -> dict:
         "pin_carried_events": sum(
             1 for event in store.events if event.event_type == "pin_carried"
         ),
-        "leftover_still_on_old": leftover_draft.pins[0].sheet_revision_id == rev27.id
+        "leftover_still_on_old": leftover_draft.pins[0].sheet_revision_id == rev_a.id
         and leftover_draft.rfi_number is None,
         "carried_has_both_revs": {p.sheet_revision_id for p in stopped.pins}
-        == {rev27.id, rev28.id},
+        == {rev_a.id, rev_b.id},
         "search_open_ids": {row.id for row in open_on_sheet},
         "store": store,
         "rfi": stopped,
         "sheet": sheet,
-        "rev_a": rev27,
-        "rev_b": rev28,
+        "rev_a": rev_a,
+        "rev_b": rev_b,
         "leftover_draft": leftover_draft,
         "foreman_id": foreman,
         "grok_enter": grok_enter,

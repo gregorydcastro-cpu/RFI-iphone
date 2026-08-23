@@ -1,18 +1,19 @@
-from app.ids import PROJECT_ID, REV_S301_C_ID
-from tests.actors import actor_payload
+from app.ids import PROJECT_ID, REV_E101_A_ID, SHOP_DRAFT_RFI_ID
+from tests.actors import actor_payload, clear_seeded_shop_draft
 
 
 def _draft(client, note: str, label: str = "B-4"):
+    clear_seeded_shop_draft()
     return client.post(
         "/create_rfi_draft",
         json={
             "task": "preflight_rfi",
-            "project": {"id": str(PROJECT_ID), "name": "Harbor Yard Warehouse"},
+            "project": {"id": str(PROJECT_ID), "name": "G-Line Shop Test"},
             "sheet_revision": {
-                "id": str(REV_S301_C_ID),
-                "sheet_number": "S301",
-                "revision": "C",
-                "discipline": "Structural",
+                "id": str(REV_E101_A_ID),
+                "sheet_number": "E-101",
+                "revision": "A",
+                "discipline": "E",
             },
             "pin": {"x_norm": 0.42, "y_norm": 0.71, "label": label},
             "photos": [],
@@ -40,8 +41,8 @@ def test_search_default_limit_and_empty(client):
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] is True
-    assert body["count"] == 0
-    assert body["rfis"] == []
+    assert body["count"] == 1
+    assert body["rfis"][0]["id"] == str(SHOP_DRAFT_RFI_ID)
 
 
 def test_search_limit_bounds(client):
@@ -58,7 +59,7 @@ def test_search_by_sheet_grid_query_and_status(client):
 
     by_sheet = client.get(
         "/search_rfis",
-        params={"project_id": str(PROJECT_ID), "sheet_number": "S301"},
+        params={"project_id": str(PROJECT_ID), "sheet_number": "E-101"},
     )
     assert by_sheet.json()["count"] == 1
     assert by_sheet.json()["rfis"][0]["id"] == rfi_id
@@ -89,6 +90,6 @@ def test_search_by_sheet_grid_query_and_status(client):
 
     other_sheet = client.get(
         "/search_rfis",
-        params={"project_id": str(PROJECT_ID), "sheet_number": "S302"},
+        params={"project_id": str(PROJECT_ID), "sheet_number": "E-000"},
     )
     assert other_sheet.json()["count"] == 0

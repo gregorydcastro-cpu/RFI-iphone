@@ -7,13 +7,14 @@ from sqlalchemy import select, text
 from app import db as dbmod
 from app.ids import (
     COMPANY_SAMPLE_AE_ID,
-    ILSB_RFI_ID,
     PROJECT_ID,
-    REV_S301_C_ID,
+    REV_E101_A_ID,
     SAMPLE_ON_CYCLE_ID,
     SAMPLE_WORK_STOPPED_ID,
+    SHOP_DRAFT_RFI_ID,
     USER_SAMPLE_AE_ID,
 )
+from tests.actors import clear_seeded_shop_draft
 from app.models import RFIEvent
 from app.pe import ANSWER_DISCLAIMER
 
@@ -23,22 +24,23 @@ GC_HEADERS = {"X-Field-Actor": "gc", "X-GC-Token": "gc-demo"}
 
 
 def _new_bic(client) -> str:
-    note = "Confirm embed plate thickness at the dock on S301 Rev C for design answer."
+    clear_seeded_shop_draft()
+    note = "Confirm embed plate thickness at the dock on E-101 Rev A for design answer."
     search = client.get(
         "/search_rfis",
-        params={"project_id": str(PROJECT_ID), "sheet_number": "S301", "query": note[:80]},
+        params={"project_id": str(PROJECT_ID), "sheet_number": "E-101", "query": note[:80]},
     )
     assert search.json()["count"] == 0
     created = client.post(
         "/create_rfi_draft",
         json={
             "task": "preflight_rfi",
-            "project": {"id": str(PROJECT_ID), "name": "Harbor Yard Warehouse"},
+            "project": {"id": str(PROJECT_ID), "name": "G-Line Shop Test"},
             "sheet_revision": {
-                "id": str(REV_S301_C_ID),
-                "sheet_number": "S301",
-                "revision": "C",
-                "discipline": "Structural",
+                "id": str(REV_E101_A_ID),
+                "sheet_number": "E-101",
+                "revision": "A",
+                "discipline": "E",
             },
             "pin": {"x_norm": 0.31, "y_norm": 0.42, "label": "DESIGN-HTTP"},
             "photos": [],
@@ -111,16 +113,16 @@ def test_design_and_gc_routes_require_tokens(client):
     assert grok.json()["detail"]["policy"] == "grokbot_lane"
     still = client.get(f"/rfis/{rfi_id}").json()
     assert still["status"] == "ball_in_court"
-    e803 = client.get(f"/rfis/{ILSB_RFI_ID}").json()
-    assert e803["status"] == "draft"
-    assert e803["rfi_display"] is None
+    seeded = client.get(f"/rfis/{SHOP_DRAFT_RFI_ID}").json()
+    assert seeded["status"] == "draft"
+    assert seeded["rfi_display"] is None
 
 
 def test_design_answer_then_gc_impact_review(client):
     rfi_id = _new_bic(client)
     answered = client.post(
         f"/design/rfis/{rfi_id}/official_response",
-        json={"official_response": "Revise the embed to match S301 Rev C. Hold extra work."},
+        json={"official_response": "Revise the embed to match E-101 Rev A. Hold extra work."},
         headers=DESIGN_HEADERS,
     )
     assert answered.status_code == 200
@@ -162,11 +164,6 @@ def test_design_answer_then_gc_impact_review(client):
     assert after["status"] == "impact_review"
     assert after["priority"] == "standard"
     assert after["official_response"]
-    e803 = next(
-        item for item in client.get("/rfi_graph").json()["drafts"] if item["id"] == str(ILSB_RFI_ID)
-    )
-    assert e803["rfi_display"] is None
-    assert e803["status"] == "draft"
 
 
 def test_design_clarification_sets_gc_holding(client):
@@ -196,13 +193,13 @@ def test_design_clarification_sets_gc_holding(client):
 
 def test_cannot_answer_a_draft(client):
     blocked = client.post(
-        f"/design/rfis/{ILSB_RFI_ID}/official_response",
-        json={"official_response": "Use E-803 Rev 27."},
+        f"/design/rfis/{SHOP_DRAFT_RFI_ID}/official_response",
+        json={"official_response": "Use the E-101 Rev A fixture type."},
         headers=DESIGN_HEADERS,
     )
     assert blocked.status_code == 422
     assert "draft" in blocked.json()["detail"]
-    still = client.get(f"/rfis/{ILSB_RFI_ID}").json()
+    still = client.get(f"/rfis/{SHOP_DRAFT_RFI_ID}").json()
     assert still["status"] == "draft"
     assert still["rfi_display"] is None
     assert still["official_response"] is None
@@ -218,7 +215,7 @@ def test_empty_answer_rejected_and_disclaimer_persisted(client):
     assert empty.status_code == 422
     answered = client.post(
         f"/design/rfis/{rfi_id}/official_response",
-        json={"official_response": "Curb height as drawn on S302 Rev A."},
+        json={"official_response": "Curb height as drawn on E-101 Rev A."},
         headers=DESIGN_HEADERS,
     )
     assert answered.status_code == 200

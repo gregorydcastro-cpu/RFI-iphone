@@ -4,7 +4,7 @@ import UIKit
 /// On-device takeoff from the bundled E-101 Rev A sample.
 /// Counts only symbols on that sample. Does not invent a drawing number.
 /// Writes draft material lines. Does not submit, number, close, or set work_stopped.
-/// No HTTP. No Procore. Not Brown. Not ILSB. Not EL107_N.
+/// No HTTP. No Procore. G-Line Shop Test and E-101 Rev A only.
 enum GrokTakeoff {
     static let catalogSheet = ShopSampleCatalog.sheetNumber
     static let catalogRevision = ShopSampleCatalog.revision

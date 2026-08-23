@@ -10,18 +10,18 @@ from sqlalchemy.exc import IntegrityError
 
 from app.field_chain import FieldError, assign_person
 from app.ids import (
-    HARBOR_AREA_ROOF_ID,
-    HARBOR_AREA_YARD_ID,
-    HARBOR_TICKET_ID,
+    SHOP_AREA_ROOF_ID,
+    SHOP_AREA_FLOOR_ID,
+    SHOP_TICKET_ID,
     PROJECT_ID,
-    REV_S301_C_ID,
+    REV_E101_A_ID,
     USER_GREG_PE_ID,
     USER_HARBOR_AP_ID,
     USER_HARBOR_FM_ID,
     USER_HARBOR_JM_ID,
 )
 from app.models import ProjectAssignment, User
-from tests.actors import actor_payload, field_headers
+from tests.actors import actor_payload, clear_seeded_shop_draft, field_headers
 from tests.test_pe_submit import PE_HEADERS, _submit_body
 
 
@@ -32,12 +32,12 @@ def _db():
 def _envelope(note: str, role: str = "journeyman", **extra):
     payload = {
         "task": "preflight_rfi",
-        "project": {"id": str(PROJECT_ID), "name": "Harbor Yard Warehouse"},
+        "project": {"id": str(PROJECT_ID), "name": "G-Line Shop Test"},
         "sheet_revision": {
-            "id": str(REV_S301_C_ID),
-            "sheet_number": "S301",
-            "revision": "C",
-            "discipline": "Structural",
+            "id": str(REV_E101_A_ID),
+            "sheet_number": "E-101",
+            "revision": "A",
+            "discipline": "E",
         },
         "pin": {"x_norm": 0.33, "y_norm": 0.44, "label": "CHAIN"},
         "photos": [],
@@ -50,6 +50,7 @@ def _envelope(note: str, role: str = "journeyman", **extra):
 
 
 def _draft(client, note: str, role: str = "journeyman") -> str:
+    clear_seeded_shop_draft()
     created = client.post("/create_rfi_draft", json=_envelope(note, role))
     assert created.status_code == 200, created.text
     assert created.json()["ok"] is True
@@ -67,7 +68,7 @@ def test_unique_active_assignment_per_project_user(client):
                 user_id=str(USER_HARBOR_JM_ID),
                 role="journeyman",
                 reports_to_user_id=str(USER_HARBOR_FM_ID),
-                area_id=str(HARBOR_AREA_YARD_ID),
+                area_id=str(SHOP_AREA_FLOOR_ID),
                 active=True,
             )
             db.add(row)
@@ -90,7 +91,7 @@ def test_invalid_boss_skip_rank_wrong_area_inactive(client):
                 user_id=extra.id,
                 role="journeyman",
                 reports_to_user_id=str(USER_GREG_PE_ID),
-                area_id=str(HARBOR_AREA_YARD_ID),
+                area_id=str(SHOP_AREA_FLOOR_ID),
             )
         with pytest.raises(FieldError, match="Area must match"):
             assign_person(
@@ -99,7 +100,7 @@ def test_invalid_boss_skip_rank_wrong_area_inactive(client):
                 user_id=extra.id,
                 role="journeyman",
                 reports_to_user_id=str(USER_HARBOR_FM_ID),
-                area_id=str(HARBOR_AREA_ROOF_ID),
+                area_id=str(SHOP_AREA_ROOF_ID),
             )
         fm = db.scalar(
             select(ProjectAssignment).where(
@@ -116,7 +117,7 @@ def test_invalid_boss_skip_rank_wrong_area_inactive(client):
                 user_id=extra.id,
                 role="journeyman",
                 reports_to_user_id=str(USER_HARBOR_FM_ID),
-                area_id=str(HARBOR_AREA_YARD_ID),
+                area_id=str(SHOP_AREA_FLOOR_ID),
             )
         fm.active = True
         db.commit()
@@ -247,7 +248,7 @@ def test_apprentice_can_handle_assigned_ticket_not_draft_order(client):
     )
     assert listed.status_code == 200
     ids = {row["id"] for row in listed.json()["tickets"]}
-    assert str(HARBOR_TICKET_ID) in ids
+    assert str(SHOP_TICKET_ID) in ids
 
     denied = client.post(
         "/create_rfi_draft",
@@ -256,7 +257,7 @@ def test_apprentice_can_handle_assigned_ticket_not_draft_order(client):
     assert denied.status_code == 403
 
     handled = client.post(
-        f"/field/material_orders/{HARBOR_TICKET_ID}/handle",
+        f"/field/material_orders/{SHOP_TICKET_ID}/handle",
         headers=field_headers("apprentice"),
     )
     assert handled.status_code == 200

@@ -62,13 +62,13 @@ def _grok() -> Subject:
 def _answered(store: Store) -> RFI:
     store.add_job(Job(id=JOB))
     sheet = store.add_sheet(
-        Sheet(id=uuid4(), project_id=JOB, sheet_number="EL107_N", discipline="E")
+        Sheet(id=uuid4(), project_id=JOB, sheet_number="E-101", discipline="E")
     )
     old = store.add_revision(
-        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="27", is_current=False)
+        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="A", is_current=False)
     )
     new = store.add_revision(
-        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="28", is_current=True)
+        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="B", is_current=True)
     )
     drafted = create_rfi_draft(
         store,
@@ -229,8 +229,8 @@ def test_age_rfis_does_not_escalate_impact_review() -> None:
 def test_new_print_is_not_an_answer() -> None:
     store = Store()
     store.add_job(Job(id=JOB))
-    sheet = store.add_sheet(Sheet(id=uuid4(), project_id=JOB, sheet_number="EL107_N"))
-    store.add_revision(SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="27", is_current=True))
+    sheet = store.add_sheet(Sheet(id=uuid4(), project_id=JOB, sheet_number="E-101"))
+    store.add_revision(SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="A", is_current=True))
     drafted = create_rfi_draft(
         store,
         subject(),
@@ -244,7 +244,7 @@ def test_new_print_is_not_an_answer() -> None:
     )
     submitted = submit_rfi(store, _foreman(), drafted.id)
     store.add_revision(
-        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="28", is_current=True)
+        SheetRevision(id=uuid4(), sheet_id=sheet.id, revision="B", is_current=True)
     )
     assert submitted.status == "ball_in_court"
     with pytest.raises(AccessDenied):

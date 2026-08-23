@@ -610,7 +610,7 @@ def rfi_graph(
         days_open_rule=DAYS_OPEN_RULE,
         sample_notice=(
             "Open rows marked SAMPLE / is_sample are PE-seeded examples, "
-            "not live ILSB field RFIs. The E-803 vivarium draft is real and unnumbered."
+            "not live field RFIs. The E-101 sample draft stays unnumbered."
         ),
         status_machine={
             "main": list(STATUS_MACHINE_MAIN),
@@ -884,17 +884,6 @@ def create_rfi_draft(
                 grid=grid,
             )
         )
-        if "e-803" in drafted.question.lower() and sheet.sheet_number == "EL107_N":
-            db.add(
-                RFIRef(
-                    rfi_id=rfi_id,
-                    sheet_revision_id=None,
-                    sheet_number="E-803",
-                    revision=None,
-                    discipline="E",
-                    detail="revision not stated on EL107_N",
-                )
-            )
     if envelope.pin and sheet_rev:
         db.add(
             RFIPin(
