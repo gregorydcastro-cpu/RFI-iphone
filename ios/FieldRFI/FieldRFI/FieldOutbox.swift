@@ -10,6 +10,7 @@ enum FieldPacketKind: String, Codable, CaseIterable {
     case printPhoto
     case task
     case groupMessage
+    case lostTool
 
     var title: String {
         switch self {
@@ -19,6 +20,7 @@ enum FieldPacketKind: String, Codable, CaseIterable {
         case .printPhoto: return "Print / photo"
         case .task: return "Task"
         case .groupMessage: return "All Foremen"
+        case .lostTool: return "Lost tool"
         }
     }
 }
@@ -85,7 +87,7 @@ final class FieldOutbox: ObservableObject {
     @discardableResult
     func sendToForeman(_ packet: FieldPacket) -> FieldPacket {
         var row = packet
-        if row.kind != .task, row.kind != .groupMessage,
+        if row.kind != .task, row.kind != .groupMessage, row.kind != .lostTool,
            !FeatureSettings.shared.maySend(from: row.createdByUserID, to: row.sentToUserID),
            let from = ShopCrew.member(byID: row.createdByUserID),
            let boss = ShopCrew.oneStepUp(from: from) {
@@ -124,6 +126,24 @@ final class FieldOutbox: ObservableObject {
     /// Optional all-hands to every Foreman seat. Not tool find. Does not rewrite to one-step-up.
     @discardableResult
     func sendGroupToForemen(note: String, from: CrewMemberDTO) -> [FieldPacket] {
+        sendToForemenGroup(note: note, from: from, kind: .groupMessage)
+    }
+
+    /// Lost / not-checked-out tool only. Refuses when a holder is known.
+    @discardableResult
+    func sendLostToolBlast(tool: ShopTool, from: CrewMemberDTO) -> [FieldPacket] {
+        guard tool.canBlastAllForemen, !tool.hasKnownHolder else { return [] }
+        let label = tool.vendor.isEmpty ? tool.name : "\(tool.name) (\(tool.vendor))"
+        let reason = tool.isLost ? "Lost" : "Not checked out"
+        return sendToForemenGroup(
+            note: "\(reason): \(label) on \(ShopCrew.jobName). No holder on this phone.",
+            from: from,
+            kind: .lostTool
+        )
+    }
+
+    private func sendToForemenGroup(note: String, from: CrewMemberDTO, kind: FieldPacketKind) -> [FieldPacket] {
+        guard kind == .groupMessage || kind == .lostTool else { return [] }
         guard FeatureSettings.shared.mayGroupMessageForemen(from: from.user_id) else { return [] }
         let text = note.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return [] }
@@ -134,7 +154,7 @@ final class FieldOutbox: ObservableObject {
         for target in targets {
             let row = FieldPacket(
                 id: UUID().uuidString,
-                kind: .groupMessage,
+                kind: kind,
                 projectID: ShopCrew.jobID,
                 projectName: ShopCrew.jobName,
                 sheetNumber: nil,

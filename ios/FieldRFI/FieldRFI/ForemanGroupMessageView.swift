@@ -16,7 +16,7 @@ struct ForemanGroupMessageComposer: View {
                 .font(.caption.weight(.semibold))
                 .tracking(0.8)
                 .foregroundStyle(FieldTheme.muted)
-            Text("Optional group text to every Foreman on \(ShopCrew.jobName). Lands in the on-device inbox. Not tool find — find still opens the one holder only. No Procore.")
+            Text("Optional all-hands group text to every Foreman on \(ShopCrew.jobName). Lands in the on-device inbox. Not tool find. Lost-tool blast is on the Tools tab only when a tool is lost or not checked out. No Procore.")
                 .font(.caption)
                 .foregroundStyle(FieldTheme.muted)
             if features.mayGroupMessageForemen(from: session.userID) {

@@ -11,8 +11,13 @@ struct ShopTool: Identifiable, Codable, Hashable {
     var holderUserID: String?
     var holderName: String?
     var checkedOutAt: Date?
+    var lostFlag: Bool? = nil
 
-    var isOut: Bool { holderUserID != nil }
+    var isLost: Bool { lostFlag == true }
+    var isOut: Bool { holderUserID != nil && !isLost }
+    var hasKnownHolder: Bool { holderUserID != nil && !isLost }
+    /// Blast only when there is no person to open.
+    var canBlastAllForemen: Bool { isLost || !hasKnownHolder }
 
     func matches(_ query: String) -> Bool {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -62,6 +67,7 @@ final class ToolBoard: ObservableObject {
         tools[index].holderUserID = member.user_id
         tools[index].holderName = member.name
         tools[index].checkedOutAt = Date()
+        tools[index].lostFlag = false
         save()
     }
 
@@ -70,6 +76,16 @@ final class ToolBoard: ObservableObject {
         tools[index].holderUserID = nil
         tools[index].holderName = nil
         tools[index].checkedOutAt = nil
+        tools[index].lostFlag = false
+        save()
+    }
+
+    func markLost(id: String) {
+        guard let index = tools.firstIndex(where: { $0.id == id }) else { return }
+        tools[index].holderUserID = nil
+        tools[index].holderName = nil
+        tools[index].checkedOutAt = nil
+        tools[index].lostFlag = true
         save()
     }
 
@@ -104,7 +120,8 @@ final class ToolBoard: ObservableObject {
             jobName: ShopCrew.jobName,
             holderUserID: nil,
             holderName: nil,
-            checkedOutAt: nil
+            checkedOutAt: nil,
+            lostFlag: nil
         )
     }
 }
