@@ -12,7 +12,7 @@ struct ToolCheckoutView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Shop tools on \(ShopCrew.jobName). Check out to a crew name already in the app. Search by name or vendor. Find opens the one person who has it. Blast all Foremen only if the tool is lost or not checked out. On this phone. No barcode. No Procore.")
+                Text("Shop tools on \(ShopCrew.jobName). Check out to a crew name already in the app. Search by name or vendor. Find opens the one person who has it. Lost-tool blast is only for a lost or unchecked tool — all-hands lives on the Foreman tab. On this phone. No barcode. No Procore.")
                     .font(.subheadline)
                     .foregroundStyle(FieldTheme.ink)
 
@@ -73,7 +73,7 @@ struct ToolCheckoutView: View {
                             .foregroundStyle(FieldTheme.orange)
                     }
                 }
-                Text("Holder is known. No blast to all Foremen.")
+                Text("Holder is known. Find that person. No lost-tool blast.")
                     .font(.caption)
                     .foregroundStyle(FieldTheme.muted)
                 Button("Check in") {
@@ -133,7 +133,7 @@ struct ToolCheckoutView: View {
         if tool.hasKnownHolder {
             EmptyView()
         } else if features.mayGroupMessageForemen(from: session.userID) {
-            Button("Ask all Foremen") {
+            Button("Lost-tool blast") {
                 blastLost(tool)
             }
             .font(.subheadline.weight(.semibold))
@@ -147,7 +147,7 @@ struct ToolCheckoutView: View {
 
     private func blastLost(_ tool: ShopTool) {
         guard !tool.hasKnownHolder else {
-            blastError = "Holder is known. Open that person. Do not blast all Foremen."
+            blastError = "Holder is known. Open that person. Lost-tool blast is off."
             blastMessage = nil
             return
         }

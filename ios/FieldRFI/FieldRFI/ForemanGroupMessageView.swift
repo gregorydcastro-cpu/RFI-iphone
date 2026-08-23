@@ -12,11 +12,11 @@ struct ForemanGroupMessageComposer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("ALL FOREMEN")
+            Text("ALL-HANDS")
                 .font(.caption.weight(.semibold))
                 .tracking(0.8)
                 .foregroundStyle(FieldTheme.muted)
-            Text("Optional all-hands group text to every Foreman on \(ShopCrew.jobName). Lands in the on-device inbox. Not tool find. Lost-tool blast is on the Tools tab only when a tool is lost or not checked out. No Procore.")
+            Text("Optional all-hands group text to every Foreman on \(ShopCrew.jobName). Real all-hands only — not a tool search, not a lost-tool blast. Lands in the on-device inbox. No Procore.")
                 .font(.caption)
                 .foregroundStyle(FieldTheme.muted)
             if features.mayGroupMessageForemen(from: session.userID) {
@@ -25,7 +25,7 @@ struct ForemanGroupMessageComposer: View {
                 Button {
                     send()
                 } label: {
-                    Text("Send to all Foremen")
+                    Text("Send all-hands")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(canSend ? FieldTheme.orange : FieldTheme.muted)
                 }

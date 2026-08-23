@@ -19,7 +19,7 @@ enum FieldPacketKind: String, Codable, CaseIterable {
         case .materialAsk: return "Material list"
         case .printPhoto: return "Print / photo"
         case .task: return "Task"
-        case .groupMessage: return "All Foremen"
+        case .groupMessage: return "All-hands"
         case .lostTool: return "Lost tool"
         }
     }

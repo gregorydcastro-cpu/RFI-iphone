@@ -21,7 +21,7 @@ struct ForemanInboxView: View {
                 }
             }
 
-            Section("All Foremen") {
+            Section("All-hands") {
                 ForemanGroupMessageComposer()
             }
 
