@@ -45,7 +45,8 @@ final class NewRFIViewModel: ObservableObject {
     }
 
     func canSendToForeman(session: FieldSession) -> Bool {
-        session.sendTarget() != nil
+        FeatureSettings.shared.allowsSend(session.userID)
+            && session.sendTarget() != nil
             && !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && (pin != nil || !photos.isEmpty || savedRFI != nil)
             && !isSubmitting
@@ -251,6 +252,10 @@ final class NewRFIViewModel: ObservableObject {
 
     func sendToForeman(session: FieldSession) {
         session.ensureLocalSeat()
+        guard FeatureSettings.shared.allowsSend(session.userID) else {
+            errorMessage = "The person above blocked send-to-inbox for this seat."
+            return
+        }
         guard let target = session.sendTarget() else {
             errorMessage = "No foreman on this crew."
             return

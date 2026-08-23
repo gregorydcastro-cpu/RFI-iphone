@@ -20,7 +20,9 @@ final class PrintPhotoViewModel: ObservableObject {
     let jobID = MaterialListRecord.shopTestID
 
     func canSend(session: FieldSession) -> Bool {
-        session.sendTarget() != nil && (!photos.isEmpty || !prints.isEmpty)
+        FeatureSettings.shared.allowsSend(session.userID)
+            && session.sendTarget() != nil
+            && (!photos.isEmpty || !prints.isEmpty)
     }
 
     func runTakeoff() {
@@ -48,6 +50,10 @@ final class PrintPhotoViewModel: ObservableObject {
 
     func sendToForeman(session: FieldSession) {
         session.ensureLocalSeat()
+        guard FeatureSettings.shared.allowsSend(session.userID) else {
+            errorMessage = "The person above blocked send-to-inbox for this seat."
+            return
+        }
         guard let target = session.sendTarget() else {
             errorMessage = "No foreman on this crew."
             return

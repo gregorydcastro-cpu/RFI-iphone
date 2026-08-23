@@ -12,13 +12,15 @@ struct FieldRFIApp: App {
         WindowGroup {
             let flags = features.flags(for: session.userID)
             TabView {
-                NavigationStack {
-                    NewRFIView()
+                if flags.seeRFI {
+                    NavigationStack {
+                        NewRFIView()
+                    }
+                    .tabItem {
+                        Label("RFI", systemImage: "plus.rectangle.on.folder")
+                    }
                 }
-                .tabItem {
-                    Label("RFI", systemImage: "plus.rectangle.on.folder")
-                }
-                if session.canCaptureField || session.assignment == nil {
+                if flags.seeProblem && (session.canCaptureField || session.assignment == nil) {
                     NavigationStack {
                         FieldProblemView()
                     }
@@ -58,11 +60,13 @@ struct FieldRFIApp: App {
                         Label("Meet", systemImage: "calendar")
                     }
                 }
-                NavigationStack {
-                    ForemanInboxView()
-                }
-                .tabItem {
-                    Label("Foreman", systemImage: "person.2")
+                if flags.seeInbox {
+                    NavigationStack {
+                        ForemanInboxView()
+                    }
+                    .tabItem {
+                        Label("Foreman", systemImage: "person.2")
+                    }
                 }
                 NavigationStack {
                     FeatureSettingsView()

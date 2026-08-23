@@ -91,6 +91,7 @@ final class TaskBoard: ObservableObject {
     ) -> FieldTask? {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, from.user_id != to.user_id else { return nil }
+        guard FeatureSettings.shared.allowsAssign(from.user_id) else { return nil }
         var row = FieldTask(
             id: UUID().uuidString,
             jobID: ShopCrew.jobID,
@@ -109,7 +110,9 @@ final class TaskBoard: ObservableObject {
         )
         tasks.insert(row, at: 0)
         save()
-        _ = FieldOutbox.shared.sendToForeman(packet(for: row))
+        if FeatureSettings.shared.allowsSend(from.user_id) {
+            _ = FieldOutbox.shared.sendToForeman(packet(for: row))
+        }
         return row
     }
 
@@ -130,7 +133,9 @@ final class TaskBoard: ObservableObject {
         tasks[index].doneAt = Date()
         tasks[index].checkedOffByName = by.name
         save()
-        _ = FieldOutbox.shared.sendToForeman(packet(for: tasks[index]))
+        if FeatureSettings.shared.allowsSend(by.user_id) {
+            _ = FieldOutbox.shared.sendToForeman(packet(for: tasks[index]))
+        }
         return tasks[index]
     }
 

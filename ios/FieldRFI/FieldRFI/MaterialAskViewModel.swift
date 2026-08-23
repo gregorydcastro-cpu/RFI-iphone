@@ -17,6 +17,7 @@ final class MaterialAskViewModel: ObservableObject {
 
     func canSend(session: FieldSession) -> Bool {
         canOrder(session: session)
+            && FeatureSettings.shared.allowsSend(session.userID)
             && session.sendTarget() != nil
             && !board.held.readyLines.isEmpty
     }
@@ -26,7 +27,7 @@ final class MaterialAskViewModel: ObservableObject {
     }
 
     func canFlag(session: FieldSession) -> Bool {
-        session.sendTarget() != nil
+        FeatureSettings.shared.allowsSend(session.userID) && session.sendTarget() != nil
     }
 
     func addLine() {
@@ -70,6 +71,10 @@ final class MaterialAskViewModel: ObservableObject {
             errorMessage = "Apprentices pick up material. They do not order or submit."
             return
         }
+        guard FeatureSettings.shared.allowsSend(session.userID) else {
+            errorMessage = "The person above blocked send-to-inbox for this seat."
+            return
+        }
         guard let packet = board.sendHeld(session: session) else {
             errorMessage = board.held.readyLines.isEmpty
                 ? "Add at least one line: description, qty, and UOM."
@@ -82,6 +87,10 @@ final class MaterialAskViewModel: ObservableObject {
     }
 
     func flagBackOrder(id: String, session: FieldSession) {
+        guard FeatureSettings.shared.allowsSend(session.userID) else {
+            errorMessage = "The person above blocked send-to-inbox for this seat."
+            return
+        }
         let note = flagNotes[id] ?? ""
         guard board.flagBackOrder(id: id, note: note, session: session) != nil else {
             errorMessage = "Could not send the back-order to the foreman."

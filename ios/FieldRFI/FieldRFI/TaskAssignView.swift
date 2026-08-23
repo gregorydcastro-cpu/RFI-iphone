@@ -4,6 +4,7 @@ import UIKit
 struct TaskAssignView: View {
     @EnvironmentObject private var session: FieldSession
     @ObservedObject private var board = TaskBoard.shared
+    @ObservedObject private var features = FeatureSettings.shared
     @State private var title = ""
     @State private var note = ""
     @State private var assigneeID: String?
@@ -23,7 +24,13 @@ struct TaskAssignView: View {
 
                 seatPicker
 
-                assignForm
+                if features.allowsAssign(session.userID) {
+                    assignForm
+                } else {
+                    Text("The person above blocked assign for this seat. Check-off still works.")
+                        .font(.footnote)
+                        .foregroundStyle(FieldTheme.muted)
+                }
 
                 myTasks
 
@@ -264,7 +271,8 @@ struct TaskAssignView: View {
     }
 
     private var canAssign: Bool {
-        me != nil
+        features.allowsAssign(session.userID)
+            && me != nil
             && assigneeID != nil
             && assigneeID != me?.user_id
             && !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

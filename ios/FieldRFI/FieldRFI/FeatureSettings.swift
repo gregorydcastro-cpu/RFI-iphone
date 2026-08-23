@@ -1,13 +1,18 @@
 import Foundation
 import SwiftUI
 
-/// On-device product features. Default on. Assigned downward. No HTTP.
+/// On-device access. Default allow. Assigned downward. Not a backend ABAC.
 struct FeatureFlags: Codable, Equatable {
     var material: Bool = true
     var prints: Bool = true
     var takeoff: Bool = true
     var tasks: Bool = true
     var calendar: Bool = true
+    var seeRFI: Bool = true
+    var seeProblem: Bool = true
+    var seeInbox: Bool = true
+    var assign: Bool = true
+    var send: Bool = true
 
     func mergingOff(_ other: FeatureFlags) -> FeatureFlags {
         FeatureFlags(
@@ -15,8 +20,70 @@ struct FeatureFlags: Codable, Equatable {
             prints: prints && other.prints,
             takeoff: takeoff && other.takeoff,
             tasks: tasks && other.tasks,
-            calendar: calendar && other.calendar
+            calendar: calendar && other.calendar,
+            seeRFI: seeRFI && other.seeRFI,
+            seeProblem: seeProblem && other.seeProblem,
+            seeInbox: seeInbox && other.seeInbox,
+            assign: assign && other.assign,
+            send: send && other.send
         )
+    }
+
+    init(
+        material: Bool = true,
+        prints: Bool = true,
+        takeoff: Bool = true,
+        tasks: Bool = true,
+        calendar: Bool = true,
+        seeRFI: Bool = true,
+        seeProblem: Bool = true,
+        seeInbox: Bool = true,
+        assign: Bool = true,
+        send: Bool = true
+    ) {
+        self.material = material
+        self.prints = prints
+        self.takeoff = takeoff
+        self.tasks = tasks
+        self.calendar = calendar
+        self.seeRFI = seeRFI
+        self.seeProblem = seeProblem
+        self.seeInbox = seeInbox
+        self.assign = assign
+        self.send = send
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case material, prints, takeoff, tasks, calendar
+        case seeRFI, seeProblem, seeInbox, assign, send
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        material = try c.decodeIfPresent(Bool.self, forKey: .material) ?? true
+        prints = try c.decodeIfPresent(Bool.self, forKey: .prints) ?? true
+        takeoff = try c.decodeIfPresent(Bool.self, forKey: .takeoff) ?? true
+        tasks = try c.decodeIfPresent(Bool.self, forKey: .tasks) ?? true
+        calendar = try c.decodeIfPresent(Bool.self, forKey: .calendar) ?? true
+        seeRFI = try c.decodeIfPresent(Bool.self, forKey: .seeRFI) ?? true
+        seeProblem = try c.decodeIfPresent(Bool.self, forKey: .seeProblem) ?? true
+        seeInbox = try c.decodeIfPresent(Bool.self, forKey: .seeInbox) ?? true
+        assign = try c.decodeIfPresent(Bool.self, forKey: .assign) ?? true
+        send = try c.decodeIfPresent(Bool.self, forKey: .send) ?? true
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(material, forKey: .material)
+        try c.encode(prints, forKey: .prints)
+        try c.encode(takeoff, forKey: .takeoff)
+        try c.encode(tasks, forKey: .tasks)
+        try c.encode(calendar, forKey: .calendar)
+        try c.encode(seeRFI, forKey: .seeRFI)
+        try c.encode(seeProblem, forKey: .seeProblem)
+        try c.encode(seeInbox, forKey: .seeInbox)
+        try c.encode(assign, forKey: .assign)
+        try c.encode(send, forKey: .send)
     }
 }
 
@@ -36,6 +103,15 @@ final class FeatureSettings: ObservableObject {
     func flags(for userID: String?) -> FeatureFlags {
         guard let member = ShopCrew.member(byID: userID) else { return FeatureFlags() }
         return flags(for: member)
+    }
+
+    func allowsAssign(_ userID: String?) -> Bool {
+        let flags = flags(for: userID)
+        return flags.tasks && flags.assign
+    }
+
+    func allowsSend(_ userID: String?) -> Bool {
+        flags(for: userID).send
     }
 
     func flags(for member: CrewMemberDTO) -> FeatureFlags {
@@ -115,7 +191,7 @@ struct FeatureSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("The person above sets features for people below them on \(ShopCrew.jobName). An apprentice does not flip their own set. Default on. Stays on this phone. Not Procore.")
+                Text("The person above sets what people below them can see and do on \(ShopCrew.jobName). Hide a screen, block assign, or block send-to-inbox. An apprentice does not flip their own set. Default allow. Stays on this phone. Not a backend ABAC. Not Procore.")
                     .font(.subheadline)
                     .foregroundStyle(FieldTheme.ink)
 
@@ -178,13 +254,11 @@ struct FeatureSettingsView: View {
 
     private var mineReadOnly: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionLabel("My features")
+            sectionLabel("My access")
             let flags = features.flags(for: session.userID)
-            readOnlyRow("Material", flags.material)
-            readOnlyRow("Prints", flags.prints)
-            readOnlyRow("Takeoff", flags.takeoff)
-            readOnlyRow("Tasks", flags.tasks)
-            readOnlyRow("Calendar", flags.calendar)
+            ForEach(Self.accessRows, id: \.key) { row in
+                readOnlyRow(row.title, value(flags, row.key))
+            }
         }
     }
 
@@ -221,13 +295,24 @@ struct FeatureSettingsView: View {
         }
     }
 
+    private static let accessRows: [(key: String, title: String)] = [
+        ("seeRFI", "See RFI"),
+        ("seeProblem", "See Problem"),
+        ("material", "See Material"),
+        ("prints", "See Prints"),
+        ("tasks", "See Tasks"),
+        ("calendar", "See Calendar"),
+        ("seeInbox", "See Foreman inbox"),
+        ("takeoff", "Run takeoff"),
+        ("assign", "Assign tasks"),
+        ("send", "Send to inbox"),
+    ]
+
     private func flagToggles(_ flags: FeatureFlags, write: @escaping (String, Bool) -> Void) -> some View {
         VStack(spacing: 8) {
-            toggle("Material", flags.material) { write("material", $0) }
-            toggle("Prints", flags.prints) { write("prints", $0) }
-            toggle("Takeoff", flags.takeoff) { write("takeoff", $0) }
-            toggle("Tasks", flags.tasks) { write("tasks", $0) }
-            toggle("Calendar", flags.calendar) { write("calendar", $0) }
+            ForEach(Self.accessRows, id: \.key) { row in
+                toggle(row.title, value(flags, row.key)) { write(row.key, $0) }
+            }
         }
     }
 
@@ -255,6 +340,22 @@ struct FeatureSettingsView: View {
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(FieldTheme.rule, lineWidth: 1))
     }
 
+    private func value(_ flags: FeatureFlags, _ key: String) -> Bool {
+        switch key {
+        case "material": return flags.material
+        case "prints": return flags.prints
+        case "takeoff": return flags.takeoff
+        case "tasks": return flags.tasks
+        case "calendar": return flags.calendar
+        case "seeRFI": return flags.seeRFI
+        case "seeProblem": return flags.seeProblem
+        case "seeInbox": return flags.seeInbox
+        case "assign": return flags.assign
+        case "send": return flags.send
+        default: return true
+        }
+    }
+
     private func write(_ flags: inout FeatureFlags, _ key: String, _ on: Bool) {
         switch key {
         case "material": flags.material = on
@@ -262,6 +363,11 @@ struct FeatureSettingsView: View {
         case "takeoff": flags.takeoff = on
         case "tasks": flags.tasks = on
         case "calendar": flags.calendar = on
+        case "seeRFI": flags.seeRFI = on
+        case "seeProblem": flags.seeProblem = on
+        case "seeInbox": flags.seeInbox = on
+        case "assign": flags.assign = on
+        case "send": flags.send = on
         default: break
         }
     }
