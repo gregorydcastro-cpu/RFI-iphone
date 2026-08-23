@@ -57,18 +57,18 @@ final class NewRFIViewModel: ObservableObject {
         errorMessage = nil
         defer { isLoadingCatalog = false }
         if baseURLString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            applyLocalSample()
             return
         }
         do {
             let rows = try await client.projects()
-            projects = rows
-            if selectedProject == nil {
-                selectedProject = rows.first(where: { $0.name.contains("ILSB") })
-                    ?? rows.first(where: { $0.name == "Harbor Yard Warehouse" })
-                    ?? rows.first
+            projects = ShopSampleCatalog.allowedProjects(rows)
+            if selectedProject == nil || selectedProject.map(ShopSampleCatalog.isBlockedProject) == true {
+                selectedProject = ShopSampleCatalog.pickProject(projects)
             }
             await loadRevisions()
         } catch {
+            applyLocalSample()
             if !APIClient.isMissingHost(error) {
                 errorMessage = error.localizedDescription
             }
@@ -84,16 +84,19 @@ final class NewRFIViewModel: ObservableObject {
         }
         do {
             let rows = try await client.sheetRevisions(projectID: project.id)
-            revisions = rows
-            if let current = selectedRevision, rows.contains(current) {
+            revisions = ShopSampleCatalog.allowedRevisions(rows, project: project)
+            if let current = selectedRevision,
+               revisions.contains(current),
+               !ShopSampleCatalog.isBlockedRevision(current) {
                 await loadDrawing()
                 return
             }
-            selectedRevision = rows.first(where: { $0.sheet_number == "EL107_N" && $0.revision == "27" })
-                ?? rows.first(where: { $0.sheet_number == "S301" && $0.revision == "C" })
-                ?? rows.first
+            selectedRevision = ShopSampleCatalog.pickRevision(revisions)
             await loadDrawing()
         } catch {
+            revisions = ShopSampleCatalog.allowedRevisions([], project: project)
+            selectedRevision = ShopSampleCatalog.pickRevision(revisions)
+            await loadDrawing()
             if !APIClient.isMissingHost(error) {
                 errorMessage = error.localizedDescription
             }
@@ -105,14 +108,28 @@ final class NewRFIViewModel: ObservableObject {
             drawingData = nil
             return
         }
+        if revision.sheet_number == ShopSampleCatalog.sheetNumber,
+           revision.revision == ShopSampleCatalog.revision,
+           let local = ShopSampleCatalog.drawingData() {
+            drawingData = local
+            return
+        }
         do {
             drawingData = try await client.drawing(revisionID: revision.id)
         } catch {
-            drawingData = nil
-            if !APIClient.isMissingHost(error) {
+            drawingData = ShopSampleCatalog.drawingData()
+            if drawingData == nil, !APIClient.isMissingHost(error) {
                 errorMessage = error.localizedDescription
             }
         }
+    }
+
+    private func applyLocalSample() {
+        projects = [ShopSampleCatalog.project]
+        selectedProject = ShopSampleCatalog.project
+        revisions = [ShopSampleCatalog.sheetRevision]
+        selectedRevision = ShopSampleCatalog.sheetRevision
+        drawingData = ShopSampleCatalog.drawingData()
     }
 
     func dropPin(xNorm: Double, yNorm: Double) {
@@ -265,8 +282,8 @@ final class NewRFIViewModel: ObservableObject {
         let packet = FieldPacket(
             id: UUID().uuidString,
             kind: .rfi,
-            projectID: selectedProject?.id ?? "local-job",
-            projectName: selectedProject?.name ?? "This job",
+            projectID: selectedProject?.id ?? MaterialListRecord.shopTestID,
+            projectName: selectedProject?.name ?? MaterialListRecord.shopTestName,
             sheetNumber: selectedRevision?.sheet_number,
             revision: selectedRevision?.revision,
             sheetRevisionID: selectedRevision?.id,

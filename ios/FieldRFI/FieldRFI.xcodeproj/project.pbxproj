@@ -37,7 +37,8 @@
 		A100000000000000000032 /* PrintPhotoViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000032 /* PrintPhotoViewModel.swift */; };
 		A100000000000000000033 /* PrintMarkupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000033 /* PrintMarkupView.swift */; };
 		A100000000000000000034 /* GrokTakeoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000034 /* GrokTakeoff.swift */; };
-		A100000000000000000035 /* el107_n-rev-27.png in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000035 /* el107_n-rev-27.png */; };
+		A100000000000000000035 /* e-101-rev-a.png in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000035 /* e-101-rev-a.png */; };
+		A100000000000000000046 /* ShopSampleCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000046 /* ShopSampleCatalog.swift */; };
 		A100000000000000000036 /* ShopCrew.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000036 /* ShopCrew.swift */; };
 		A100000000000000000037 /* TaskBoard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000037 /* TaskBoard.swift */; };
 		A100000000000000000038 /* TaskAssignView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000038 /* TaskAssignView.swift */; };
@@ -84,7 +85,8 @@
 		B100000000000000000032 /* PrintPhotoViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrintPhotoViewModel.swift; sourceTree = "<group>"; };
 		B100000000000000000033 /* PrintMarkupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrintMarkupView.swift; sourceTree = "<group>"; };
 		B100000000000000000034 /* GrokTakeoff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokTakeoff.swift; sourceTree = "<group>"; };
-		B100000000000000000035 /* el107_n-rev-27.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Catalog/el107_n-rev-27.png"; sourceTree = "<group>"; };
+		B100000000000000000035 /* e-101-rev-a.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Catalog/e-101-rev-a.png"; sourceTree = "<group>"; };
+		B100000000000000000046 /* ShopSampleCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopSampleCatalog.swift; sourceTree = "<group>"; };
 		B100000000000000000036 /* ShopCrew.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopCrew.swift; sourceTree = "<group>"; };
 		B100000000000000000037 /* TaskBoard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskBoard.swift; sourceTree = "<group>"; };
 		B100000000000000000038 /* TaskAssignView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskAssignView.swift; sourceTree = "<group>"; };
@@ -151,7 +153,8 @@
 				B100000000000000000032 /* PrintPhotoViewModel.swift */,
 				B100000000000000000033 /* PrintMarkupView.swift */,
 				B100000000000000000034 /* GrokTakeoff.swift */,
-				B100000000000000000035 /* el107_n-rev-27.png */,
+				B100000000000000000046 /* ShopSampleCatalog.swift */,
+				B100000000000000000035 /* e-101-rev-a.png */,
 				B100000000000000000036 /* ShopCrew.swift */,
 				B100000000000000000037 /* TaskBoard.swift */,
 				B100000000000000000038 /* TaskAssignView.swift */,
@@ -237,7 +240,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A100000000000000000010 /* Assets.xcassets in Resources */,
-				A100000000000000000035 /* el107_n-rev-27.png in Resources */,
+				A100000000000000000035 /* e-101-rev-a.png in Resources */,
 				A100000000000000000028 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -278,6 +281,7 @@
 				A100000000000000000032 /* PrintPhotoViewModel.swift in Sources */,
 				A100000000000000000033 /* PrintMarkupView.swift in Sources */,
 				A100000000000000000034 /* GrokTakeoff.swift in Sources */,
+				A100000000000000000046 /* ShopSampleCatalog.swift in Sources */,
 				A100000000000000000036 /* ShopCrew.swift in Sources */,
 				A100000000000000000037 /* TaskBoard.swift in Sources */,
 				A100000000000000000038 /* TaskAssignView.swift in Sources */,

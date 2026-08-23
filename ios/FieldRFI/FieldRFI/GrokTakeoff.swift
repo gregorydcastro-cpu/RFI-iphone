@@ -1,15 +1,15 @@
 import Foundation
 import UIKit
 
-/// On-device takeoff from a sheet already in the app.
-/// Counts symbols on EL107_N Rev 27 only. Does not invent a drawing number.
+/// On-device takeoff from the bundled E-101 Rev A sample.
+/// Counts only symbols on that sample. Does not invent a drawing number.
 /// Writes draft material lines. Does not submit, number, close, or set work_stopped.
-/// No HTTP. No Procore.
+/// No HTTP. No Procore. Not Brown. Not ILSB. Not EL107_N.
 enum GrokTakeoff {
-    static let catalogSheet = "EL107_N"
-    static let catalogRevision = "27"
-    static let catalogResource = "el107_n-rev-27"
-    static let takeoffTag = "EL107_N Rev 27 takeoff"
+    static let catalogSheet = ShopSampleCatalog.sheetNumber
+    static let catalogRevision = ShopSampleCatalog.revision
+    static let catalogResource = ShopSampleCatalog.resource
+    static let takeoffTag = ShopSampleCatalog.takeoffTag
 
     struct Result {
         var lines: [MaterialLine]
@@ -64,19 +64,9 @@ enum GrokTakeoff {
         return image
     }
 
-    /// Only the catalog sheet already in the app. Do not count job photos or other PDFs.
+    /// Only the bundled E-101 Rev A sample. Do not count job photos or other PDFs.
     static func catalogSheetURL() -> URL? {
-        let bundle = Bundle.main
-        if let url = bundle.url(forResource: catalogResource, withExtension: "png") {
-            return url
-        }
-        if let url = bundle.url(forResource: catalogResource, withExtension: "png", subdirectory: "Catalog") {
-            return url
-        }
-        if let url = bundle.url(forResource: catalogResource, withExtension: "png", subdirectory: "FieldRFI/Catalog") {
-            return url
-        }
-        return nil
+        ShopSampleCatalog.sheetURL()
     }
 
     /// Lighting-fixture outlines on the catalog sheet are #1D4F72 circles.

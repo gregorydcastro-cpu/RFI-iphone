@@ -18,15 +18,15 @@ This slice drafts only. It does not submit, number, age, or close RFIs.
 
 ## Demo data
 
-Seeded on first API boot:
+iOS sample (on this phone, no host required):
 
 | | |
 | --- | --- |
-| Organization | Castro Construction | Brown University |
-| Project | Harbor Yard Warehouse | **Brown Integrated Life Sciences Building (ILSB)** |
-| Address / architect | — | 233 Richmond St, Providence RI 02903 · TenBerke · 4224 |
-| Sheets | S301 Rev B/C, S302 Rev A | **EL107_N Rev 27** (Bulletin 46, 06/25/2026, `is_current`) |
-| Seeded draft | none | Vivarium lighting control — which E-803 revision for EL107_N (`draft`, no number) |
+| Job | **G-Line Shop Test** |
+| Sheet | **E-101 Rev A** (bundled fake lighting plan) |
+| Takeoff | Count only symbols on that sample sheet |
+
+Do not use Brown, ILSB, EL107_N, or any live job sheet in the iOS app.
 
 ## Backend (Linux / Mac)
 
@@ -63,20 +63,20 @@ This cloud VM cannot run the iOS simulator. On a Mac:
 ## Test plan (New RFI screen)
 
 1. Open the app. You should land on **New RFI**, not a placeholder.
-2. Project list includes **Brown Integrated Life Sciences Building (ILSB)** (default) and Harbor Yard Warehouse.
-3. Pick **EL107_N Rev 27** (Electrical Lighting Plan — Level 07 North). The full-sheet drawing should load. Harbor Yard **S301 Rev C** remains available.
+2. Job is **G-Line Shop Test**. Sheet is **E-101 Rev A**.
+3. The bundled sample drawing should load. Do not pick a live job sheet.
 4. Tap the sheet to drop a pin. Optionally set grid `B-4`.
 5. Add a photo if you want. Enter one note, for example: `Beam at grid B-4 appears to conflict with the duct. Please confirm clearance.`
-6. Tap **Draft RFI**. The client calls `search_rfis`, then `create_rfi_draft`.
-7. Confirm the result: **status is `draft`**, **display number is null**, and `missing_for_submit` includes `internal_review`.
+6. Tap **Draft RFI**. With no API host this stays on the phone. With a Debug host the client calls `search_rfis`, then `create_rfi_draft`.
+7. Confirm the result: **status is `draft`**, **display number is null**, and `missing_for_submit` includes `internal_review` when a host is used.
 8. Tap Draft again with a similar note. The app should show the open match and refuse to duplicate.
 
 ## RFI Graph (weekly log)
 
-The iOS **RFI Graph** tab is the meeting / pipeline view. Open RFIs are ordered `work_stopped → escalated → overdue → due_soon → gc_holding → missing_due → on_cycle`. Harbor Yard rows labeled **SAMPLE** are PE-seeded examples so the graph is not empty. The ILSB E-803 vivarium RFI stays a **draft with no number** and appears only under **Drafts (no number)**.
+The iOS **RFI Graph** tab is the meeting / pipeline view. Open RFIs are ordered `work_stopped → escalated → overdue → due_soon → gc_holding → missing_due → on_cycle`. Rows labeled **SAMPLE** are PE-seeded examples so the graph is not empty. Not a live job.
 
 `days_open` is `floor(life_hours/24)` in **UTC** (not project-TZ business days; no holiday calendar).
 
 Both actors are simulated in `backend/tests/test_rfi_e2e.py` (Field/Grokbot HTTP + PE/design helpers). The Mac simulator is not required. Those PE helpers are not Grok tools.
 
-Not in this slice: submit as a Grok tool, holiday cache, Prometheus, `set_priority`, `age_rfis` as a job. Age buckets are computed on read. The existing ILSB E-803 draft is never submitted.
+Not in this slice: submit as a Grok tool, holiday cache, Prometheus, `set_priority`, `age_rfis` as a job. Age buckets are computed on read. Grokbot never submits.

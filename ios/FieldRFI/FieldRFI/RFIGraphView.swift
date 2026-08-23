@@ -83,7 +83,7 @@ struct RFIGraphView: View {
             Text("SAMPLE meeting log")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(FieldTheme.orange)
-            Text("PE-seeded examples so the weekly graph is not empty. Not live ILSB field RFIs. The E-803 vivarium draft is real and stays unnumbered.")
+            Text("PE-seeded examples so the weekly graph is not empty. Sample meeting log only. Not a live job.")
                 .font(.footnote)
                 .foregroundStyle(FieldTheme.ink)
         }

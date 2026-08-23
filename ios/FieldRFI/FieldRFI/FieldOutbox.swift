@@ -123,13 +123,13 @@ final class FieldOutbox: ObservableObject {
         packets.filter(\.isSent)
     }
 
-    /// Optional all-hands to every Foreman seat. Not tool find. Does not rewrite to one-step-up.
+    /// Path 2: optional all-hands. Not a tool, not lost-tool blast, not tool find.
     @discardableResult
     func sendGroupToForemen(note: String, from: CrewMemberDTO) -> [FieldPacket] {
         sendToForemenGroup(note: note, from: from, kind: .groupMessage)
     }
 
-    /// Lost / not-checked-out tool only. Refuses when a holder is known.
+    /// Path 1: lost or not-checked-out tool only. Refuses when a holder is known.
     @discardableResult
     func sendLostToolBlast(tool: ShopTool, from: CrewMemberDTO) -> [FieldPacket] {
         guard tool.canBlastAllForemen, !tool.hasKnownHolder else { return [] }

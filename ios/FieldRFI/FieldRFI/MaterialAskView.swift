@@ -123,7 +123,7 @@ struct MaterialAskView: View {
                 }
             }
             if features.flags(for: session.userID).takeoff {
-                Text("Counts plate fixtures on catalog sheet EL107_N Rev 27 only. Writes the held list. Does not submit, number, or set work-stopped. Job photos are not a sheet. If the catalog image is missing, it writes nothing.")
+                Text("Counts plate fixtures on sample sheet E-101 Rev A only. Writes the held list. Does not submit, number, or set work-stopped. Job photos are not a sheet. If the sample image is missing, it writes nothing.")
                     .font(.caption)
                     .foregroundStyle(FieldTheme.muted)
                 if let takeoff = model.takeoffMessage {
