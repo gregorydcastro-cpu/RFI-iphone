@@ -129,12 +129,12 @@ final class FeatureSettings: ObservableObject {
         guard let actor = ShopCrew.member(byID: actorID),
               let target = ShopCrew.member(byID: targetID)
         else { return false }
-        return ShopCrew.isBelow(target, of: actor)
+        return ShopCrew.isDirectReport(target, of: actor)
     }
 
     func canAssign(from actorID: String?, toRole role: String) -> Bool {
         guard let actor = ShopCrew.member(byID: actorID) else { return false }
-        return ShopCrew.below(actor).contains(where: { $0.role == role })
+        return ShopCrew.directReports(of: actor).contains(where: { $0.role == role })
     }
 
     func set(_ flags: FeatureFlags, forUser userID: String, by actorID: String?) {
@@ -191,7 +191,7 @@ struct FeatureSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("The person above sets what people below them can see and do on \(ShopCrew.jobName). Hide a screen, block assign, or block send-to-inbox. An apprentice does not flip their own set. Default allow. Stays on this phone. Not a backend ABAC. Not Procore.")
+                Text("The person above sets what their direct reports can see and do on \(ShopCrew.jobName). One step only: GF → Area Foreman → Foreman → Journeyman → Apprentice. An apprentice cannot address the GF. Not a backend ABAC. Not Procore.")
                     .font(.subheadline)
                     .foregroundStyle(FieldTheme.ink)
 
@@ -224,7 +224,7 @@ struct FeatureSettingsView: View {
     }
 
     private var below: [CrewMemberDTO] {
-        me.map { ShopCrew.below($0) } ?? []
+        me.map { ShopCrew.directReports(of: $0) } ?? []
     }
 
     private var seatPicker: some View {

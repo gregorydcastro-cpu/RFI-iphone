@@ -14,7 +14,7 @@ struct ForemanInboxView: View {
                     .font(.footnote)
                     .foregroundStyle(FieldTheme.ink)
                 if let target = session.sendTarget() {
-                    Text("Sends to \(target.name). Enters Procore later. No work-stopped from this app.")
+                    Text("Sends one step up to \(target.name). No skip-level. Enters Procore later. No work-stopped from this app.")
                         .font(.footnote)
                         .foregroundStyle(FieldTheme.muted)
                 }

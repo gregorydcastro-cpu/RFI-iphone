@@ -41,14 +41,16 @@ final class FieldSession: ObservableObject {
     }
 
     func sendTarget() -> (id: String, name: String)? {
+        if let me = ShopCrew.member(byID: userID) {
+            if let boss = ShopCrew.oneStepUp(from: me) {
+                return (boss.user_id, boss.name)
+            }
+            return (me.user_id, me.name)
+        }
         if let id = assignment?.reports_to_user_id, let name = assignment?.boss_name, !id.isEmpty {
             return (id, name)
         }
-        if ["foreman", "area_foreman", "general_foreman"].contains(role),
-           let me = assignment {
-            return (me.user_id, me.name)
-        }
-        return ("local-foreman", "Foreman")
+        return nil
     }
 
     func ensureLocalSeat() {

@@ -109,6 +109,11 @@ struct TaskAssignView: View {
     private var assignForm: some View {
         VStack(alignment: .leading, spacing: 10) {
             sectionLabel("Assign")
+            if directReports.isEmpty {
+                Text("No direct report one step down. Cannot skip a level.")
+                    .font(.footnote)
+                    .foregroundStyle(FieldTheme.muted)
+            }
             TextField("Task", text: $title)
                 .textFieldStyle(.roundedBorder)
             TextField("Note (optional)", text: $note)
@@ -118,10 +123,10 @@ struct TaskAssignView: View {
                 DatePicker("Due", selection: $dueAt, displayedComponents: .date)
             }
             sectionLabel("Crew on \(ShopCrew.jobName)")
-            Text("Pick who the task is for. Existing mock names only. Harbor Apprentice is on this list.")
+            Text("Assign one step down on \(ShopCrew.jobName). Apprentice reports to Journeyman. No skip to the GF.")
                 .font(.caption)
                 .foregroundStyle(FieldTheme.muted)
-            ForEach(ShopCrew.members.filter { $0.user_id != me?.user_id }) { member in
+            ForEach(directReports) { member in
                 Button {
                     assigneeID = member.user_id
                 } label: {
@@ -275,7 +280,12 @@ struct TaskAssignView: View {
             && me != nil
             && assigneeID != nil
             && assigneeID != me?.user_id
+            && directReports.contains(where: { $0.user_id == assigneeID })
             && !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var directReports: [CrewMemberDTO] {
+        me.map { ShopCrew.directReports(of: $0) } ?? []
     }
 
     private func assign() {

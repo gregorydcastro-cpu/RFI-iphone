@@ -46,6 +46,18 @@ enum ShopCrew {
         members.filter { isBelow($0, of: boss) }
     }
 
+    static func isDirectReport(_ member: CrewMemberDTO, of boss: CrewMemberDTO) -> Bool {
+        member.reports_to_user_id == boss.user_id
+    }
+
+    static func directReports(of boss: CrewMemberDTO) -> [CrewMemberDTO] {
+        members.filter { isDirectReport($0, of: boss) }
+    }
+
+    static func oneStepUp(from member: CrewMemberDTO) -> CrewMemberDTO? {
+        member(byID: member.reports_to_user_id)
+    }
+
     static func member(
         _ id: String,
         _ name: String,

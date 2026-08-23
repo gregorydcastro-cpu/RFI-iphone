@@ -50,7 +50,7 @@ Do not invent a production host. Leave Release empty until there is a real `http
 - Prints and job pictures use the same send-to-foreman inbox. Foreman markup is local. Not a ticket that skips the inbox. Do not invent drawing numbers.
 - Grok takeoff counts visible devices on catalog sheet EL107_N Rev 27 and writes the G-Line Shop Test held material list. If there is no sheet image or PDF, it writes no quantities. On-device only. Grokbot still cannot submit, number, close, or set work_stopped.
 - Tasks: assign to an existing mock crew name on G-Line Shop Test (short crew list, including Harbor Apprentice), assignee checks off on this phone, assigner sees verification. Optional job proof photo on check-off stays on this phone. Due date is optional and does not block assign or check-off.
-- Access: the person above assigns what people below can see and do (hide a screen, block assign, block send-to-inbox). Default allow. An apprentice does not flip their own set. On-device UI only. Not a backend ABAC. Persist on this phone.
+- Access: the person above assigns what their direct reports can see and do (hide a screen, block assign, block send-to-inbox). One step only: GF → Area Foreman → Foreman → Journeyman → Apprentice. Messages, asks, assign, and send-to-inbox do not skip. An apprentice cannot address the GF. Default allow. On-device UI only. Not a backend ABAC. Persist on this phone.
 - Meetings: date/time, who, short note on G-Line Shop Test. Upcoming list and an in-app reminder on any tab in the hour before. Dated tasks show on that calendar day; assignees get an in-app due-today banner. No Apple Calendar sync. No local-notification permission required.
 - Grokbot drafts only on the backend.
 - Do not invent drawing numbers.
