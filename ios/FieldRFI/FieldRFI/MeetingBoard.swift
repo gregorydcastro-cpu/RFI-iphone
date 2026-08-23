@@ -39,7 +39,17 @@ final class MeetingBoard: ObservableObject {
     }
 
     var soon: [ShopMeeting] {
-        meetings.filter(\.isSoon).sorted { $0.startsAt < $1.startsAt }
+        soon(for: nil)
+    }
+
+    func soon(for userID: String?) -> [ShopMeeting] {
+        let rows = meetings.filter(\.isSoon).sorted { $0.startsAt < $1.startsAt }
+        guard let userID, !userID.isEmpty, userID != "local-field" else { return rows }
+        return rows.filter { $0.createdByUserID == userID || $0.withUserID == userID }
+    }
+
+    func tick() {
+        objectWillChange.send()
     }
 
     @discardableResult

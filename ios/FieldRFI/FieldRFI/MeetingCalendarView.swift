@@ -1,5 +1,41 @@
 import SwiftUI
 
+/// In-app reminder in the hour before a meeting. No Apple Calendar. No push host.
+struct MeetingSoonBanner: View {
+    @EnvironmentObject private var session: FieldSession
+    @ObservedObject private var board = MeetingBoard.shared
+
+    private let clock: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .none
+        f.timeStyle = .short
+        return f
+    }()
+
+    var body: some View {
+        let rows = board.soon(for: session.userID)
+        if rows.isEmpty {
+            EmptyView()
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("STARTING SOON")
+                    .font(.caption.weight(.semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(.white)
+                ForEach(rows) { row in
+                    Text("\(clock.string(from: row.startsAt))  ·  \(row.withName)\(row.note.isEmpty ? "" : "  ·  \(row.note)")")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(FieldTheme.orange)
+        }
+    }
+}
+
 struct MeetingCalendarView: View {
     @EnvironmentObject private var session: FieldSession
     @ObservedObject private var board = MeetingBoard.shared
@@ -21,24 +57,6 @@ struct MeetingCalendarView: View {
                 Text("Meetings on \(ShopCrew.jobName). On this phone only. Not an RFI. No Apple Calendar sync. No Procore.")
                     .font(.subheadline)
                     .foregroundStyle(FieldTheme.ink)
-
-                if !board.soon.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("STARTING SOON")
-                            .font(.caption.weight(.semibold))
-                            .tracking(0.8)
-                            .foregroundStyle(FieldTheme.orange)
-                        ForEach(board.soon) { row in
-                            Text("\(clock.string(from: row.startsAt))  ·  \(row.withName)")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(FieldTheme.ink)
-                        }
-                    }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(FieldTheme.orange.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
 
                 VStack(alignment: .leading, spacing: 10) {
                     sectionLabel("Set a meeting")
@@ -141,7 +159,7 @@ struct MeetingCalendarView: View {
               let other = ShopCrew.members.first(where: { $0.user_id == withID })
         else { return }
         _ = board.add(startsAt: startsAt, with: other, note: note, from: me)
-        message = "Saved. Reminder shows here in the hour before."
+        message = "Saved. Reminder shows on this phone in the hour before."
         note = ""
     }
 

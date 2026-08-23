@@ -3,6 +3,8 @@ import SwiftUI
 @main
 struct FieldRFIApp: App {
     @StateObject private var session = FieldSession()
+    @ObservedObject private var meetings = MeetingBoard.shared
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -55,8 +57,22 @@ struct FieldRFIApp: App {
                 }
             }
             .environmentObject(session)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                MeetingSoonBanner()
+            }
             .tint(FieldTheme.orange)
-            .onAppear { session.ensureLocalSeat() }
+            .onAppear {
+                session.ensureLocalSeat()
+                meetings.tick()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    meetings.tick()
+                }
+            }
+            .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { _ in
+                meetings.tick()
+            }
         }
     }
 }
