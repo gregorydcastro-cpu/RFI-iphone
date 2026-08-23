@@ -12,7 +12,7 @@ enum FieldPacketKind: String, Codable, CaseIterable {
         switch self {
         case .rfi: return "RFI draft"
         case .fieldProblem: return "Field problem"
-        case .materialAsk: return "Material ask"
+        case .materialAsk: return "Material list"
         }
     }
 }

@@ -20,12 +20,12 @@ struct FieldRFIApp: App {
                     .tabItem {
                         Label("Problem", systemImage: "exclamationmark.triangle")
                     }
-                    NavigationStack {
-                        MaterialAskView()
-                    }
-                    .tabItem {
-                        Label("Material", systemImage: "shippingbox")
-                    }
+                }
+                NavigationStack {
+                    MaterialAskView()
+                }
+                .tabItem {
+                    Label("Material", systemImage: "shippingbox")
                 }
                 NavigationStack {
                     ForemanInboxView()

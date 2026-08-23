@@ -3,101 +3,75 @@ import SwiftUI
 
 @MainActor
 final class MaterialAskViewModel: ObservableObject {
-    @Published var baseURLString = APIClient.defaultBaseURLString
-    @Published var projects: [ProjectDTO] = []
-    @Published var selectedProject: ProjectDTO?
-    @Published var note = ""
-    @Published var lines: [DraftMaterialLineDTO] = [
-        DraftMaterialLineDTO(description: "", qty: 1, uom: "EA")
-    ]
+    @Published var flagNotes: [String: String] = [:]
     @Published var errorMessage: String?
     @Published var sentPacket: FieldPacket?
 
-    let uoms = ["EA", "LF", "SF", "BOX", "SET"]
+    let uoms = MaterialBoard.uoms
+    private let board = MaterialBoard.shared
 
-    var client: APIClient {
-        APIClient(baseURL: URL(string: baseURLString) ?? APIClient.defaultBaseURL)
-    }
-
-    var readyLines: [DraftMaterialLineDTO] {
-        lines.compactMap { line in
-            let desc = line.description.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !desc.isEmpty, line.qty > 0, uoms.contains(line.uom) else { return nil }
-            return DraftMaterialLineDTO(description: desc, qty: line.qty, uom: line.uom)
-        }
+    func canOrder(session: FieldSession) -> Bool {
+        !session.isApprentice
     }
 
     func canSend(session: FieldSession) -> Bool {
-        session.sendTarget() != nil && !readyLines.isEmpty
+        canOrder(session: session)
+            && session.sendTarget() != nil
+            && !board.held.readyLines.isEmpty
+    }
+
+    func canPick(session: FieldSession) -> Bool {
+        session.isApprentice || session.assignment == nil
     }
 
     func addLine() {
-        lines.append(DraftMaterialLineDTO(description: "", qty: 1, uom: "EA"))
+        board.addLine()
+        objectWillChange.send()
     }
 
-    func removeLine(at index: Int) {
-        guard lines.indices.contains(index) else { return }
-        lines.remove(at: index)
-        if lines.isEmpty {
-            addLine()
-        }
+    func removeLine(id: String) {
+        board.removeLine(id: id)
+        objectWillChange.send()
     }
 
-    func loadCatalog() async {
-        errorMessage = nil
-        if baseURLString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return
-        }
-        do {
-            let rows = try await client.projects()
-            projects = rows
-            if selectedProject == nil {
-                selectedProject = rows.first(where: { $0.name.contains("ILSB") })
-                    ?? rows.first
-            }
-        } catch {
-            if !APIClient.isMissingHost(error) {
-                errorMessage = error.localizedDescription
-            }
-        }
+    func persistHeld() {
+        board.save()
+        objectWillChange.send()
+    }
+
+    func appear(session: FieldSession) {
+        board.ensureAuthor(session: session)
+        objectWillChange.send()
     }
 
     func sendToForeman(session: FieldSession) {
-        session.ensureLocalSeat()
-        guard let target = session.sendTarget() else {
-            errorMessage = "No foreman on this crew."
+        guard canOrder(session: session) else {
+            errorMessage = "Apprentices pick up material. They do not order or submit."
             return
         }
-        let ready = readyLines
-        guard !ready.isEmpty else {
-            errorMessage = "Add at least one line: description, qty, and UOM."
+        guard let packet = board.sendHeld(session: session) else {
+            errorMessage = board.held.readyLines.isEmpty
+                ? "Add at least one line: description, qty, and UOM."
+                : "No foreman on this crew."
             return
         }
-        let packet = FieldPacket(
-            id: UUID().uuidString,
-            kind: .materialAsk,
-            projectID: selectedProject?.id ?? "local-job",
-            projectName: selectedProject?.name ?? "This job",
-            sheetNumber: nil,
-            revision: nil,
-            sheetRevisionID: nil,
-            pinLabel: nil,
-            xNorm: nil,
-            yNorm: nil,
-            note: note.trimmingCharacters(in: .whitespacesAndNewlines),
-            materialLines: ready,
-            photoCount: 0,
-            createdByUserID: session.userID ?? "",
-            createdByName: session.assignment?.name ?? "Field",
-            createdByRole: session.role,
-            sentToUserID: target.id,
-            sentToName: target.name,
-            createdAt: Date(),
-            sentAt: nil,
-            rfiID: nil,
-            status: "draft"
-        )
-        sentPacket = FieldOutbox.shared.sendToForeman(packet)
+        sentPacket = packet
         errorMessage = nil
+        objectWillChange.send()
+    }
+
+    func flagBackOrder(id: String, session: FieldSession) {
+        let note = flagNotes[id] ?? ""
+        guard board.flagBackOrder(id: id, note: note, session: session) != nil else {
+            errorMessage = "Could not send the back-order to the foreman."
+            return
+        }
+        errorMessage = nil
+        objectWillChange.send()
+    }
+
+    func markPicked(id: String) {
+        board.markPicked(id: id)
+        objectWillChange.send()
     }
 }

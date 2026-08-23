@@ -56,7 +56,7 @@ struct ForemanInboxView: View {
             guard APIClient.hasServerHost else { return }
             let client = APIClient()
             if let project = try? await client.projects(),
-               let first = project.first(where: { $0.name.contains("ILSB") }) ?? project.first {
+               let first = project.first {
                 await session.load(client: client, projectID: first.id)
             }
         }
@@ -100,6 +100,11 @@ struct ForemanInboxView: View {
             }
             .font(.caption)
             .foregroundStyle(FieldTheme.muted)
+            ForEach(row.materialLines, id: \.self) { line in
+                Text("\(line.qty.formatted()) \(line.uom)  \(line.description)")
+                    .font(.caption)
+                    .foregroundStyle(FieldTheme.ink)
+            }
             Text("\(row.createdByName) → \(row.sentToName)")
                 .font(.caption2)
                 .foregroundStyle(FieldTheme.muted)
