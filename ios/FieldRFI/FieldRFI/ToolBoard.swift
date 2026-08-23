@@ -1,0 +1,99 @@
+import Foundation
+import SwiftUI
+
+/// Shop tools on G-Line Shop Test. On this phone. No barcode. No Procore.
+struct ShopTool: Identifiable, Codable, Hashable {
+    var id: String
+    var name: String
+    var vendor: String
+    var jobID: String
+    var jobName: String
+    var holderUserID: String?
+    var holderName: String?
+    var checkedOutAt: Date?
+
+    var isOut: Bool { holderUserID != nil }
+
+    func matches(_ query: String) -> Bool {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if q.isEmpty { return true }
+        return name.lowercased().contains(q) || vendor.lowercased().contains(q)
+    }
+}
+
+@MainActor
+final class ToolBoard: ObservableObject {
+    static let shared = ToolBoard()
+
+    @Published private(set) var tools: [ShopTool] = []
+
+    private let key = "gcfieldlog.tools.v1"
+
+    init() {
+        load()
+        if tools.isEmpty {
+            tools = Self.seed
+            save()
+        }
+    }
+
+    func matching(_ query: String) -> [ShopTool] {
+        tools.filter { $0.matches(query) }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    func tool(id: String) -> ShopTool? {
+        tools.first(where: { $0.id == id })
+    }
+
+    func checkOut(id: String, to member: CrewMemberDTO) {
+        guard let index = tools.firstIndex(where: { $0.id == id }) else { return }
+        tools[index].holderUserID = member.user_id
+        tools[index].holderName = member.name
+        tools[index].checkedOutAt = Date()
+        save()
+    }
+
+    func checkIn(id: String) {
+        guard let index = tools.firstIndex(where: { $0.id == id }) else { return }
+        tools[index].holderUserID = nil
+        tools[index].holderName = nil
+        tools[index].checkedOutAt = nil
+        save()
+    }
+
+    private func load() {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let rows = try? JSONDecoder().decode([ShopTool].self, from: data)
+        else { return }
+        tools = rows
+    }
+
+    private func save() {
+        if let data = try? JSONEncoder().encode(tools) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
+        objectWillChange.send()
+    }
+
+    private static let seed: [ShopTool] = [
+        tool("emt-bender", "1/2\" EMT bender", "Greenlee"),
+        tool("hole-saw", "Hole saw kit", "Milwaukee"),
+        tool("multimeter", "Multimeter", "Fluke"),
+        tool("knockout", "Knockout punch", "Greenlee"),
+        tool("fish-tape", "Fish tape", "Klein"),
+    ]
+
+    private static func tool(_ id: String, _ name: String, _ vendor: String) -> ShopTool {
+        ShopTool(
+            id: id,
+            name: name,
+            vendor: vendor,
+            jobID: ShopCrew.jobID,
+            jobName: ShopCrew.jobName,
+            holderUserID: nil,
+            holderName: nil,
+            checkedOutAt: nil
+        )
+    }
+}

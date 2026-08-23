@@ -60,6 +60,12 @@ struct FieldRFIApp: App {
                         Label("Meet", systemImage: "calendar")
                     }
                 }
+                NavigationStack {
+                    ToolCheckoutView()
+                }
+                .tabItem {
+                    Label("Tools", systemImage: "wrench.and.screwdriver")
+                }
                 if flags.seeInbox {
                     NavigationStack {
                         ForemanInboxView()
