@@ -6,6 +6,7 @@ final class MaterialAskViewModel: ObservableObject {
     @Published var flagNotes: [String: String] = [:]
     @Published var errorMessage: String?
     @Published var sentPacket: FieldPacket?
+    @Published var takeoffMessage: String?
 
     let uoms = MaterialBoard.uoms
     private let board = MaterialBoard.shared
@@ -45,6 +46,22 @@ final class MaterialAskViewModel: ObservableObject {
 
     func appear(session: FieldSession) {
         board.ensureAuthor(session: session)
+        objectWillChange.send()
+    }
+
+    func runTakeoff() {
+        switch GrokTakeoff.run() {
+        case .success(let result):
+            if board.applyTakeoff(result.lines, note: result.message) {
+                takeoffMessage = result.message
+                errorMessage = nil
+            } else {
+                errorMessage = "Takeoff did not write quantities."
+            }
+        case .failure(let failure):
+            takeoffMessage = nil
+            errorMessage = failure.message
+        }
         objectWillChange.send()
     }
 

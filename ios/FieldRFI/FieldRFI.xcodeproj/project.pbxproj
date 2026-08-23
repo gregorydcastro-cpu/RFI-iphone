@@ -36,6 +36,8 @@
 		A100000000000000000031 /* PrintPhotoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000031 /* PrintPhotoView.swift */; };
 		A100000000000000000032 /* PrintPhotoViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000032 /* PrintPhotoViewModel.swift */; };
 		A100000000000000000033 /* PrintMarkupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000033 /* PrintMarkupView.swift */; };
+		A100000000000000000034 /* GrokTakeoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000034 /* GrokTakeoff.swift */; };
+		A100000000000000000035 /* el107_n-rev-27.png in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000035 /* el107_n-rev-27.png */; };
 		A100000000000000000010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000010 /* Assets.xcassets */; };
 		A100000000000000000028 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000028 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
@@ -71,6 +73,8 @@
 		B100000000000000000031 /* PrintPhotoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrintPhotoView.swift; sourceTree = "<group>"; };
 		B100000000000000000032 /* PrintPhotoViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrintPhotoViewModel.swift; sourceTree = "<group>"; };
 		B100000000000000000033 /* PrintMarkupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrintMarkupView.swift; sourceTree = "<group>"; };
+		B100000000000000000034 /* GrokTakeoff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokTakeoff.swift; sourceTree = "<group>"; };
+		B100000000000000000035 /* el107_n-rev-27.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Catalog/el107_n-rev-27.png"; sourceTree = "<group>"; };
 		B100000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B100000000000000000011 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B100000000000000000028 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -126,6 +130,8 @@
 				B100000000000000000031 /* PrintPhotoView.swift */,
 				B100000000000000000032 /* PrintPhotoViewModel.swift */,
 				B100000000000000000033 /* PrintMarkupView.swift */,
+				B100000000000000000034 /* GrokTakeoff.swift */,
+				B100000000000000000035 /* el107_n-rev-27.png */,
 				B100000000000000000027 /* ForemanInboxView.swift */,
 				B100000000000000000010 /* Assets.xcassets */,
 				B100000000000000000011 /* Info.plist */,
@@ -201,6 +207,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A100000000000000000010 /* Assets.xcassets in Resources */,
+				A100000000000000000035 /* el107_n-rev-27.png in Resources */,
 				A100000000000000000028 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -240,6 +247,7 @@
 				A100000000000000000031 /* PrintPhotoView.swift in Sources */,
 				A100000000000000000032 /* PrintPhotoViewModel.swift in Sources */,
 				A100000000000000000033 /* PrintMarkupView.swift in Sources */,
+				A100000000000000000034 /* GrokTakeoff.swift in Sources */,
 				A100000000000000000027 /* ForemanInboxView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

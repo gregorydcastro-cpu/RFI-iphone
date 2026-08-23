@@ -14,12 +14,28 @@ final class PrintPhotoViewModel: ObservableObject {
     @Published var prints: [PendingPrint] = []
     @Published var errorMessage: String?
     @Published var sentPacket: FieldPacket?
+    @Published var takeoffMessage: String?
 
     let jobName = MaterialListRecord.shopTestName
     let jobID = MaterialListRecord.shopTestID
 
     func canSend(session: FieldSession) -> Bool {
         session.sendTarget() != nil && (!photos.isEmpty || !prints.isEmpty)
+    }
+
+    func runTakeoff() {
+        switch GrokTakeoff.run() {
+        case .success(let result):
+            if MaterialBoard.shared.applyTakeoff(result.lines, note: result.message) {
+                takeoffMessage = result.message
+                errorMessage = nil
+            } else {
+                errorMessage = "Takeoff did not write quantities."
+            }
+        case .failure(let failure):
+            takeoffMessage = nil
+            errorMessage = failure.message
+        }
     }
 
     func addPrint(filename: String, data: Data) {

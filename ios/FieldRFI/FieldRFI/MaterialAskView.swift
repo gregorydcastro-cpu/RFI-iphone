@@ -108,9 +108,24 @@ struct MaterialAskView: View {
                 model.persistHeld()
             }
 
-            Button("Add line", action: model.addLine)
+            HStack(spacing: 16) {
+                Button("Add line", action: model.addLine)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(FieldTheme.orange)
+                Button("Grok takeoff") {
+                    model.runTakeoff()
+                }
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(FieldTheme.orange)
+                .foregroundStyle(FieldTheme.steel)
+            }
+            Text("Counts plate fixtures on catalog sheet EL107_N Rev 27 only. Writes the held list. Does not submit, number, or set work-stopped. If there is no sheet image, it writes nothing.")
+                .font(.caption)
+                .foregroundStyle(FieldTheme.muted)
+            if let takeoff = model.takeoffMessage {
+                Text(takeoff)
+                    .font(.footnote)
+                    .foregroundStyle(Color(red: 0.16, green: 0.45, blue: 0.28))
+            }
 
             VStack(alignment: .leading, spacing: 8) {
                 sectionLabel("Note (optional)")

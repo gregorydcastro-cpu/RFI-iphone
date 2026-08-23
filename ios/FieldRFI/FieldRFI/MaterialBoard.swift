@@ -158,6 +158,25 @@ final class MaterialBoard: ObservableObject {
         }
     }
 
+    @discardableResult
+    func applyTakeoff(_ lines: [MaterialLine], note: String) -> Bool {
+        guard !lines.isEmpty else { return false }
+        held.jobID = MaterialListRecord.shopTestID
+        held.jobName = MaterialListRecord.shopTestName
+        held.lines.removeAll {
+            $0.description.contains(GrokTakeoff.takeoffTag)
+                || $0.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        held.lines.append(contentsOf: lines)
+        if held.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            held.note = note
+        }
+        held.updatedAt = Date()
+        save()
+        objectWillChange.send()
+        return true
+    }
+
     func addLine() {
         held.lines.append(MaterialLine.blank())
         held.updatedAt = Date()
