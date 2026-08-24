@@ -1,10 +1,9 @@
 import Foundation
 import SwiftUI
 
-/// On-device panel tracker. G-Line Shop Test + E-101 Rev A only.
+/// On-device field tracker. G-Line Shop Test + E-101 Rev A only.
 /// Pulled vs not pulled so a circuit is not missed.
-/// A change note stays on that circuit. Not a design log. Not an RFI. Not work_stopped.
-/// No Procore write. No HTTP.
+/// Optional one-line note. Not a design log. Not a Procore sync. No HTTP.
 struct CircuitChangeNote: Identifiable, Codable, Hashable {
     var id: String
     var text: String

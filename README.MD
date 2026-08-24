@@ -25,7 +25,7 @@ iOS sample (on this phone, no host required):
 | Job | **G-Line Shop Test** |
 | Sheet | **E-101 Rev A** (bundled fake lighting plan) |
 | Takeoff | Count only symbols on that sample sheet |
-| Panels | Create a panel; add/edit circuits; pulled vs not pulled; optional sample fill |
+| Panels | Field tracker: build circuits, pulled vs not pulled, optional E-101 fill |
 
 ## Backend (Linux / Mac)
 
