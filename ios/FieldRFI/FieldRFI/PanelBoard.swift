@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-/// On-device field tracker. G-Line Shop Test + E-101 Rev A only.
+/// On-device field tracker. Selected sample job + that job’s bundled fake sheet.
 /// Pulled vs not pulled so a circuit is not missed.
 /// Optional one-line note. Not a design log. Not a Procore sync. No HTTP.
 struct CircuitChangeNote: Identifiable, Codable, Hashable {
@@ -46,14 +46,14 @@ struct PanelSchedule: Identifiable, Codable, Hashable {
 
     var pulledCount: Int { circuits.filter(\.pulled).count }
 
-    static func make(name: String) -> PanelSchedule {
+    static func make(name: String, job: SampleJob = ShopSampleCatalog.selected) -> PanelSchedule {
         PanelSchedule(
             id: UUID().uuidString,
-            jobID: MaterialListRecord.shopTestID,
-            jobName: MaterialListRecord.shopTestName,
+            jobID: job.id,
+            jobName: job.name,
             name: name,
-            sheetNumber: ShopSampleCatalog.sheetNumber,
-            revision: ShopSampleCatalog.revision,
+            sheetNumber: job.sheetNumber,
+            revision: job.revision,
             circuits: [],
             updatedAt: Date()
         )
@@ -81,14 +81,18 @@ final class PanelBoard: ObservableObject {
         panels.first(where: { $0.id == id })
     }
 
+    func panels(for jobID: String) -> [PanelSchedule] {
+        panels.filter { $0.jobID == jobID }
+    }
+
     @discardableResult
-    func createPanel(name: String) -> PanelSchedule? {
+    func createPanel(name: String, job: SampleJob = ShopSampleCatalog.selected) -> PanelSchedule? {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        if panels.contains(where: { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }) {
+        if panels.contains(where: { $0.jobID == job.id && $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }) {
             return nil
         }
-        let row = PanelSchedule.make(name: trimmed)
+        let row = PanelSchedule.make(name: trimmed, job: job)
         panels.insert(row, at: 0)
         save()
         return row
@@ -168,7 +172,8 @@ final class PanelBoard: ObservableObject {
         guard let index = panels.firstIndex(where: { $0.id == panelID }) else {
             return .failed("Pick a panel first.")
         }
-        switch GrokTakeoff.suggestCircuits() {
+        let job = ShopSampleCatalog.job(id: panels[index].jobID)
+        switch GrokTakeoff.suggestCircuits(job: job) {
         case .success(let result):
             var added = 0
             for suggestion in result.circuits {
@@ -211,7 +216,7 @@ final class PanelBoard: ObservableObject {
         guard let data = UserDefaults.standard.data(forKey: key),
               let rows = try? JSONDecoder().decode([PanelSchedule].self, from: data)
         else { return }
-        panels = rows.filter { $0.jobID == MaterialListRecord.shopTestID }
+        panels = rows
     }
 
     private func save() {

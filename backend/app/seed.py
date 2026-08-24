@@ -5,11 +5,18 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.drawings import ensure_demo_drawings, png_size
+from app.drawings import (
+    SHEET_CEDAR_E101,
+    SHEET_E101,
+    SHEET_MILL_E101,
+    ensure_demo_drawings,
+    png_size,
+)
 from app.holiday_cache import holiday_cache
 from app.access import seed_role_permissions
 from app.field_chain import assign_person
 from app.ids import (
+    CEDAR_PROJECT_NAME,
     COMPANY_CASTRO_ID,
     COMPANY_SAMPLE_AE_ID,
     COMPANY_SAMPLE_ARCH_ID,
@@ -17,14 +24,25 @@ from app.ids import (
     DEMO_PROJECT_NAME,
     DEMO_REVISION,
     DEMO_SHEET_NUMBER,
+    DRAWING_SET_CEDAR_ID,
     DRAWING_SET_ID,
+    DRAWING_SET_MILL_ID,
     LOC_GRID_B4_ID,
+    MILL_PROJECT_NAME,
     ORG_ID,
+    PROJECT_CEDAR_ID,
     PROJECT_ID,
+    PROJECT_MILL_ID,
+    REV_CEDAR_E101_A_ID,
     REV_E101_A_ID,
+    REV_MILL_E101_A_ID,
     SAMPLE_ON_CYCLE_ID,
+    SETTINGS_CEDAR_ID,
     SETTINGS_ID,
+    SETTINGS_MILL_ID,
+    SHEET_CEDAR_E101_ID,
     SHEET_E101_ID,
+    SHEET_MILL_E101_ID,
     SHOP_AREA_FLOOR_ID,
     SHOP_AREA_ROOF_ID,
     SHOP_CALENDAR_ID,
@@ -97,8 +115,12 @@ def _revision(
 
 
 def seed_shop_catalog(db: Session, sizes: dict[str, tuple[int, int]]) -> None:
-    if db.get(Project, str(PROJECT_ID)):
-        return
+    if not db.get(Project, str(PROJECT_ID)):
+        _seed_gline_shop_test(db, sizes)
+    seed_extra_sample_jobs(db, sizes)
+
+
+def _seed_gline_shop_test(db: Session, sizes: dict[str, tuple[int, int]]) -> None:
     org = db.get(Organization, str(ORG_ID)) or Organization(
         id=str(ORG_ID), name=DEMO_ORG_NAME
     )
@@ -138,7 +160,7 @@ def seed_shop_catalog(db: Session, sizes: dict[str, tuple[int, int]]) -> None:
         REV_E101_A_ID,
         SHEET_E101_ID,
         DEMO_REVISION,
-        "e-101-rev-a.png",
+        SHEET_E101,
         date(2026, 6, 25),
         True,
         sizes,
@@ -157,6 +179,87 @@ def seed_shop_catalog(db: Session, sizes: dict[str, tuple[int, int]]) -> None:
     )
     db.add_all([org, project, settings, drawing_set, sheet, revision, location, grid])
     db.commit()
+
+
+def seed_extra_sample_jobs(db: Session, sizes: dict[str, tuple[int, int]]) -> None:
+    """Cedar Lot Sample and Mill Street Mock. Fake jobs only. No extra RFIs."""
+    org = db.get(Organization, str(ORG_ID)) or Organization(
+        id=str(ORG_ID), name=DEMO_ORG_NAME
+    )
+    if db.get(Organization, str(ORG_ID)) is None:
+        db.add(org)
+    extras = (
+        (
+            PROJECT_CEDAR_ID,
+            SETTINGS_CEDAR_ID,
+            DRAWING_SET_CEDAR_ID,
+            SHEET_CEDAR_E101_ID,
+            REV_CEDAR_E101_A_ID,
+            CEDAR_PROJECT_NAME,
+            SHEET_CEDAR_E101,
+        ),
+        (
+            PROJECT_MILL_ID,
+            SETTINGS_MILL_ID,
+            DRAWING_SET_MILL_ID,
+            SHEET_MILL_E101_ID,
+            REV_MILL_E101_A_ID,
+            MILL_PROJECT_NAME,
+            SHEET_MILL_E101,
+        ),
+    )
+    added = False
+    for project_id, settings_id, set_id, sheet_id, rev_id, name, filename in extras:
+        if db.get(Project, str(project_id)):
+            continue
+        db.add_all(
+            [
+                Project(
+                    id=str(project_id),
+                    organization_id=str(ORG_ID),
+                    name=name,
+                    address=None,
+                    architect=None,
+                    project_number=None,
+                ),
+                ProjectRFISettings(
+                    id=str(settings_id),
+                    project_id=str(project_id),
+                    rfi_prefix="RFI",
+                    number_width=4,
+                    standard_due_days=7,
+                    urgent_due_hours=72,
+                    work_stopped_due_hours=24,
+                    escalate_after_overdue_hours=48,
+                ),
+                DrawingSet(
+                    id=str(set_id),
+                    project_id=str(project_id),
+                    name="Sample drawing set",
+                    issued_on=date(2026, 6, 25),
+                ),
+                Sheet(
+                    id=str(sheet_id),
+                    drawing_set_id=str(set_id),
+                    project_id=str(project_id),
+                    sheet_number=DEMO_SHEET_NUMBER,
+                    title="Sample lighting plan",
+                    discipline="E",
+                ),
+                _revision(
+                    rev_id,
+                    sheet_id,
+                    DEMO_REVISION,
+                    filename,
+                    date(2026, 6, 25),
+                    True,
+                    sizes,
+                ),
+            ]
+        )
+        added = True
+    if added:
+        db.commit()
 
 
 def _shop_open_match(db: Session) -> RFI | None:

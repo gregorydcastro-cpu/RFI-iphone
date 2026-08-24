@@ -21,6 +21,9 @@ struct FieldProblemView: View {
                     ForEach(model.projects) { project in
                         Button {
                             model.selectedProject = project
+                            if let job = ShopSampleCatalog.job(matching: project) {
+                                session.selectJob(job)
+                            }
                             Task {
                                 await model.loadRevisions()
                                 await session.load(client: model.client, projectID: project.id)
@@ -123,6 +126,10 @@ struct FieldProblemView: View {
             if let project = model.selectedProject {
                 await session.load(client: model.client, projectID: project.id)
             }
+        }
+        .onChange(of: session.selectedJobID) { _, _ in
+            model.projects = ShopSampleCatalog.allowedProjects(model.projects)
+            model.applySelectedJob(session.selectedJob)
         }
     }
 

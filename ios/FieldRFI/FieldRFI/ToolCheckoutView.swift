@@ -16,6 +16,7 @@ struct ToolCheckoutView: View {
                     .font(.subheadline)
                     .foregroundStyle(FieldTheme.ink)
 
+                SampleJobPicker()
                 ShopSeatPicker()
 
                 TextField("Search name, vendor, or who has it", text: $query)

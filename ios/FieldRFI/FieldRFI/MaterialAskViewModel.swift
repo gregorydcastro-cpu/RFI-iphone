@@ -47,11 +47,12 @@ final class MaterialAskViewModel: ObservableObject {
 
     func appear(session: FieldSession) {
         board.ensureAuthor(session: session)
+        board.adoptSelectedJob()
         objectWillChange.send()
     }
 
     func runTakeoff() {
-        switch GrokTakeoff.run() {
+        switch GrokTakeoff.run(job: ShopSampleCatalog.selected) {
         case .success(let result):
             if board.applyTakeoff(result.lines, note: result.message) {
                 takeoffMessage = result.message

@@ -58,11 +58,11 @@ final class FieldProblemViewModel: ObservableObject {
         do {
             let rows = try await client.sheetRevisions(projectID: project.id)
             revisions = ShopSampleCatalog.allowedRevisions(rows, project: project)
-            selectedRevision = ShopSampleCatalog.pickRevision(revisions)
+            selectedRevision = ShopSampleCatalog.pickRevision(revisions, project: project)
             await loadDrawing()
         } catch {
             revisions = ShopSampleCatalog.allowedRevisions([], project: project)
-            selectedRevision = ShopSampleCatalog.pickRevision(revisions)
+            selectedRevision = ShopSampleCatalog.pickRevision(revisions, project: project)
             await loadDrawing()
             if !APIClient.isMissingHost(error) {
                 errorMessage = error.localizedDescription
@@ -75,25 +75,29 @@ final class FieldProblemViewModel: ObservableObject {
             drawingData = nil
             return
         }
-        if revision.sheet_number == ShopSampleCatalog.sheetNumber,
-           revision.revision == ShopSampleCatalog.revision,
-           let local = ShopSampleCatalog.drawingData() {
+        if let job = ShopSampleCatalog.job(matchingRevision: revision, project: selectedProject),
+           let local = job.drawingData() {
             drawingData = local
             return
         }
         do {
             drawingData = try await client.drawing(revisionID: revision.id)
         } catch {
-            drawingData = ShopSampleCatalog.drawingData()
+            drawingData = ShopSampleCatalog.job(matchingRevision: revision, project: selectedProject)?.drawingData()
         }
     }
 
+    func applySelectedJob(_ job: SampleJob) {
+        selectedProject = job.project
+        revisions = [job.sheetRevision]
+        selectedRevision = job.sheetRevision
+        drawingData = job.drawingData()
+        pin = nil
+    }
+
     private func applyLocalSample() {
-        projects = [ShopSampleCatalog.project]
-        selectedProject = ShopSampleCatalog.project
-        revisions = [ShopSampleCatalog.sheetRevision]
-        selectedRevision = ShopSampleCatalog.sheetRevision
-        drawingData = ShopSampleCatalog.drawingData()
+        projects = ShopSampleCatalog.projects
+        applySelectedJob(ShopSampleCatalog.selected)
     }
 
     func dropPin(xNorm: Double, yNorm: Double) {
@@ -116,8 +120,8 @@ final class FieldProblemViewModel: ObservableObject {
         let packet = FieldPacket(
             id: UUID().uuidString,
             kind: .fieldProblem,
-            projectID: selectedProject?.id ?? MaterialListRecord.shopTestID,
-            projectName: selectedProject?.name ?? MaterialListRecord.shopTestName,
+            projectID: selectedProject?.id ?? ShopSampleCatalog.selected.id,
+            projectName: selectedProject?.name ?? ShopSampleCatalog.selected.name,
             sheetNumber: selectedRevision?.sheet_number,
             revision: selectedRevision?.revision,
             sheetRevisionID: selectedRevision?.id,

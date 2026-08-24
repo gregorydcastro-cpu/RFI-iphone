@@ -1,15 +1,15 @@
 import Foundation
 import UIKit
 
-/// On-device takeoff from the bundled E-101 Rev A sample.
+/// On-device takeoff from the selected job’s bundled fake sheet.
 /// Counts only symbols on that sample. Does not invent a drawing number.
 /// Writes draft material lines. Does not submit, number, close, or set work_stopped.
-/// No HTTP. No Procore. G-Line Shop Test and E-101 Rev A only.
+/// No HTTP. No Procore. Invents no live counts.
 enum GrokTakeoff {
-    static let catalogSheet = ShopSampleCatalog.sheetNumber
-    static let catalogRevision = ShopSampleCatalog.revision
-    static let catalogResource = ShopSampleCatalog.resource
-    static let takeoffTag = ShopSampleCatalog.takeoffTag
+    static var catalogSheet: String { ShopSampleCatalog.selected.sheetNumber }
+    static var catalogRevision: String { ShopSampleCatalog.selected.revision }
+    static var catalogResource: String { ShopSampleCatalog.selected.resource }
+    static var takeoffTag: String { ShopSampleCatalog.selected.takeoffTag }
 
     struct Result {
         var lines: [MaterialLine]
@@ -36,8 +36,8 @@ enum GrokTakeoff {
     }
 
     @MainActor
-    static func run() -> Swift.Result<Result, Failure> {
-        guard let image = loadSheetImage() else {
+    static func run(job: SampleJob = ShopSampleCatalog.selected) -> Swift.Result<Result, Failure> {
+        guard let image = loadSheetImage(job: job) else {
             return .failure(.noSheet)
         }
         let fixtures = countFixtureSymbols(image)
@@ -50,21 +50,21 @@ enum GrokTakeoff {
             lines.append(
                 MaterialLine(
                     id: UUID().uuidString,
-                    description: "Plate fixture (\(takeoffTag))",
+                    description: "Plate fixture (\(job.takeoffTag))",
                     qty: Double(fixtures),
                     uom: "EA"
                 )
             )
         }
-        let message = "Grok takeoff on \(catalogSheet) Rev \(catalogRevision): \(fixtures) plate fixture(s) visible. No receptacles drawn. Draft list only — not submitted."
+        let message = "Grok takeoff on \(job.name) \(job.sheetNumber) Rev \(job.revision): \(fixtures) plate fixture(s) visible. No receptacles drawn. Draft list only — not submitted. SAMPLE / NOT A REAL JOB."
         return .success(Result(lines: lines, message: message))
     }
 
-    /// Suggest one circuit per visible plate fixture on the bundled sample.
+    /// Suggest one circuit per visible plate fixture on that job’s bundled sample.
     /// Does not invent circuits if the sample sheet is missing or empty.
     @MainActor
-    static func suggestCircuits() -> Swift.Result<(circuits: [CircuitSuggestion], message: String), Failure> {
-        guard let image = loadSheetImage() else {
+    static func suggestCircuits(job: SampleJob = ShopSampleCatalog.selected) -> Swift.Result<(circuits: [CircuitSuggestion], message: String), Failure> {
+        guard let image = loadSheetImage(job: job) else {
             return .failure(.noSheet)
         }
         let fixtures = countFixtureSymbols(image)
@@ -74,15 +74,15 @@ enum GrokTakeoff {
         let rows = (1...fixtures).map { n in
             CircuitSuggestion(
                 number: "\(n)",
-                description: "Plate fixture (\(takeoffTag))"
+                description: "Plate fixture (\(job.takeoffTag))"
             )
         }
-        let message = "Filled \(fixtures) circuit(s) from \(catalogSheet) Rev \(catalogRevision). Sample only. Not an RFI. Not submitted."
+        let message = "Filled \(fixtures) circuit(s) from \(job.name) \(job.sheetNumber) Rev \(job.revision). Sample only. Not an RFI. Not submitted."
         return .success((rows, message))
     }
 
-    static func loadSheetImage() -> CGImage? {
-        guard let url = catalogSheetURL(),
+    static func loadSheetImage(job: SampleJob = ShopSampleCatalog.selected) -> CGImage? {
+        guard let url = catalogSheetURL(job: job),
               let data = try? Data(contentsOf: url),
               !data.isEmpty,
               let image = UIImage(data: data)?.cgImage
@@ -90,9 +90,9 @@ enum GrokTakeoff {
         return image
     }
 
-    /// Only the bundled E-101 Rev A sample. Do not count job photos or other PDFs.
-    static func catalogSheetURL() -> URL? {
-        ShopSampleCatalog.sheetURL()
+    /// Only that job’s bundled fake sheet. Do not count job photos or other PDFs.
+    static func catalogSheetURL(job: SampleJob = ShopSampleCatalog.selected) -> URL? {
+        job.sheetURL()
     }
 
     /// Lighting-fixture outlines on the catalog sheet are #1D4F72 circles.

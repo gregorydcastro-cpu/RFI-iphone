@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-/// On-device meetings for G-Line Shop Test. Not an RFI. No Apple Calendar sync.
+/// On-device meetings for the selected sample job. Not an RFI. No Apple Calendar sync.
 struct ShopMeeting: Identifiable, Codable, Hashable {
     var id: String
     var jobID: String

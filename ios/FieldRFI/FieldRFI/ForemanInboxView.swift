@@ -10,6 +10,7 @@ struct ForemanInboxView: View {
     var body: some View {
         List {
             Section("Seat") {
+                SampleJobPicker()
                 ShopSeatPicker()
                 Text(session.banner)
                     .font(.footnote)

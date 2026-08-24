@@ -328,10 +328,11 @@ struct FeatureSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Company iPhone is the default. Personal phone is allowed. Pick who you are on \(ShopCrew.jobName). The person above sets what their direct reports can see and do. A personal Apple ID is not required. Not MDM. Not Procore.")
+                Text("Company iPhone is the default. Personal phone is allowed. Pick the sample job, then who you are. The person above sets what their direct reports can see and do. A personal Apple ID is not required. Not MDM. Not Procore.")
                     .font(.subheadline)
                     .foregroundStyle(FieldTheme.ink)
 
+                SampleJobPicker()
                 ShopSeatPicker()
 
                 mineReadOnly

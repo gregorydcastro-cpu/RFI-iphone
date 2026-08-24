@@ -7,6 +7,9 @@ final class FieldSession: ObservableObject {
     @Published var assignment: AssignmentDTO?
     @Published var crew: [CrewMemberDTO] = []
     @Published var sendOverrideID: String?
+    @Published var selectedJobID: String = ShopSampleCatalog.selectedJobID
+
+    var selectedJob: SampleJob { ShopSampleCatalog.job(id: selectedJobID) }
 
     var role: String { assignment?.role ?? "" }
 
@@ -61,11 +64,25 @@ final class FieldSession: ObservableObject {
         ensureShopSeat()
     }
 
+    func selectJob(_ job: SampleJob) {
+        selectedJobID = job.id
+        ShopSampleCatalog.selectedJobID = job.id
+        if let member = ShopCrew.member(byID: userID) {
+            pickShopSeat(member)
+        } else if assignment != nil, let member = ShopCrew.members.first {
+            pickShopSeat(ShopCrew.member(byID: userID) ?? member)
+        }
+    }
+
     func ensureShopSeat() {
+        selectedJobID = ShopSampleCatalog.selectedJobID
         if crew.isEmpty {
             crew = ShopCrew.members
         }
-        if let userID, userID != "local-field", ShopCrew.member(byID: userID) != nil {
+        if let userID, userID != "local-field", let member = ShopCrew.member(byID: userID) {
+            if assignment?.project_id != selectedJobID {
+                pickShopSeat(member)
+            }
             return
         }
         if let saved = UserDefaults.standard.string(forKey: seatKey),
@@ -163,7 +180,7 @@ struct ShopSeatPicker: View {
                 .font(.caption.weight(.semibold))
                 .tracking(0.8)
                 .foregroundStyle(FieldTheme.muted)
-            Text("Company iPhone is the default. Personal phone is allowed. On a shared shop handset, pick who you are on \(ShopCrew.jobName). A personal Apple ID is not required.")
+            Text("Company iPhone is the default. Personal phone is allowed. On a shared shop handset, pick who you are. A personal Apple ID is not required.")
                 .font(.caption)
                 .foregroundStyle(FieldTheme.muted)
             ForEach(ShopCrew.members) { member in
@@ -175,6 +192,47 @@ struct ShopSeatPicker: View {
                             .foregroundStyle(FieldTheme.ink)
                         Spacer()
                         if member.user_id == session.userID {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(FieldTheme.orange)
+                        }
+                    }
+                    .padding(12)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(FieldTheme.rule, lineWidth: 1))
+                }
+            }
+        }
+    }
+}
+
+/// Shared sample-job picker. Takeoff and panel fill use only that job’s bundled sheet.
+struct SampleJobPicker: View {
+    @EnvironmentObject private var session: FieldSession
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("JOB")
+                .font(.caption.weight(.semibold))
+                .tracking(0.8)
+                .foregroundStyle(FieldTheme.muted)
+            Text("Sample / mock jobs only. Not a live site. Takeoff and panel fill use only that job’s bundled sheet. SAMPLE / NOT A REAL JOB.")
+                .font(.caption)
+                .foregroundStyle(FieldTheme.muted)
+            ForEach(ShopSampleCatalog.jobs) { job in
+                Button {
+                    session.selectJob(job)
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(job.name)
+                                .foregroundStyle(FieldTheme.ink)
+                            Text("\(job.sheetNumber) Rev \(job.revision)  ·  SAMPLE / NOT A REAL JOB")
+                                .font(.caption)
+                                .foregroundStyle(FieldTheme.muted)
+                        }
+                        Spacer()
+                        if job.id == session.selectedJobID {
                             Image(systemName: "checkmark")
                                 .foregroundStyle(FieldTheme.orange)
                         }

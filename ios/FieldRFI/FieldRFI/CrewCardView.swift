@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// One person on G-Line Shop Test. One-step-up contact only.
+/// One person on the selected sample job. Harbor* are people names only. One-step-up contact only.
 /// Tool find opens this card. It does not message every Foreman.
 struct CrewCardView: View {
     let member: CrewMemberDTO

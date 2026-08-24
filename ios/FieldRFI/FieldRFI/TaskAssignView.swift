@@ -22,6 +22,7 @@ struct TaskAssignView: View {
                     .font(.subheadline)
                     .foregroundStyle(FieldTheme.ink)
 
+                SampleJobPicker()
                 ShopSeatPicker()
 
                 if features.allowsAssign(session.userID) {

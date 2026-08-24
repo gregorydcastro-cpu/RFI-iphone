@@ -19,6 +19,9 @@ struct NewRFIView: View {
                     ForEach(model.projects) { project in
                         Button {
                             model.selectedProject = project
+                            if let job = ShopSampleCatalog.job(matching: project) {
+                                session.selectJob(job)
+                            }
                             Task {
                                 await model.loadRevisions()
                                 await session.load(client: model.client, projectID: project.id)
@@ -204,6 +207,10 @@ struct NewRFIView: View {
                 await session.load(client: model.client, projectID: project.id)
                 await model.loadTickets(session: session)
             }
+        }
+        .onChange(of: session.selectedJobID) { _, _ in
+            model.projects = ShopSampleCatalog.allowedProjects(model.projects)
+            model.applySelectedJob(session.selectedJob)
         }
     }
 

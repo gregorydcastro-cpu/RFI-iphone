@@ -17,10 +17,11 @@ struct PanelScheduleView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Field tracker on \(ShopCrew.jobName). Pulled vs not pulled so a circuit is not missed. Build the list here. Not a design log. Not Procore.")
+                Text("Field tracker on the selected sample job. Pulled vs not pulled so a circuit is not missed. Build the list here. Fill only from that job’s bundled sheet. Not a design log. Not Procore.")
                     .font(.subheadline)
                     .foregroundStyle(FieldTheme.ink)
 
+                SampleJobPicker()
                 ShopSeatPicker()
 
                 createPanel
@@ -53,9 +54,14 @@ struct PanelScheduleView: View {
         .toolbarColorScheme(.dark, for: .navigationBar)
         .onAppear {
             session.ensureShopSeat()
-            if selectedID == nil {
-                selectedID = board.panels.first?.id
+            if selectedID == nil || !jobPanels.contains(where: { $0.id == selectedID }) {
+                selectedID = jobPanels.first?.id
             }
+        }
+        .onChange(of: session.selectedJobID) { _, _ in
+            selectedID = jobPanels.first?.id
+            message = nil
+            error = nil
         }
     }
 
@@ -63,8 +69,12 @@ struct PanelScheduleView: View {
         ShopCrew.member(byID: session.userID)
     }
 
+    private var jobPanels: [PanelSchedule] {
+        board.panels(for: session.selectedJobID)
+    }
+
     private var panel: PanelSchedule? {
-        selectedID.flatMap { board.panel(id: $0) } ?? board.panels.first
+        selectedID.flatMap { id in jobPanels.first(where: { $0.id == id }) } ?? jobPanels.first
     }
 
     private var createPanel: some View {
@@ -79,7 +89,7 @@ struct PanelScheduleView: View {
                     error = nil
                     message = "\(row.name) on \(row.jobName)."
                 } else {
-                    error = "Need a panel name that is not already on \(ShopCrew.jobName)."
+                    error = "Need a panel name that is not already on \(session.selectedJob.name)."
                     message = nil
                 }
             } label: {
@@ -91,7 +101,7 @@ struct PanelScheduleView: View {
                     .foregroundStyle(.white)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
             }
-            Text("\(ShopCrew.jobName) · \(ShopSampleCatalog.sheetNumber) Rev \(ShopSampleCatalog.revision) only.")
+            Text("\(session.selectedJob.name) · \(session.selectedJob.sheetNumber) Rev \(session.selectedJob.revision) bundled sample. SAMPLE / NOT A REAL JOB.")
                 .font(.caption)
                 .foregroundStyle(FieldTheme.muted)
         }
@@ -99,13 +109,13 @@ struct PanelScheduleView: View {
 
     private var panelList: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionLabel("On \(ShopCrew.jobName)")
-            if board.panels.isEmpty {
-                Text("No panels yet. Create one, then add circuits or fill from E-101 Rev A.")
+            sectionLabel("On \(session.selectedJob.name)")
+            if jobPanels.isEmpty {
+                Text("No panels yet. Create one, then add circuits or fill from this job’s E-101 Rev A sample.")
                     .font(.footnote)
                     .foregroundStyle(FieldTheme.muted)
             }
-            ForEach(board.panels) { row in
+            ForEach(jobPanels) { row in
                 Button {
                     selectedID = row.id
                 } label: {
@@ -119,7 +129,7 @@ struct PanelScheduleView: View {
                                 .foregroundStyle(FieldTheme.muted)
                         }
                         Spacer()
-                        if selectedID == row.id || (selectedID == nil && board.panels.first?.id == row.id) {
+                        if selectedID == row.id || (selectedID == nil && jobPanels.first?.id == row.id) {
                             Image(systemName: "checkmark")
                                 .foregroundStyle(FieldTheme.orange)
                         }
@@ -150,7 +160,7 @@ struct PanelScheduleView: View {
                         error = text
                     }
                 } label: {
-                    Text("Fill from E-101 Rev A")
+                    Text("Fill from this job’s E-101 Rev A sample")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)

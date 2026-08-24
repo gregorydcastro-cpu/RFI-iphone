@@ -38,6 +38,8 @@
 		A100000000000000000033 /* PrintMarkupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000033 /* PrintMarkupView.swift */; };
 		A100000000000000000034 /* GrokTakeoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000034 /* GrokTakeoff.swift */; };
 		A100000000000000000035 /* e-101-rev-a.png in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000035 /* e-101-rev-a.png */; };
+		A100000000000000000049 /* cedar-lot-e-101-rev-a.png in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000049 /* cedar-lot-e-101-rev-a.png */; };
+		A100000000000000000050 /* mill-street-e-101-rev-a.png in Resources */ = {isa = PBXBuildFile; fileRef = B100000000000000000050 /* mill-street-e-101-rev-a.png */; };
 		A100000000000000000046 /* ShopSampleCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000046 /* ShopSampleCatalog.swift */; };
 		A100000000000000000036 /* ShopCrew.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000036 /* ShopCrew.swift */; };
 		A100000000000000000037 /* TaskBoard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000037 /* TaskBoard.swift */; };
@@ -88,6 +90,8 @@
 		B100000000000000000033 /* PrintMarkupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrintMarkupView.swift; sourceTree = "<group>"; };
 		B100000000000000000034 /* GrokTakeoff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokTakeoff.swift; sourceTree = "<group>"; };
 		B100000000000000000035 /* e-101-rev-a.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Catalog/e-101-rev-a.png"; sourceTree = "<group>"; };
+		B100000000000000000049 /* cedar-lot-e-101-rev-a.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Catalog/cedar-lot-e-101-rev-a.png"; sourceTree = "<group>"; };
+		B100000000000000000050 /* mill-street-e-101-rev-a.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Catalog/mill-street-e-101-rev-a.png"; sourceTree = "<group>"; };
 		B100000000000000000046 /* ShopSampleCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopSampleCatalog.swift; sourceTree = "<group>"; };
 		B100000000000000000036 /* ShopCrew.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopCrew.swift; sourceTree = "<group>"; };
 		B100000000000000000037 /* TaskBoard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskBoard.swift; sourceTree = "<group>"; };
@@ -159,6 +163,8 @@
 				B100000000000000000034 /* GrokTakeoff.swift */,
 				B100000000000000000046 /* ShopSampleCatalog.swift */,
 				B100000000000000000035 /* e-101-rev-a.png */,
+				B100000000000000000049 /* cedar-lot-e-101-rev-a.png */,
+				B100000000000000000050 /* mill-street-e-101-rev-a.png */,
 				B100000000000000000036 /* ShopCrew.swift */,
 				B100000000000000000037 /* TaskBoard.swift */,
 				B100000000000000000038 /* TaskAssignView.swift */,
@@ -247,6 +253,8 @@
 			files = (
 				A100000000000000000010 /* Assets.xcassets in Resources */,
 				A100000000000000000035 /* e-101-rev-a.png in Resources */,
+				A100000000000000000049 /* cedar-lot-e-101-rev-a.png in Resources */,
+				A100000000000000000050 /* mill-street-e-101-rev-a.png in Resources */,
 				A100000000000000000028 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

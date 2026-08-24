@@ -15,6 +15,7 @@ struct MaterialAskView: View {
                     .font(.subheadline)
                     .foregroundStyle(FieldTheme.ink)
 
+                SampleJobPicker()
                 jobChrome
                 statusStrip
 
@@ -39,16 +40,15 @@ struct MaterialAskView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .onAppear { model.appear(session: session) }
+        .onChange(of: session.selectedJobID) { _, _ in
+            model.appear(session: session)
+        }
         .onDisappear { model.persistHeld() }
     }
 
     private var jobChrome: some View {
         VStack(alignment: .leading, spacing: 6) {
-            sectionLabel("Job")
-            Text(MaterialListRecord.shopTestName)
-                .font(.headline)
-                .foregroundStyle(FieldTheme.ink)
-            Text("Sample / mock job only.")
+            Text("Held list is stamped \(board.held.jobName). Takeoff counts only that job’s bundled sheet.")
                 .font(.caption)
                 .foregroundStyle(FieldTheme.muted)
         }
@@ -58,7 +58,7 @@ struct MaterialAskView: View {
         VStack(alignment: .leading, spacing: 8) {
             sectionLabel("Status")
             HStack(spacing: 8) {
-                ForEach(board.statusCounts(), id: \.0) { item in
+                ForEach(board.statusCounts(for: session.selectedJobID), id: \.0) { item in
                     VStack(spacing: 2) {
                         Text("\(item.1)")
                             .font(.headline)
@@ -123,7 +123,7 @@ struct MaterialAskView: View {
                 }
             }
             if features.flags(for: session.userID).takeoff {
-                Text("Counts plate fixtures on sample sheet E-101 Rev A only. Writes the held list. Does not submit, number, or set work-stopped. Job photos are not a sheet. If the sample image is missing, it writes nothing.")
+                Text("Counts plate fixtures on this job’s bundled E-101 Rev A sample only. Writes the held list. Does not submit, number, or set work-stopped. Job photos are not a sheet. If the sample image is missing, it writes nothing.")
                     .font(.caption)
                     .foregroundStyle(FieldTheme.muted)
                 if let takeoff = model.takeoffMessage {
@@ -205,7 +205,7 @@ struct MaterialAskView: View {
     }
 
     private var pickedTickets: some View {
-        let rows = board.pickedTickets
+            let rows = board.pickedTickets(for: session.selectedJobID)
         return Group {
             if !rows.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {

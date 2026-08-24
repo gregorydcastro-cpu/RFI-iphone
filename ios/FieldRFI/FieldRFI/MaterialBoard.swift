@@ -68,11 +68,11 @@ struct MaterialListRecord: Identifiable, Codable, Hashable {
         }
     }
 
-    static func newHeld(userID: String, name: String) -> MaterialListRecord {
+    static func newHeld(userID: String, name: String, job: SampleJob = ShopSampleCatalog.selected) -> MaterialListRecord {
         MaterialListRecord(
             id: UUID().uuidString,
-            jobID: shopTestID,
-            jobName: shopTestName,
+            jobID: job.id,
+            jobName: job.name,
             note: "",
             lines: [MaterialLine.blank()],
             status: .held,
@@ -110,8 +110,12 @@ final class MaterialBoard: ObservableObject {
         lists.sorted { $0.updatedAt > $1.updatedAt }
     }
 
+    func history(for jobID: String) -> [MaterialListRecord] {
+        lists.filter { $0.jobID == jobID }.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
     func assignedTickets(for session: FieldSession) -> [MaterialListRecord] {
-        let open = history.filter { $0.status == .sent || $0.status == .backOrdered }
+        let open = history(for: session.selectedJobID).filter { $0.status == .sent || $0.status == .backOrdered }
         if session.isApprentice, let me = session.userID {
             return open.filter { $0.assignedToUserID == me }
         }
@@ -128,13 +132,19 @@ final class MaterialBoard: ObservableObject {
         history.filter { $0.status == .picked }
     }
 
-    func statusCounts() -> [(MaterialListStatus, Int)] {
-        let heldCount = held.readyLines.isEmpty ? 0 : 1
+    func pickedTickets(for jobID: String) -> [MaterialListRecord] {
+        history(for: jobID).filter { $0.status == .picked }
+    }
+
+    func statusCounts(for jobID: String? = nil) -> [(MaterialListStatus, Int)] {
+        let jobHeld = jobID == nil || held.jobID == jobID
+        let heldCount = jobHeld && !held.readyLines.isEmpty ? 1 : 0
+        let rows = jobID.map { id in lists.filter { $0.jobID == id } } ?? lists
         return [
             (.held, heldCount),
-            (.sent, lists.filter { $0.status == .sent }.count),
-            (.picked, lists.filter { $0.status == .picked }.count),
-            (.backOrdered, lists.filter { $0.status == .backOrdered }.count),
+            (.sent, rows.filter { $0.status == .sent }.count),
+            (.picked, rows.filter { $0.status == .picked }.count),
+            (.backOrdered, rows.filter { $0.status == .backOrdered }.count),
         ]
     }
 
@@ -160,13 +170,22 @@ final class MaterialBoard: ObservableObject {
         }
     }
 
+    func adoptSelectedJob() {
+        let job = ShopSampleCatalog.selected
+        if held.readyLines.isEmpty {
+            held.jobID = job.id
+            held.jobName = job.name
+            save()
+        }
+    }
+
     @discardableResult
-    func applyTakeoff(_ lines: [MaterialLine], note: String) -> Bool {
+    func applyTakeoff(_ lines: [MaterialLine], note: String, job: SampleJob = ShopSampleCatalog.selected) -> Bool {
         guard !lines.isEmpty else { return false }
-        held.jobID = MaterialListRecord.shopTestID
-        held.jobName = MaterialListRecord.shopTestName
+        held.jobID = job.id
+        held.jobName = job.name
         held.lines.removeAll {
-            $0.description.contains(GrokTakeoff.takeoffTag)
+            $0.description.contains("E-101 Rev A takeoff")
                 || $0.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
         held.lines.append(contentsOf: lines)
@@ -201,9 +220,10 @@ final class MaterialBoard: ObservableObject {
             held.createdByName = session.assignment?.name ?? "Field"
         }
         if held.jobName.isEmpty {
-            held.jobID = MaterialListRecord.shopTestID
-            held.jobName = MaterialListRecord.shopTestName
+            held.jobID = ShopSampleCatalog.selected.id
+            held.jobName = ShopSampleCatalog.selected.name
         }
+        adoptSelectedJob()
         save()
     }
 
@@ -234,7 +254,8 @@ final class MaterialBoard: ObservableObject {
         let packet = packet(for: sent, extraNote: nil)
         held = MaterialListRecord.newHeld(
             userID: session.userID ?? "local-field",
-            name: session.assignment?.name ?? "Field"
+            name: session.assignment?.name ?? "Field",
+            job: ShopSampleCatalog.selected
         )
         save()
         return FieldOutbox.shared.sendToForeman(packet)

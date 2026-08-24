@@ -76,6 +76,8 @@ struct MeetingCalendarView: View {
                     .font(.subheadline)
                     .foregroundStyle(FieldTheme.ink)
 
+                SampleJobPicker()
+
                 VStack(alignment: .leading, spacing: 10) {
                     sectionLabel("On this day")
                     DatePicker("Day", selection: $day, displayedComponents: .date)

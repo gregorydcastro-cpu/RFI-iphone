@@ -14,15 +14,7 @@ struct PrintPhotoView: View {
                     .font(.subheadline)
                     .foregroundStyle(FieldTheme.ink)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    sectionLabel("Job")
-                    Text(model.jobName)
-                        .font(.headline)
-                        .foregroundStyle(FieldTheme.ink)
-                    Text("Sample / mock job only.")
-                        .font(.caption)
-                        .foregroundStyle(FieldTheme.muted)
-                }
+                SampleJobPicker()
 
                 VStack(alignment: .leading, spacing: 10) {
                     sectionLabel("Print PDFs")
@@ -86,7 +78,7 @@ struct PrintPhotoView: View {
                     }
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(FieldTheme.steel)
-                    Text("Counts plate fixtures on sample sheet E-101 Rev A and writes the G-Line Shop Test material list. Does not submit. Job photos are not a sheet. If the sample image is missing, it writes nothing.")
+                    Text("Counts plate fixtures on this job’s bundled E-101 Rev A sample and writes that job’s held material list. Does not submit. Job photos are not a sheet. If the sample image is missing, it writes nothing.")
                         .font(.caption)
                         .foregroundStyle(FieldTheme.muted)
                     if let takeoff = model.takeoffMessage {

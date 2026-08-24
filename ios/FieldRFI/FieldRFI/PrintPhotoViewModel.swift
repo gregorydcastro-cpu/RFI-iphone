@@ -16,8 +16,8 @@ final class PrintPhotoViewModel: ObservableObject {
     @Published var sentPacket: FieldPacket?
     @Published var takeoffMessage: String?
 
-    let jobName = MaterialListRecord.shopTestName
-    let jobID = MaterialListRecord.shopTestID
+    var jobName: String { ShopSampleCatalog.selected.name }
+    var jobID: String { ShopSampleCatalog.selected.id }
 
     func canSend(session: FieldSession) -> Bool {
         FeatureSettings.shared.allowsSend(session.userID)
@@ -26,7 +26,7 @@ final class PrintPhotoViewModel: ObservableObject {
     }
 
     func runTakeoff() {
-        switch GrokTakeoff.run() {
+        switch GrokTakeoff.run(job: ShopSampleCatalog.selected) {
         case .success(let result):
             if MaterialBoard.shared.applyTakeoff(result.lines, note: result.message) {
                 takeoffMessage = result.message

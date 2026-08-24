@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-/// Shop tools on G-Line Shop Test. On this phone. No barcode. No Procore.
+/// Shop tools on the selected sample job. On this phone. No barcode. No Procore.
 struct ShopTool: Identifiable, Codable, Hashable {
     var id: String
     var name: String

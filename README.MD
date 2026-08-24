@@ -22,10 +22,10 @@ iOS sample (on this phone, no host required):
 
 | | |
 | --- | --- |
-| Job | **G-Line Shop Test** |
-| Sheet | **E-101 Rev A** (bundled fake lighting plan) |
-| Takeoff | Count only symbols on that sample sheet |
-| Panels | Field tracker: build circuits, pulled vs not pulled, optional E-101 fill |
+| Jobs | **G-Line Shop Test**, **Cedar Lot Sample**, **Mill Street Mock** (selectable; sample / not a real job) |
+| Sheet | Each job has its own bundled **E-101 Rev A** fake lighting plan |
+| Takeoff | Count only symbols on that job’s bundled sample sheet |
+| Panels | Field tracker: build circuits, pulled vs not pulled, optional fill from that job’s sheet |
 
 ## Backend (Linux / Mac)
 
@@ -62,8 +62,8 @@ This cloud VM cannot run the iOS simulator. On a Mac:
 ## Test plan (New RFI screen)
 
 1. Open the app. You should land on **New RFI**, not a placeholder.
-2. Job is **G-Line Shop Test**. Sheet is **E-101 Rev A**.
-3. The bundled E-101 Rev A sample drawing should load.
+2. Pick a sample job (**G-Line Shop Test**, **Cedar Lot Sample**, or **Mill Street Mock**). Sheet is that job’s bundled **E-101 Rev A**.
+3. The bundled E-101 Rev A sample drawing for that job should load.
 4. Tap the sheet to drop a pin. Optionally set grid `B-4`.
 5. Add a photo if you want. Enter one note, for example: `Beam at grid B-4 appears to conflict with the duct. Please confirm clearance.`
 6. Tap **Draft RFI**. With no API host this stays on the phone. With a Debug host the client calls `search_rfis`, then `create_rfi_draft`.

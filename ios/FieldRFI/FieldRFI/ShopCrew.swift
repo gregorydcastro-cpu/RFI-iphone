@@ -1,10 +1,10 @@
 import Foundation
 
-/// Existing mock crew names already in the app. Job stays G-Line Shop Test.
-/// Do not invent a new job or new people.
+/// Existing mock crew names already in the app. Harbor* are people names only.
+/// Job comes from the selected sample job. Do not invent new people.
 enum ShopCrew {
-    static let jobID = MaterialListRecord.shopTestID
-    static let jobName = MaterialListRecord.shopTestName
+    static var jobID: String { ShopSampleCatalog.selected.id }
+    static var jobName: String { ShopSampleCatalog.selected.name }
 
     static let members: [CrewMemberDTO] = [
         member("aaaaaaaa-0000-4000-8000-000000000311", "Greg Castro", "general_foreman", reportsTo: nil, boss: nil),
