@@ -61,6 +61,12 @@ struct FieldRFIApp: App {
                     }
                 }
                 NavigationStack {
+                    PanelScheduleView()
+                }
+                .tabItem {
+                    Label("Panels", systemImage: "list.bullet.rectangle")
+                }
+                NavigationStack {
                     ToolCheckoutView()
                 }
                 .tabItem {

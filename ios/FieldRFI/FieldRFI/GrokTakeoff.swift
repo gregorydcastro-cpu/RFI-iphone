@@ -16,6 +16,11 @@ enum GrokTakeoff {
         var message: String
     }
 
+    struct CircuitSuggestion: Hashable {
+        var number: String
+        var description: String
+    }
+
     enum Failure: Error {
         case noSheet
         case noVisibleDevices
@@ -53,6 +58,27 @@ enum GrokTakeoff {
         }
         let message = "Grok takeoff on \(catalogSheet) Rev \(catalogRevision): \(fixtures) plate fixture(s) visible. No receptacles drawn. Draft list only — not submitted."
         return .success(Result(lines: lines, message: message))
+    }
+
+    /// Suggest one circuit per visible plate fixture on the bundled sample.
+    /// Does not invent circuits if the sample sheet is missing or empty.
+    @MainActor
+    static func suggestCircuits() -> Swift.Result<(circuits: [CircuitSuggestion], message: String), Failure> {
+        guard let image = loadSheetImage() else {
+            return .failure(.noSheet)
+        }
+        let fixtures = countFixtureSymbols(image)
+        if fixtures <= 0 {
+            return .failure(.noVisibleDevices)
+        }
+        let rows = (1...fixtures).map { n in
+            CircuitSuggestion(
+                number: "\(n)",
+                description: "Plate fixture (\(takeoffTag))"
+            )
+        }
+        let message = "Filled \(fixtures) circuit(s) from \(catalogSheet) Rev \(catalogRevision). Sample only. Not an RFI. Not submitted."
+        return .success((rows, message))
     }
 
     static func loadSheetImage() -> CGImage? {
