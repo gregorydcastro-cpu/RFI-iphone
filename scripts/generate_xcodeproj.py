@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import hashlib
-import os
 from pathlib import Path
 
 ROOT = Path("/workspace")
@@ -109,7 +108,6 @@ common_target = """
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "GC Field Log";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
-				INFOPLIST_KEY_NSBonjourServices = "_gcfieldlog._tcp";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Snap packing slips, paper sign-in sheets, and field photos.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Bump work to a nearby device running GC Field Log. Not system AirDrop.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Attach photos to RFI packets and field problems.";

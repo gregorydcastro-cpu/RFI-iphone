@@ -1,6 +1,5 @@
 import Foundation
 import SwiftData
-import SwiftUI
 
 @Model
 final class CrewMember {
@@ -485,7 +484,7 @@ enum DemoIDs {
 
 enum SchemaModels {
     static var schema: Schema {
-        Schema([
+        let types: [any PersistentModel.Type] = [
             CrewMember.self,
             Job.self,
             DrawingSheet.self,
@@ -500,6 +499,7 @@ enum SchemaModels {
             RoomProgress.self,
             GrabListSend.self,
             BumpRecord.self
-        ])
+        ]
+        return Schema(types)
     }
 }

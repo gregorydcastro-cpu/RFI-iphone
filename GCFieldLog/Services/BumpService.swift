@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import SwiftData
 
 struct NearbyDevice: Identifiable, Hashable {
