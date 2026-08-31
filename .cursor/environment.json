@@ -1,0 +1,14 @@
+{
+  "name": "Field RFI backend",
+  "install": "bash .cursor/install.sh",
+  "terminals": [
+    {
+      "name": "backend",
+      "command": "bash .cursor/run-backend.sh",
+      "description": "Field RFI FastAPI backend on http://0.0.0.0:8000 (SQLite, auto-seeds demo data on startup)."
+    }
+  ],
+  "ports": [
+    { "name": "backend api", "port": 8000 }
+  ]
+}
