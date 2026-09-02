@@ -121,7 +121,7 @@ common_target = """
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gcfieldlog.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.castro.fieldrfi;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;

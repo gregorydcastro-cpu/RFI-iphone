@@ -51,6 +51,8 @@ open GCFieldLog.xcodeproj
 
 Select the **GCFieldLog** scheme.
 
+Display name on the home screen is **GC Field Log**. Bundle ID is `com.castro.fieldrfi` (App Store Connect Apple ID `6804498935`). Pick your signing Team in Xcode, then **Product → Archive** for TestFlight. There is no checked-in Info.plist; Xcode generates it from these build settings.
+
 ### iPhone
 
 1. Destination: **iPhone 16** (or any iPhone simulator).
