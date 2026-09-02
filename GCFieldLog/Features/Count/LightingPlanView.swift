@@ -197,7 +197,7 @@ enum PlanGeometry {
         }
 
         if showZoneBox, let z = zone(named: selectedZone) {
-            let r = rect(z).insetBy(dx: -6, dy: -6)
+            let r = rect(z.rect).insetBy(dx: -6, dy: -6)
             context.stroke(Path(r), with: .color(GCTheme.zone), style: StrokeStyle(lineWidth: 2, dash: [7, 5]))
         }
 

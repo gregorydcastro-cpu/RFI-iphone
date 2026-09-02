@@ -19,7 +19,8 @@ struct GCFieldLogApp: App {
                 configurations: ModelConfiguration(isStoredInMemoryOnly: true)
             )
         }
-        DemoSeed.ensure(in: container.mainContext)
+        // `mainContext` is MainActor-isolated; App.init is not. Use a side context.
+        DemoSeed.ensure(in: container)
     }
 
     var body: some Scene {

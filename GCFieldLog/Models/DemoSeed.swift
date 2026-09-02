@@ -7,21 +7,27 @@ enum DemoSeed {
     static let sheetNumber = "E-201"
     static let disclaimer = "Demo job, invented drawing. Not a real project."
 
-    static func ensure(in context: ModelContext) {
+    /// Safe from `App.init`. Do not use `container.mainContext` here — that property is MainActor-isolated.
+    nonisolated static func ensure(in container: ModelContainer) {
+        let context = ModelContext(container)
+        ensure(in: context)
+    }
+
+    nonisolated static func ensure(in context: ModelContext) {
         let existing = try? context.fetch(FetchDescriptor<Job>())
         if let existing, !existing.isEmpty { return }
         seed(in: context)
     }
 
-    static func previewContainer() -> ModelContainer {
+    nonisolated static func previewContainer() -> ModelContainer {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let schema = SchemaModels.schema
         let container = try! ModelContainer(for: schema, configurations: config)
-        seed(in: container.mainContext)
+        ensure(in: container)
         return container
     }
 
-    static func seed(in context: ModelContext) {
+    nonisolated static func seed(in context: ModelContext) {
         let pat = CrewMember(id: DemoIDs.pat, name: "Pat Nguyen", role: .foreman, pin: "1001", shortName: "Pat")
         let alex = CrewMember(id: DemoIDs.alex, name: "Alex Rivera", role: .journeyman, pin: "2002", shortName: "Alex")
         let sam = CrewMember(id: DemoIDs.sam, name: "Sam Ortiz", role: .apprentice, pin: "3003", shortName: "Sam")

@@ -40,6 +40,8 @@ final class BumpService {
     var lastMessage: String?
     var basementMode: Bool = false
 
+    nonisolated init() {}
+
     func send(_ payload: BumpPayload, to device: NearbyDevice, context: ModelContext) {
         let encoded = (try? JSONEncoder().encode(payload)) ?? Data()
         _ = encoded

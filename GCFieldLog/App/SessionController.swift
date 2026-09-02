@@ -15,7 +15,7 @@ final class SessionController {
     var showPINPad = false
     var toast: String?
 
-    init(
+    nonisolated init(
         signedInID: UUID = DemoIDs.pat,
         activeJobID: UUID = DemoIDs.job,
         activeSheetID: UUID = DemoIDs.sheetCurrent,
