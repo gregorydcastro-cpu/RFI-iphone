@@ -16,7 +16,9 @@ export function TakeoffCounts({ takeoff, roomName }: Props) {
         <h2 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
           Takeoff counts
         </h2>
-        <p className="text-sm text-zinc-500">No takeoff counts on this pack.</p>
+        <p className="text-sm text-zinc-500">
+          Placeholder — takeoff counts are not on this pack yet.
+        </p>
       </section>
     );
   }
@@ -24,7 +26,10 @@ export function TakeoffCounts({ takeoff, roomName }: Props) {
   return (
     <section className="space-y-2">
       <h2 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
-        Takeoff counts
+        Takeoff counts{" "}
+        <span className="font-normal tracking-normal text-zinc-400 normal-case">
+          (placeholder)
+        </span>
       </h2>
       <div className="rounded-md border border-zinc-200 bg-white p-3">
         <p className="text-sm font-medium text-zinc-900">{room.name}</p>

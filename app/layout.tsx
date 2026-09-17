@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GC Pull Log · Room pack viewer",
+  title: "GC Pull Log · Crew dashboard",
   description:
-    "Web-first construction room-pack viewer for gcpullog.com. Native iOS is paused.",
+    "Browser dashboard for field crews on gcpullog.com. Zoomable sheets, RFIs, and room-pack actions. Native iOS is paused.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

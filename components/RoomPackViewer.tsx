@@ -74,7 +74,7 @@ function TopBar({ pack, sheet }: { pack: RoomPack; sheet: Sheet }) {
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-950 px-4 py-3 text-white">
       <div className="min-w-0">
         <p className="text-[11px] font-medium tracking-wide text-amber-400 uppercase">
-          gcpullog.com · room pack
+          gcpullog.com · crew dashboard
         </p>
         <h1 className="truncate text-base font-semibold sm:text-lg">
           {pack.project.name}
