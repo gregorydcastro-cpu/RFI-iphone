@@ -74,13 +74,16 @@ function pendingStub(
   };
 }
 
-function rejectMismatchedPack(drivePath: string): PackStatusSnapshot {
+function rejectMismatchedPack(
+  drivePath: string,
+  source: PackStatusSnapshot["source"],
+): PackStatusSnapshot {
   console.error("[gcfieldlog] room-pack status rejected — job mismatch", {
     drivePath,
   });
   return {
     state: "error",
-    source: "http",
+    source,
     drivePath,
     pack: null,
     poll: false,
@@ -161,7 +164,7 @@ export async function fetchPackStatus(input: {
   const local = await loadPack(input.requestId);
   if (local && isRoomPackShape(local)) {
     if (!packMatchesJob(local, input.job, input.requestId)) {
-      return rejectMismatchedPack(drivePath);
+      return rejectMismatchedPack(drivePath, "local");
     }
     if (local.status === "ready") {
       return {
@@ -203,7 +206,7 @@ export async function fetchPackStatus(input: {
     if (!json) continue;
     if (!isRoomPackShape(json)) continue;
     if (!packMatchesJob(json, input.job, input.requestId)) {
-      return rejectMismatchedPack(drivePath);
+      return rejectMismatchedPack(drivePath, "http");
     }
     if (json.status === "ready") {
       return {
