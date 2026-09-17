@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+:root {
+  /* Live glineracing.com tokens (fetched 2026-09-17). */
+  --gline-primary: #191616;
+  --gline-secondary: #f5f1eb;
+  --gline-accent-1: #673b2f;
+  --gline-accent-2: #6d9ca5;
+  --gline-accent-3: #4d7798;
+  --gline-tan: #c8bdac;
+  --gline-gray-900: #111827;
+  --gline-gray-800: #1f2937;
+  --gline-cta: #e10600;
+  --gline-cta-hover: #ff2b1a;
+}
+
+@theme inline {
+  --color-primary: var(--gline-primary);
+  --color-secondary: var(--gline-secondary);
+  --color-accent-1: var(--gline-accent-1);
+  --color-accent-2: var(--gline-accent-2);
+  --color-accent-3: var(--gline-accent-3);
+  --color-tan: var(--gline-tan);
+  --color-cta: var(--gline-cta);
+  --color-cta-hover: var(--gline-cta-hover);
+  --color-ink: var(--gline-gray-900);
+  --color-gline-ink: var(--gline-primary);
+  --color-charcoal: var(--gline-gray-900);
+  --color-panel: var(--gline-primary);
+  --color-panel-2: var(--gline-gray-800);
+  --color-line: #2c2a29;
+  --color-metal: var(--gline-tan);
+  --color-paper: var(--gline-secondary);
+  --color-muted: var(--gline-accent-2);
+  --color-accent: var(--gline-cta);
+  --color-accent-hover: var(--gline-cta-hover);
+  --color-accent-deep: var(--gline-accent-1);
+  --color-background: var(--gline-gray-900);
+  --color-foreground: var(--gline-secondary);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-oswald);
+}
+
+body {
+  background:
+    radial-gradient(900px 420px at 100% -8%, rgb(225 6 0 / 0.12), transparent 55%),
+    radial-gradient(640px 380px at 0% 100%, rgb(77 119 152 / 0.12), transparent 50%),
+    var(--gline-gray-900);
+  color: var(--gline-secondary);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-oswald), var(--font-geist-sans), sans-serif;
+}

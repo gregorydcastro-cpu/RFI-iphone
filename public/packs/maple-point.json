@@ -1,0 +1,113 @@
+{
+  "schema": "gcpullog.room_pack.v1",
+  "status": "ready",
+  "request_id": "maple-point",
+  "project": {
+    "id": "proj-maple-point",
+    "name": "Maple Point Medical Office",
+    "slug": "maple-point"
+  },
+  "room": {
+    "id": "room-e101",
+    "name": "Electrical Closet 101",
+    "number": "101"
+  },
+  "sheets": [
+    {
+      "id": "E-101",
+      "rev": "A",
+      "pdf": "/packs/maple-point-e101.pdf",
+      "preview": null,
+      "crop": null
+    },
+    {
+      "id": "E-102",
+      "rev": "A",
+      "pdf": "/packs/maple-point-e102.pdf",
+      "preview": null,
+      "crop": null
+    }
+  ],
+  "rfis": [
+    {
+      "id": "r1",
+      "number": "RFI-001",
+      "title": "Panel feed clarification for PP-101",
+      "status": "open",
+      "url": null
+    },
+    {
+      "id": "r2",
+      "number": "RFI-004",
+      "title": "Spare breaker count for future IT rack",
+      "status": "answered",
+      "url": null
+    },
+    {
+      "id": "r3",
+      "number": "RFI-009",
+      "title": "Emergency lighting transfer in Closet 101",
+      "status": "closed",
+      "url": null
+    }
+  ],
+  "layout": {
+    "sheet": "E-101",
+    "type": "polygon",
+    "locator": "Electrical Closet 101",
+    "points": [
+      [0.2, 0.2],
+      [0.5, 0.2],
+      [0.5, 0.5],
+      [0.2, 0.5]
+    ],
+    "bbox": { "x": 0.2, "y": 0.2, "w": 0.3, "h": 0.3 },
+    "bbox_pdf_pts": { "x": 244.8, "y": 396, "w": 367.2, "h": 237.6 },
+    "page_width_pts": 1224,
+    "page_height_pts": 792
+  },
+  "actions": [
+    {
+      "id": "generate-rfi",
+      "label": "Generate RFI",
+      "href": "/pack/maple-point/rfi/new?sheet=E-101",
+      "enabled": false,
+      "note": "Draft to foreman — not a Procore submit"
+    },
+    {
+      "id": "order-materials",
+      "label": "Order materials",
+      "href": "/pack/maple-point/materials",
+      "enabled": false,
+      "note": "Coming soon"
+    }
+  ],
+  "takeoff": {
+    "project": "Maple Point Medical Office",
+    "scope": "Electrical Closet 101 — Level 1 power",
+    "sheets": ["E-101"],
+    "units": "each",
+    "by_room": [
+      {
+        "room": "101",
+        "name": "Electrical Closet 101",
+        "sheet": "E-101",
+        "fixtures": [
+          { "type": "Panelboard 225A (PP-101)", "qty": 1 },
+          { "type": "Junction box 4sq", "qty": 6 },
+          { "type": "Duplex receptacle", "qty": 4 },
+          { "type": "Lighting control relay", "qty": 2 }
+        ]
+      }
+    ],
+    "by_type": [
+      { "type": "Panelboard 225A (PP-101)", "qty": 1 },
+      { "type": "Junction box 4sq", "qty": 6 },
+      { "type": "Duplex receptacle", "qty": 4 },
+      { "type": "Lighting control relay", "qty": 2 }
+    ],
+    "by_sheet": [{ "sheet": "E-101", "qty": 13 }],
+    "confidence": "demo",
+    "flags": ["fictional-project", "demo-data"]
+  }
+}
