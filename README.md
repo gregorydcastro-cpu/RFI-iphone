@@ -56,9 +56,28 @@ This is a standard Next.js App Router app. Production host for the crew dashboar
 | `/pack/[requestId]/materials` | Stub “Order materials” page |
 | `/jobs/[projectSlug]/rooms/[room]` | Optional alias stub (Maple Point redirects to `/pack/maple-point`) |
 
+## Where production packs come from
+
+Live packs are produced by **Procore’s Room pack webhook**, schema `gcpullog.room_pack.v1`.
+
+This MVP **does not call that webhook**. The dashboard consumes the **local Maple Point demo** at `public/packs/maple-point.json`. Production will **poll the same v1 JSON** from Drive (below) and feed it to `/pack/[requestId]` — no change to the contract.
+
+### Drive layout (Greg / ops — not secrets)
+
+Status JSON lands next to the room folder:
+
+```
+{project_slug}/{request_id}.json
+{project_slug}/Room_{room}/
+```
+
+Drive root: [GC Pull Log room packs](https://drive.google.com/drive/folders/19Ixner0dApGlfpG13M2XOw2rzReQGl3P)
+
+That folder is an ops pointer, not a credential. Do not put Drive API keys or webhook secrets in this app.
+
 ## Pack JSON contract (`gcpullog.room_pack.v1`)
 
-Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `/pack/<requestId>`. Demo packs are local files; later a Procore (or other) backend can emit this same shape.
+Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `/pack/<requestId>`. Demo packs are those local files. Production webhook output uses this same shape.
 
 ```json
 {
@@ -143,7 +162,7 @@ Buttons come from `actions[]`, or default to **Generate RFI** (draft to foreman 
 
 - Crew **login**
 - **Stripe** monthly billing
-- Live Procore (or other) pack fetch
+- Poll Drive / Procore Room pack webhook v1 JSON (viewer still will not invoke the webhook itself)
 
 ## Demo data
 
