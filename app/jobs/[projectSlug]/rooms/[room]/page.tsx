@@ -1,18 +1,15 @@
 import { redirect } from "next/navigation";
+import { makeRequestId } from "@/lib/jobs";
 
 type Props = {
   params: Promise<{ projectSlug: string; room: string }>;
 };
 
 /**
- * Optional URL alias stub.
- * TODO: resolve project slug + room to a pack `requestId` instead of a
- * hardcoded Maple Point demo redirect.
+ * Optional URL alias: `/jobs/[projectSlug]/rooms/[room]` → pack viewer.
  */
 export default async function JobRoomAliasPage({ params }: Props) {
-  const { projectSlug } = await params;
-  if (projectSlug === "maple-point") {
-    redirect("/pack/maple-point");
-  }
-  redirect("/");
+  const { projectSlug, room } = await params;
+  const requestId = makeRequestId(projectSlug, room);
+  redirect(`/pack/${requestId}?job=${projectSlug}&room=${room}`);
 }

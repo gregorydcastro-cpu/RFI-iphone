@@ -1,22 +1,25 @@
-# GC Pull Log — crew dashboard (web)
+# GC Field Log — crew dashboard (web)
 
-Browser **dashboard for field crews** on [gcpullog.com](https://gcpullog.com). Foremen and supers open a room pack in the browser: zoomable floor-plan sheets, the room highlighted on the sheet, linked RFIs, and action buttons (Generate RFI / Order materials).
+Browser **dashboard for field crews** on **[gcfieldlog.com](https://gcfieldlog.com)**. Foremen and supers sign in (stub), pick a job, request a room pack, then work the sheet: zoomable floor plans, room highlight, linked RFIs, and Generate RFI / Order materials.
 
-This is the product surface. **Native iOS is paused.** Login and **Stripe monthly billing** are planned later — they are not in this MVP.
+This is the product surface. **Native iOS is paused.** Real login and **Stripe monthly billing** are later — the login page is UI only.
 
-Host: **Vercel (primary)**. Cloudflare Pages is a possible later target; this repo is set up as a standard Next.js App Router app for Vercel.
+Host: **Vercel (primary)** with **HostGator DNS** for `gcfieldlog.com` (document only; this PR does not change DNS). Cloudflare Pages is a possible later target.
 
-No auth, Stripe, or live Procore API yet.
+No real auth, Stripe, HostGator uploads, or live Procore API in this MVP.
 
 ## What the dashboard shows (MVP)
 
 | Area | Behavior |
 | --- | --- |
+| Login | Email/password form UI. Any submit goes to jobs. No session server. |
+| Job selection | Fictional jobs only (Maple Point and similar). |
+| Request room pack | Room number (e.g. `733`) → `requestId` → pack viewer. Demo loads local Maple Point JSON immediately. |
 | Floor plan / sheet | Zoomable, pannable PDF (`pdf.js`) with sheet tabs |
 | Room highlight | SVG overlay (polygon or bbox in normalized 0–1 sheet coords) |
 | RFI list | Linked RFIs for the room |
 | Actions | **Generate RFI** (draft to foreman — not a Procore submit) and **Order materials** — stubs |
-| Takeoff counts | Optional placeholder panel (demo pack has sample `by_room` counts; omit `takeoff` for an empty stub) |
+| Takeoff counts | Optional placeholder panel |
 
 ## Local run
 
@@ -25,53 +28,82 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Home is the **Maple Point Medical Office** fictional demo only.
+Open [http://localhost:3000](http://localhost:3000). Sign in (stub) → pick **Maple Point Medical Office** → request room `733`.
 
 ```bash
+npm run lint
 npm run build
 npm start
 ```
 
-`npm install` copies the pdf.js worker into `public/pdf.worker.min.mjs`. Regenerate demo sheets with `npm run generate-demo`.
+`npm install` copies the pdf.js worker into `public/pdf.worker.min.mjs`.
 
-## Deploy (Vercel, primary)
+## Deploy (Vercel + HostGator DNS)
 
-This is a standard Next.js App Router app. Production host for the crew dashboard is **gcpullog.com**.
+Production host is **gcfieldlog.com**.
 
-1. Import the GitHub repo in [Vercel](https://vercel.com/new) (framework preset: **Next.js**).
-2. Build command: `npm run build` (default). Output: Next.js default.
-3. `postinstall` copies `pdf.worker.min.mjs` into `public/` so the sheet viewer works on the deployment.
-4. No env secrets are required for the static Maple Point demo packs.
-5. Attach the `gcpullog.com` domain (or a Vercel preview URL) when DNS is ready.
+1. Import this GitHub repo in [Vercel](https://vercel.com/new) (framework preset: **Next.js**).
+2. Build command: `npm run build`. `postinstall` copies `pdf.worker.min.mjs`.
+3. No env secrets are required for the Maple Point demo.
+4. **DNS (ops, not this repo):** at HostGator, point `gcfieldlog.com` / `www` to Vercel (A / CNAME per Vercel’s domain docs). Do not upload files to HostGator for this app.
 
-**Cloudflare Pages** can host Next.js later (via OpenNext / `@cloudflare/next-on-pages`). Do not treat that as the current deploy path; keep Vercel as the primary.
+**Cloudflare Pages** can host Next.js later. Keep Vercel as the primary.
 
 ## Routes
 
 | Path | Purpose |
 | --- | --- |
-| `/` | Maple Point fictional demo pack |
-| `/pack/[requestId]` | **Primary** dashboard view. Loads `public/packs/<requestId>.json` |
-| `/pack/[requestId]/rfi/new?sheet=` | Stub “Generate RFI” form (disabled) |
-| `/pack/[requestId]/materials` | Stub “Order materials” page |
-| `/jobs/[projectSlug]/rooms/[room]` | Optional alias stub (Maple Point redirects to `/pack/maple-point`) |
+| `/` | Stub **login** |
+| `/jobs` | Fictional **job selection** |
+| `/jobs/[projectSlug]` | **Request room pack** (room number → requestId) |
+| `/jobs/[projectSlug]/rooms/[room]` | Alias → `/pack/{slug}-{room}` |
+| `/pack/[requestId]` | Pack viewer. Unknown IDs fall back to local Maple Point demo |
+| `/pack/[requestId]/rfi/new?sheet=` | Stub Generate RFI form |
+| `/pack/[requestId]/materials` | Stub Order materials |
+
+## Theme tokens (GlineRacing-inspired)
+
+Fetched live CSS from [glineracing.com](https://glineracing.com) (`/_next/static/css/f2c975d8c7508e2f.css`, 2026-09-17): dark charcoal `#111827` / `#1f2937` / `#191616`, paper `#f5f1eb`, metal `#c8bdac`. Their marketing CSS also uses steel cyan; **GC Field Log CTAs use racing crimson `#e10600`** as specified.
+
+| Token | Value | Use |
+| --- | --- | --- |
+| `--ink` | `#0b0b0c` | Page background |
+| `--gline-ink` | `#191616` | Header / chrome |
+| `--charcoal` | `#111827` | Sheet well |
+| `--panel` | `#16171a` | Cards |
+| `--panel-2` | `#1f2937` | Raised charcoal |
+| `--line` | `#2a2d33` | Borders |
+| `--metal` | `#c8bdac` | Secondary type |
+| `--paper` | `#f5f1eb` | Primary type |
+| `--muted` | `#9ca3af` | Labels |
+| `--accent` | `#e10600` | CTAs, active tabs, room highlight stroke |
+| `--accent-hover` | `#ff2b1a` | Hover |
+| `--accent-deep` | `#9a0400` | Pressed / badges |
+| Display font | Oswald | Wordmark / headings |
+| UI font | Geist | Body |
+
+Defined in `app/globals.css`.
 
 ## Where production packs come from
 
 Live packs are produced by **Procore’s Room pack webhook**, schema `gcpullog.room_pack.v1`.
 
-This MVP **does not call that webhook**. The dashboard consumes the **local Maple Point demo** at `public/packs/maple-point.json`. Production will **poll the same v1 JSON** from Drive (below) and feed it to `/pack/[requestId]` — no change to the contract.
+This MVP **does not call that webhook**. Requesting a room navigates to `/pack/{projectSlug}-{room}` and **loads the local Maple Point demo** when that JSON is missing.
+
+Production will:
+
+1. **POST** the room-pack request to the Procore Room pack webhook.
+2. **Poll** Drive v1 status JSON until `status` is `ready`.
+3. Open `/pack/[requestId]` with that JSON.
 
 ### Drive layout (Greg / ops — not secrets)
-
-Status JSON lands next to the room folder:
 
 ```
 {project_slug}/{request_id}.json
 {project_slug}/Room_{room}/
 ```
 
-Drive root: [GC Pull Log room packs](https://drive.google.com/drive/folders/19Ixner0dApGlfpG13M2XOw2rzReQGl3P)
+Drive root: [GC Field Log room packs](https://drive.google.com/drive/folders/19Ixner0dApGlfpG13M2XOw2rzReQGl3P)
 
 That folder is an ops pointer, not a credential. Do not put Drive API keys or webhook secrets in this app.
 
@@ -115,23 +147,23 @@ Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `
 | `project` | `{ id, name, slug }` |
 | `room` | `{ id, name, number? }` |
 | `request_id` | URL key for `/pack/[requestId]` |
-| `sheets[]` | `{ id, rev, pdf, preview?, crop? }` — `pdf` is a URL the viewer fetches |
+| `sheets[]` | `{ id, rev, pdf, preview?, crop? }` |
 | `rfis[]` | `{ id, number, title, status, url? }` |
-| `layout` | Room locator on the sheet (see highlight rules) |
-| `actions[]` | Dashboard buttons; omitted packs get Generate RFI + Order materials defaults |
-| `takeoff` | **Optional.** If missing, the Takeoff counts panel is an empty placeholder |
+| `layout` | Room locator on the sheet |
+| `actions[]` | Dashboard buttons |
+| `takeoff` | **Optional.** If missing, Takeoff counts is empty |
 
 ### Highlight (coordinate-ready)
 
-The overlay is an **SVG** on the sheet, not a baked highlight image.
+The overlay is an **SVG** on the sheet (crimson stroke), not a baked highlight image.
 
-1. `layout.points` — polygon in **normalized 0–1** coordinates, origin **top-left** of the sheet.
-2. Else `layout.bbox` `{x,y,w,h}` — same normalized space.
-3. Else Procore `layout.bbox_pdf_pts` — PDF user-space points, origin **bottom-left**. Mapped with `page_width_pts` / `page_height_pts` (or the rendered page size) into a normalized top-left rect.
+1. `layout.points` — polygon in **normalized 0–1** coordinates, origin **top-left**.
+2. Else `layout.bbox` `{x,y,w,h}` — same space.
+3. Else Procore `layout.bbox_pdf_pts` — PDF user-space, origin **bottom-left**, mapped with `page_width_pts` / `page_height_pts`.
 
 ### Optional takeoff counts (placeholder)
 
-The dashboard always shows a Takeoff counts section. With no `takeoff` object it stays empty. When present, the stub panel renders `by_room` (and the rest of this shape is reserved for later):
+Always shown. Empty without `takeoff`. When present, renders `by_room`:
 
 ```json
 {
@@ -154,15 +186,12 @@ The dashboard always shows a Takeoff counts section. With no `takeoff` object it
 }
 ```
 
-### Actions
+## Later (not implemented)
 
-Buttons come from `actions[]`, or default to **Generate RFI** (draft to foreman — not a Procore submit) and **Order materials**. MVP handlers are toasts / console stubs. Future deep-links: `/pack/[requestId]/rfi/new?sheet=` and `/pack/[requestId]/materials`.
-
-## Later (not in this PR)
-
-- Crew **login**
+- Real crew **login**
 - **Stripe** monthly billing
 - Poll Drive / Procore Room pack webhook v1 JSON (viewer still will not invoke the webhook itself)
+- HostGator DNS cutover to Vercel for gcfieldlog.com
 
 ## Demo data
 
@@ -173,5 +202,3 @@ Sample files:
 - `public/packs/maple-point.json`
 - `public/packs/maple-point-e101.pdf`
 - `public/packs/maple-point-e102.pdf`
-
-Add another pack by dropping `<requestId>.json` (and PDFs) into `public/packs/` and opening `/pack/<requestId>`.

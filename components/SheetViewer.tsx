@@ -58,7 +58,7 @@ export function SheetViewer({ pdfUrl, highlight }: Props) {
   }, [pdfUrl]);
 
   return (
-    <div className="relative h-full min-h-[280px] w-full overflow-hidden bg-zinc-300">
+    <div className="relative h-full min-h-[280px] w-full overflow-hidden bg-charcoal">
       <TransformWrapper
         ref={transformRef}
         minScale={0.4}
@@ -87,10 +87,10 @@ export function SheetViewer({ pdfUrl, highlight }: Props) {
                 {ready && highlight ? <HighlightOverlay highlight={highlight} /> : null}
               </div>
             </TransformComponent>
-            <div className="absolute bottom-3 left-3 flex items-center gap-1 rounded-md bg-zinc-950/80 p-1 text-white shadow">
+            <div className="absolute bottom-3 left-3 flex items-center gap-1 border border-line bg-gline-ink/90 p-1 text-paper">
               <button
                 type="button"
-                className="rounded px-2 py-1 text-sm hover:bg-white/10"
+                className="px-2 py-1 text-sm hover:bg-accent"
                 onClick={() => zoomOut()}
                 aria-label="Zoom out"
               >
@@ -98,7 +98,7 @@ export function SheetViewer({ pdfUrl, highlight }: Props) {
               </button>
               <button
                 type="button"
-                className="rounded px-2 py-1 text-sm hover:bg-white/10"
+                className="px-2 py-1 text-sm hover:bg-accent"
                 onClick={() => zoomIn()}
                 aria-label="Zoom in"
               >
@@ -106,7 +106,7 @@ export function SheetViewer({ pdfUrl, highlight }: Props) {
               </button>
               <button
                 type="button"
-                className="rounded px-2 py-1 text-xs hover:bg-white/10"
+                className="px-2 py-1 text-xs hover:bg-accent"
                 onClick={() => resetTransform()}
               >
                 Reset
@@ -115,16 +115,16 @@ export function SheetViewer({ pdfUrl, highlight }: Props) {
           </>
         )}
       </TransformWrapper>
-      <p className="pointer-events-none absolute right-3 bottom-3 rounded bg-zinc-950/70 px-2 py-1 text-[11px] text-zinc-100">
+      <p className="pointer-events-none absolute right-3 bottom-3 bg-gline-ink/80 px-2 py-1 text-[11px] text-metal">
         Scroll to zoom · drag to pan
       </p>
       {!ready && !error ? (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-zinc-300/80 text-sm text-zinc-700">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-charcoal/80 text-sm text-muted">
           Loading sheet…
         </div>
       ) : null}
       {error ? (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-zinc-200 px-4 text-center text-sm text-red-800">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-ink px-4 text-center text-sm text-accent">
           {error}
         </div>
       ) : null}
@@ -143,8 +143,8 @@ function HighlightOverlay({ highlight }: { highlight: ResolvedHighlight }) {
       {highlight.type === "polygon" ? (
         <polygon
           points={highlight.points.map(([x, y]) => `${x},${y}`).join(" ")}
-          fill="rgba(245, 158, 11, 0.32)"
-          stroke="#d97706"
+          fill="rgba(225, 6, 0, 0.32)"
+          stroke="#e10600"
           strokeWidth="0.006"
         />
       ) : (
@@ -153,8 +153,8 @@ function HighlightOverlay({ highlight }: { highlight: ResolvedHighlight }) {
           y={highlight.bbox.y}
           width={highlight.bbox.w}
           height={highlight.bbox.h}
-          fill="rgba(245, 158, 11, 0.32)"
-          stroke="#d97706"
+          fill="rgba(225, 6, 0, 0.32)"
+          stroke="#e10600"
           strokeWidth="0.006"
         />
       )}

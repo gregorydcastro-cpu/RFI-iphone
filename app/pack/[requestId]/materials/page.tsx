@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AppHeader } from "@/components/AppHeader";
 
 type Props = {
   params: Promise<{ requestId: string }>;
@@ -9,18 +10,23 @@ export default async function MaterialsStubPage({ params }: Props) {
   const { requestId } = await params;
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-lg flex-col gap-4 p-6">
-      <p className="text-xs font-medium tracking-wide text-amber-700 uppercase">
-        Coming soon
-      </p>
-      <h1 className="text-2xl font-semibold">Order materials</h1>
-      <p className="text-sm text-zinc-600">
-        Material order for pack <span className="font-mono">{requestId}</span> is
-        not wired yet. Counts will come from the takeoff panel on the pack.
-      </p>
-      <Link href={`/pack/${requestId}`} className="text-sm text-zinc-700 underline">
-        Back to pack
-      </Link>
-    </main>
+    <div className="flex min-h-dvh flex-col">
+      <AppHeader signedIn />
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4 p-6">
+        <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
+          Coming soon
+        </p>
+        <h1 className="font-display text-3xl tracking-wide text-paper uppercase">
+          Order materials
+        </h1>
+        <p className="text-sm text-muted">
+          Material order for pack <span className="font-mono text-metal">{requestId}</span> is
+          not wired yet. Counts will come from the takeoff panel on the pack.
+        </p>
+        <Link href={`/pack/${requestId}`} className="text-sm text-accent underline">
+          Back to pack
+        </Link>
+      </main>
+    </div>
   );
 }

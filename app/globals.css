@@ -1,18 +1,55 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f4f4f5;
-  --foreground: #18181b;
+  /* Dark industrial base mirrored from glineracing.com (fetched 2026-09-17):
+     #191616 ink, #111827 / #1f2937 charcoal, #f5f1eb paper, #c8bdac metal.
+     Racing crimson CTAs use #e10600 (GlineRacing live CSS leans cyan for
+     marketing links; GC Field Log uses crimson for field CTAs as specified). */
+  --ink: #0b0b0c;
+  --gline-ink: #191616;
+  --charcoal: #111827;
+  --panel: #16171a;
+  --panel-2: #1f2937;
+  --line: #2a2d33;
+  --metal: #c8bdac;
+  --paper: #f5f1eb;
+  --muted: #9ca3af;
+  --accent: #e10600;
+  --accent-hover: #ff2b1a;
+  --accent-deep: #9a0400;
+  --background: var(--ink);
+  --foreground: var(--paper);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-ink: var(--ink);
+  --color-gline-ink: var(--gline-ink);
+  --color-charcoal: var(--charcoal);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-line: var(--line);
+  --color-metal: var(--metal);
+  --color-paper: var(--paper);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-deep: var(--accent-deep);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-oswald);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background:
+    radial-gradient(900px 420px at 100% -10%, rgb(225 6 0 / 0.14), transparent 55%),
+    radial-gradient(700px 400px at -10% 110%, rgb(201 189 172 / 0.07), transparent 50%),
+    var(--ink);
+  color: var(--paper);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-oswald), var(--font-geist-sans), sans-serif;
 }
