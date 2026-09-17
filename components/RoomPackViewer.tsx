@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { highlightForSheet } from "@/lib/highlight";
 import { packActions, type PackAction, type RoomPack, type Sheet } from "@/lib/pack";
 import { ActionPanel } from "./ActionPanel";
 import { AppHeader } from "./AppHeader";
+import { PackPollStub } from "./PackPollStub";
 import { RfiList } from "./RfiList";
 import { SheetViewer } from "./SheetViewer";
 import { TakeoffCounts } from "./TakeoffCounts";
@@ -14,22 +15,41 @@ type Props = {
   pack: RoomPack;
   requestId?: string;
   requestedRoom?: string;
+  requestedJobName?: string;
+  projectSlug?: string;
   demoFallback?: boolean;
+  webhookAccepted?: boolean;
 };
 
 export function RoomPackViewer({
   pack,
   requestId,
   requestedRoom,
+  requestedJobName,
+  projectSlug,
   demoFallback,
+  webhookAccepted,
 }: Props) {
   const router = useRouter();
-  const [sheetId, setSheetId] = useState(pack.sheets[0]?.id ?? "");
+  const [livePack, setLivePack] = useState<RoomPack | null>(null);
+  const displayedPack = livePack ?? pack;
+  const [sheetId, setSheetId] = useState(displayedPack.sheets[0]?.id ?? "");
   const [toast, setToast] = useState<string | null>(null);
-  const sheet = pack.sheets.find((item) => item.id === sheetId) ?? pack.sheets[0];
-  const actions = useMemo(() => packActions(pack), [pack]);
-  const highlight = sheet ? highlightForSheet(pack.layout, sheet.id) : null;
-  const displayedRequest = requestId ?? pack.request_id;
+  const sheet =
+    displayedPack.sheets.find((item) => item.id === sheetId) ??
+    displayedPack.sheets[0];
+  const actions = useMemo(() => packActions(displayedPack), [displayedPack]);
+  const highlight = sheet
+    ? highlightForSheet(displayedPack.layout, sheet.id)
+    : null;
+  const displayedRequest = requestId ?? displayedPack.request_id;
+  const showingDemo = demoFallback && !livePack;
+  const polling = Boolean(webhookAccepted && showingDemo && projectSlug);
+
+  const handleLivePack = useCallback((next: RoomPack) => {
+    setLivePack(next);
+    setSheetId(next.sheets[0]?.id ?? "");
+  }, []);
 
   function handleAction(action: PackAction) {
     if (action.id === "generate-rfi") {
@@ -59,23 +79,35 @@ export function RoomPackViewer({
     <div className="flex min-h-dvh flex-col bg-ink text-paper">
       <AppHeader signedIn />
       <PackContextBar
-        pack={pack}
+        pack={displayedPack}
         sheet={sheet}
         requestId={displayedRequest}
         requestedRoom={requestedRoom}
-        demoFallback={demoFallback}
+        requestedJobName={requestedJobName}
+        projectSlug={projectSlug}
+        demoFallback={showingDemo}
+        webhookAccepted={webhookAccepted}
+        polling={polling}
+        onPack={handleLivePack}
       />
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <section className="flex h-[48vh] min-h-[240px] flex-col sm:h-[52vh] lg:h-auto lg:w-[60%]">
-          <SheetTabs sheets={pack.sheets} activeId={sheet.id} onSelect={setSheetId} />
+          <SheetTabs
+            sheets={displayedPack.sheets}
+            activeId={sheet.id}
+            onSelect={setSheetId}
+          />
           <div className="min-h-0 flex-1">
             <SheetViewer pdfUrl={sheet.pdf} highlight={highlight} />
           </div>
         </section>
         <aside className="flex flex-col gap-5 overflow-y-auto border-t border-line bg-panel p-4 lg:w-[40%] lg:max-w-xl lg:border-t-0 lg:border-l">
           <ActionPanel actions={actions} onAction={handleAction} />
-          <RfiList rfis={pack.rfis} />
-          <TakeoffCounts takeoff={pack.takeoff} roomName={pack.room.name} />
+          <RfiList rfis={displayedPack.rfis} />
+          <TakeoffCounts
+            takeoff={displayedPack.takeoff}
+            roomName={displayedPack.room.name}
+          />
         </aside>
       </div>
       {toast ? (
@@ -95,14 +127,29 @@ function PackContextBar({
   sheet,
   requestId,
   requestedRoom,
+  requestedJobName,
+  projectSlug,
   demoFallback,
+  webhookAccepted,
+  polling,
+  onPack,
 }: {
   pack: RoomPack;
   sheet: Sheet;
   requestId: string;
   requestedRoom?: string;
+  requestedJobName?: string;
+  projectSlug?: string;
   demoFallback?: boolean;
+  webhookAccepted?: boolean;
+  polling?: boolean;
+  onPack: (pack: RoomPack) => void;
 }) {
+  const status =
+    webhookAccepted && demoFallback
+      ? "pending"
+      : pack.status;
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-primary px-4 py-2 text-secondary">
       <div className="min-w-0">
@@ -114,9 +161,18 @@ function PackContextBar({
             {requestedRoom ? ` · requested ${requestedRoom}` : ""}
           </span>
         </h1>
-        {demoFallback ? (
+        {polling && projectSlug ? (
+          <PackPollStub
+            requestId={requestId}
+            projectSlug={projectSlug}
+            jobName={requestedJobName ?? pack.project.name}
+            requestedRoom={requestedRoom}
+            onPack={onPack}
+          />
+        ) : demoFallback ? (
           <p className="mt-0.5 text-xs text-tan">
-            Demo pack (Maple Point). Production would poll Drive for{" "}
+            Demo pack (Maple Point). Local demo does not call the Procore
+            webhook or poll Drive. Production POSTs then polls{" "}
             <span className="font-mono">{requestId}.json</span>.
           </p>
         ) : null}
@@ -125,7 +181,7 @@ function PackContextBar({
         <span className="border border-line bg-panel-2 px-2 py-1 font-mono">
           {sheet.id} Rev {sheet.rev}
         </span>
-        <StatusBadge status={pack.status} />
+        <StatusBadge status={status} />
       </div>
     </div>
   );
@@ -135,7 +191,7 @@ function StatusBadge({ status }: { status: string }) {
   const tone =
     status === "ready"
       ? "border-emerald-700/60 bg-emerald-950/50 text-emerald-300"
-      : status === "pending"
+      : status === "pending" || status === "accepted"
         ? "border-accent/50 bg-accent-deep/40 text-paper"
         : "border-line bg-panel text-muted";
   return (
