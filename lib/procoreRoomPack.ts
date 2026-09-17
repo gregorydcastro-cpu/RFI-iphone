@@ -5,6 +5,9 @@
  * do not look up PROCORE_ROOM_PACK_*. Never log the URL or Authorization value.
  */
 
+import { readLowercaseEnv } from "./env";
+import { pickStatusUrlFromWebhookBody } from "./packStatus";
+
 export const PROCORE_ROOM_PACK_WEBHOOK_URL_KEY =
   "procore_room_pack_webhook_url" as const;
 export const PROCORE_ROOM_PACK_WEBHOOK_AUTHORIZATION_KEY =
@@ -25,17 +28,8 @@ export type ProcoreRoomPackWebhookConfig = {
 };
 
 export type RoomPackWebhookPostResult =
-  | { ok: true; status: number }
+  | { ok: true; status: number; statusUrl?: string }
   | { ok: false; status: number | null; aborted: boolean };
-
-function readLowercaseEnv(key: string): string | undefined {
-  // Bracket access so Next.js does not inline at build time; Vercel injects
-  // these at runtime on the server. Keys are lowercase only.
-  const value = process.env[key];
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
 
 /**
  * Both keys must be non-empty. Local Maple Point demo leaves them unset.
@@ -87,11 +81,19 @@ export async function postRoomPackWebhook(
       signal: controller.signal,
     });
 
-    // Discard body; never log it (may include internals). Status only.
-    await response.text().catch(() => undefined);
+    // Parse for an optional status/json URL. Never log the body.
+    const raw = await response.text().catch(() => "");
+    let statusUrl: string | undefined;
+    if (raw) {
+      try {
+        statusUrl = pickStatusUrlFromWebhookBody(JSON.parse(raw) as unknown);
+      } catch {
+        statusUrl = undefined;
+      }
+    }
 
     if (response.ok) {
-      return { ok: true, status: response.status };
+      return { ok: true, status: response.status, statusUrl };
     }
 
     console.error("[gcfieldlog] room-pack webhook was not accepted", {

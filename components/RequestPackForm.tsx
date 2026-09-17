@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { type DemoJob } from "@/lib/jobs";
+import { packStatusSessionKey } from "@/lib/packStatus";
 
 type Props = {
   job: DemoJob;
@@ -15,6 +16,8 @@ type RoomPackApiOk = {
   job: string;
   room: string;
   accepted: boolean;
+  poll?: boolean;
+  statusUrl?: string;
 };
 
 type RoomPackApiErr = {
@@ -58,6 +61,18 @@ export function RequestPackForm({ job }: Props) {
         room: data.room,
       });
       if (data.accepted) params.set("accepted", "1");
+      if (data.poll) params.set("poll", "1");
+
+      if (data.statusUrl) {
+        try {
+          window.sessionStorage.setItem(
+            packStatusSessionKey(data.requestId),
+            data.statusUrl,
+          );
+        } catch {
+          // sessionStorage may be unavailable; env template still polls.
+        }
+      }
 
       console.info("[gcfieldlog] room-pack request", {
         job: data.job,
@@ -65,6 +80,7 @@ export function RequestPackForm({ job }: Props) {
         requestId: data.requestId,
         mode: data.mode,
         accepted: data.accepted,
+        poll: Boolean(data.poll),
       });
 
       router.push(`/pack/${data.requestId}?${params.toString()}`);
@@ -93,7 +109,8 @@ export function RequestPackForm({ job }: Props) {
           <span className="text-paper">{job.name}</span>
           ) to the Room pack webhook, then opens{" "}
           <code className="font-mono text-metal">/pack/&lt;requestId&gt;</code>{" "}
-          as soon as the request is accepted.
+          as soon as the request is accepted and polls Drive status in the
+          background.
         </p>
       </div>
       <label className="block text-xs font-semibold tracking-wide text-muted uppercase">

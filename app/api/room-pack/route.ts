@@ -1,4 +1,5 @@
 import { getJob, makeRequestId } from "@/lib/jobs";
+import { drivePackJsonPath } from "@/lib/packStatus";
 import {
   buildRoomPackWebhookPayload,
   getProcoreRoomPackWebhookConfig,
@@ -22,8 +23,9 @@ function asNonEmptyString(value: unknown): string | null {
 /**
  * Request a room pack from `/jobs/[projectSlug]`.
  *
- * When both lowercase Vercel env keys are set, POSTs to the Procore webhook
- * and returns as soon as the webhook accepts. Otherwise local demo (no POST).
+ * When both lowercase Vercel webhook keys are set, POSTs to Procore and
+ * returns as soon as the webhook accepts. The pack page then polls status.
+ * Otherwise local demo (no POST, no poll).
  */
 export async function POST(request: Request) {
   let json: RoomPackRequestJson;
@@ -64,6 +66,7 @@ export async function POST(request: Request) {
       job: job.slug,
       room,
       accepted: false,
+      poll: false,
     });
   }
 
@@ -88,5 +91,8 @@ export async function POST(request: Request) {
     job: job.slug,
     room,
     accepted: true,
+    poll: true,
+    drivePath: drivePackJsonPath(job.slug, requestId),
+    statusUrl: result.statusUrl,
   });
 }
