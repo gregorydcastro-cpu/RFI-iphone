@@ -6,6 +6,7 @@ import { highlightForSheet } from "@/lib/highlight";
 import { packActions, type PackAction, type RoomPack, type Sheet } from "@/lib/pack";
 import { ActionPanel } from "./ActionPanel";
 import { AppHeader } from "./AppHeader";
+import { PackPollStub } from "./PackPollStub";
 import { RfiList } from "./RfiList";
 import { SheetViewer } from "./SheetViewer";
 import { TakeoffCounts } from "./TakeoffCounts";
@@ -14,14 +15,18 @@ type Props = {
   pack: RoomPack;
   requestId?: string;
   requestedRoom?: string;
+  requestedJobName?: string;
   demoFallback?: boolean;
+  webhookAccepted?: boolean;
 };
 
 export function RoomPackViewer({
   pack,
   requestId,
   requestedRoom,
+  requestedJobName,
   demoFallback,
+  webhookAccepted,
 }: Props) {
   const router = useRouter();
   const [sheetId, setSheetId] = useState(pack.sheets[0]?.id ?? "");
@@ -63,7 +68,9 @@ export function RoomPackViewer({
         sheet={sheet}
         requestId={displayedRequest}
         requestedRoom={requestedRoom}
+        requestedJobName={requestedJobName}
         demoFallback={demoFallback}
+        webhookAccepted={webhookAccepted}
       />
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <section className="flex h-[48vh] min-h-[240px] flex-col sm:h-[52vh] lg:h-auto lg:w-[60%]">
@@ -95,14 +102,20 @@ function PackContextBar({
   sheet,
   requestId,
   requestedRoom,
+  requestedJobName,
   demoFallback,
+  webhookAccepted,
 }: {
   pack: RoomPack;
   sheet: Sheet;
   requestId: string;
   requestedRoom?: string;
+  requestedJobName?: string;
   demoFallback?: boolean;
+  webhookAccepted?: boolean;
 }) {
+  const status = webhookAccepted && demoFallback ? "accepted" : pack.status;
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-primary px-4 py-2 text-secondary">
       <div className="min-w-0">
@@ -114,9 +127,16 @@ function PackContextBar({
             {requestedRoom ? ` · requested ${requestedRoom}` : ""}
           </span>
         </h1>
-        {demoFallback ? (
+        {webhookAccepted ? (
+          <PackPollStub
+            requestId={requestId}
+            jobName={requestedJobName ?? pack.project.name}
+            requestedRoom={requestedRoom}
+          />
+        ) : demoFallback ? (
           <p className="mt-0.5 text-xs text-tan">
-            Demo pack (Maple Point). Production would poll Drive for{" "}
+            Demo pack (Maple Point). Local demo does not call the Procore
+            webhook. Production POSTs then polls Drive for{" "}
             <span className="font-mono">{requestId}.json</span>.
           </p>
         ) : null}
@@ -125,7 +145,7 @@ function PackContextBar({
         <span className="border border-line bg-panel-2 px-2 py-1 font-mono">
           {sheet.id} Rev {sheet.rev}
         </span>
-        <StatusBadge status={pack.status} />
+        <StatusBadge status={status} />
       </div>
     </div>
   );
@@ -135,7 +155,7 @@ function StatusBadge({ status }: { status: string }) {
   const tone =
     status === "ready"
       ? "border-emerald-700/60 bg-emerald-950/50 text-emerald-300"
-      : status === "pending"
+      : status === "pending" || status === "accepted"
         ? "border-accent/50 bg-accent-deep/40 text-paper"
         : "border-line bg-panel text-muted";
   return (

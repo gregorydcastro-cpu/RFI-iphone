@@ -6,7 +6,7 @@ This is the product surface. **Native iOS is paused. No Apple.** Real login and 
 
 Host: **Vercel (primary)** with **HostGator DNS** for `gcfieldlog.com` (document only; this PR does not change DNS). Cloudflare Pages is a possible later target.
 
-No real auth, Stripe, HostGator uploads, or live Procore API in this MVP.
+No real auth, Stripe, HostGator uploads, or live Procore REST API in this MVP. Requesting a room pack **does** POST to Procore’s Room pack webhook when the two lowercase Vercel env keys are set (Production). Local demo leaves those unset and never calls the webhook.
 
 ## Locked nav (MVP)
 
@@ -22,7 +22,7 @@ Must match this path — nothing else in the primary nav:
 | --- | --- |
 | Login (`/`) | Email/password form UI. Any submit goes to jobs. No session server. |
 | Jobs (`/jobs`) | Fictional jobs only (Maple Point and similar). |
-| Room pack request | Room number (e.g. `733`) → `requestId` → pack viewer. Demo loads local Maple Point JSON immediately. |
+| Room pack request | Room number (e.g. `733`) → `POST /api/room-pack` → `/pack/[requestId]`. Local demo loads Maple Point JSON immediately (no webhook). Production POSTs the selected job’s **exact name** to the Procore webhook, then opens the pack page as soon as the webhook accepts. Missing pack JSON still falls back to Maple Point. |
 | Pack viewer | Zoomable plan/sheets + SVG room highlight + linked RFIs |
 | Generate RFI / Materials | Stub pages from the pack action buttons |
 | Takeoff counts | Optional placeholder panel |
@@ -50,8 +50,28 @@ Production host is **gcfieldlog.com**.
 
 1. Import this GitHub repo in [Vercel](https://vercel.com/new) (framework preset: **Next.js**).
 2. Build command: `npm run build`. `postinstall` copies `pdf.worker.min.mjs`.
-3. No env secrets are required for the Maple Point demo.
+3. **Env:** the Maple Point demo needs **no** secrets. Production already has the two lowercase Procore webhook keys (see below). Do not add `PROCORE_ROOM_PACK_*` aliases unless you also wire both directions.
 4. **DNS (ops, not this repo):** at HostGator, point `gcfieldlog.com` / `www` to Vercel (A / CNAME per Vercel’s domain docs). Do not upload files to HostGator for this app.
+
+### Procore Room pack webhook env (Vercel)
+
+Read **only** these exact lowercase keys from `process.env` on the server (`POST /api/room-pack`). They are already set on **Vercel Production**. Never commit values, never `NEXT_PUBLIC_` them, never log them.
+
+| Key | Role |
+| --- | --- |
+| `procore_room_pack_webhook_url` | Webhook URL (POST target) |
+| `procore_room_pack_webhook_authorization` | Sent as the `Authorization` header, verbatim |
+
+```ts
+process.env.procore_room_pack_webhook_url
+process.env.procore_room_pack_webhook_authorization
+```
+
+- **Both set** (Production): request pack POSTs `{ "project": "<exact job name>", "room": "<room>", "request_id": "..." }` and treats a 2xx as accepted. The UI navigates to `/pack/[requestId]?accepted=1` without waiting for the full pack.
+- **Missing / local:** same as today — local Maple Point JSON, **no** webhook call.
+- **Hard rule:** `project` is the selected job’s exact `name` from the jobs list (looked up server-side from `projectSlug`). Never send another job’s name. Never mix jobs.
+
+Local `npm run dev` does not need these variables.
 
 **Cloudflare Pages** can host Next.js later. Keep Vercel as the primary.
 
@@ -61,8 +81,9 @@ Production host is **gcfieldlog.com**.
 | --- | --- |
 | `/` | Stub **login** |
 | `/jobs` | Fictional **job selection** |
-| `/jobs/[projectSlug]` | **Request room pack** (room number → requestId) |
-| `/jobs/[projectSlug]/rooms/[room]` | Alias → `/pack/{slug}-{room}` |
+| `/jobs/[projectSlug]` | **Request room pack** (room number → `POST /api/room-pack` → `/pack/[requestId]`) |
+| `/jobs/[projectSlug]/rooms/[room]` | Alias → `/pack/{slug}-{room}` (no webhook; use the request form) |
+| `/api/room-pack` | Server POST. Forwards to Procore when both lowercase env keys are set; otherwise demo. |
 | `/pack/[requestId]` | Pack viewer. Unknown IDs fall back to local Maple Point demo |
 | `/pack/[requestId]/rfi/new?sheet=` | Stub Generate RFI form |
 | `/pack/[requestId]/materials` | Stub Order materials |
@@ -92,13 +113,11 @@ Defined in `app/globals.css`.
 
 Live packs are produced by **Procore’s Room pack webhook**, schema `gcpullog.room_pack.v1`.
 
-This MVP **does not call that webhook**. Requesting a room navigates to `/pack/{projectSlug}-{room}` and **loads the local Maple Point demo** when that JSON is missing.
+**Request (this app, Production):** `POST /api/room-pack` reads the lowercase Vercel keys and POSTs `{ project, room, request_id }` to `procore_room_pack_webhook_url` with `Authorization` from `procore_room_pack_webhook_authorization`. A 2xx is accepted; the dashboard does **not** wait for the pack to finish. It opens `/pack/[requestId]` and keeps the Maple Point demo fallback until that request’s JSON exists.
 
-Production will:
+**Local demo:** both env keys unset → no webhook POST → local Maple Point JSON.
 
-1. **POST** the room-pack request to the Procore Room pack webhook.
-2. **Poll** Drive v1 status JSON until `status` is `ready`.
-3. Open `/pack/[requestId]` with that JSON.
+**Later:** poll Drive `{project_slug}/{request_id}.json` until `status` is `ready`. The pack viewer still does not call the webhook itself.
 
 ### Drive layout (Greg / ops — not secrets)
 
@@ -195,7 +214,7 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 - Real crew **login**
 - **Stripe** monthly billing
 - **Tools** and **Time** nav
-- Poll Drive / Procore Room pack webhook v1 JSON (viewer still will not invoke the webhook itself)
+- Poll Drive for Procore Room pack webhook v1 JSON until `ready` (request POST is implemented; the viewer does not call the webhook)
 - HostGator DNS cutover to Vercel for gcfieldlog.com
 - No Apple / native iOS
 
