@@ -1,41 +1,42 @@
 @import "tailwindcss";
 
 :root {
-  /* Dark industrial base mirrored from glineracing.com (fetched 2026-09-17):
-     #191616 ink, #111827 / #1f2937 charcoal, #f5f1eb paper, #c8bdac metal.
-     Racing crimson CTAs use #e10600 (GlineRacing live CSS leans cyan for
-     marketing links; GC Field Log uses crimson for field CTAs as specified). */
-  --ink: #0b0b0c;
-  --gline-ink: #191616;
-  --charcoal: #111827;
-  --panel: #16171a;
-  --panel-2: #1f2937;
-  --line: #2a2d33;
-  --metal: #c8bdac;
-  --paper: #f5f1eb;
-  --muted: #9ca3af;
-  --accent: #e10600;
-  --accent-hover: #ff2b1a;
-  --accent-deep: #9a0400;
-  --background: var(--ink);
-  --foreground: var(--paper);
+  /* Live glineracing.com tokens (fetched 2026-09-17). */
+  --gline-primary: #191616;
+  --gline-secondary: #f5f1eb;
+  --gline-accent-1: #673b2f;
+  --gline-accent-2: #6d9ca5;
+  --gline-accent-3: #4d7798;
+  --gline-tan: #c8bdac;
+  --gline-gray-900: #111827;
+  --gline-gray-800: #1f2937;
+  --gline-cta: #e10600;
+  --gline-cta-hover: #ff2b1a;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-ink: var(--ink);
-  --color-gline-ink: var(--gline-ink);
-  --color-charcoal: var(--charcoal);
-  --color-panel: var(--panel);
-  --color-panel-2: var(--panel-2);
-  --color-line: var(--line);
-  --color-metal: var(--metal);
-  --color-paper: var(--paper);
-  --color-muted: var(--muted);
-  --color-accent: var(--accent);
-  --color-accent-hover: var(--accent-hover);
-  --color-accent-deep: var(--accent-deep);
+  --color-primary: var(--gline-primary);
+  --color-secondary: var(--gline-secondary);
+  --color-accent-1: var(--gline-accent-1);
+  --color-accent-2: var(--gline-accent-2);
+  --color-accent-3: var(--gline-accent-3);
+  --color-tan: var(--gline-tan);
+  --color-cta: var(--gline-cta);
+  --color-cta-hover: var(--gline-cta-hover);
+  --color-ink: var(--gline-gray-900);
+  --color-gline-ink: var(--gline-primary);
+  --color-charcoal: var(--gline-gray-900);
+  --color-panel: var(--gline-primary);
+  --color-panel-2: var(--gline-gray-800);
+  --color-line: #2c2a29;
+  --color-metal: var(--gline-tan);
+  --color-paper: var(--gline-secondary);
+  --color-muted: var(--gline-accent-2);
+  --color-accent: var(--gline-cta);
+  --color-accent-hover: var(--gline-cta-hover);
+  --color-accent-deep: var(--gline-accent-1);
+  --color-background: var(--gline-gray-900);
+  --color-foreground: var(--gline-secondary);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-display: var(--font-oswald);
@@ -43,10 +44,10 @@
 
 body {
   background:
-    radial-gradient(900px 420px at 100% -10%, rgb(225 6 0 / 0.14), transparent 55%),
-    radial-gradient(700px 400px at -10% 110%, rgb(201 189 172 / 0.07), transparent 50%),
-    var(--ink);
-  color: var(--paper);
+    radial-gradient(900px 420px at 100% -8%, rgb(225 6 0 / 0.12), transparent 55%),
+    radial-gradient(640px 380px at 0% 100%, rgb(77 119 152 / 0.12), transparent 50%),
+    var(--gline-gray-900);
+  color: var(--gline-secondary);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 

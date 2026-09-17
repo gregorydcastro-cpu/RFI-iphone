@@ -2,23 +2,29 @@
 
 Browser **dashboard for field crews** on **[gcfieldlog.com](https://gcfieldlog.com)**. Foremen and supers sign in (stub), pick a job, request a room pack, then work the sheet: zoomable floor plans, room highlight, linked RFIs, and Generate RFI / Order materials.
 
-This is the product surface. **Native iOS is paused.** Real login and **Stripe monthly billing** are later — the login page is UI only.
+This is the product surface. **Native iOS is paused. No Apple.** Real login and **Stripe monthly billing** are later — the login page is UI only. Wordmark is clean text: **GC Field Log** (no extra logo).
 
 Host: **Vercel (primary)** with **HostGator DNS** for `gcfieldlog.com` (document only; this PR does not change DNS). Cloudflare Pages is a possible later target.
 
 No real auth, Stripe, HostGator uploads, or live Procore API in this MVP.
 
+## Locked nav (MVP)
+
+Must match this path — nothing else in the primary nav:
+
+**Login (stub) → Jobs → Room pack request → Pack viewer (plan + sheets + RFIs) → Generate RFI / Materials stubs.**
+
+**Tools** and **Time** appear in the header as later (not wired). No Apple.
+
 ## What the dashboard shows (MVP)
 
 | Area | Behavior |
 | --- | --- |
-| Login | Email/password form UI. Any submit goes to jobs. No session server. |
-| Job selection | Fictional jobs only (Maple Point and similar). |
-| Request room pack | Room number (e.g. `733`) → `requestId` → pack viewer. Demo loads local Maple Point JSON immediately. |
-| Floor plan / sheet | Zoomable, pannable PDF (`pdf.js`) with sheet tabs |
-| Room highlight | SVG overlay (polygon or bbox in normalized 0–1 sheet coords) |
-| RFI list | Linked RFIs for the room |
-| Actions | **Generate RFI** (draft to foreman — not a Procore submit) and **Order materials** — stubs |
+| Login (`/`) | Email/password form UI. Any submit goes to jobs. No session server. |
+| Jobs (`/jobs`) | Fictional jobs only (Maple Point and similar). |
+| Room pack request | Room number (e.g. `733`) → `requestId` → pack viewer. Demo loads local Maple Point JSON immediately. |
+| Pack viewer | Zoomable plan/sheets + SVG room highlight + linked RFIs |
+| Generate RFI / Materials | Stub pages from the pack action buttons |
 | Takeoff counts | Optional placeholder panel |
 
 ## Local run
@@ -61,25 +67,23 @@ Production host is **gcfieldlog.com**.
 | `/pack/[requestId]/rfi/new?sheet=` | Stub Generate RFI form |
 | `/pack/[requestId]/materials` | Stub Order materials |
 
-## Theme tokens (GlineRacing-inspired)
+## Theme tokens (GlineRacing, adapted)
 
-Fetched live CSS from [glineracing.com](https://glineracing.com) (`/_next/static/css/f2c975d8c7508e2f.css`, 2026-09-17): dark charcoal `#111827` / `#1f2937` / `#191616`, paper `#f5f1eb`, metal `#c8bdac`. Their marketing CSS also uses steel cyan; **GC Field Log CTAs use racing crimson `#e10600`** as specified.
+Observed on [glineracing.com](https://glineracing.com) live CSS (`/_next/static/css/f2c975d8c7508e2f.css`, 2026-09-17). Field dashboard keeps those surfaces and uses a **racing red CTA** so primary buttons stay high-contrast on dark panels.
 
 | Token | Value | Use |
 | --- | --- | --- |
-| `--ink` | `#0b0b0c` | Page background |
-| `--gline-ink` | `#191616` | Header / chrome |
-| `--charcoal` | `#111827` | Sheet well |
-| `--panel` | `#16171a` | Cards |
-| `--panel-2` | `#1f2937` | Raised charcoal |
-| `--line` | `#2a2d33` | Borders |
-| `--metal` | `#c8bdac` | Secondary type |
-| `--paper` | `#f5f1eb` | Primary type |
-| `--muted` | `#9ca3af` | Labels |
-| `--accent` | `#e10600` | CTAs, active tabs, room highlight stroke |
-| `--accent-hover` | `#ff2b1a` | Hover |
-| `--accent-deep` | `#9a0400` | Pressed / badges |
-| Display font | Oswald | Wordmark / headings |
+| `--color-primary` | `#191616` | Header, cards, side panel |
+| `--color-secondary` | `#f5f1eb` | Primary type |
+| `--color-accent-1` | `#673b2f` | Warm brown-red (badges / deep fill) |
+| `--color-accent-2` | `#6d9ca5` | Muted labels |
+| `--color-accent-3` | `#4d7798` | Answered / steel info |
+| `--color-tan` | `#c8bdac` | Secondary type / metal |
+| gray-900 | `#111827` | Page background, sheet well |
+| gray-800 | `#1f2937` | Raised charcoal |
+| `--color-cta` | `#e10600` | Primary buttons, active tabs, room highlight |
+| `--color-cta-hover` | `#ff2b1a` | Button hover |
+| Display font | Oswald | Clean **GC Field Log** wordmark |
 | UI font | Geist | Body |
 
 Defined in `app/globals.css`.
@@ -190,8 +194,10 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 
 - Real crew **login**
 - **Stripe** monthly billing
+- **Tools** and **Time** nav
 - Poll Drive / Procore Room pack webhook v1 JSON (viewer still will not invoke the webhook itself)
 - HostGator DNS cutover to Vercel for gcfieldlog.com
+- No Apple / native iOS
 
 ## Demo data
 

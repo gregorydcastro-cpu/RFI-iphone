@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { highlightForSheet } from "@/lib/highlight";
 import { packActions, type PackAction, type RoomPack, type Sheet } from "@/lib/pack";
 import { ActionPanel } from "./ActionPanel";
+import { AppHeader } from "./AppHeader";
 import { RfiList } from "./RfiList";
 import { SheetViewer } from "./SheetViewer";
 import { TakeoffCounts } from "./TakeoffCounts";
@@ -22,6 +23,7 @@ export function RoomPackViewer({
   requestedRoom,
   demoFallback,
 }: Props) {
+  const router = useRouter();
   const [sheetId, setSheetId] = useState(pack.sheets[0]?.id ?? "");
   const [toast, setToast] = useState<string | null>(null);
   const sheet = pack.sheets.find((item) => item.id === sheetId) ?? pack.sheets[0];
@@ -30,11 +32,16 @@ export function RoomPackViewer({
   const displayedRequest = requestId ?? pack.request_id;
 
   function handleAction(action: PackAction) {
-    const message =
-      action.note ??
-      (action.id === "generate-rfi"
-        ? "Generate RFI — draft to foreman, not a Procore submit"
-        : `${action.label} — coming soon`);
+    if (action.id === "generate-rfi") {
+      const sheetQuery = sheet ? `?sheet=${encodeURIComponent(sheet.id)}` : "";
+      router.push(`/pack/${displayedRequest}/rfi/new${sheetQuery}`);
+      return;
+    }
+    if (action.id === "order-materials") {
+      router.push(`/pack/${displayedRequest}/materials`);
+      return;
+    }
+    const message = action.note ?? `${action.label} — coming soon`;
     console.info("[gcfieldlog] stub action", action);
     setToast(message);
     window.setTimeout(() => setToast(null), 3200);
@@ -50,7 +57,8 @@ export function RoomPackViewer({
 
   return (
     <div className="flex min-h-dvh flex-col bg-ink text-paper">
-      <TopBar
+      <AppHeader signedIn />
+      <PackContextBar
         pack={pack}
         sheet={sheet}
         requestId={displayedRequest}
@@ -82,7 +90,7 @@ export function RoomPackViewer({
   );
 }
 
-function TopBar({
+function PackContextBar({
   pack,
   sheet,
   requestId,
@@ -96,42 +104,30 @@ function TopBar({
   demoFallback?: boolean;
 }) {
   return (
-    <header className="border-b border-line bg-gline-ink text-paper">
-      <div className="h-0.5 w-full bg-accent" />
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-        <div className="min-w-0">
-          <p className="font-display text-[11px] font-medium tracking-[0.22em] text-accent uppercase">
-            gcfieldlog.com · GC Field Log
-          </p>
-          <h1 className="font-display truncate text-lg tracking-wide uppercase sm:text-xl">
-            {pack.project.name}
-            <span className="font-sans text-base font-normal tracking-normal text-muted normal-case">
-              {" "}
-              · {pack.room.name}
-              {requestedRoom ? ` · requested ${requestedRoom}` : ""}
-            </span>
-          </h1>
-          {demoFallback ? (
-            <p className="mt-1 text-xs text-metal">
-              Demo pack (Maple Point). Production would poll Drive for{" "}
-              <span className="font-mono">{requestId}.json</span>.
-            </p>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
-          <span className="border border-line bg-panel px-2 py-1 font-mono">
-            {sheet.id} Rev {sheet.rev}
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-primary px-4 py-2 text-secondary">
+      <div className="min-w-0">
+        <h1 className="truncate text-sm font-medium sm:text-base">
+          {pack.project.name}
+          <span className="font-normal text-accent-2">
+            {" "}
+            · {pack.room.name}
+            {requestedRoom ? ` · requested ${requestedRoom}` : ""}
           </span>
-          <StatusBadge status={pack.status} />
-          <Link
-            href="/jobs"
-            className="text-muted underline-offset-2 hover:text-paper hover:underline"
-          >
-            Jobs
-          </Link>
-        </div>
+        </h1>
+        {demoFallback ? (
+          <p className="mt-0.5 text-xs text-tan">
+            Demo pack (Maple Point). Production would poll Drive for{" "}
+            <span className="font-mono">{requestId}.json</span>.
+          </p>
+        ) : null}
       </div>
-    </header>
+      <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
+        <span className="border border-line bg-panel-2 px-2 py-1 font-mono">
+          {sheet.id} Rev {sheet.rev}
+        </span>
+        <StatusBadge status={pack.status} />
+      </div>
+    </div>
   );
 }
 
@@ -169,8 +165,8 @@ function SheetTabs({
             onClick={() => onSelect(sheet.id)}
             className={`px-3 py-1.5 text-xs font-semibold tracking-wide whitespace-nowrap uppercase ${
               active
-                ? "bg-accent text-paper"
-                : "text-muted hover:bg-panel hover:text-paper"
+                ? "bg-cta text-secondary"
+                : "text-accent-2 hover:bg-panel-2 hover:text-secondary"
             }`}
           >
             {sheet.id}

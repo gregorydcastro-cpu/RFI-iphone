@@ -17,7 +17,7 @@ export function ActionPanel({ actions, onAction }: Props) {
             key={action.id}
             type="button"
             onClick={() => onAction(action)}
-            className="border border-accent bg-accent-deep/40 px-3 py-2 text-left text-sm font-medium text-paper hover:bg-accent"
+            className="border border-cta bg-cta px-3 py-2 text-left text-sm font-medium text-secondary hover:bg-cta-hover"
           >
             <span className="flex items-center justify-between gap-2">
               {action.label}

@@ -20,14 +20,11 @@ export function LoginForm() {
       className="w-full max-w-md space-y-4 border border-line bg-panel p-6 shadow-[0_0_0_1px_rgb(225_6_0_/_0.15)]"
     >
       <div>
-        <p className="font-display text-xs tracking-[0.28em] text-accent uppercase">
-          Sign in
-        </p>
-        <h1 className="font-display mt-1 text-3xl tracking-wide text-paper uppercase">
+        <h1 className="font-display text-3xl tracking-wide text-secondary">
           GC Field Log
         </h1>
-        <p className="mt-2 text-sm text-muted">
-          Demo form only. No real login, Stripe, or HostGator auth.
+        <p className="mt-2 text-sm text-accent-2">
+          Stub login. No real auth, Stripe, or Apple sign-in.
         </p>
       </div>
       <label className="block text-xs font-semibold tracking-wide text-muted uppercase">
@@ -38,7 +35,7 @@ export function LoginForm() {
           autoComplete="username"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="mt-1 w-full border border-line bg-ink px-3 py-2 text-sm text-paper outline-none focus:border-accent"
+          className="mt-1 w-full border border-line bg-ink px-3 py-2 text-sm text-paper outline-none focus:border-cta"
           placeholder="foreman@crew.example"
         />
       </label>
@@ -50,13 +47,13 @@ export function LoginForm() {
           autoComplete="current-password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          className="mt-1 w-full border border-line bg-ink px-3 py-2 text-sm text-paper outline-none focus:border-accent"
+          className="mt-1 w-full border border-line bg-ink px-3 py-2 text-sm text-paper outline-none focus:border-cta"
           placeholder="••••••••"
         />
       </label>
       <button
         type="submit"
-        className="w-full bg-accent px-4 py-2.5 font-display text-sm tracking-[0.16em] text-paper uppercase hover:bg-accent-hover"
+        className="w-full bg-cta px-4 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover"
       >
         Enter dashboard
       </button>

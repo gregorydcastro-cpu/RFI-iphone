@@ -36,7 +36,7 @@ export function RequestPackForm({ job }: Props) {
         <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
           Request room pack
         </p>
-        <h1 className="font-display mt-1 text-2xl tracking-wide text-paper uppercase sm:text-3xl">
+        <h1 className="font-display mt-1 text-2xl tracking-wide text-paper sm:text-3xl">
           {job.name}
         </h1>
         <p className="mt-2 text-sm text-muted">
@@ -55,13 +55,13 @@ export function RequestPackForm({ job }: Props) {
           required
           value={room}
           onChange={(event) => setRoom(event.target.value)}
-          className="mt-1 w-full border border-line bg-ink px-3 py-2 font-mono text-sm text-paper outline-none focus:border-accent"
+          className="mt-1 w-full border border-line bg-ink px-3 py-2 font-mono text-sm text-paper outline-none focus:border-cta"
           placeholder="733"
         />
       </label>
       <button
         type="submit"
-        className="bg-accent px-5 py-2.5 font-display text-sm tracking-[0.16em] text-paper uppercase hover:bg-accent-hover"
+        className="bg-cta px-5 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover"
       >
         Request pack
       </button>

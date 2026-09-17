@@ -1,9 +1,9 @@
 import type { Rfi } from "@/lib/pack";
 
 const STATUS_CLASS: Record<string, string> = {
-  open: "border-accent/50 bg-accent-deep/30 text-paper",
-  answered: "border-metal/40 bg-panel-2 text-metal",
-  closed: "border-line bg-ink text-muted",
+  open: "border-cta/60 bg-accent-1/40 text-secondary",
+  answered: "border-accent-3/50 bg-panel-2 text-accent-3",
+  closed: "border-line bg-ink text-tan",
 };
 
 type Props = {
