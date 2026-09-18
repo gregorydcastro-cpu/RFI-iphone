@@ -111,9 +111,8 @@ export function RequestPackForm({ job, procoreLinked = false }: Props) {
           ) : (
             <>
               View-only session. You can open the current pack but cannot
-              trigger a Procore pull. Sign in with{" "}
-              <span className="text-paper">Linked Procore account</span> to
-              pull.
+              trigger a Procore pull. Sign in as a puller and{" "}
+              <span className="text-paper">Connect Procore</span> to pull.
             </>
           )}
         </p>

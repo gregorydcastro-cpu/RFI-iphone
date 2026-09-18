@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         error:
-          "Puller role required. Link a Procore account (procoreLinked cookie or x-procore-linked header).",
+          "Puller role required. Connect Procore (procoreLinked cookie after OAuth, or x-procore-linked header).",
       },
       403,
     );

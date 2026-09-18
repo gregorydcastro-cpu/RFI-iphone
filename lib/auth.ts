@@ -2,7 +2,8 @@
  * Stub role gate for GC Field Log.
  *
  * Auth is not real yet. Default is read-only viewer. A linked Procore
- * account (the puller) is marked with cookie or header `procoreLinked`.
+ * account (the puller) is marked after OAuth connect (cookie) or via
+ * header `x-procore-linked`. Connect Procore stores tokens per stub user.
  */
 
 export const PROCORE_LINKED_COOKIE = "gcfieldlog_procore_linked";
@@ -15,6 +16,43 @@ export type FieldRole = {
   procoreLinked: boolean;
   role: FieldRoleName;
 };
+
+export function isPullerRole(role: string | null | undefined): boolean {
+  return role === "puller";
+}
+
+export function cookieSecureFromRequest(request: Request): boolean {
+  const forwarded = request.headers.get("x-forwarded-proto");
+  if (forwarded) return forwarded.split(",")[0]?.trim() === "https";
+  try {
+    return new URL(request.url).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export function procoreLinkedCookieOptions(
+  linked: boolean,
+  secure: boolean,
+): {
+  name: string;
+  value: string;
+  httpOnly: boolean;
+  path: string;
+  sameSite: "lax";
+  maxAge: number;
+  secure: boolean;
+} {
+  return {
+    name: PROCORE_LINKED_COOKIE,
+    value: linked ? "1" : "",
+    httpOnly: true,
+    path: "/",
+    sameSite: "lax",
+    maxAge: linked ? 60 * 60 * 24 * 30 : 0,
+    secure,
+  };
+}
 
 function isTruthyFlag(value: string | null | undefined): boolean {
   if (!value) return false;

@@ -1,19 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { procoreLinkedCookie, type FieldRoleName } from "@/lib/auth";
+import type { FieldRoleName } from "@/lib/auth";
 
 type Props = {
   signedIn?: boolean;
+  role?: FieldRoleName | null;
   procoreLinked?: boolean;
+  procoreConnected?: boolean;
 };
 
-export function AppHeader({ signedIn = false, procoreLinked = false }: Props) {
-  const role: FieldRoleName = procoreLinked ? "puller" : "viewer";
-
-  function clearRoleCookie() {
-    document.cookie = procoreLinkedCookie(false);
-  }
+export function AppHeader({
+  signedIn = false,
+  role = null,
+  procoreLinked = false,
+  procoreConnected = false,
+}: Props) {
+  const resolvedRole: FieldRoleName | null =
+    role ?? (signedIn ? (procoreLinked ? "puller" : "viewer") : null);
+  const connected = procoreConnected || procoreLinked;
 
   return (
     <header className="border-b border-line bg-primary">
@@ -40,24 +45,37 @@ export function AppHeader({ signedIn = false, procoreLinked = false }: Props) {
               <span className="cursor-default text-tan/50" title="Later">
                 Time
               </span>
-              <span
-                className={
-                  procoreLinked
-                    ? "border border-cta/40 px-1.5 py-0.5 text-[10px] text-secondary"
-                    : "border border-line px-1.5 py-0.5 text-[10px] text-tan"
-                }
-                title={
-                  procoreLinked
-                    ? "Linked Procore account — can pull packs"
-                    : "Read-only viewer — cannot pull packs"
-                }
+              <Link
+                className="text-secondary hover:text-cta"
+                href="/account"
               >
-                {role === "puller" ? "Puller" : "View only"}
-              </span>
+                Account
+              </Link>
+              {resolvedRole ? (
+                <span
+                  className={
+                    connected
+                      ? "border border-cta/40 px-1.5 py-0.5 text-[10px] text-secondary"
+                      : "border border-line px-1.5 py-0.5 text-[10px] text-tan"
+                  }
+                  title={
+                    resolvedRole === "puller"
+                      ? connected
+                        ? "Procore connected — can pull"
+                        : "Puller — connect Procore to pull"
+                      : "Read-only viewer — cannot pull packs"
+                  }
+                >
+                  {resolvedRole === "puller"
+                    ? connected
+                      ? "Procore connected"
+                      : "Puller"
+                    : "View only"}
+                </span>
+              ) : null}
               <Link
                 className="text-accent-2 hover:text-secondary"
-                href="/"
-                onClick={clearRoleCookie}
+                href="/api/session/logout"
               >
                 Sign out
               </Link>

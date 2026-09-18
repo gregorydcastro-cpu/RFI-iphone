@@ -2,13 +2,15 @@
 
 Browser **dashboard for field crews** on **[gcfieldlog.com](https://gcfieldlog.com)**. Foremen and supers sign in (stub), pick a job, request a room pack, then work the sheet: zoomable floor plans, room highlight, linked RFIs, and Generate RFI / Order materials.
 
-This is the product surface. **Native iOS is paused. No Apple.** Real login and **Stripe monthly billing** are later — the login page is UI only. Wordmark is clean text: **GC Field Log** (no extra logo).
+This is the product surface. **Native iOS is paused. No Apple.** Real login and **Stripe monthly billing** are later — the login page is a **stub session** (httpOnly cookie with user id + email + role). Wordmark is clean text: **GC Field Log** (no extra logo).
 
 Host: **Vercel (primary)** with **HostGator DNS** for `gcfieldlog.com` (document only; this PR does not change DNS). Cloudflare Pages is a possible later target.
 
-No real auth, Stripe, HostGator uploads, or live Procore REST API in this MVP. The **Room pack webhook routine is deleted** — this app does **not** call `procore_room_pack_webhook_url` / webhook Authorization.
+No real crew auth, Stripe, HostGator uploads, or live Procore REST API in this MVP. The **Room pack webhook routine is deleted** — this app does **not** call `procore_room_pack_webhook_url` / webhook Authorization.
 
-**Live path:** the Procore bot (`969a9d8e-c07f-44c3-ae9d-862704cd60c7`) owns the Procore pull and upserts `public.room_packs` on Supabase project `aejevzkqvlwbmjbqdxuu`. The website reads that table with `SUPABASE_URL` + `SUPABASE_ANON_KEY` (`cache: "no-store"`) on every pack open. Pullers can request a refresh; viewers only read. Local demo leaves Supabase unset: Maple Point JSON, no pull.
+**Pullers** can **Connect Procore** with their own Procore login (OAuth authorization code). Tokens are stored per stub user in Supabase `procore_connections`. Viewers do not need to connect and cannot trigger a pull.
+
+**Live path:** the Procore bot (`969a9d8e-c07f-44c3-ae9d-862704cd60c7`) owns the Procore pull and upserts `public.room_packs` on Supabase project `aejevzkqvlwbmjbqdxuu`. The website reads that table with `SUPABASE_URL` + `SUPABASE_ANON_KEY` (`cache: "no-store"`) on every pack open. Pullers who have connected Procore can request a refresh; viewers only read. Local demo leaves Supabase unset: Maple Point JSON, no pull.
 
 ## Locked nav (MVP)
 
@@ -22,10 +24,11 @@ Must match this path — nothing else in the primary nav:
 
 | Area | Behavior |
 | --- | --- |
-| Login (`/`) | Email/password form UI. Checkbox **Linked Procore account (puller)** sets the stub `procoreLinked` cookie. Any submit goes to jobs. No session server. |
-| Jobs (`/jobs`) | Fictional jobs only (Maple Point and similar). Header shows **Puller** or **View only**. |
-| Room pack request | Room number (e.g. `733`). **Puller:** `POST /api/room-pack` asks the Procore bot to refresh, then opens `/pack/[requestId]`. **Viewer:** **Open pack** only — no pull. Local demo (no `SUPABASE_URL`) loads Maple Point JSON. |
-| Pack viewer | Zoomable plan/sheets + SVG room highlight + linked RFIs. Top bar and sheet tabs show **drawing number + revision letter** from the pull (`E-101 Rev A`) plus `pulled_at`. Website open always re-reads `room_packs` (no-store). Pullers also trigger a bot refresh; viewers cannot. |
+| Login (`/`) | Email/password form UI. Submit creates a stub session cookie (`gcfieldlog_stub_user`) with `userId` + email + role (`viewer` default, or `puller`). Password is not checked. |
+| Jobs (`/jobs`) | Fictional jobs only (Maple Point and similar). Header shows **Puller** / **Procore connected** / **View only**. Pullers get **Connect Procore**. |
+| Account (`/account`) | Stub session + Procore connected / disconnected state. |
+| Room pack request | Room number (e.g. `733`). **Connected puller:** `POST /api/room-pack` asks the Procore bot to refresh, then opens `/pack/[requestId]`. **Viewer / unconnected puller:** **Open pack** only — no pull. Local demo (no `SUPABASE_URL`) loads Maple Point JSON. |
+| Pack viewer | Zoomable plan/sheets + SVG room highlight + linked RFIs. Top bar and sheet tabs show **drawing number + revision letter** from the pull (`E-101 Rev A`) plus `pulled_at`. Website open always re-reads `room_packs` (no-store). Connected pullers also trigger a bot refresh; viewers cannot. |
 | Generate RFI / Materials | Stub pages from the pack action buttons |
 | Takeoff counts | Optional placeholder panel |
 
@@ -52,22 +55,78 @@ Production host is **gcfieldlog.com**.
 
 1. Import this GitHub repo in [Vercel](https://vercel.com/new) (framework preset: **Next.js**).
 2. Build command: `npm run build`. `postinstall` copies `pdf.worker.min.mjs`.
-3. **Env:** the Maple Point demo needs **no** secrets. Production reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` (see below). Do **not** restore `procore_room_pack_webhook_url` / `procore_room_pack_webhook_authorization` for this live path — that routine is deleted.
+3. **Env:** the Maple Point demo needs **no** secrets. Production reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` for live `room_packs`. Procore **user** OAuth (Connect Procore) uses **`PROCORE_CLIENT_ID` / `PROCORE_CLIENT_SECRET`** and **`SUPABASE_SERVICE_ROLE_KEY`** on Vercel (server-only, never `NEXT_PUBLIC_`). Copy OAuth id/secret from `/home/box/.secrets/procore_client_id` and `procore_client_secret` — do not commit. Do **not** restore `procore_room_pack_webhook_url` / `procore_room_pack_webhook_authorization` for this live path — that routine is deleted.
 4. **DNS (ops, not this repo):** at HostGator, point `gcfieldlog.com` / `www` to Vercel (A / CNAME per Vercel’s domain docs). Do not upload files to HostGator for this app.
+
+### Procore OAuth (Connect Procore)
+
+Pullers click **Connect Procore** → Procore authorize → they sign in with **their own** Procore credentials and approve → callback exchanges the code for tokens → tokens are stored **per user** in Supabase (service role writes). End users do **not** create a Developer Portal app. After a successful callback the server also sets `gcfieldlog_procore_linked=1` so pack pull routes treat the session as a puller.
+
+**Redirect URI** allowlisted on Greg’s Procore developer app (exact):
+
+`https://www.gcfieldlog.com/api/procore/callback`
+
+That is the default `redirect_uri`. Preview hosts will not match unless `PROCORE_REDIRECT_URI` is set **and** that URI is added in the developer app.
+
+**Vercel (server-only, never `NEXT_PUBLIC_`):**
+
+| Key | Role |
+| --- | --- |
+| `PROCORE_CLIENT_ID` | OAuth client id (`procore_client_id` alias also read) |
+| `PROCORE_CLIENT_SECRET` | OAuth client secret (`procore_client_secret` alias also read) |
+| `PROCORE_REDIRECT_URI` | Optional. Default: `https://www.gcfieldlog.com/api/procore/callback` |
+| `PROCORE_OAUTH_BASE` | Optional login host. Default **`https://login-sandbox.procore.com`** (Developer Sandbox). Production / on-demand: `https://login.procore.com`. |
+| `PROCORE_API_BASE` | Optional API host. Default follows the login host. |
+| `SUPABASE_URL` | Supabase project URL (same project as `room_packs`) |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Required to write tokens.** Anon key must not read or write `procore_connections`. |
+| `SUPABASE_ANON_KEY` | Live `room_packs` reads (not token storage) |
+
+Never commit secrets. Never log them. Sandbox id/secret live on the shared box at `/home/box/.secrets/procore_client_id` and `/home/box/.secrets/procore_client_secret` — copy those values into Vercel env; do not put them in git. If those files are present at runtime and Vercel env is unset, the server will read them as a fallback.
+
+[Procore OAuth docs](https://procore.github.io/documentation/oauth-auth-grant-flow): authorize `GET {login}/oauth/authorize`, token `POST {login}/oauth/token`. Developer Sandbox login host is `login-sandbox.procore.com`. Access tokens last ~1.5 hours; refresh tokens are stored for later.
+
+**Company id** is dynamic per project (Maple Point demos only in this app). Do not hardcode a company. `procore_connections.company_id` is last-known from `/me` only. Later API calls must use `resolveCompanyIdForProject` against the selected demo job name.
+
+#### Token table (`public.procore_connections`)
+
+Applied on the gc-field-log Supabase project. SQL: `supabase/migrations/20260918010000_procore_connections.sql`.
+
+| Column | Notes |
+| --- | --- |
+| `user_id` | Primary key. Stub: `stub:` + sha256(email). Replace with `auth.uid()` when real auth lands. |
+| `email` | Stub session email |
+| `access_token` | Never returned to the browser |
+| `refresh_token` | Never returned to the browser |
+| `expires_at` | Access token expiry |
+| `company_id` | Last-known from `/me` only. **Not** a hardcoded Field Log company. Resolve per project. |
+| `procore_user_id` | From `/rest/v1.0/me` when available |
+| `created_at` / `updated_at` | Timestamps |
+
+RLS is on. `anon` has no grants. `authenticated` may **SELECT own row** only (`auth.uid()` or JWT email). Service role upserts. Status API selects non-secret columns only.
+
+If `SUPABASE_SERVICE_ROLE_KEY` is missing, Connect still redirects through Procore but the callback cannot persist tokens (`storage_unconfigured`). Do not use `SUPABASE_ANON_KEY` for this table.
+
+#### Stub user until real auth
+
+1. Login POSTs `/api/session` with email + role. Password is ignored.
+2. Server sets httpOnly `gcfieldlog_stub_user` = `{ userId, email, role }`. Same email → same `userId`.
+3. Pullers see Connect Procore on `/jobs`, the job request page, and `/account`. Viewers do not need it.
+4. After OAuth, `gcfieldlog_procore_linked=1` is set (puller linked). Sign out (`/api/session/logout`) clears the stub cookie; tokens stay in Supabase until Disconnect.
+5. Upgrade path: replace the stub cookie with real Supabase/Auth.js session and store `auth.uid()` as `user_id`. Keep RLS as written.
 
 ### Roles (stub MVP)
 
-Auth is still stubby. Default is **read-only viewer**. Only a **linked Procore account** (the puller) can trigger pulls.
+Auth is still stubby. Default is **read-only viewer**. Only a **connected Procore account** (the puller after OAuth) can trigger pulls.
 
 | Mark a puller | How |
 | --- | --- |
-| Login checkbox | Check **Linked Procore account (puller)** before Enter dashboard |
-| Cookie | `gcfieldlog_procore_linked=1; Path=/; SameSite=Lax` |
+| Login role | Choose **Puller**, then **Connect Procore** |
+| Cookie | `gcfieldlog_procore_linked=1` (httpOnly; set by `/api/procore/callback`) |
 | Header (API) | `x-procore-linked: true` (also `1` / `yes` / `puller`) |
 
-Viewers can open `/pack/[requestId]` and see sheets, RFIs, and revision stamps. Pull / file-pull controls are hidden. `POST /api/room-pack` and `POST /api/room-pack/refresh` return **403** for viewers.
+Viewers can open `/pack/[requestId]` and see sheets, RFIs, and revision stamps. Pull / file-pull controls are hidden. `POST /api/room-pack` and `POST /api/room-pack/refresh` return **403** for viewers and unconnected pullers.
 
-This is not real auth. Anyone who can set the cookie is a puller. Replace with a real Procore-linked session later.
+This is not real auth. Anyone who can set the cookie or header is a puller. Replace with a real Procore-linked session later.
 
 ### Supabase + Procore bot (Vercel)
 
@@ -83,7 +142,7 @@ process.env.SUPABASE_URL
 process.env.SUPABASE_ANON_KEY
 ```
 
-- **Both set (Production):** website live view GETs the latest `public.room_packs` row with `cache: "no-store"`. Pullers POST a refresh that coordinates the **Procore bot** (`969a9d8e-c07f-44c3-ae9d-862704cd60c7`). The bot owns the Procore pull and upserts `room_packs`. The website then re-reads the latest row. No expiry timers.
+- **Both set (Production):** website live view GETs the latest `public.room_packs` row with `cache: "no-store"`. Connected pullers POST a refresh that coordinates the **Procore bot** (`969a9d8e-c07f-44c3-ae9d-862704cd60c7`). The bot owns the Procore pull and upserts `room_packs`. The website then re-reads the latest row. No expiry timers.
 - **Missing / local:** Maple Point JSON, **no** Supabase call, **no** bot pull.
 - **Hard rule:** never display another job’s pack. Match project slug or exact job name.
 
@@ -124,10 +183,17 @@ Local `npm run dev` does not need any of these variables.
 
 | Path | Purpose |
 | --- | --- |
-| `/` | Stub **login** (optional Procore-linked puller checkbox) |
-| `/jobs` | Fictional **job selection** |
-| `/jobs/[projectSlug]` | **Pull / open room pack** (puller POSTs `/api/room-pack`; viewer opens `/pack/[requestId]` only) |
+| `/` | Stub **login** (creates session cookie) |
+| `/jobs` | Fictional **job selection** + Connect Procore (puller) |
+| `/jobs/[projectSlug]` | **Pull / open room pack** (connected puller POSTs `/api/room-pack`; viewer opens `/pack/[requestId]` only) |
 | `/jobs/[projectSlug]/rooms/[room]` | Alias → `/pack/{slug}-{room}` (no pull; use the request form) |
+| `/account` | Stub account + Procore connected state |
+| `/api/session` | POST stub login |
+| `/api/session/logout` | Clear stub session |
+| `/api/procore/connect` | Redirect to Procore OAuth authorize |
+| `/api/procore/callback` | Exchange code, store per-user tokens |
+| `/api/procore/status` | Connected state (no tokens) |
+| `/api/procore/disconnect` | Revoke + delete this user’s tokens |
 | `/api/room-pack` | Puller POST. Requests a Procore bot refresh + reads `room_packs`. Demo when Supabase unset. |
 | `/api/room-pack/refresh` | Puller POST. Bot refresh, optional `{ pack }` upsert, then latest `room_packs` row. |
 | `/api/room-pack/live` | Anyone GET/POST. Latest `room_packs` row, `no-store`. Does not pull. |
@@ -161,7 +227,7 @@ Defined in `app/globals.css`.
 
 Live packs are produced by the **Procore bot** (`969a9d8e-c07f-44c3-ae9d-862704cd60c7`) and stored in Supabase **`public.room_packs`**, schema `gcpullog.room_pack.v1`.
 
-**Request (this app, Production, puller):** `POST /api/room-pack` or `POST /api/room-pack/refresh` asks that bot to pull, then reads the latest matching `room_packs` row with `SUPABASE_URL` + `SUPABASE_ANON_KEY` (`cache: "no-store"`). Opening `/pack/[requestId]` does the same read every time (pullers also trigger refresh). The website does **not** call the deleted Room pack webhook.
+**Request (this app, Production, connected puller):** `POST /api/room-pack` or `POST /api/room-pack/refresh` asks that bot to pull, then reads the latest matching `room_packs` row with `SUPABASE_URL` + `SUPABASE_ANON_KEY` (`cache: "no-store"`). Opening `/pack/[requestId]` does the same read every time (pullers also trigger refresh). The website does **not** call the deleted Room pack webhook.
 
 **Viewer:** GET `/api/room-pack/live` / open `/pack/[requestId]` only. No pull.
 
@@ -254,7 +320,8 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 
 ## Later (not implemented)
 
-- Real crew **login** (replace the `procoreLinked` cookie)
+- Real crew **login** (replace stub session cookie with Supabase Auth / Auth.js; keep `procore_connections.user_id` = `auth.uid()`)
+- Use stored per-user Procore tokens for live pulls (Connect Procore only **stores** tokens today; pack refresh still goes through the Procore bot)
 - **Stripe** monthly billing
 - **Tools** and **Time** nav
 - Sent pack **snapshots** (text/email frozen copies — not in this PR)

@@ -1,23 +1,47 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, useState } from "react";
-import { procoreLinkedCookie } from "@/lib/auth";
+import type { FieldRoleName } from "@/lib/auth";
 
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [procoreLinked, setProcoreLinked] = useState(false);
+  const [role, setRole] = useState<FieldRoleName>("viewer");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    document.cookie = procoreLinkedCookie(procoreLinked);
-    console.info("[gcfieldlog] stub login — no auth yet", {
-      email,
-      procoreLinked,
-    });
-    router.push("/jobs");
+    if (pending) return;
+    setPending(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, role }),
+      });
+      const data = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !data.ok) {
+        setError(data.error ?? "Could not start a session");
+        return;
+      }
+      console.info("[gcfieldlog] stub login — no real auth yet", {
+        email,
+        role,
+      });
+      const next = searchParams.get("next");
+      router.push(next && next.startsWith("/") ? next : "/jobs");
+      router.refresh();
+    } catch {
+      setError("Could not reach the session service. Try again.");
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -30,8 +54,9 @@ export function LoginForm() {
           GC Field Log
         </h1>
         <p className="mt-2 text-sm text-accent-2">
-          Stub login. No real auth, Stripe, or Apple sign-in. Default is view
-          only; check Procore linked to pull packs.
+          Stub login. No real auth, Stripe, or Apple sign-in. Viewers open
+          packs without Procore. Pullers connect their own Procore account
+          to pull.
         </p>
       </div>
       <label className="block text-xs font-semibold tracking-wide text-muted uppercase">
@@ -58,26 +83,55 @@ export function LoginForm() {
           placeholder="••••••••"
         />
       </label>
-      <label className="flex items-start gap-2 text-sm text-paper">
-        <input
-          type="checkbox"
-          checked={procoreLinked}
-          onChange={(event) => setProcoreLinked(event.target.checked)}
-          className="mt-1"
-        />
-        <span>
-          <span className="font-medium">Linked Procore account (puller)</span>
-          <span className="mt-0.5 block text-xs text-muted">
-            Sets <code className="font-mono">procoreLinked=true</code> on this
-            session. Leave unchecked for read-only.
+      <fieldset className="space-y-2">
+        <legend className="text-xs font-semibold tracking-wide text-muted uppercase">
+          Role
+        </legend>
+        <label className="flex items-start gap-2 text-sm text-paper">
+          <input
+            type="radio"
+            name="role"
+            value="viewer"
+            checked={role === "viewer"}
+            onChange={() => setRole("viewer")}
+            className="mt-1"
+          />
+          <span>
+            <span className="font-medium">View only</span>
+            <span className="mt-0.5 block text-xs text-muted">
+              Open packs. No Procore connect required. Cannot trigger a pull.
+            </span>
           </span>
-        </span>
-      </label>
+        </label>
+        <label className="flex items-start gap-2 text-sm text-paper">
+          <input
+            type="radio"
+            name="role"
+            value="puller"
+            checked={role === "puller"}
+            onChange={() => setRole("puller")}
+            className="mt-1"
+          />
+          <span>
+            <span className="font-medium">Puller</span>
+            <span className="mt-0.5 block text-xs text-muted">
+              Must Connect Procore with your own credentials. No developer
+              portal signup.
+            </span>
+          </span>
+        </label>
+      </fieldset>
+      {error ? (
+        <p role="alert" className="text-sm text-cta">
+          {error}
+        </p>
+      ) : null}
       <button
         type="submit"
-        className="w-full bg-cta px-4 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover"
+        disabled={pending}
+        className="w-full bg-cta px-4 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
       >
-        Enter dashboard
+        {pending ? "Entering…" : "Enter dashboard"}
       </button>
     </form>
   );
