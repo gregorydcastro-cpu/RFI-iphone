@@ -19,7 +19,6 @@ export const metadata: Metadata = {
 
 export default async function SharePage() {
   const session = await readStubSession();
-  console.info("[gcfieldlog] /share stub session", session?.role ?? "signed-out");
   const view = await getProcoreConnectionView(session);
   const canRefresh = view.role === "puller";
   const snapshot = session ? await listSharePortal(session.userId) : null;
