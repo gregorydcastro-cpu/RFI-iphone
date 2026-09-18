@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { InviteCrewCard } from "@/components/InviteCrewCard";
+import { NotifyEmailForm } from "@/components/NotifyEmailForm";
 import { ProcoreConnectCard } from "@/components/ProcoreConnectCard";
+import { loadAccountNotifyEmail } from "@/lib/accountNotifyEmail";
+import { canManageNotifyEmail } from "@/lib/accountRole";
 import { canInviteCrew, fieldRoleLabel } from "@/lib/inviteRole";
 import { getProcoreConnectionView, procoreErrorMessage } from "@/lib/procoreStatus";
 import { readStubSession } from "@/lib/stubSession";
@@ -16,6 +19,9 @@ export default async function AccountPage({ searchParams }: Props) {
   const query = await searchParams;
   const session = await readStubSession();
   const view = await getProcoreConnectionView(session);
+  const notify = session && canManageNotifyEmail(session.role)
+    ? await loadAccountNotifyEmail(session.userId)
+    : null;
   const error =
     query.procore === "error" ? procoreErrorMessage(query.reason) : null;
 
@@ -72,6 +78,19 @@ export default async function AccountPage({ searchParams }: Props) {
         <div className="mt-6 max-w-lg">
           <ProcoreConnectCard view={view} />
         </div>
+        {notify ? (
+          <div className="mt-8">
+            <NotifyEmailForm
+              initialEmail={notify.notify_email}
+              storage={notify.storage}
+            />
+          </div>
+        ) : view.signedIn ? (
+          <p className="mt-8 max-w-lg text-sm text-muted">
+            Sign in as a puller / foreman to set the revision bump notify
+            email for the job you are running.
+          </p>
+        ) : null}
         {canInviteCrew(view.role) ? (
           <div className="mt-8">
             <InviteCrewCard canInvite />

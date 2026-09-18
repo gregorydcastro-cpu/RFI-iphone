@@ -214,13 +214,13 @@ The pack viewer badge: **live** (this pull used REST), **cached** (bot / `room_p
 
 #### Token table (`public.procore_connections`)
 
-Applied on the gc-field-log Supabase project. SQL: `supabase/migrations/20260918010000_procore_connections.sql`.
+Applied on the gc-field-log Supabase project. SQL: `supabase/migrations/20260918010000_procore_connections.sql`. Additive notify column: `supabase/migrations/20260918230000_procore_connections_notify_email.sql` (already applied).
 
 | Column | Notes |
 | --- | --- |
 | `user_id` | Primary key. Stub: `stub:` + sha256(email). Replace with `auth.uid()` when real auth lands. |
-| `email` | Stub session email |
-| `notify_email` | Per-user bump-alert destination (nullable). Null/empty skips notify for that owner. SQL: `supabase/migrations/20260918230000_procore_connections_notify_email.sql`. Settings UI is owned by GC Field Log. |
+| `email` | OAuth / stub session email (Procore account). **Not** the bump-alert destination. |
+| `notify_email` | Per-user revision-bump destination (nullable). Trim + lowercase on write. Distinct from `email`. Account settings writes this; cron reads it. SQL: `supabase/migrations/20260918230000_procore_connections_notify_email.sql`. |
 | `access_token` | Never returned to the browser |
 | `refresh_token` | Never returned to the browser |
 | `expires_at` | Access token expiry |
@@ -468,7 +468,7 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/share/folders
 
 **Weekly rev-only re-pull:** `GET`/`POST /api/share/weekly-refresh` is the automated path. Vercel Cron (`vercel.json`, Mondays 12:00 UTC) sends `Authorization: Bearer $CRON_SECRET`. The worker reads **all** `pinned_sheets` + `sheet_revision_cache` with the service role (process memory when the service role is unset), reuses `planShareRefresh` (same catalog + `room_packs` compare as Refresh all), and on a bump updates `last_seen_rev` / `last_pulled_at` / cache `rev` + `checked_at`. Unchanged revs are metadata-only.
 
-**Procore REST** on weekly cron is still a no-call: cron has no per-user OAuth token. `SHARE_WEEKLY_PROCORE_REST=1` does not change that. Connected pullers use REST on `POST /api/room-pack` ([issue #25](https://github.com/gregorydcastro-cpu/RFI-iphone/issues/25)). **PDF re-download** uses the existing Drive / `/api/sheet-pdf` proxy only when Drive auth is set or `SHARE_WEEKLY_PDF_REDOWNLOAD=1`; otherwise metadata-only. There is no separate PDF store — the pack viewer already streams that proxy. Response: `{ scanned, bumped, unchanged, missing, errors, bumps, error_items, pdf, procore_rest, notify }`. `bumps: [{ sheet_id, old_rev, new_rev, project_name, owner_user_id }]` feed notify. **Recipient resolution:** bumped pin → `pinned_sheets.folder_id` → `share_folders.owner_user_id` → `procore_connections.user_id` → `notify_email`. Unchanged sheets do not email. Missing `notify_email` (and no temporary `NOTIFY_MIKE_EMAIL` fallback) returns `notify.code: "notify_email_unset"` (status 200 on the notify object) and does **not** fail the refresh. Missing `RESEND_API_KEY` returns `notify.code: "notify_unconfigured"` (status 503 on the notify object only). SMS (`NOTIFY_MIKE_SMS`) is reserved and not sent. Trial-link redeem stays later. Account/settings UI to set `notify_email` is owned by **GC Field Log**, not this notify path.
+**Procore REST** on weekly cron is still a no-call: cron has no per-user OAuth token. `SHARE_WEEKLY_PROCORE_REST=1` does not change that. Connected pullers use REST on `POST /api/room-pack` ([issue #25](https://github.com/gregorydcastro-cpu/RFI-iphone/issues/25)). **PDF re-download** uses the existing Drive / `/api/sheet-pdf` proxy only when Drive auth is set or `SHARE_WEEKLY_PDF_REDOWNLOAD=1`; otherwise metadata-only. There is no separate PDF store — the pack viewer already streams that proxy. Response: `{ scanned, bumped, unchanged, missing, errors, bumps, error_items, pdf, procore_rest, notify }`. `bumps: [{ sheet_id, old_rev, new_rev, project_name, owner_user_id }]` feed notify. **Recipient resolution:** bumped pin → `pinned_sheets.folder_id` → `share_folders.owner_user_id` → `procore_connections.user_id` → `notify_email`. Unchanged sheets do not email. Missing `notify_email` (and no temporary `NOTIFY_MIKE_EMAIL` fallback) returns `notify.code: "notify_email_unset"` (status 200 on the notify object) and does **not** fail the refresh. Missing `RESEND_API_KEY` returns `notify.code: "notify_unconfigured"` (status 503 on the notify object only). SMS (`NOTIFY_MIKE_SMS`) is reserved and not sent. Trial-link redeem stays later. Account/settings UI to set `notify_email` is on `/account` (`GET`/`PATCH` `/api/account/notify-email`).
 
 ```bash
 # Missing secret
@@ -497,7 +497,7 @@ curl -s -X POST http://localhost:3000/api/share/weekly-refresh \
 | `/jobs` | Fictional **job selection** + Connect Procore (puller) |
 | `/jobs/[projectSlug]` | **Pull / open room pack** (connected puller POSTs `/api/room-pack`; viewer opens `/pack/[requestId]` only) |
 | `/jobs/[projectSlug]/rooms/[room]` | Alias → `/pack/{slug}-{room}` (no pull; use the request form) |
-| `/account` | Stub account + Procore connected state + billing link + share folders |
+| `/account` | Stub account + Procore connected state + per-user **revision bump email** + billing link + share folders |
 | `/pricing` | Subscribe CTA → Stripe-hosted Checkout (60-day trial) |
 | `/time` | **Time tab** — worker punch + foreman crew week (Maple Point geofence) |
 | `/share` | **Share folders** — create folders, pin disciplines / room packs, Refresh all |
@@ -507,6 +507,7 @@ curl -s -X POST http://localhost:3000/api/share/weekly-refresh \
 | `/api/procore/callback` | Exchange code, store per-user tokens |
 | `/api/procore/status` | Connected state (no tokens) |
 | `/api/procore/disconnect` | Revoke + delete this user’s tokens |
+| `/api/account/notify-email` | GET/PATCH puller notify email → `procore_connections.notify_email` via `upsertNotifyEmail`. Distinct from OAuth `email`. |
 | `/api/room-pack` | Puller POST. Procore REST when tokens are valid; bot + `room_packs` fallback. Demo when Supabase unset and REST cannot run. |
 | `/api/room-pack/refresh` | Puller POST. Same REST-then-bot refresh, optional `{ pack }` upsert, then latest `room_packs` row. |
 | `/api/room-pack/live` | Anyone GET/POST. Latest `room_packs` row, `no-store`. Does not pull. |
@@ -712,7 +713,6 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 - Weekly cron Procore REST compare (cron still has no per-user token; `SHARE_WEEKLY_PROCORE_REST` stays a scheduled-only flag)
 - Persist a new PDF copy on bump beyond the existing Drive / `/api/sheet-pdf` proxy
 - SMS when a pinned rev bumps (`NOTIFY_MIKE_SMS` reserved; per-user email is wired)
-- Account/settings UI to edit `procore_connections.notify_email` (GC Field Log owns that)
 - RLS policies on `public.room_packs` (table is currently wide open to the anon key)
 - HostGator DNS cutover to Vercel for gcfieldlog.com
 - No Apple / native iOS
