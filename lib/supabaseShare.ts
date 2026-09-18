@@ -107,6 +107,11 @@ export async function deleteShareFolder(input: {
   return true;
 }
 
+const PINNED_SHEET_SELECT =
+  "id,folder_id,project_name,sheet_id,discipline,last_seen_rev,last_pulled_at";
+const REVISION_CACHE_SELECT = "id,project_name,sheet_id,rev,checked_at";
+const SHARE_LIST_LIMIT = "2000";
+
 export async function selectPinnedSheets(
   folderIds: string[],
 ): Promise<PinnedSheetRow[] | null> {
@@ -116,11 +121,32 @@ export async function selectPinnedSheets(
 
   const params = new URLSearchParams();
   params.set("folder_id", `in.(${folderIds.join(",")})`);
-  params.set(
-    "select",
-    "id,folder_id,project_name,sheet_id,discipline,last_seen_rev,last_pulled_at",
-  );
+  params.set("select", PINNED_SHEET_SELECT);
   params.set("order", "sheet_id.asc");
+
+  const response = await restFetch(
+    config,
+    `${PINNED_SHEETS_TABLE}?${params.toString()}`,
+    { method: "GET" },
+  );
+  if (!response || !response.ok) return null;
+  const json: unknown = await response.json().catch(() => null);
+  if (!Array.isArray(json)) return null;
+  return json.flatMap((row) => {
+    const parsed = asPinnedSheetRow(row);
+    return parsed ? [parsed] : [];
+  });
+}
+
+/** Service-role scan of every pin. Used by the weekly cron, not Refresh all. */
+export async function selectAllPinnedSheets(): Promise<PinnedSheetRow[] | null> {
+  const config = getSupabaseServiceConfig();
+  if (!config) return null;
+
+  const params = new URLSearchParams();
+  params.set("select", PINNED_SHEET_SELECT);
+  params.set("order", "sheet_id.asc");
+  params.set("limit", SHARE_LIST_LIMIT);
 
   const response = await restFetch(
     config,
@@ -262,7 +288,7 @@ export async function selectRevisionCache(
   for (const projectName of projectNames) {
     const params = new URLSearchParams();
     params.set("project_name", `eq.${projectName}`);
-    params.set("select", "id,project_name,sheet_id,rev,checked_at");
+    params.set("select", REVISION_CACHE_SELECT);
     params.set("limit", "500");
 
     const response = await restFetch(
@@ -279,6 +305,32 @@ export async function selectRevisionCache(
     }
   }
   return rows;
+}
+
+/** Service-role scan of the full rev cache. Used by the weekly cron. */
+export async function selectAllRevisionCache(): Promise<
+  SheetRevisionCacheRow[] | null
+> {
+  const config = getSupabaseServiceConfig();
+  if (!config) return null;
+
+  const params = new URLSearchParams();
+  params.set("select", REVISION_CACHE_SELECT);
+  params.set("order", "sheet_id.asc");
+  params.set("limit", SHARE_LIST_LIMIT);
+
+  const response = await restFetch(
+    config,
+    `${SHEET_REVISION_CACHE_TABLE}?${params.toString()}`,
+    { method: "GET" },
+  );
+  if (!response || !response.ok) return null;
+  const json: unknown = await response.json().catch(() => null);
+  if (!Array.isArray(json)) return null;
+  return json.flatMap((row) => {
+    const parsed = asRevisionCacheRow(row);
+    return parsed ? [parsed] : [];
+  });
 }
 
 export async function upsertRevisionCache(

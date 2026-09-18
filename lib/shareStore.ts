@@ -5,10 +5,9 @@
  * Service role configured: persist to share_folders / pinned_sheets /
  * sheet_revision_cache under the stub session owner_user_id.
  *
- * Manual Refresh all walks pins and updates rev cache from known pack revs.
- * TODO(weekly-cron): do not schedule a weekly job here. A later worker should
- * compare Procore top rev to sheet_revision_cache and re-download only on bump.
- * Do not notify Mike by text/email in this slice.
+ * Manual Refresh all walks one owner's pins. Weekly cron walks every pin
+ * (service role) and reuses the same compare + cache write. Do not notify
+ * Mike by text/email here (issue #31).
  */
 
 import {
@@ -19,7 +18,13 @@ import {
   shareSheetKey,
   type SharePinDraft,
 } from "./shareCatalog";
-import { planShareRefresh, type ShareRefreshPlan } from "./shareRefresh";
+import {
+  bumpsFromPlan,
+  planShareRefresh,
+  type ShareRefreshBump,
+  type ShareRefreshError,
+  type ShareRefreshPlan,
+} from "./shareRefresh";
 import type { PinnedSheetRow, ShareFolderRow, SheetRevisionCacheRow } from "./schema";
 import { fetchLatestRoomPackRow, getSupabaseConfig, roomPackFromRow } from "./supabaseRoomPack";
 import {
@@ -27,6 +32,8 @@ import {
   deleteShareFolder,
   insertShareFolder,
   isShareTableWriteConfigured,
+  selectAllPinnedSheets,
+  selectAllRevisionCache,
   selectPinnedSheets,
   selectRevisionCache,
   selectShareFolders,
@@ -241,7 +248,8 @@ export async function unpinSheet(input: {
   return { ok: true, storage: "memory" };
 }
 
-async function currentRevMap(): Promise<Map<string, string>> {
+/** Known pack revs: Maple Point catalog, plus live room_packs when configured. */
+export async function currentShareRevMap(): Promise<Map<string, string>> {
   const map = catalogRevMap(SHARE_CATALOG);
   if (!getSupabaseConfig()) return map;
   const row = await fetchLatestRoomPackRow({
@@ -259,12 +267,94 @@ async function currentRevMap(): Promise<Map<string, string>> {
   return map;
 }
 
+export type ShareRefreshApplyResult = {
+  plan: ShareRefreshPlan;
+  storage: ShareStorage;
+  bumps: ShareRefreshBump[];
+  errors: ShareRefreshError[];
+};
+
+async function persistRefreshPlan(input: {
+  plan: ShareRefreshPlan;
+  storage: ShareStorage;
+  now: string;
+}): Promise<ShareRefreshError[]> {
+  const errors: ShareRefreshError[] = [];
+
+  if (input.storage === "supabase" && isShareTableWriteConfigured()) {
+    const cacheWrites = input.plan.items
+      .filter((item) => item.current_rev)
+      .map((item) => ({
+        projectName: item.project_name,
+        sheetId: item.sheet_id,
+        rev: item.current_rev as string,
+        checkedAt: input.now,
+      }));
+    if (cacheWrites.length > 0) {
+      const written = await upsertRevisionCache(cacheWrites);
+      if (!written) {
+        errors.push({ error: "sheet_revision_cache upsert failed" });
+      }
+    }
+    for (const item of input.plan.items) {
+      if (item.status !== "bumped" || !item.current_rev) continue;
+      const ok = await updatePinnedSheetRev({
+        id: item.pin_id,
+        lastSeenRev: item.current_rev,
+        lastPulledAt: input.now,
+      });
+      if (!ok) {
+        errors.push({
+          pin_id: item.pin_id,
+          sheet_id: item.sheet_id,
+          project_name: item.project_name,
+          error: "pinned_sheets rev patch failed",
+        });
+      }
+    }
+    return errors;
+  }
+
+  const store = memory();
+  for (const item of input.plan.items) {
+    if (!item.current_rev) continue;
+    const key = shareSheetKey(item.project_name, item.sheet_id);
+    const existing = store.cache.findIndex(
+      (row) => shareSheetKey(row.project_name, row.sheet_id) === key,
+    );
+    const next: SheetRevisionCacheRow = {
+      id: existing >= 0 ? store.cache[existing].id : newId(),
+      project_name: item.project_name,
+      sheet_id: item.sheet_id,
+      rev: item.current_rev,
+      checked_at: input.now,
+    };
+    if (existing >= 0) store.cache[existing] = next;
+    else store.cache.push(next);
+    if (item.status === "bumped") {
+      const pin = store.pins.find((row) => row.id === item.pin_id);
+      if (pin) {
+        pin.last_seen_rev = item.current_rev;
+        pin.last_pulled_at = input.now;
+      } else {
+        errors.push({
+          pin_id: item.pin_id,
+          sheet_id: item.sheet_id,
+          project_name: item.project_name,
+          error: "pinned sheet not found in memory store",
+        });
+      }
+    }
+  }
+  return errors;
+}
+
 export async function refreshAllPinnedSheets(
   ownerUserId: string,
-): Promise<{ plan: ShareRefreshPlan; storage: ShareStorage }> {
+): Promise<ShareRefreshApplyResult> {
   const snapshot = await listSharePortal(ownerUserId);
   const pins = snapshot.folders.flatMap((folder) => folder.pins);
-  const currentRevs = await currentRevMap();
+  const currentRevs = await currentShareRevMap();
   const now = new Date().toISOString();
 
   let cache: SheetRevisionCacheRow[] = [];
@@ -276,54 +366,73 @@ export async function refreshAllPinnedSheets(
   }
 
   const plan = planShareRefresh(pins, cache, currentRevs);
+  const errors = await persistRefreshPlan({
+    plan,
+    storage: snapshot.storage,
+    now,
+  });
+  return {
+    plan,
+    storage: snapshot.storage,
+    bumps: bumpsFromPlan(plan),
+    errors,
+  };
+}
 
-  if (snapshot.storage === "supabase" && isShareTableWriteConfigured()) {
-    const cacheWrites = plan.items
-      .filter((item) => item.current_rev)
-      .map((item) => ({
-        projectName: item.project_name,
-        sheetId: item.sheet_id,
-        rev: item.current_rev as string,
-        checkedAt: now,
-      }));
-    if (cacheWrites.length > 0) {
-      await upsertRevisionCache(cacheWrites);
+export async function weeklyRefreshPinnedSheets(): Promise<
+  ShareRefreshApplyResult & { load_error?: string }
+> {
+  const configured = isShareTableWriteConfigured();
+  let pins: PinnedSheetRow[] = [];
+  let cache: SheetRevisionCacheRow[] = [];
+  let storage: ShareStorage = "memory";
+
+  if (configured) {
+    const allPins = await selectAllPinnedSheets();
+    const allCache = await selectAllRevisionCache();
+    if (!allPins || !allCache) {
+      return {
+        plan: { scanned: 0, bumped: 0, unchanged: 0, missing: 0, items: [] },
+        storage: "supabase",
+        bumps: [],
+        errors: [
+          {
+            error:
+              "Could not read pinned_sheets / sheet_revision_cache with the service role.",
+          },
+        ],
+        load_error:
+          "Could not read pinned_sheets / sheet_revision_cache with the service role.",
+      };
     }
-    for (const item of plan.items) {
-      if (item.status !== "bumped" || !item.current_rev) continue;
-      await updatePinnedSheetRev({
-        id: item.pin_id,
-        lastSeenRev: item.current_rev,
-        lastPulledAt: now,
-      });
-    }
-    return { plan, storage: "supabase" };
+    pins = allPins;
+    cache = allCache;
+    storage = "supabase";
+  } else {
+    const store = memory();
+    pins = store.pins;
+    cache = store.cache;
   }
 
+  const currentRevs = await currentShareRevMap();
+  const plan = planShareRefresh(pins, cache, currentRevs);
+  const errors = await persistRefreshPlan({
+    plan,
+    storage,
+    now: new Date().toISOString(),
+  });
+  return {
+    plan,
+    storage,
+    bumps: bumpsFromPlan(plan),
+    errors,
+  };
+}
+
+/** Test helper: wipe the in-process share store. */
+export function resetShareMemoryForTests(): void {
   const store = memory();
-  for (const item of plan.items) {
-    if (!item.current_rev) continue;
-    const key = shareSheetKey(item.project_name, item.sheet_id);
-    const existing = store.cache.findIndex(
-      (row) => shareSheetKey(row.project_name, row.sheet_id) === key,
-    );
-    const next: SheetRevisionCacheRow = {
-      id: existing >= 0 ? store.cache[existing].id : newId(),
-      project_name: item.project_name,
-      sheet_id: item.sheet_id,
-      rev: item.current_rev,
-      checked_at: now,
-    };
-    if (existing >= 0) store.cache[existing] = next;
-    else store.cache.push(next);
-    if (item.status === "bumped") {
-      const pin = store.pins.find((row) => row.id === item.pin_id);
-      if (pin) {
-        pin.last_seen_rev = item.current_rev;
-        pin.last_pulled_at = now;
-      }
-    }
-  }
-
-  return { plan, storage: "memory" };
+  store.folders = [];
+  store.pins = [];
+  store.cache = [];
 }

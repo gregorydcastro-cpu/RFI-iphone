@@ -19,11 +19,8 @@ function json(data: unknown, status = 200) {
  * Walks `pinned_sheets` for the stub session owner, compares each sheet's
  * known pack rev to `sheet_revision_cache`, and updates last_seen_rev when
  * the rev bumped. Does not call Procore REST. Does not download PDFs.
- *
- * TODO(weekly-cron): a scheduled worker should reuse this rev-only compare,
- * re-download a sheet PDF only when `rev` bumped, then update
- * sheet_revision_cache + pinned_sheets.last_pulled_at. Unchanged revs stay
- * metadata-only. Do not notify Mike by text/email yet.
+ * Weekly automation is GET/POST `/api/share/weekly-refresh` (CRON_SECRET).
+ * Do not notify Mike by text/email yet (issue #31).
  */
 export async function POST(request: Request) {
   const session = parseStubSession(
@@ -51,7 +48,7 @@ export async function POST(request: Request) {
     requestId: MAPLE_POINT_REQUEST_ID,
   });
 
-  const { plan, storage } = await refreshAllPinnedSheets(session.userId);
+  const { plan, storage, bumps } = await refreshAllPinnedSheets(session.userId);
 
   return json({
     ok: true,
@@ -66,9 +63,10 @@ export async function POST(request: Request) {
     bumped: plan.bumped,
     unchanged: plan.unchanged,
     missing: plan.missing,
+    bumps,
     items: plan.items,
     botId: PROCORE_BOT_ID,
     note:
-      "Force refresh compared pinned sheets to known pack revs and updated sheet_revision_cache. TODO: weekly cron for rev-only re-pull (download PDF only when rev bumped). Do not notify Mike by text/email yet.",
+      "Force refresh compared this owner's pinned sheets to known pack revs and updated sheet_revision_cache. Weekly cron is GET/POST /api/share/weekly-refresh. Do not notify Mike by text/email yet.",
   });
 }

@@ -220,8 +220,8 @@ export function SharePortal({
                 sheet_revision_cache
               </span>
               , and records bumps. Pack pulls still need Connect Procore.
-              Weekly cron is not scheduled. No text or email to Mike in this
-              slice.
+              Weekly cron updates every pin when rev bumps. No text or email
+              to Mike in this slice.
             </p>
             <p className="mt-2 font-mono text-xs text-metal">
               {folders.length} folder{folders.length === 1 ? "" : "s"} · {pinCount}{" "}
@@ -248,7 +248,7 @@ export function SharePortal({
           <p className="mt-3 text-sm text-accent-2" role="status">
             Scanned {refresh.scanned ?? 0}: {refresh.bumped ?? 0} bumped,{" "}
             {refresh.unchanged ?? 0} unchanged, {refresh.missing ?? 0} missing.
-            Weekly cron: off. Notify: off.
+            Notify: off.
           </p>
         ) : null}
       </section>
