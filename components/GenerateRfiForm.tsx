@@ -20,7 +20,11 @@ import {
   readMarkupRfiPrefill,
 } from "@/lib/markup";
 import { sheetRevisionLabel, type RoomPack } from "@/lib/pack";
-import { parseRfiDictation, rfiSpeakText } from "@/lib/rfiDictation";
+import {
+  applyRfiSpeechToFields,
+  parseRfiDictation,
+  rfiSpeakText,
+} from "@/lib/rfiDictation";
 
 const inputClass =
   "mt-1 w-full border border-line bg-ink px-3 py-3 text-base text-paper outline-none focus:border-cta";
@@ -233,18 +237,17 @@ export function GenerateRfiForm({
 
   async function onDictate(text: string) {
     const parsed = parseRfiDictation(text);
-    const nextSubject = parsed.subject || subject;
-    const nextQuestion = parsed.question || question;
-    const nextLocation = parsed.location || location;
-    if (parsed.subject) setSubject(parsed.subject);
-    if (parsed.question) setQuestion(parsed.question);
-    if (parsed.location) setLocation(parsed.location);
+    const next = applyRfiSpeechToFields(parsed, { subject, question, location });
+    if (next.subject !== subject) setSubject(next.subject);
+    // STT always writes the spoken body into Question / description.
+    if (next.question) setQuestion(next.question);
+    if (next.location !== location) setLocation(next.location);
     setError(null);
     if (parsed.send) {
       await submitDraft({
-        subject: nextSubject,
-        question: nextQuestion,
-        location: nextLocation,
+        subject: next.subject,
+        question: next.question,
+        location: next.location,
       });
     }
   }
@@ -353,7 +356,7 @@ export function GenerateRfiForm({
             onTranscript={onDictate}
             disabled={pending}
             label="Dictate RFI"
-            hint="Tap mic, speak subject and question, tap again. Say a room to fill location. Say “send draft” to send to Pat Nguyen."
+            hint="Tap mic, speak the issue, tap again. Subject and location fill when spoken. Question / description always gets the transcript. Say “send draft” to send to Pat Nguyen."
           />
           <ReadAloudButton
             id={`rfi-form-${requestId}`}
@@ -414,15 +417,20 @@ export function GenerateRfiForm({
         />
       </label>
 
-      <label className="block text-xs font-semibold tracking-wide text-muted uppercase">
+      <label
+        htmlFor="rfi-description"
+        className="block text-xs font-semibold tracking-wide text-muted uppercase"
+      >
         Question / description
         <textarea
+          id="rfi-description"
+          name="description"
           required
           rows={5}
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
           className={inputClass}
-          placeholder="What is unclear on this sheet?"
+          placeholder="What is unclear on this sheet? Dictate fills this field."
         />
       </label>
 
