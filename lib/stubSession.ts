@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
-import { readCookieValue, type FieldRoleName } from "./auth";
+import { readCookieValue, STUB_SESSION_COOKIE, type FieldRoleName } from "./auth";
 
-export const STUB_SESSION_COOKIE = "gcfieldlog_stub_user";
+export { STUB_SESSION_COOKIE };
 
 export type StubSession = {
   userId: string;

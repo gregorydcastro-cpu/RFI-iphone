@@ -6,7 +6,7 @@ import { authorFromSessionEmail } from "@/lib/crew";
 import { loadPack } from "@/lib/loadPack";
 import { loadLiveRoomPack } from "@/lib/livePack";
 import { readStubSession } from "@/lib/stubSession";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -23,6 +23,9 @@ export default async function MaterialsPage({ params }: Props) {
   const { requestId } = await params;
   const role = await getFieldRole();
   const session = await readStubSession();
+  if (role.role === "viewer") {
+    redirect(`/pack/${requestId}`);
+  }
   const live = await loadLiveRoomPack({ requestId });
   if (!live) notFound();
 

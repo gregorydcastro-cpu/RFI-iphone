@@ -1,13 +1,21 @@
+import { isWritePackAction } from "@/lib/invites";
 import type { PackAction } from "@/lib/pack";
 
 type Props = {
   actions: PackAction[];
   onAction: (action: PackAction) => void;
   procoreLinked?: boolean;
+  readOnly?: boolean;
 };
 
-export function ActionPanel({ actions, onAction, procoreLinked = false }: Props) {
+export function ActionPanel({
+  actions,
+  onAction,
+  procoreLinked = false,
+  readOnly = false,
+}: Props) {
   const visible = actions.filter((action) => {
+    if (readOnly && isWritePackAction(action.id, action.label)) return false;
     if (procoreLinked) return true;
     const id = action.id.toLowerCase();
     const label = action.label.toLowerCase();
@@ -21,7 +29,12 @@ export function ActionPanel({ actions, onAction, procoreLinked = false }: Props)
       <h2 className="font-display text-xs tracking-[0.18em] text-muted uppercase">
         Actions
       </h2>
-      {!procoreLinked ? (
+      {readOnly ? (
+        <p className="text-xs text-tan">
+          View only. Sheets and red boxes / overlays — no markup, print, or
+          request actions.
+        </p>
+      ) : !procoreLinked ? (
         <p className="text-xs text-tan">
           View only. Pull and file-pull controls stay with a linked Procore
           account.

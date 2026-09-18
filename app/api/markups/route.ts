@@ -1,4 +1,5 @@
-import { readCookieValue } from "@/lib/auth";
+import { readCookieValue, readFieldRoleFromRequest } from "@/lib/auth";
+import { canWriteFieldLog } from "@/lib/invites";
 import { isMarkupUuid, parseVectors } from "@/lib/markup";
 import { parseStubSession, STUB_SESSION_COOKIE, stubUserIdFromEmail } from "@/lib/stubSession";
 import {
@@ -69,6 +70,17 @@ export async function GET(request: Request) {
  * only the client fallback when this returns storage: unconfigured.
  */
 export async function PUT(request: Request) {
+  const role = readFieldRoleFromRequest(request);
+  if (!canWriteFieldLog(role.role)) {
+    return json(
+      {
+        ok: false,
+        error: "View-only session. Markup writes need a full-crew (puller) invite.",
+      },
+      403,
+    );
+  }
+
   let body: MarkupBody;
   try {
     body = (await request.json()) as MarkupBody;

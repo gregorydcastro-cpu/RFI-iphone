@@ -33,6 +33,7 @@ type Props = {
   source?: "procore" | "supabase" | "local" | "none";
   pull?: "procore" | "bot" | "none";
   procoreLinked?: boolean;
+  readOnly?: boolean;
 };
 
 export function RoomPackViewer({
@@ -46,6 +47,7 @@ export function RoomPackViewer({
   source,
   pull,
   procoreLinked = false,
+  readOnly = false,
 }: Props) {
   const router = useRouter();
   const [livePack, setLivePack] = useState<RoomPack | null>(null);
@@ -83,6 +85,7 @@ export function RoomPackViewer({
   );
 
   function handleAction(action: PackAction) {
+    if (readOnly) return;
     if (action.id === "generate-rfi") {
       const sheetQuery = primary
         ? `?sheet=${encodeURIComponent(primary.id)}`
@@ -110,7 +113,11 @@ export function RoomPackViewer({
 
   return (
     <div className="flex min-h-dvh flex-col bg-ink text-paper">
-      <AppHeader signedIn procoreLinked={procoreLinked} />
+      <AppHeader
+        signedIn
+        role={readOnly ? "viewer" : "puller"}
+        procoreLinked={procoreLinked}
+      />
       <PackContextBar
         pack={displayedPack}
         sheet={primary}
@@ -148,6 +155,7 @@ export function RoomPackViewer({
               requestId={displayedRequest}
               roomName={displayedPack.room.name}
               roomNumber={displayedPack.room.number}
+              readOnly={readOnly}
             />
           </div>
         </section>
@@ -184,6 +192,7 @@ export function RoomPackViewer({
                     requestId={displayedRequest}
                     roomName={displayedPack.room.name}
                     roomNumber={displayedPack.room.number}
+                    readOnly={readOnly}
                   />
                 </div>
               </article>
@@ -201,6 +210,7 @@ export function RoomPackViewer({
               actions={actions}
               onAction={handleAction}
               procoreLinked={procoreLinked}
+              readOnly={readOnly}
             />
             <TakeoffCounts
               takeoff={displayedPack.takeoff}

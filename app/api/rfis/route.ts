@@ -1,5 +1,6 @@
-import { readCookieValue } from "@/lib/auth";
+import { readCookieValue, readFieldRoleFromRequest } from "@/lib/auth";
 import { DEMO_FOREMAN } from "@/lib/crew";
+import { canWriteFieldLog } from "@/lib/invites";
 import { isRfiDraftStatus } from "@/lib/rfiSchema";
 import { parseStubSession, STUB_SESSION_COOKIE, stubUserIdFromEmail } from "@/lib/stubSession";
 import { insertRfiDraftRow, isRfiTableWriteConfigured } from "@/lib/supabaseRfis";
@@ -48,6 +49,17 @@ function newUuid(): string {
  * `markup_id` is the optional overlay FK when Create RFI came from a markup.
  */
 export async function POST(request: Request) {
+  const role = readFieldRoleFromRequest(request);
+  if (!canWriteFieldLog(role.role)) {
+    return json(
+      {
+        ok: false,
+        error: "View-only session. Drafts need a full-crew (puller) invite.",
+      },
+      403,
+    );
+  }
+
   let body: RfiBody;
   try {
     body = (await request.json()) as RfiBody;

@@ -34,6 +34,7 @@ type Props = {
   requestId?: string;
   roomName?: string;
   roomNumber?: string;
+  readOnly?: boolean;
 };
 
 export function SheetViewer({
@@ -46,6 +47,7 @@ export function SheetViewer({
   requestId,
   roomName,
   roomNumber,
+  readOnly = false,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const transformRef = useRef<ReactZoomPanPinchContentRef>(null);
@@ -57,7 +59,9 @@ export function SheetViewer({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const router = useRouter();
   const markupEnabled = Boolean(requestId && sheetId);
-  const markup = useMarkupOverlay(requestId ?? "", sheetId ?? "");
+  const markup = useMarkupOverlay(requestId ?? "", sheetId ?? "", {
+    readOnly,
+  });
 
   const overlay = useMemo(() => {
     if (layout && sheetId) {
@@ -178,7 +182,7 @@ export function SheetViewer({
 
   return (
     <div className="relative h-full min-h-0 w-full overflow-hidden bg-charcoal">
-      {markupEnabled ? (
+      {markupEnabled && !readOnly ? (
         <MarkupToolbar
           tool={tool}
           onTool={setTool}
@@ -197,9 +201,9 @@ export function SheetViewer({
         fitOnInit
         limitToBounds={false}
         wheel={{ disabled: true }}
-        panning={{ disabled: drawing }}
+        panning={{ disabled: !readOnly && drawing }}
         pinch={{ step: 5 }}
-        doubleClick={{ disabled: drawing, mode: "zoomIn", step: 0.7 }}
+        doubleClick={{ disabled: !readOnly && drawing, mode: "zoomIn", step: 0.7 }}
       >
         {({ zoomIn, zoomOut, resetTransform }) => (
           <>
@@ -219,11 +223,11 @@ export function SheetViewer({
                 {markupEnabled ? (
                   <MarkupOverlay
                     items={markup.items}
-                    selectedId={selectedId}
-                    tool={tool}
+                    selectedId={readOnly ? null : selectedId}
+                    tool={readOnly ? "pan" : tool}
                     aspect={aspect}
-                    onSelect={setSelectedId}
-                    onAdd={handleAdd}
+                    onSelect={readOnly ? () => undefined : setSelectedId}
+                    onAdd={readOnly ? () => undefined : handleAdd}
                   />
                 ) : null}
               </div>
@@ -257,13 +261,15 @@ export function SheetViewer({
         )}
       </TransformWrapper>
       <p className="pointer-events-none absolute right-3 bottom-3 bg-gline-ink/80 px-2 py-1 text-[11px] text-metal">
-        {drawing
-          ? tool === "text"
-            ? "Tap the sheet to place a note"
-            : "Drag on the sheet · vector overlay (not a photo bake)"
-          : selected
-            ? "Markup selected · Create RFI sends a draft to the foreman"
-            : "Pinch or +/− to zoom · drag to pan · tap a markup to select"}
+        {readOnly
+          ? "View only · pinch or +/− to zoom · drag to pan"
+          : drawing
+            ? tool === "text"
+              ? "Tap the sheet to place a note"
+              : "Drag on the sheet · vector overlay (not a photo bake)"
+            : selected
+              ? "Markup selected · Create RFI sends a draft to the foreman"
+              : "Pinch or +/− to zoom · drag to pan · tap a markup to select"}
       </p>
       {!ready && !error && !missingPdf ? (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-charcoal/80 text-sm text-muted">

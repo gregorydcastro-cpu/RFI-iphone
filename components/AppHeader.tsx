@@ -23,6 +23,8 @@ export function AppHeader({
   const connected = procoreConnected || procoreLinked;
   const timeActive = pathname === "/time" || pathname.startsWith("/time/");
   const shareActive = pathname === "/share" || pathname.startsWith("/share/");
+  const inviteActive =
+    pathname === "/invite" || pathname.startsWith("/invite/");
   const accountActive =
     pathname === "/account" || pathname.startsWith("/account/");
 
@@ -68,6 +70,18 @@ export function AppHeader({
               >
                 Share
               </Link>
+              {resolvedRole === "puller" ? (
+                <Link
+                  className={
+                    inviteActive
+                      ? "text-cta"
+                      : "text-secondary hover:text-cta"
+                  }
+                  href="/invite"
+                >
+                  Invite
+                </Link>
+              ) : null}
               <Link
                 className={
                   accountActive
