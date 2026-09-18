@@ -6,11 +6,15 @@ import {
   TransformWrapper,
   type ReactZoomPanPinchContentRef,
 } from "react-zoom-pan-pinch";
-import type { ResolvedHighlight } from "@/lib/highlight";
+import {
+  bboxFromPoints,
+  type OversizedRoomBox,
+  type ResolvedHighlight,
+} from "@/lib/highlight";
 
 type Props = {
   pdfUrl: string;
-  highlight: ResolvedHighlight | null;
+  highlight: OversizedRoomBox | ResolvedHighlight | null;
 };
 
 export function SheetViewer({ pdfUrl, highlight }: Props) {
@@ -132,7 +136,15 @@ export function SheetViewer({ pdfUrl, highlight }: Props) {
   );
 }
 
-function HighlightOverlay({ highlight }: { highlight: ResolvedHighlight }) {
+function HighlightOverlay({
+  highlight,
+}: {
+  highlight: OversizedRoomBox | ResolvedHighlight;
+}) {
+  const bbox =
+    highlight.type === "bbox"
+      ? highlight.bbox
+      : bboxFromPoints(highlight.points);
   return (
     <svg
       className="pointer-events-none absolute inset-0 h-full w-full"
@@ -140,24 +152,15 @@ function HighlightOverlay({ highlight }: { highlight: ResolvedHighlight }) {
       preserveAspectRatio="none"
       aria-hidden
     >
-      {highlight.type === "polygon" ? (
-        <polygon
-          points={highlight.points.map(([x, y]) => `${x},${y}`).join(" ")}
-          fill="rgba(225, 6, 0, 0.32)"
-          stroke="#e10600"
-          strokeWidth="0.006"
-        />
-      ) : (
-        <rect
-          x={highlight.bbox.x}
-          y={highlight.bbox.y}
-          width={highlight.bbox.w}
-          height={highlight.bbox.h}
-          fill="rgba(225, 6, 0, 0.32)"
-          stroke="#e10600"
-          strokeWidth="0.006"
-        />
-      )}
+      <rect
+        x={bbox.x}
+        y={bbox.y}
+        width={bbox.w}
+        height={bbox.h}
+        fill="rgba(225, 6, 0, 0.16)"
+        stroke="#e10600"
+        strokeWidth="0.012"
+      />
     </svg>
   );
 }

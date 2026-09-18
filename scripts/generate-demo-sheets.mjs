@@ -20,7 +20,7 @@ function tl(x, y, w, h) {
   };
 }
 
-function drawRoom(page, font, room, fill) {
+function drawRoom(page, font, room, fill, wallWidth = 1.4) {
   const r = tl(room.x, room.y, room.w, room.h);
   page.drawRectangle({
     x: r.x,
@@ -29,7 +29,7 @@ function drawRoom(page, font, room, fill) {
     height: r.h,
     color: fill,
     borderColor: rgb(0.15, 0.18, 0.22),
-    borderWidth: 1.4,
+    borderWidth: wallWidth,
   });
   const label = room.label;
   const size = 10;
@@ -148,7 +148,8 @@ function drawHeader(page, bold, font, sheet) {
   });
 }
 
-async function buildSheet(sheet, rooms, extras) {
+async function buildSheet(sheet, rooms, extras, options = {}) {
+  const wallWidth = options.wallWidth ?? 1.4;
   const doc = await PDFDocument.create();
   const page = doc.addPage([PAGE_W, PAGE_H]);
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -168,7 +169,7 @@ async function buildSheet(sheet, rooms, extras) {
     const fill = room.highlight
       ? rgb(1, 0.86, 0.55)
       : rgb(0.99, 0.99, 0.97);
-    drawRoom(page, font, room, fill);
+    drawRoom(page, font, room, fill, wallWidth);
   }
 
   extras?.(page, font, bold);
@@ -233,9 +234,16 @@ const roomsE101 = [
 ];
 
 const roomsE102 = roomsE101.map((room) => ({ ...room, highlight: false }));
+const roomsA101 = roomsE101.map((room) => ({ ...room, highlight: false }));
 
 mkdirSync(outDir, { recursive: true });
 
+const a101 = await buildSheet(
+  { id: "A-101", rev: "A", title: "LEVEL 1 FLOOR PLAN" },
+  roomsA101,
+  undefined,
+  { wallWidth: 2.6 },
+);
 const e101 = await buildSheet(
   { id: "E-101", rev: "A", title: "LEVEL 1 POWER PLAN" },
   roomsE101,
@@ -264,6 +272,7 @@ const e102 = await buildSheet(
   },
 );
 
+writeFileSync(join(outDir, "maple-point-a101.pdf"), a101);
 writeFileSync(join(outDir, "maple-point-e101.pdf"), e101);
 writeFileSync(join(outDir, "maple-point-e102.pdf"), e102);
-console.log("wrote Maple Point demo sheets");
+console.log("wrote Maple Point demo sheets (A-101, E-101, E-102)");

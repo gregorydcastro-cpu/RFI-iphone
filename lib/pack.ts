@@ -27,6 +27,10 @@ export type Sheet = {
   pdf: string;
   preview?: string | null;
   crop?: NormalizedBBox | null;
+  /** Optional sheet title (e.g. Level 1 Floor Plan). Used by viewer heuristics. */
+  title?: string | null;
+  name?: string | null;
+  discipline?: string | null;
 };
 
 /** Drawing number + revision letter stamped when the pack was pulled. */
@@ -165,12 +169,21 @@ export function sheetRevisionLabel(sheet: Pick<Sheet, "id" | "rev">): string {
   return `${sheet.id} Rev ${sheet.rev}`;
 }
 
+function optionalText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
 export function stampSheet(sheet: {
   id?: string | null;
   rev?: string | null;
   pdf?: string | null;
   preview?: string | null;
   crop?: NormalizedBBox | null;
+  title?: string | null;
+  name?: string | null;
+  discipline?: string | null;
 }): Sheet {
   const id = typeof sheet.id === "string" ? sheet.id.trim() : "";
   const rev = typeof sheet.rev === "string" ? sheet.rev.trim() : "";
@@ -180,7 +193,14 @@ export function stampSheet(sheet: {
     pdf: typeof sheet.pdf === "string" ? sheet.pdf : "",
     preview: sheet.preview ?? null,
     crop: sheet.crop ?? null,
+    title: optionalText(sheet.title),
+    name: optionalText(sheet.name),
+    discipline: optionalText(sheet.discipline),
   };
+}
+
+export function sheetTitle(sheet: Pick<Sheet, "id" | "title" | "name">): string {
+  return sheet.title?.trim() || sheet.name?.trim() || sheet.id;
 }
 
 export function primaryRevisionStamp(pack: {
