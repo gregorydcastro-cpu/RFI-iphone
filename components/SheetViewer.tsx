@@ -62,7 +62,7 @@ export function SheetViewer({ pdfUrl, highlight }: Props) {
   }, [pdfUrl]);
 
   return (
-    <div className="relative h-full min-h-[280px] w-full overflow-hidden bg-charcoal">
+    <div className="relative h-full min-h-0 w-full overflow-hidden bg-charcoal">
       <TransformWrapper
         ref={transformRef}
         minScale={0.4}
@@ -71,7 +71,8 @@ export function SheetViewer({ pdfUrl, highlight }: Props) {
         centerOnInit
         fitOnInit
         limitToBounds={false}
-        wheel={{ step: 0.1 }}
+        wheel={{ disabled: true }}
+        pinch={{ step: 5 }}
         doubleClick={{ mode: "zoomIn", step: 0.7 }}
       >
         {({ zoomIn, zoomOut, resetTransform }) => (
@@ -120,7 +121,7 @@ export function SheetViewer({ pdfUrl, highlight }: Props) {
         )}
       </TransformWrapper>
       <p className="pointer-events-none absolute right-3 bottom-3 bg-gline-ink/80 px-2 py-1 text-[11px] text-metal">
-        Scroll to zoom · drag to pan
+        Pinch or +/− to zoom · drag to pan
       </p>
       {!ready && !error ? (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-charcoal/80 text-sm text-muted">

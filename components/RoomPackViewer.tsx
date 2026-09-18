@@ -53,7 +53,6 @@ export function RoomPackViewer({
   );
   const actions = useMemo(() => packActions(displayedPack), [displayedPack]);
   const displayedRequest = requestId ?? displayedPack.request_id;
-  const showingDemo = Boolean(demoFallback) && !livePack;
   const primaryHighlight = primary
     ? highlightForSheet(displayedPack.layout, primary.id, undefined, {
         primarySheetId: primary.id,
@@ -100,7 +99,7 @@ export function RoomPackViewer({
         requestedRoom={requestedRoom}
         requestedJobName={requestedJobName}
         projectSlug={projectSlug}
-        demoFallback={showingDemo}
+        demoFallback={Boolean(demoFallback)}
         supabaseConfigured={Boolean(supabaseConfigured)}
         source={source}
         procoreLinked={procoreLinked}
@@ -114,7 +113,7 @@ export function RoomPackViewer({
             sheet={primary}
             roomLabel={roomCaption(displayedPack)}
           />
-          <div className="h-[calc(100svh-13.5rem)] min-h-[260px] border border-line sm:h-[calc(100svh-12.5rem)]">
+          <div className="h-[min(64vw,calc(100svh-12.5rem))] min-h-[220px] border border-line md:h-[calc(100svh-12.5rem)]">
             <SheetViewer pdfUrl={primary.pdf} highlight={primaryHighlight} />
           </div>
         </section>
@@ -131,7 +130,7 @@ export function RoomPackViewer({
                   kind={sheetKindLabel(sheet, false)}
                   sheet={sheet}
                 />
-                <div className="h-[42vh] min-h-[220px] border border-line sm:h-[48vh]">
+                <div className="h-[min(56vw,42vh)] min-h-[200px] border border-line sm:h-[42vh] md:h-[48vh]">
                   <SheetViewer
                     pdfUrl={sheet.pdf}
                     highlight={highlightForSheet(
