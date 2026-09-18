@@ -8,6 +8,22 @@ type Props = {
 export function ProcoreConnectCard({ view, compact = false }: Props) {
   if (!view.signedIn || view.role !== "puller") {
     if (compact) return null;
+    if (view.role === "full") {
+      return (
+        <section className="border border-line bg-panel p-4">
+          <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
+            Procore
+          </p>
+          <h2 className="font-display mt-1 text-xl tracking-wide text-paper">
+            Full crew
+          </h2>
+          <p className="mt-2 text-sm text-muted">
+            Full crew can markup and draft to the foreman. Connect Procore
+            stays with pullers.
+          </p>
+        </section>
+      );
+    }
     return (
       <section className="border border-line bg-panel p-4">
         <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
