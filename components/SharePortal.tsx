@@ -28,14 +28,13 @@ type RefreshPayload = {
   refresh?: string;
   storage?: string;
   weeklyCron?: boolean;
-  notify?: boolean | NotifyPayload;
+  notify?: NotifyPayload;
   note?: string;
   items?: ShareRefreshItem[];
 };
 
-function notifyStatusLabel(notify: RefreshPayload["notify"]): string {
-  if (!notify || notify === false) return "skipped (unconfigured)";
-  if (notify === true) return "on";
+function notifyStatusLabel(notify: NotifyPayload | undefined): string {
+  if (!notify) return "skipped (unconfigured)";
   if (notify.sent) return "sent";
   if (notify.code === "no_bumps") return "skipped (no bumps)";
   if (notify.code === "notify_unconfigured") return "skipped (unconfigured)";
