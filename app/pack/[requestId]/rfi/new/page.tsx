@@ -12,16 +12,25 @@ export const revalidate = 0;
 
 type Props = {
   params: Promise<{ requestId: string }>;
-  searchParams: Promise<{ sheet?: string }>;
+  searchParams: Promise<{
+    sheet?: string;
+    markup?: string;
+    item?: string;
+    subject?: string;
+    question?: string;
+    location?: string;
+    kind?: string;
+  }>;
 };
 
 /**
  * Generate RFI — draft packet to the foreman. Never a Procore submit.
- * Prefills job, room, and `?sheet=` pin from the pack.
+ * Prefills job, room, and `?sheet=` pin from the pack. `?markup=` / `?item=`
+ * come from one-tap Create RFI on a selected vector overlay.
  */
 export default async function NewRfiPage({ params, searchParams }: Props) {
   const { requestId } = await params;
-  const { sheet } = await searchParams;
+  const query = await searchParams;
   const role = await getFieldRole();
   const session = await readStubSession();
   const live = await loadLiveRoomPack({ requestId });
@@ -46,7 +55,13 @@ export default async function NewRfiPage({ params, searchParams }: Props) {
         <GenerateRfiForm
           pack={live.pack}
           requestId={requestId}
-          sheetQuery={sheet}
+          sheetQuery={query.sheet}
+          markupQuery={query.markup}
+          markupItemQuery={query.item}
+          initialSubject={query.subject}
+          initialQuestion={query.question}
+          initialLocation={query.location}
+          markupKindQuery={query.kind}
           authorName={author.name}
           authorEmail={author.email}
         />

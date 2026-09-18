@@ -29,8 +29,8 @@ Must match this path — nothing else in the primary nav:
 | Account (`/account`) | Stub session + Procore connected / disconnected state + link to pricing. |
 | Pricing (`/pricing`) | Subscribe CTA → Stripe-hosted Checkout (60-day trial, payment method collected). |
 | Room pack request | Room number (e.g. `733`). **Connected puller:** `POST /api/room-pack` asks the Procore bot to refresh, then opens `/pack/[requestId]`. **Viewer / unconnected puller:** **Open pack** only — no pull. Local demo (no `SUPABASE_URL`) loads Maple Point JSON. |
-| Pack viewer | Field stack on `/pack/[requestId]`: **architectural floor plan first** (A-*, architectural, floor plan heuristics; else current primary), oversized crimson SVG box around the room walls, then remaining sheets (power, lighting, …) and linked RFIs. Drawing number + revision letter stamps stay on the top bar and each sheet (`A-101 Rev A`). Website open always re-reads `room_packs` (no-store). Connected pullers also trigger a bot refresh; viewers cannot. |
-| Generate RFI / Materials | Shipped in [PR #12](https://github.com/gregorydcastro-cpu/RFI-iphone/pull/12). Live pack actions — drafts to foreman Pat Nguyen, not a Procore submit. Not Coming soon. **Dictate** fills the form from the mic; **Read aloud** speaks RFIs. |
+| Pack viewer | Field stack on `/pack/[requestId]`: **architectural floor plan first** (A-*, architectural, floor plan heuristics; else current primary), oversized crimson SVG box around the room walls, **vector markup tools** (circle, box, arrow, text note) with one-tap **Create RFI**, then remaining sheets (power, lighting, …) and linked RFIs. Drawing number + revision letter stamps stay on the top bar and each sheet (`A-101 Rev A`). Website open always re-reads `room_packs` (no-store). Connected pullers also trigger a bot refresh; viewers cannot. |
+| Generate RFI / Materials | Live pack actions. Drafts go to foreman Pat Nguyen — not a Procore submit. **Dictate** fills the form from the mic; **Read aloud** speaks RFIs. **Create RFI** from a selected sheet markup prefills the same draft. Phone photo attaches as a data URL on the draft. |
 | Voice (Grok) | Server-side `XAI_API_KEY` → `/api/dictation` (STT) and `/api/tts` (TTS). Never `NEXT_PUBLIC_`. |
 | Time (`/time`) | Maple Point **worker punch** (GPS geofence) and **foreman crew week**. Field log only — not payroll/ADP. |
 | Takeoff counts | Optional placeholder panel |
@@ -144,6 +144,27 @@ curl -X POST https://api.x.ai/v1/tts \
 ```
 
 Mic capture happens in the **browser** (this IDE has no mic). Use earbuds on site; large tap targets are for gloves.
+
+### Markup → Create RFI (vector overlay)
+
+Hands-in-gloves markup on the pack viewer. Vectors stay as SVG/JSON — **not** a flattened raster bake. Drafts still go to foreman Pat Nguyen. Never a Procore submit.
+
+1. Stub login at `/` (any email; password ignored).
+2. Jobs → **Maple Point Medical Office** → Open pack (room `101` or `733`).
+3. On the floor plan (or any sheet), tap **Box**, **Circle**, **Arrow**, or **Note**. Pan stays for zooming.
+4. Drag on the sheet (or tap to place a text note). The new markup stays selected.
+5. Tap **Create RFI**. `/pack/[requestId]/rfi/new` opens with subject, question, location, and sheet/rev pin filled from the markup.
+6. Optional: **Take photo** (camera) or **Choose photo**. The image is stored as a data URL on the draft — not uploaded to Procore.
+7. **Send draft to Pat Nguyen**.
+
+Markups persist to Supabase `public.markup_overlays` (`request_id`, `sheet_id`, `vectors` jsonb, `user_id`, `updated_at`) via service-role `/api/markups` under the stub session — same write path as `rfis` / `procore_connections`. Schema is on main ([PR #9](https://github.com/gregorydcastro-cpu/RFI-iphone/pull/9)): `supabase/migrations/20260918020000_share_markup_rfi_trial.sql` plus `20260918130000_rfis_markup_overlay_fk.sql`. Types: `lib/schema.ts`. **localStorage** (`gcfieldlog.markup:request_id:sheet_id`) is only the offline/demo fallback when `SUPABASE_SERVICE_ROLE_KEY` is missing.
+
+The RFI row’s optional `markup_id` points at the overlay. The draft packet also keeps a vector snapshot + sheet id/rev. Share-folder portal, weekly rev re-pull, and trial-link gating are out of scope.
+
+```bash
+curl -s "http://localhost:3000/api/markups?request_id=maple-point&sheet_id=A-101"
+# {"ok":true,"persisted":false,"storage":"unconfigured","row":null}
+```
 
 Never commit secrets. Search the client bundle for `XAI_API_KEY` — the secret must not appear there.
 
@@ -323,7 +344,7 @@ SQL: `supabase/migrations/20260918020000_share_markup_rfi_trial.sql` plus overla
 | `20260918093000_time_tracking.sql` | `job_sites` / `workers` / `time_punches` | Untouched. |
 | `20260918010000_procore_connections.sql` | `procore_connections` | Untouched. `room_packs` RLS stays off. |
 
-**Pack viewer layout is out of scope.** Architectural floor plan first and the oversized red room highlight belong to the Field Log viewer UI work. This PR does not edit pack viewer components, Stripe Checkout, or Time geofence.
+**Pack viewer markup** (this app) writes `markup_overlays` through `/api/markups` and links drafts with `rfis.markup_id`. Share-folder UI, weekly re-pull, and trial-link redeem stay later. Architectural floor plan first and the oversized red room highlight are already on the Field Log viewer.
 
 These tables do **not** replace `procore_connections`, `room_packs`, `rfis`, or `billing_customers`.
 
@@ -375,10 +396,11 @@ These tables do **not** replace `procore_connections`, `room_packs`, `rfis`, or 
 | `/api/voice/status` | GET. `{ configured }` for Grok Voice — never returns the key |
 | `/api/dictation` | POST multipart `file`. Server-side Grok STT (`XAI_API_KEY`) |
 | `/api/tts` | POST `{ text }`. Server-side Grok TTS MP3 (`XAI_API_KEY`) |
+| `/api/markups` | GET/PUT vector overlay for a pack sheet (`request_id` + `sheet_id`). Service-role upsert into `markup_overlays`. localStorage only if service role is missing. |
 | `/api/stripe/checkout` | POST. Creates a subscription Checkout Session (60-day trial). |
 | `/api/stripe/webhook` | POST. Stripe signature + `billing_customers` upsert. |
 | `/pack/[requestId]` | Live pack viewer. Re-reads on open. Unknown IDs fall back to local Maple Point demo |
-| `/pack/[requestId]/rfi/new?sheet=` | Generate RFI — draft to foreman (not Procore) |
+| `/pack/[requestId]/rfi/new?sheet=&markup=&item=` | Generate RFI — draft to foreman (not Procore). Markup query prefills from a selected overlay. |
 | `/pack/[requestId]/materials` | Order materials — draft to foreman (not Procore) |
 
 ## Time tab (Maple Point geofence)
@@ -561,7 +583,7 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 - Realtime Grok speech-to-speech on site (this PR is batch STT + TTS)
 - Payroll export / ADP
 - Sent pack **snapshots** (text/email frozen copies — not in this PR)
-- Share folder / pinned-sheet UI, markup toolbar, RFI generation from markup, trial-link redeem
+- Share folder / pinned-sheet UI, weekly rev-only re-pull job, trial-link redeem
 - Weekly rev-only re-pull job (read `sheet_revision_cache`, download only on bump) and a real `POST /api/share/refresh-all` implementation
 - RLS policies on `public.room_packs` (table is currently wide open to the anon key)
 - HostGator DNS cutover to Vercel for gcfieldlog.com

@@ -4,6 +4,7 @@
  * keeps working after the schema-foundation PR merges.
  *
  * Drafts go to the foreman. Never a Procore RFI submit.
+ * Optional `markup_id` FK → `public.markup_overlays`.
  */
 
 export {

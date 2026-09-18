@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   TransformComponent,
   TransformWrapper,
@@ -12,14 +13,27 @@ import {
   type OversizedRoomBox,
   type ResolvedHighlight,
 } from "@/lib/highlight";
+import {
+  buildMarkupRfiPrefill,
+  writeMarkupRfiPrefill,
+  type MarkupTool,
+  type MarkupVector,
+} from "@/lib/markup";
 import type { Layout } from "@/lib/pack";
+import { MarkupOverlay } from "./MarkupOverlay";
+import { MarkupToolbar } from "./MarkupToolbar";
+import { useMarkupOverlay } from "./useMarkupOverlay";
 
 type Props = {
   pdfUrl: string;
   highlight?: OversizedRoomBox | ResolvedHighlight | null;
   layout?: Layout;
   sheetId?: string;
+  sheetRev?: string;
   primarySheetId?: string;
+  requestId?: string;
+  roomName?: string;
+  roomNumber?: string;
 };
 
 export function SheetViewer({
@@ -27,7 +41,11 @@ export function SheetViewer({
   highlight,
   layout,
   sheetId,
+  sheetRev,
   primarySheetId,
+  requestId,
+  roomName,
+  roomNumber,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const transformRef = useRef<ReactZoomPanPinchContentRef>(null);
@@ -35,6 +53,11 @@ export function SheetViewer({
   const [error, setError] = useState<string | null>(null);
   const [aspect, setAspect] = useState(1224 / 792);
   const [pagePts, setPagePts] = useState<{ width: number; height: number }>();
+  const [tool, setTool] = useState<MarkupTool>("pan");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const router = useRouter();
+  const markupEnabled = Boolean(requestId && sheetId);
+  const markup = useMarkupOverlay(requestId ?? "", sheetId ?? "");
 
   const overlay = useMemo(() => {
     if (layout && sheetId) {
@@ -84,9 +107,60 @@ export function SheetViewer({
   }, [pdfUrl]);
 
   const missingPdf = !pdfUrl;
+  const selected: MarkupVector | null =
+    markup.items.find((item) => item.id === selectedId) ?? null;
+  const drawing = tool !== "pan";
+
+  function handleAdd(item: MarkupVector) {
+    markup.setItems((current) => [...current, item]);
+    setSelectedId(item.id);
+  }
+
+  function handleDeleteSelected() {
+    if (!selectedId) return;
+    markup.setItems((current) => current.filter((item) => item.id !== selectedId));
+    setSelectedId(null);
+  }
+
+  async function handleCreateRfi() {
+    if (!requestId || !sheetId || !selected) return;
+    const saved = await markup.flush();
+    const overlayId = saved.id || markup.overlayId;
+    const prefill = buildMarkupRfiPrefill({
+      requestId,
+      overlayId,
+      item: selected,
+      sheetId,
+      sheetRev: sheetRev ?? "",
+      roomName: roomName ?? "",
+      roomNumber,
+      vectors: saved.vectors,
+    });
+    writeMarkupRfiPrefill(prefill);
+    const params = new URLSearchParams({
+      sheet: sheetId,
+      markup: overlayId,
+      item: selected.id,
+      subject: prefill.subject,
+      question: prefill.question,
+      location: prefill.location,
+      kind: prefill.kind,
+    });
+    router.push(`/pack/${requestId}/rfi/new?${params.toString()}`);
+  }
 
   return (
     <div className="relative h-full min-h-0 w-full overflow-hidden bg-charcoal">
+      {markupEnabled ? (
+        <MarkupToolbar
+          tool={tool}
+          onTool={setTool}
+          selected={selected}
+          onCreateRfi={handleCreateRfi}
+          onDeleteSelected={handleDeleteSelected}
+          disabled={!ready}
+        />
+      ) : null}
       <TransformWrapper
         ref={transformRef}
         minScale={0.4}
@@ -96,8 +170,9 @@ export function SheetViewer({
         fitOnInit
         limitToBounds={false}
         wheel={{ disabled: true }}
+        panning={{ disabled: drawing }}
         pinch={{ step: 5 }}
-        doubleClick={{ mode: "zoomIn", step: 0.7 }}
+        doubleClick={{ disabled: drawing, mode: "zoomIn", step: 0.7 }}
       >
         {({ zoomIn, zoomOut, resetTransform }) => (
           <>
@@ -114,12 +189,22 @@ export function SheetViewer({
                   className="absolute inset-0 h-full w-full bg-white"
                 />
                 {overlay ? <HighlightOverlay highlight={overlay} /> : null}
+                {markupEnabled ? (
+                  <MarkupOverlay
+                    items={markup.items}
+                    selectedId={selectedId}
+                    tool={tool}
+                    aspect={aspect}
+                    onSelect={setSelectedId}
+                    onAdd={handleAdd}
+                  />
+                ) : null}
               </div>
             </TransformComponent>
-            <div className="absolute bottom-3 left-3 flex items-center gap-1 border border-line bg-gline-ink/90 p-1 text-paper">
+            <div className="absolute bottom-3 left-3 z-20 flex items-center gap-1 border border-line bg-gline-ink/90 p-1 text-paper">
               <button
                 type="button"
-                className="px-2 py-1 text-sm hover:bg-accent"
+                className="min-h-10 min-w-10 px-2 py-1 text-sm hover:bg-accent"
                 onClick={() => zoomOut()}
                 aria-label="Zoom out"
               >
@@ -127,7 +212,7 @@ export function SheetViewer({
               </button>
               <button
                 type="button"
-                className="px-2 py-1 text-sm hover:bg-accent"
+                className="min-h-10 min-w-10 px-2 py-1 text-sm hover:bg-accent"
                 onClick={() => zoomIn()}
                 aria-label="Zoom in"
               >
@@ -135,7 +220,7 @@ export function SheetViewer({
               </button>
               <button
                 type="button"
-                className="px-2 py-1 text-xs hover:bg-accent"
+                className="min-h-10 px-2 py-1 text-xs hover:bg-accent"
                 onClick={() => resetTransform()}
               >
                 Reset
@@ -145,7 +230,13 @@ export function SheetViewer({
         )}
       </TransformWrapper>
       <p className="pointer-events-none absolute right-3 bottom-3 bg-gline-ink/80 px-2 py-1 text-[11px] text-metal">
-        Pinch or +/− to zoom · drag to pan
+        {drawing
+          ? tool === "text"
+            ? "Tap the sheet to place a note"
+            : "Drag on the sheet · vector overlay (not a photo bake)"
+          : selected
+            ? "Markup selected · Create RFI sends a draft to the foreman"
+            : "Pinch or +/− to zoom · drag to pan · tap a markup to select"}
       </p>
       {!ready && !error && !missingPdf ? (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-charcoal/80 text-sm text-muted">
