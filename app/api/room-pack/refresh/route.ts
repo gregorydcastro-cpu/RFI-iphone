@@ -4,6 +4,7 @@ import { refreshLiveRoomPack } from "@/lib/livePack";
 import { stampRoomPack, type RoomPack } from "@/lib/pack";
 import { isRoomPackShape, requestBelongsToJob } from "@/lib/packStatus";
 import { PROCORE_BOT_ID } from "@/lib/procoreBot";
+import { stubSessionFromRequest } from "@/lib/stubSession";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -27,8 +28,10 @@ function json(data: unknown, status = 200) {
 }
 
 /**
- * Puller-only. Request a Procore bot refresh, optionally persist pack JSON
- * (bot/ops callback), then read the latest `public.room_packs` row.
+ * Puller-only. Try Procore REST with stored tokens, optionally persist
+ * pack JSON (bot/ops callback), then read the latest `public.room_packs`
+ * row. Bot/catalog is the fallback when tokens or the demo project are
+ * missing.
  */
 export async function POST(request: Request) {
   const role = readFieldRoleFromRequest(request);
@@ -87,11 +90,13 @@ export async function POST(request: Request) {
     incoming = stampRoomPack(body.pack, { touch: true });
   }
 
+  const session = stubSessionFromRequest(request);
   const live = await refreshLiveRoomPack({
     requestId: resolvedRequestId,
     job,
     room,
     pack: incoming,
+    userId: session?.userId,
   });
 
   if (!live) {
@@ -100,9 +105,11 @@ export async function POST(request: Request) {
 
   return json({
     ok: true,
-    mode: live.supabaseConfigured ? "live" : "demo",
+    mode: live.source === "procore" || live.supabaseConfigured ? "live" : "demo",
     refresh: true,
     source: live.source,
+    pull: live.pull,
+    restReason: live.restReason,
     demoFallback: live.demoFallback,
     requestId: resolvedRequestId,
     job: job.slug,

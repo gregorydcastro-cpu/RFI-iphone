@@ -57,6 +57,7 @@ async function handleStatus(input: {
     ok: true,
     state: live.pack.status === "ready" ? "ready" : live.pack.status,
     source: live.source,
+    pull: live.pull,
     demoFallback: live.demoFallback,
     poll: false,
     unconfigured: !live.supabaseConfigured,

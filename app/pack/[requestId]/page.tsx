@@ -18,9 +18,9 @@ type Props = {
 /**
  * Primary room-pack route (website live view).
  * Always re-reads the latest `public.room_packs` row (no-store).
- * Pullers additionally trigger a Procore bot refresh on open.
- * Unknown IDs still fall back to the local Maple Point pack when live
- * data is missing.
+ * Pullers additionally POST a refresh that tries Procore REST first,
+ * then the bot. Unknown IDs still fall back to the local Maple Point
+ * pack when live data is missing.
  */
 export default async function PackPage({ params, searchParams }: Props) {
   const { requestId } = await params;
@@ -44,6 +44,7 @@ export default async function PackPage({ params, searchParams }: Props) {
       demoFallback={live.demoFallback}
       supabaseConfigured={live.supabaseConfigured}
       source={live.source}
+      pull={live.pull}
       procoreLinked={role.procoreLinked}
     />
   );

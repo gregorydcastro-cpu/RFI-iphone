@@ -1,11 +1,12 @@
 import type { DemoJob } from "./jobs";
-import { loadPack } from "./loadPack";
 import {
   stampRoomPack,
   type RoomPack,
 } from "./pack";
+import { loadPack } from "./loadPack";
 import { packMatchesJob } from "./packStatus";
 import { requestProcoreBotRefresh } from "./procoreBot";
+import { pullProcoreRoomPack } from "./procoreRest";
 import {
   fetchLatestRoomPackRow,
   getSupabaseConfig,
@@ -13,14 +14,17 @@ import {
   roomPackFromRow,
 } from "./supabaseRoomPack";
 
-export type LivePackSource = "supabase" | "local" | "none";
+export type LivePackSource = "procore" | "supabase" | "local" | "none";
+export type LivePackPull = "procore" | "bot" | "none";
 
 export type LivePackLoad = {
   pack: RoomPack;
   source: LivePackSource;
+  pull: LivePackPull;
   demoFallback: boolean;
   supabaseConfigured: boolean;
   requestId: string;
+  restReason?: string;
 };
 
 async function maplePointFallback(
@@ -65,6 +69,7 @@ export async function loadLiveRoomPack(input: {
         return {
           pack: fromRow,
           source: "supabase",
+          pull: "none",
           demoFallback: false,
           supabaseConfigured,
           requestId: input.requestId,
@@ -84,6 +89,7 @@ export async function loadLiveRoomPack(input: {
   return {
     pack: fallback,
     source: "local",
+    pull: "none",
     demoFallback: true,
     supabaseConfigured,
     requestId: input.requestId,
@@ -91,15 +97,58 @@ export async function loadLiveRoomPack(input: {
 }
 
 /**
- * Puller-only refresh: ask the Procore bot to pull, optionally persist pack
- * JSON the bot/ops posted, then re-read the latest room_packs row.
+ * Puller refresh: try Procore REST with the session's stored tokens.
+ * Bot + cached `room_packs` is the fallback when tokens are missing,
+ * refresh fails, or sandbox/production cannot see the demo project.
  */
 export async function refreshLiveRoomPack(input: {
   requestId: string;
   job: DemoJob;
   room: string;
   pack?: RoomPack;
+  userId?: string | null;
 }): Promise<LivePackLoad | null> {
+  const cached = await loadLiveRoomPack({
+    requestId: input.requestId,
+    job: input.job,
+    room: input.room,
+  });
+  let restReason: string | undefined;
+
+  if (input.userId) {
+    const rest = await pullProcoreRoomPack({
+      userId: input.userId,
+      job: input.job,
+      room: input.room,
+      requestId: input.requestId,
+      cached: cached?.pack ?? null,
+    });
+    if (rest.ok) {
+      if (getSupabaseConfig()) {
+        await insertRoomPackRow({
+          projectName: input.job.name,
+          requestId: input.requestId,
+          room: input.room,
+          pack: rest.pack,
+        });
+      }
+      return {
+        pack: rest.pack,
+        source: "procore",
+        pull: "procore",
+        demoFallback: false,
+        supabaseConfigured: Boolean(getSupabaseConfig()),
+        requestId: input.requestId,
+        restReason: rest.reason,
+      };
+    }
+    restReason = rest.reason;
+    console.info("[gcfieldlog] procore rest pull fell back to bot", {
+      request_id: input.requestId,
+      reason: rest.reason,
+    });
+  }
+
   await requestProcoreBotRefresh({
     projectName: input.job.name,
     room: input.room,
@@ -115,9 +164,19 @@ export async function refreshLiveRoomPack(input: {
     });
   }
 
-  return loadLiveRoomPack({
+  const live = await loadLiveRoomPack({
     requestId: input.requestId,
     job: input.job,
     room: input.room,
   });
+  if (!live) {
+    return cached
+      ? { ...cached, pull: "bot", restReason }
+      : null;
+  }
+  return {
+    ...live,
+    pull: "bot",
+    restReason,
+  };
 }

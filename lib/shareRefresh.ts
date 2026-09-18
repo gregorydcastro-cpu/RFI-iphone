@@ -3,8 +3,9 @@
  *
  * Walks pinned_sheets against sheet_revision_cache + the current known pack
  * rev (Maple Point catalog / live room_packs). Callers persist last_seen_rev
- * and cache on a bump. PDF re-download and Procore REST stay in the weekly
- * worker (flagged / TODO) — this planner only records the decision.
+ * and cache on a bump. PDF re-download stays in the weekly worker.
+ * Live Procore REST is the connected pack-request path — this planner
+ * only records the rev decision.
  * Notify Mike after persist via notifyMikeOnBumps (issue #31), not here.
  */
 

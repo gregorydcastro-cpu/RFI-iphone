@@ -3,8 +3,9 @@
  *
  * Protected by CRON_SECRET (never NEXT_PUBLIC_). Reuses planShareRefresh
  * (same compare as Refresh all): Maple Point catalog + live room_packs.
- * Live Procore REST is not called — reserved behind SHARE_WEEKLY_PROCORE_REST
- * until issue #25 lands. PDF re-download uses the existing Drive/proxy path
+ * Connected pullers use live Procore REST on pack request routes.
+ * Weekly/scheduled refresh stays catalog + room_packs + bot (no per-user
+ * token in cron). PDF re-download uses the existing Drive/proxy path
  * only when that path is configured; otherwise metadata-only.
  * After a persisted bump, notifyMikeOnBumps emails Mike (issue #31).
  * Unchanged sheets do not notify. Missing mail env skips (503 code) and

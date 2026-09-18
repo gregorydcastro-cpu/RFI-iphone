@@ -24,8 +24,12 @@ export type ProcoreConnectionStatus = {
 
 export type ProcoreConnectionSecrets = {
   userId: string;
+  email: string | null;
   accessToken: string;
   refreshToken: string | null;
+  expiresAt: string | null;
+  companyId: string | null;
+  procoreUserId: string | null;
 };
 
 export type SupabaseServiceConfig = {
@@ -141,7 +145,10 @@ export async function fetchProcoreConnectionSecrets(
 
   const params = new URLSearchParams();
   params.set("user_id", `eq.${userId}`);
-  params.set("select", "user_id,access_token,refresh_token");
+  params.set(
+    "select",
+    "user_id,email,access_token,refresh_token,expires_at,company_id,procore_user_id",
+  );
   params.set("limit", "1");
 
   const response = await restFetch(
@@ -162,8 +169,12 @@ export async function fetchProcoreConnectionSecrets(
   }
   return {
     userId: record.user_id,
+    email: asStringOrNull(record.email),
     accessToken: record.access_token,
     refreshToken: asStringOrNull(record.refresh_token),
+    expiresAt: asStringOrNull(record.expires_at),
+    companyId: asStringOrNull(record.company_id),
+    procoreUserId: asStringOrNull(record.procore_user_id),
   };
 }
 

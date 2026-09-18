@@ -6,11 +6,11 @@ This is the product surface. **Native iOS is paused. No Apple.** Real login is l
 
 Host: **Vercel (primary)** with **HostGator DNS** for `gcfieldlog.com` (document only; this PR does not change DNS). Cloudflare Pages is a possible later target.
 
-No real crew auth, HostGator uploads, or live Procore REST API in this MVP. Stripe Checkout + webhook are scaffolded (secrets stay in Vercel; Maple Point demos do not need them). The **Room pack webhook routine is deleted** — this app does **not** call `procore_room_pack_webhook_url` / webhook Authorization.
+No real crew auth or HostGator uploads in this MVP. Stripe Checkout + webhook are scaffolded (secrets stay in Vercel; Maple Point demos do not need them). The **Room pack webhook routine is deleted** — this app does **not** call `procore_room_pack_webhook_url` / webhook Authorization.
 
 **Pullers** can **Connect Procore** with their own Procore login (OAuth authorization code). Tokens are stored per stub user in Supabase `procore_connections`. Viewers do not need to connect and cannot trigger a pull.
 
-**Live path:** the Procore bot (`969a9d8e-c07f-44c3-ae9d-862704cd60c7`) owns the Procore pull and upserts `public.room_packs` on Supabase project `aejevzkqvlwbmjbqdxuu`. The website reads that table with `SUPABASE_URL` + `SUPABASE_ANON_KEY` (`cache: "no-store"`) on every pack open. Pullers who have connected Procore can request a refresh; viewers only read. Local demo leaves Supabase unset: Maple Point JSON, no pull.
+**Live path:** a **connected puller** with tokens in `procore_connections` can request a fresh room pack from the site via **Procore REST** (current drawing revisions + RFIs). Company id is resolved per demo project name (`resolveCompanyIdForProject` / `resolveProjectForName`) — never hardcoded. Access tokens last ~1.5 hours and refresh automatically via `refresh_token`. If tokens are missing, refresh fails, or sandbox OAuth sees no companies, the website falls back to the Procore bot (`969a9d8e-c07f-44c3-ae9d-862704cd60c7`) + cached `public.room_packs`. The bot remains the bulk/scheduled path. Viewers only read. Local demo leaves Supabase unset: Maple Point JSON unless a live REST pull succeeds. Tokens stay server-side (never `NEXT_PUBLIC_`).
 
 ## Locked nav (MVP)
 
@@ -29,8 +29,8 @@ Must match this path — nothing else in the primary nav:
 | Account (`/account`) | Stub session + Procore connected / disconnected state + link to pricing + share folders. |
 | Share (`/share`) | Create folders, pin full disciplines (electrical / lighting / architectural) or Maple Point room packs, puller-gated **Refresh all**. |
 | Pricing (`/pricing`) | Subscribe CTA → Stripe-hosted Checkout (60-day trial, payment method collected). |
-| Room pack request | Room number (e.g. `733`). **Connected puller:** `POST /api/room-pack` asks the Procore bot to refresh, then opens `/pack/[requestId]`. **Viewer / unconnected puller:** **Open pack** only — no pull. Local demo (no `SUPABASE_URL`) loads Maple Point JSON. |
-| Pack viewer | Field stack on `/pack/[requestId]`: **architectural floor plan first** (A-*, architectural, floor plan heuristics; else current primary), oversized crimson SVG box around the room walls, **vector markup tools** (circle, box, arrow, text note) with one-tap **Create RFI**, then remaining sheets (power, lighting, …) and linked RFIs. Drawing number + revision letter stamps stay on the top bar and each sheet (`A-101 Rev A`). Website open always re-reads `room_packs` (no-store). Connected pullers also trigger a bot refresh; viewers cannot. |
+| Room pack request | Room number (e.g. `733`). **Connected puller:** `POST /api/room-pack` tries Procore REST with stored tokens, then opens `/pack/[requestId]`. Bot + cached `room_packs` if REST cannot run. **Viewer / unconnected puller:** **Open pack** only — no pull. Local demo (no `SUPABASE_URL`) loads Maple Point JSON unless REST succeeds. |
+| Pack viewer | Field stack on `/pack/[requestId]`: **architectural floor plan first** (A-*, architectural, floor plan heuristics; else current primary), oversized crimson SVG box around the room walls, **vector markup tools** (circle, box, arrow, text note) with one-tap **Create RFI**, then remaining sheets (power, lighting, …) and linked RFIs. Drawing number + revision letter stamps stay on the top bar and each sheet (`A-101 Rev A`). Website open always re-reads `room_packs` (no-store). Status shows **live** (Procore REST this pull), **cached** (`room_packs` / bot fallback), or **demo**. Viewers cannot pull. |
 | Generate RFI / Materials | Live pack actions. Drafts go to foreman Pat Nguyen — not a Procore submit. **Dictate** fills the form from the mic; **Read aloud** speaks RFIs. **Create RFI** from a selected sheet markup prefills the same draft. Phone photo attaches as a data URL on the draft. |
 | Voice (Grok) | Server-side `XAI_API_KEY` → `/api/dictation` (STT) and `/api/tts` (TTS). Never `NEXT_PUBLIC_`. |
 | Time (`/time`) | Maple Point **worker punch** (GPS geofence) and **foreman crew week**. Field log only — not payroll/ADP. |
@@ -97,7 +97,7 @@ That is the default `redirect_uri`. Preview hosts will not match unless `PROCORE
 | `GOOGLE_DRIVE_FOLDER_ID` | Optional ops note (not required for download). Folder the Procore bot writes pack PDFs into — share that folder with the service account as **Viewer**. |
 | `CRON_SECRET` | **Weekly share refresh.** Server-only. Vercel Cron sends `Authorization: Bearer $CRON_SECRET` to `GET /api/share/weekly-refresh`. Also accepted as `x-cron-secret`. Never `NEXT_PUBLIC_`. |
 | `SHARE_WEEKLY_PDF_REDOWNLOAD` | Optional. `1` forces Drive/proxy PDF fetch on a rev bump; `0` forces metadata-only. Unset: fetch when Google Drive auth is configured. |
-| `SHARE_WEEKLY_PROCORE_REST` | Reserved TODO (issue #25). Even if `1`, this app does **not** call Procore REST yet. Cron compares catalog + `room_packs` only. |
+| `SHARE_WEEKLY_PROCORE_REST` | Weekly/scheduled flag only. Even if `1`, cron has no per-user token — it still compares catalog + `room_packs` and asks the bot. Live REST is the connected puller pack path (`POST /api/room-pack`). |
 | `NOTIFY_MIKE_EMAIL` | **Notify Mike on a pinned rev bump.** Server-only destination (demo/config, e.g. `mike@crew.example`). Never a personal address in client code. Never `NEXT_PUBLIC_`. Alias: `GMAIL_USER` if this key is unset. |
 | `NOTIFY_FROM_EMAIL` | Optional From address. Aliases: `RESEND_FROM`, then `GMAIL_USER`. Default From: `GC Field Log <notify@gcfieldlog.com>`. |
 | `RESEND_API_KEY` | Optional. Send the bump email through [Resend](https://resend.com). Server-only. Never `NEXT_PUBLIC_`. |
@@ -188,7 +188,21 @@ Never commit secrets. Never log them. Sandbox id/secret live on the shared box a
 
 [Procore OAuth docs](https://procore.github.io/documentation/oauth-auth-grant-flow): authorize `GET {login}/oauth/authorize`, token `POST {login}/oauth/token`. Developer Sandbox login host is `login-sandbox.procore.com`. Access tokens last ~1.5 hours; refresh tokens are stored for later.
 
-**Company id** is dynamic per project (Maple Point demos only in this app). Do not hardcode a company. `procore_connections.company_id` is last-known from `/me` only. Later API calls must use `resolveCompanyIdForProject` against the selected demo job name.
+**Company id** is dynamic per project (Maple Point demos only in this app). Do not hardcode a company. `procore_connections.company_id` is last-known from `/me` only. Live REST pulls call `resolveCompanyIdForProject` / `resolveProjectForName` against the selected demo job name before listing drawings and RFIs.
+
+#### Live Procore REST vs bot fallback
+
+Connected pullers with tokens in `procore_connections` can request a fresh pack from the site without waiting solely on the external bot.
+
+| Step | Behavior |
+| --- | --- |
+| 1. Valid tokens | Server loads `access_token` + `refresh_token` with the service role (never returned to the browser). |
+| 2. Refresh | If `expires_at` is within ~2 minutes (access lasts ~1.5h), `POST {login}/oauth/token` with `grant_type=refresh_token` and the new tokens are stored. A 401 on REST retries once after refresh. |
+| 3. Company / project | `GET /rest/v1.0/companies` then `GET /rest/v1.0/projects?company_id=` until the demo job name matches. `Procore-Company-Id` is that resolved id. |
+| 4. Pack | `GET .../drawing_revisions?drawing_set_id=current_set` and `GET .../rfis`. Mapped to `gcpullog.room_pack.v1` and inserted into `room_packs` when Supabase is set. **GET only** — this app never POSTs RFIs or POs to Procore. |
+| 5. Fallback | Missing OAuth env, missing/expired refresh, empty sandbox companies, or API errors → log-only Procore bot request + latest `room_packs` / Maple Point JSON. Weekly cron and Refresh all stay on this bulk path. |
+
+The pack viewer badge: **live** (this pull used REST), **cached** (bot / `room_packs`), **demo** (local Maple Point). Client bundles must not contain `PROCORE_CLIENT_SECRET` or tokens — search for `NEXT_PUBLIC_PROCORE` / `access_token` in `.next` if you need to confirm.
 
 #### Token table (`public.procore_connections`)
 
@@ -311,7 +325,7 @@ process.env.SUPABASE_URL
 process.env.SUPABASE_ANON_KEY
 ```
 
-- **Both set (Production):** website live view GETs the latest `public.room_packs` row with `cache: "no-store"`. Connected pullers POST a refresh that coordinates the **Procore bot** (`969a9d8e-c07f-44c3-ae9d-862704cd60c7`). The bot owns the Procore pull and upserts `room_packs`. The website then re-reads the latest row. No expiry timers.
+- **Both set (Production):** website live view GETs the latest `public.room_packs` row with `cache: "no-store"`. Connected pullers POST a refresh that **calls Procore REST** with their stored tokens when valid, persists the pack, and otherwise coordinates the **Procore bot** (`969a9d8e-c07f-44c3-ae9d-862704cd60c7`). The bot remains the bulk/scheduled upsert path. No expiry timers.
 - **Missing / local:** Maple Point JSON, **no** Supabase call, **no** bot pull.
 - **Hard rule:** never display another job’s pack. Match project slug or exact job name.
 
@@ -441,11 +455,11 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/share/folders
 # 401
 ```
 
-**Manual force refresh:** `POST /api/share/refresh-all` is puller-gated (**stub Puller** session, or Procore-linked cookie / `x-procore-linked` header) **and** requires the stub session. It walks that owner's `pinned_sheets`, compares known pack revs (Maple Point catalog, plus live `room_packs` when Supabase anon is set) to `sheet_revision_cache`, and updates last_seen_rev / last_pulled_at on a bump. It asks the Procore bot to refresh Maple Point (same log-only request as pack open) but **does not** call Procore REST or re-download PDFs. A persisted bump emails Mike (`notifyMikeOnBumps`). Response: `{ accepted: true, stub: false, implemented: true, weeklyCron: false, notify, scanned, bumped, unchanged, missing, bumps }`.
+**Manual force refresh:** `POST /api/share/refresh-all` is puller-gated (**stub Puller** session, or Procore-linked cookie / `x-procore-linked` header) **and** requires the stub session. It walks that owner's `pinned_sheets`, compares known pack revs (Maple Point catalog, plus live `room_packs` when Supabase anon is set) to `sheet_revision_cache`, and updates last_seen_rev / last_pulled_at on a bump. Bulk/scheduled refresh still asks the Procore bot (no per-user token on that path) and does **not** re-download PDFs. Live REST is the connected pack-request path. A persisted bump emails Mike (`notifyMikeOnBumps`). Response: `{ accepted: true, stub: false, implemented: true, weeklyCron: false, notify, scanned, bumped, unchanged, missing, bumps }`.
 
 **Weekly rev-only re-pull:** `GET`/`POST /api/share/weekly-refresh` is the automated path. Vercel Cron (`vercel.json`, Mondays 12:00 UTC) sends `Authorization: Bearer $CRON_SECRET`. The worker reads **all** `pinned_sheets` + `sheet_revision_cache` with the service role (process memory when the service role is unset), reuses `planShareRefresh` (same catalog + `room_packs` compare as Refresh all), and on a bump updates `last_seen_rev` / `last_pulled_at` / cache `rev` + `checked_at`. Unchanged revs are metadata-only.
 
-**Procore REST** is not called. `SHARE_WEEKLY_PROCORE_REST` is reserved until [issue #25](https://github.com/gregorydcastro-cpu/RFI-iphone/issues/25) lands. **PDF re-download** uses the existing Drive / `/api/sheet-pdf` proxy only when Drive auth is set or `SHARE_WEEKLY_PDF_REDOWNLOAD=1`; otherwise metadata-only (TODO). There is no separate PDF store — the pack viewer already streams that proxy. Response: `{ scanned, bumped, unchanged, missing, errors, bumps, error_items, pdf, procore_rest, notify }`. `bumps: [{ sheet_id, old_rev, new_rev, project_name }]` feeds [issue #31](https://github.com/gregorydcastro-cpu/RFI-iphone/issues/31) (Notify Mike). Mike is the share-portal puller mentioned in crew comments — the address is **`NOTIFY_MIKE_EMAIL`** (demo: `mike@crew.example`), never hardcoded in the client. Unchanged sheets do not email. Missing Resend/Gmail env returns `notify.code: "notify_unconfigured"` (status 503 on the notify object only) and does **not** fail the refresh. SMS (`NOTIFY_MIKE_SMS`) is reserved and not sent. Trial-link redeem stays later.
+**Procore REST** on weekly cron is still a no-call: cron has no per-user OAuth token. `SHARE_WEEKLY_PROCORE_REST=1` does not change that. Connected pullers use REST on `POST /api/room-pack` ([issue #25](https://github.com/gregorydcastro-cpu/RFI-iphone/issues/25)). **PDF re-download** uses the existing Drive / `/api/sheet-pdf` proxy only when Drive auth is set or `SHARE_WEEKLY_PDF_REDOWNLOAD=1`; otherwise metadata-only. There is no separate PDF store — the pack viewer already streams that proxy. Response: `{ scanned, bumped, unchanged, missing, errors, bumps, error_items, pdf, procore_rest, notify }`. `bumps: [{ sheet_id, old_rev, new_rev, project_name }]` feeds [issue #31](https://github.com/gregorydcastro-cpu/RFI-iphone/issues/31) (Notify Mike). Mike is the share-portal puller mentioned in crew comments — the address is **`NOTIFY_MIKE_EMAIL`** (demo: `mike@crew.example`), never hardcoded in the client. Unchanged sheets do not email. Missing Resend/Gmail env returns `notify.code: "notify_unconfigured"` (status 503 on the notify object only) and does **not** fail the refresh. SMS (`NOTIFY_MIKE_SMS`) is reserved and not sent. Trial-link redeem stays later.
 
 ```bash
 # Missing secret
@@ -484,15 +498,15 @@ curl -s -X POST http://localhost:3000/api/share/weekly-refresh \
 | `/api/procore/callback` | Exchange code, store per-user tokens |
 | `/api/procore/status` | Connected state (no tokens) |
 | `/api/procore/disconnect` | Revoke + delete this user’s tokens |
-| `/api/room-pack` | Puller POST. Requests a Procore bot refresh + reads `room_packs`. Demo when Supabase unset. |
-| `/api/room-pack/refresh` | Puller POST. Bot refresh, optional `{ pack }` upsert, then latest `room_packs` row. |
+| `/api/room-pack` | Puller POST. Procore REST when tokens are valid; bot + `room_packs` fallback. Demo when Supabase unset and REST cannot run. |
+| `/api/room-pack/refresh` | Puller POST. Same REST-then-bot refresh, optional `{ pack }` upsert, then latest `room_packs` row. |
 | `/api/room-pack/live` | Anyone GET/POST. Latest `room_packs` row, `no-store`. Does not pull. |
 | `/api/room-pack/status` | Alias of live read (no Drive poll, no webhook). |
 | `/api/sheet-pdf` | GET `?requestId=&sheetId=`. Streams a sheet PDF (Drive proxy or local `/packs`). Secrets stay on the server. |
 | `/api/share/folders` | GET/POST/DELETE stub-session share folders (service role or memory) |
 | `/api/share/pins` | POST pin discipline or room pack; DELETE `?id=` unpin |
 | `/api/share/refresh-all` | Puller POST. Walks this owner's pins + updates `sheet_revision_cache`. Emails Mike on a persisted bump. |
-| `/api/share/weekly-refresh` | Cron GET/POST. `CRON_SECRET` required. All pins, same compare as Refresh all. Emails Mike on a persisted bump. No Procore REST. |
+| `/api/share/weekly-refresh` | Cron GET/POST. `CRON_SECRET` required. All pins, catalog + `room_packs` + bot. Live REST stays on pack routes. Emails Mike on a persisted bump. |
 | `/api/time` | GET Maple Point site, workers, week punches (memory demo or service-role Supabase) |
 | `/api/time/punches` | POST worker punch (GPS + geofence) or `{ foreman: true }` missed-punch override |
 | `/api/voice/status` | GET. `{ configured }` for Grok Voice — never returns the key |
@@ -558,7 +572,7 @@ Defined in `app/globals.css`.
 
 Live packs are produced by the **Procore bot** (`969a9d8e-c07f-44c3-ae9d-862704cd60c7`) and stored in Supabase **`public.room_packs`**, schema `gcpullog.room_pack.v1`.
 
-**Request (this app, Production, connected puller):** `POST /api/room-pack` or `POST /api/room-pack/refresh` asks that bot to pull, then reads the latest matching `room_packs` row with `SUPABASE_URL` + `SUPABASE_ANON_KEY` (`cache: "no-store"`). Opening `/pack/[requestId]` does the same read every time (pullers also trigger refresh). The website does **not** call the deleted Room pack webhook.
+**Request (this app, Production, connected puller):** `POST /api/room-pack` or `POST /api/room-pack/refresh` calls Procore REST with the puller's stored tokens when they are valid (refreshing the access token if needed), persists `room_packs`, and otherwise asks the bot then reads the latest matching row with `SUPABASE_URL` + `SUPABASE_ANON_KEY` (`cache: "no-store"`). Opening `/pack/[requestId]` re-reads every time (pullers also trigger refresh). The website does **not** call the deleted Room pack webhook.
 
 **Viewer:** GET `/api/room-pack/live` / open `/pack/[requestId]` only. No pull.
 
@@ -677,7 +691,7 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 ## Later (not implemented)
 
 - Real crew **login** (replace stub session cookie with Supabase Auth / Auth.js; keep `procore_connections.user_id` = `auth.uid()`)
-- Use stored per-user Procore tokens for live pulls (Connect Procore only **stores** tokens today; pack refresh still goes through the Procore bot)
+- Production Procore app / per-user tokens so sandbox-empty company lists can resolve a real demo project (REST is wired; fallback is still the bot)
 - Stripe **Customer Portal**, entitlement gating, and receipt / trial emails (Checkout + webhook scaffold is in this PR; no email send yet)
 - Stripe **crypto / stablecoin** payment methods (Dashboard-only later — no app code)
 - **Tools** nav
@@ -686,7 +700,7 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 - Payroll export / ADP
 - Sent pack **snapshots** (text/email frozen copies — not in this PR)
 - Trial-link redeem / public share-folder read
-- Live Procore REST compare / download on weekly refresh (reserved flag `SHARE_WEEKLY_PROCORE_REST`; issue #25)
+- Weekly cron Procore REST compare (cron still has no per-user token; `SHARE_WEEKLY_PROCORE_REST` stays a scheduled-only flag)
 - Persist a new PDF copy on bump beyond the existing Drive / `/api/sheet-pdf` proxy
 - SMS Mike when a pinned rev bumps (`NOTIFY_MIKE_SMS` reserved; email is wired)
 - RLS policies on `public.room_packs` (table is currently wide open to the anon key)

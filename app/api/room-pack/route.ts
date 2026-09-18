@@ -2,6 +2,7 @@ import { readFieldRoleFromRequest } from "@/lib/auth";
 import { getJob, makeRequestId } from "@/lib/jobs";
 import { refreshLiveRoomPack } from "@/lib/livePack";
 import { PROCORE_BOT_ID } from "@/lib/procoreBot";
+import { stubSessionFromRequest } from "@/lib/stubSession";
 import { getSupabaseConfig } from "@/lib/supabaseRoomPack";
 import { NextResponse } from "next/server";
 
@@ -27,9 +28,9 @@ function json(data: unknown, status = 200) {
 /**
  * Request a room pack from `/jobs/[projectSlug]`.
  *
- * Puller only. Coordinates a Procore bot refresh and reads
- * `public.room_packs`. Does not call the deleted webhook.
- * Local demo when Supabase env is unset.
+ * Puller only. Tries Procore REST with stored OAuth tokens, then
+ * falls back to the Procore bot + `public.room_packs`. Does not call
+ * the deleted webhook. Local demo when Supabase env is unset.
  */
 export async function POST(request: Request) {
   const role = readFieldRoleFromRequest(request);
@@ -67,34 +68,26 @@ export async function POST(request: Request) {
 
   const requestId = makeRequestId(job.slug, room);
   const supabaseConfigured = Boolean(getSupabaseConfig());
-
-  if (!supabaseConfigured) {
-    return json({
-      ok: true,
-      mode: "demo" as const,
-      requestId,
-      job: job.slug,
-      room,
-      refresh: false,
-      botId: PROCORE_BOT_ID,
-      procoreLinked: true,
-    });
-  }
+  const session = stubSessionFromRequest(request);
 
   const live = await refreshLiveRoomPack({
     requestId,
     job,
     room,
+    userId: session?.userId,
   });
 
+  const pulledLive = live?.source === "procore" || live?.source === "supabase";
   return json({
     ok: true,
-    mode: "live" as const,
+    mode: pulledLive || supabaseConfigured ? ("live" as const) : ("demo" as const),
     requestId,
     job: job.slug,
     room,
     refresh: true,
     source: live?.source ?? "none",
+    pull: live?.pull ?? "none",
+    restReason: live?.restReason,
     pulled_at: live?.pack.pulled_at,
     revision_stamp: live?.pack.revision_stamp,
     botId: PROCORE_BOT_ID,
