@@ -7,10 +7,32 @@ import {
 } from "@/lib/auth";
 import {
   createStubSession,
+  parseStubSessionFromCookieHeader,
   stubSessionCookieWrites,
 } from "@/lib/stubSession";
 
 export const dynamic = "force-dynamic";
+
+/** Current stub session for the httpOnly cookie (Share recovery + smoke). */
+export async function GET(request: Request) {
+  const session = parseStubSessionFromCookieHeader(request.headers.get("cookie"));
+  if (!session) {
+    return NextResponse.json(
+      { ok: false, signedIn: false },
+      { status: 401, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+  return NextResponse.json(
+    {
+      ok: true,
+      signedIn: true,
+      userId: session.userId,
+      email: session.email,
+      role: session.role,
+    },
+    { headers: { "Cache-Control": "no-store" } },
+  );
+}
 
 type SessionBody = {
   email?: unknown;

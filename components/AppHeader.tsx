@@ -65,6 +65,13 @@ export function AppHeader({
                     : "text-secondary hover:text-cta"
                 }
                 href="/share"
+                onClick={(event) => {
+                  event.preventDefault();
+                  // Full document load so the httpOnly stub cookie is sent.
+                  // Next.js Link can reuse a signed-out RSC payload for /share.
+                  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- cookie-gated Share
+                  window.location.assign("/share");
+                }}
               >
                 Share
               </a>

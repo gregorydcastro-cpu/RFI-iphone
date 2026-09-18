@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   MAPLE_POINT_REQUEST_ID,
   packHrefForSheet,
@@ -80,6 +80,30 @@ export function SharePortal({
     () => folders.reduce((sum, folder) => sum + folder.pins.length, 0),
     [folders],
   );
+
+  useEffect(() => {
+    const reloadKey = "gcfieldlog.share-session-reload";
+    if (signedIn) {
+      sessionStorage.removeItem(reloadKey);
+      return;
+    }
+    if (sessionStorage.getItem(reloadKey)) return;
+    let cancelled = false;
+    fetch("/api/session", { credentials: "include", cache: "no-store" })
+      .then((response) => response.json())
+      .then((data: { ok?: boolean; email?: string }) => {
+        if (!cancelled && data.ok && data.email) {
+          sessionStorage.setItem(reloadKey, "1");
+          window.location.reload();
+        }
+      })
+      .catch(() => {
+        /* keep the signed-out prompt */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [signedIn]);
 
   async function reload() {
     const response = await fetch("/api/share/folders", {
