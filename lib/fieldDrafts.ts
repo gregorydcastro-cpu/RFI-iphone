@@ -28,8 +28,11 @@ export type RfiDraftPacket = {
     role: string;
     email: string;
   };
-  status: "draft_to_foreman";
+  /** Matches PR #9 `rfis.status`. UI is still a draft to the foreman. */
+  status: "draft" | "ready";
   notProcore: true;
+  persisted?: boolean;
+  storage?: "supabase" | "local" | "unconfigured" | "unavailable";
 };
 
 export type MaterialIntent = "needed" | "order";
@@ -43,6 +46,7 @@ export type MaterialDraftLine = {
   sheet?: string;
 };
 
+/** #9 has no materials table — keep order drafts local until a later schema. */
 export type MaterialOrderDraft = {
   id: string;
   createdAt: string;
@@ -107,6 +111,13 @@ export function newDraftId(prefix: string): string {
     return `${prefix}-${crypto.randomUUID()}`;
   }
   return `${prefix}-${Date.now().toString(36)}`;
+}
+
+export function newUuid(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, "0").slice(-12)}`;
 }
 
 export function foremanRecipient(): RfiDraftPacket["sentTo"] {

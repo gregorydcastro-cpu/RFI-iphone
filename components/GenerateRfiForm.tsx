@@ -4,7 +4,7 @@ import { type ChangeEvent, type FormEvent, useMemo, useState } from "react";
 import { DraftToForemanSuccess } from "@/components/DraftToForemanSuccess";
 import { DEMO_FOREMAN, DEMO_JOURNEYMAN } from "@/lib/crew";
 import {
-  newDraftId,
+  newUuid,
   saveRfiDraft,
   type DraftPhoto,
   type RfiDraftPacket,
@@ -80,7 +80,7 @@ export function GenerateRfiForm({
     event.target.value = "";
   }
 
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
     const nextSubject = subject.trim();
@@ -91,29 +91,71 @@ export function GenerateRfiForm({
     }
     setPending(true);
     setError(null);
-    const packet: RfiDraftPacket = {
-      id: newDraftId("rfi"),
+
+    const sheetPinId = selectedSheet?.id ?? pack.revision_stamp?.drawing ?? "";
+    const locationValue = location.trim() || pack.room.name;
+    let packet: RfiDraftPacket = {
+      id: newUuid(),
       createdAt: new Date().toISOString(),
       requestId,
       jobName: pack.project.name,
       roomName: pack.room.name,
       roomNumber: pack.room.number,
-      sheetId: selectedSheet?.id ?? pack.revision_stamp?.drawing ?? "",
+      sheetId: sheetPinId,
       sheetRev: selectedSheet?.rev ?? pack.revision_stamp?.rev ?? "",
       authorName: authorName || DEMO_JOURNEYMAN.name,
       authorEmail: authorEmail || DEMO_JOURNEYMAN.email,
       subject: nextSubject,
       question: nextQuestion,
-      location: location.trim() || pack.room.name,
+      location: locationValue,
       photos,
       sentTo: {
         name: DEMO_FOREMAN.name,
         role: DEMO_FOREMAN.role,
         email: DEMO_FOREMAN.email,
       },
-      status: "draft_to_foreman",
+      status: "draft",
       notProcore: true,
+      persisted: false,
+      storage: "local",
     };
+
+    try {
+      const response = await fetch("/api/rfis", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subject: nextSubject,
+          description: nextQuestion,
+          location: locationValue,
+          sheet_id: sheetPinId || null,
+          markup_id: null,
+          status: "draft",
+        }),
+      });
+      const data = (await response.json()) as {
+        ok?: boolean;
+        persisted?: boolean;
+        storage?: RfiDraftPacket["storage"];
+        row?: { id?: string; created_at?: string; status?: "draft" | "ready" };
+        sentTo?: RfiDraftPacket["sentTo"];
+      };
+      if (response.ok && data.ok && data.row?.id) {
+        packet = {
+          ...packet,
+          id: data.row.id,
+          createdAt: data.row.created_at ?? packet.createdAt,
+          status: data.row.status ?? "draft",
+          persisted: Boolean(data.persisted),
+          storage: data.storage ?? (data.persisted ? "supabase" : "local"),
+          sentTo: data.sentTo ?? packet.sentTo,
+        };
+      }
+    } catch {
+      // localStorage still holds the draft for the demo
+    }
+
     saveRfiDraft(packet);
     setSaved(packet);
     setPending(false);
@@ -144,6 +186,13 @@ export function GenerateRfiForm({
               ))}
             </ul>
           ) : null}
+          <p className="mt-2 text-xs text-muted">
+            Status {saved.status}
+            {saved.persisted
+              ? " · saved on rfis"
+              : " · saved on this device"}
+            . Not a Procore submit.
+          </p>
         </div>
       </DraftToForemanSuccess>
     );
