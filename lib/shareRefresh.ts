@@ -1,14 +1,11 @@
 /**
- * Rev-only compare for Mike's manual Refresh all.
+ * Rev-only compare for Refresh all and the weekly cron.
  *
  * Walks pinned_sheets against sheet_revision_cache + the current known pack
- * rev (catalog / room_packs). Re-download of PDFs happens only when rev
- * bumped — this planner records the decision. Weekly cron is NOT here.
- *
- * TODO(weekly-cron): scheduled job should reuse planShareRefresh, fetch
- * Procore top rev (or bot pack), download PDF only on bump, then update
- * sheet_revision_cache.rev / checked_at and pinned_sheets.last_seen_rev /
- * last_pulled_at. Unchanged revs are metadata-only. Do not text/email Mike.
+ * rev (Maple Point catalog / live room_packs). Callers persist last_seen_rev
+ * and cache on a bump. PDF re-download and Procore REST stay in the weekly
+ * worker (flagged / TODO) — this planner only records the decision.
+ * Do not text/email Mike from here (issue #31).
  */
 
 import type { PinnedSheetRow, SheetRevisionCacheRow } from "./schema";
@@ -37,6 +34,35 @@ export type ShareRefreshPlan = {
   missing: number;
   items: ShareRefreshItem[];
 };
+
+/** Hook shape for issue #31 (Notify Mike). Email/SMS is not sent here. */
+export type ShareRefreshBump = {
+  sheet_id: string;
+  old_rev: string;
+  new_rev: string;
+  project_name: string;
+};
+
+export type ShareRefreshError = {
+  sheet_id?: string;
+  project_name?: string;
+  pin_id?: string;
+  error: string;
+};
+
+export function bumpsFromPlan(plan: ShareRefreshPlan): ShareRefreshBump[] {
+  const bumps: ShareRefreshBump[] = [];
+  for (const item of plan.items) {
+    if (item.status !== "bumped" || !item.current_rev) continue;
+    bumps.push({
+      sheet_id: item.sheet_id,
+      old_rev: item.previous_rev,
+      new_rev: item.current_rev,
+      project_name: item.project_name,
+    });
+  }
+  return bumps;
+}
 
 export function planShareRefresh(
   pins: PinnedSheetRow[],

@@ -191,3 +191,15 @@ export function shareSheetKey(projectName: string, sheetId: string): string {
 export function packHrefForSheet(requestId: string): string {
   return `/pack/${encodeURIComponent(requestId)}`;
 }
+
+export function requestIdForPinnedSheet(
+  projectName: string,
+  sheetId: string,
+  catalog: ShareCatalog = SHARE_CATALOG,
+): string {
+  const key = shareSheetKey(projectName, sheetId);
+  const sheet = catalog.sheets.find(
+    (row) => shareSheetKey(row.project_name, row.sheet_id) === key,
+  );
+  return sheet?.request_id ?? MAPLE_POINT_REQUEST_ID;
+}

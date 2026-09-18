@@ -4,10 +4,12 @@ import {
   classifyShareDiscipline,
   expandDisciplinePins,
   expandRoomPackPins,
+  MAPLE_POINT_REQUEST_ID,
+  requestIdForPinnedSheet,
   SHARE_CATALOG,
   sheetsForDiscipline,
 } from "./shareCatalog.ts";
-import { planShareRefresh } from "./shareRefresh.ts";
+import { bumpsFromPlan, planShareRefresh } from "./shareRefresh.ts";
 import type { PinnedSheetRow, SheetRevisionCacheRow } from "./schema.ts";
 
 const forbidden = /Brown|Rossi|Danoff|Suffolk|ILSB|EL107/i;
@@ -68,6 +70,17 @@ test("pin full discipline expands Maple Point sheets", () => {
     ["E-102"],
   );
   assert.equal(sheetsForDiscipline("lighting").length, 1);
+});
+
+test("requestIdForPinnedSheet maps Maple Point sheets", () => {
+  assert.equal(
+    requestIdForPinnedSheet("Maple Point Medical Office", "A-101"),
+    MAPLE_POINT_REQUEST_ID,
+  );
+  assert.equal(
+    requestIdForPinnedSheet("Unknown Job", "X-1"),
+    MAPLE_POINT_REQUEST_ID,
+  );
 });
 
 test("pin room pack uses room label as discipline", () => {
@@ -133,4 +146,12 @@ test("planShareRefresh marks bumped unchanged and missing", () => {
   assert.equal(plan.items.find((item) => item.sheet_id === "E-101")?.status, "bumped");
   assert.equal(plan.items.find((item) => item.sheet_id === "A-101")?.status, "unchanged");
   assert.equal(plan.items.find((item) => item.sheet_id === "Z-999")?.status, "missing");
+  assert.deepEqual(bumpsFromPlan(plan), [
+    {
+      sheet_id: "E-101",
+      old_rev: "A",
+      new_rev: "B",
+      project_name: "Maple Point Medical Office",
+    },
+  ]);
 });
