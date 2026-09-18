@@ -88,10 +88,9 @@ export function DictationButton({
       };
       if (!response.ok || !data.ok || !data.text) {
         setError(
-          data.error ??
-            (response.status === 503
-              ? "Voice is not configured on the server."
-              : "Could not transcribe. Try again."),
+          response.status === 503
+            ? "Voice is not configured on the server."
+            : (data.error ?? "Could not transcribe. Try again."),
         );
         return;
       }
