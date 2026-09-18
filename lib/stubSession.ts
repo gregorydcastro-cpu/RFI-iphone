@@ -1,10 +1,5 @@
 import { createHash } from "node:crypto";
-import {
-  cookieWritesForDomain,
-  readCookieValue,
-  type FieldRoleName,
-  type HttpCookieOptions,
-} from "./auth";
+import type { FieldRoleName, HttpCookieOptions } from "./auth";
 
 export const STUB_SESSION_COOKIE = "gcfieldlog_stub_user";
 
@@ -84,16 +79,44 @@ export function stubSessionCookieWrites(
   secure: boolean,
   domain?: string,
 ): HttpCookieOptions[] {
-  return cookieWritesForDomain(
-    stubSessionCookieOptions(session, secure, domain),
-    domain,
-  );
+  const cookie = stubSessionCookieOptions(session, secure, domain);
+  if (!domain) return [cookie];
+  const hostOnly: HttpCookieOptions = { ...cookie };
+  delete hostOnly.domain;
+  if (cookie.maxAge > 0 && cookie.value) {
+    return [
+      { ...hostOnly, value: "", maxAge: 0 },
+      { ...cookie, domain },
+    ];
+  }
+  return [hostOnly, { ...cookie, domain }];
+}
+
+function readNamedCookie(
+  cookieHeader: string | null | undefined,
+  name: string,
+): string | undefined {
+  if (!cookieHeader) return undefined;
+  const parts = cookieHeader.split(";");
+  for (const part of parts) {
+    const trimmed = part.trim();
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    if (key !== name) continue;
+    try {
+      return decodeURIComponent(trimmed.slice(eq + 1));
+    } catch {
+      return trimmed.slice(eq + 1);
+    }
+  }
+  return undefined;
 }
 
 export function parseStubSessionFromCookieHeader(
   cookieHeader: string | null | undefined,
 ): StubSession | null {
-  return parseStubSession(readCookieValue(cookieHeader, STUB_SESSION_COOKIE));
+  return parseStubSession(readNamedCookie(cookieHeader, STUB_SESSION_COOKIE));
 }
 
 export async function readStubSession(): Promise<StubSession | null> {
