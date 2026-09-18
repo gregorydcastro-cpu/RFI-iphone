@@ -339,7 +339,7 @@ export function GenerateRfiForm({
                 ? markupKindQuery
                 : "box",
             )}{" "}
-            on {sheetQuery || pin}. Vector overlay stays attached to this draft.
+            on {pin}. Vector overlay stays attached to this draft.
           </p>
         </div>
       ) : null}
