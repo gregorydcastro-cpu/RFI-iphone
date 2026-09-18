@@ -46,16 +46,32 @@ export type PdfPointBBox = {
   h: number;
 };
 
+/** Live Procore-bot room outline. Coordinates may be pdf_pts or normalized. */
+export type WallBounds = {
+  sheet_id?: string;
+  units?: string;
+  bbox?: PdfPointBBox;
+  polygon?: [number, number][];
+  page_width_pts?: number;
+  page_height_pts?: number;
+  origin?: "bottom-left" | "top-left";
+};
+
 export type Layout = {
   sheet?: string;
+  sheet_id?: string;
   type?: "polygon" | "bbox";
   points?: [number, number][];
   bbox?: NormalizedBBox;
-  /** Procore v1 field: PDF user-space points, origin bottom-left. */
+  /** Procore v1 field: PDF user-space points, origin bottom-left. Object or [x1,y1,x2,y2]. */
   bbox_pdf_pts?: PdfPointBBox;
   locator?: string;
   page_width_pts?: number;
   page_height_pts?: number;
+  /** Nested live-bot outline. Parsed alongside the fields above. */
+  wall_bounds?: WallBounds;
+  room?: unknown;
+  floor?: string;
 };
 
 export type Rfi = {
@@ -166,7 +182,9 @@ export function packActions(pack: RoomPack): PackAction[] {
 }
 
 export function sheetRevisionLabel(sheet: Pick<Sheet, "id" | "rev">): string {
-  return `${sheet.id} Rev ${sheet.rev}`;
+  const rev = sheet.rev?.trim();
+  if (!rev || rev === "?") return sheet.id;
+  return `${sheet.id} Rev ${rev}`;
 }
 
 function optionalText(value: unknown): string | null {
@@ -180,19 +198,32 @@ export function stampSheet(sheet: {
   rev?: string | null;
   pdf?: string | null;
   preview?: string | null;
-  crop?: NormalizedBBox | null;
+  crop?: NormalizedBBox | string | null;
   title?: string | null;
   name?: string | null;
   discipline?: string | null;
 }): Sheet {
   const id = typeof sheet.id === "string" ? sheet.id.trim() : "";
   const rev = typeof sheet.rev === "string" ? sheet.rev.trim() : "";
+  const preview = typeof sheet.preview === "string" ? sheet.preview : null;
+  const cropUrl = typeof sheet.crop === "string" ? sheet.crop : null;
+  const pdfRaw =
+    (typeof sheet.pdf === "string" && sheet.pdf.trim()) ||
+    (typeof preview === "string" && preview.trim()) ||
+    (cropUrl && cropUrl.trim()) ||
+    "";
+  const crop =
+    sheet.crop && typeof sheet.crop === "object" ? sheet.crop : null;
+  const driveId = pdfRaw.match(/drive\.google\.com\/file\/d\/([^/?#]+)/i)?.[1];
+  const pdf = driveId
+    ? `https://drive.google.com/uc?export=download&id=${driveId}`
+    : pdfRaw;
   return {
     id: id || "UNKNOWN",
-    rev: rev || "?",
-    pdf: typeof sheet.pdf === "string" ? sheet.pdf : "",
-    preview: sheet.preview ?? null,
-    crop: sheet.crop ?? null,
+    rev,
+    pdf,
+    preview,
+    crop,
     title: optionalText(sheet.title),
     name: optionalText(sheet.name),
     discipline: optionalText(sheet.discipline),
@@ -218,7 +249,8 @@ export function primaryRevisionStamp(pack: {
       rev: pack.revision_stamp.rev,
     };
   }
-  const preferredId = pack.layout?.sheet;
+  const preferredId =
+    pack.layout?.sheet || pack.layout?.wall_bounds?.sheet_id;
   const sheet =
     (preferredId
       ? pack.sheets.find((item) => item.id === preferredId)

@@ -1,6 +1,6 @@
 import type { Sheet } from "./pack";
 
-const ARCH_ID = /^A(?:[-.\s]?\d|\d)/i;
+const ARCH_ID = /^A[-_.]?\d/i;
 const ARCH_WORD = /\barch(?:itectural)?\b/i;
 const FLOOR_PLAN = /\bfloor\s*plans?\b|\bfloorplan\b|\bflr\s*pln\b/i;
 const NOT_PLAN = /\b(elev(?:ation)?s?|sections?|details?|schedules?|rcp|reflected)\b/i;

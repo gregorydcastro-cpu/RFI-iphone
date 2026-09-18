@@ -12,6 +12,7 @@ import {
   type RoomPack,
   type Sheet,
 } from "@/lib/pack";
+import { layoutSheetId, resolveSheetPdf } from "@/lib/packNormalize";
 import { sheetKindLabel, splitPackSheets } from "@/lib/sheetOrder";
 import { ActionPanel } from "./ActionPanel";
 import { AppHeader } from "./AppHeader";
@@ -48,7 +49,11 @@ export function RoomPackViewer({
   const displayedPack = livePack ?? pack;
   const [toast, setToast] = useState<string | null>(null);
   const { primary, rest } = useMemo(
-    () => splitPackSheets(displayedPack.sheets, displayedPack.layout?.sheet),
+    () =>
+      splitPackSheets(
+        displayedPack.sheets,
+        layoutSheetId(displayedPack.layout),
+      ),
     [displayedPack],
   );
   const actions = useMemo(() => packActions(displayedPack), [displayedPack]);
@@ -114,7 +119,13 @@ export function RoomPackViewer({
             roomLabel={roomCaption(displayedPack)}
           />
           <div className="h-[min(64vw,calc(100svh-12.5rem))] min-h-[220px] border border-line md:h-[calc(100svh-12.5rem)]">
-            <SheetViewer pdfUrl={primary.pdf} highlight={primaryHighlight} />
+            <SheetViewer
+              pdfUrl={resolveSheetPdf(primary)}
+              layout={displayedPack.layout}
+              sheetId={primary.id}
+              primarySheetId={primary.id}
+              highlight={primaryHighlight}
+            />
           </div>
         </section>
 
@@ -132,7 +143,10 @@ export function RoomPackViewer({
                 />
                 <div className="h-[min(56vw,42vh)] min-h-[200px] border border-line sm:h-[42vh] md:h-[48vh]">
                   <SheetViewer
-                    pdfUrl={sheet.pdf}
+                    pdfUrl={resolveSheetPdf(sheet)}
+                    layout={displayedPack.layout}
+                    sheetId={sheet.id}
+                    primarySheetId={primary.id}
                     highlight={highlightForSheet(
                       displayedPack.layout,
                       sheet.id,
