@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  applyHttpCookies,
   cookieDomainFromHost,
   cookieWritesForDomain,
   PRODUCTION_COOKIE_DOMAIN,
   readCookieValue,
   serializeHttpCookie,
+  type HttpCookieOptions,
 } from "./auth.ts";
 import {
   createStubSession,
@@ -61,22 +63,56 @@ test("production stub cookie is httpOnly Path=/ Domain=gcfieldlog.com", () => {
     role: "puller",
   });
   const writes = stubSessionCookieWrites(session, true, PRODUCTION_COOKIE_DOMAIN);
-  assert.equal(writes.length, 2);
-  assert.equal(writes[0]?.maxAge, 0);
-  assert.equal(writes[0]?.domain, undefined);
-  assert.equal(writes[1]?.domain, PRODUCTION_COOKIE_DOMAIN);
-  assert.equal(writes[1]?.httpOnly, true);
-  assert.equal(writes[1]?.path, "/");
-  assert.equal(writes[1]?.sameSite, "lax");
-  assert.equal(writes[1]?.secure, true);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0]?.domain, PRODUCTION_COOKIE_DOMAIN);
+  assert.equal(writes[0]?.httpOnly, true);
+  assert.equal(writes[0]?.path, "/");
+  assert.equal(writes[0]?.sameSite, "lax");
+  assert.equal(writes[0]?.secure, true);
+  assert.ok((writes[0]?.maxAge ?? 0) > 0);
 
-  const header = serializeHttpCookie(writes[1]!);
+  const header = serializeHttpCookie(writes[0]!);
   assert.match(header, /Path=\//);
   assert.match(header, /HttpOnly/);
   assert.match(header, /SameSite=Lax/);
   assert.match(header, /Secure/);
   assert.match(header, /Domain=gcfieldlog.com/);
   assert.match(header, /gcfieldlog_stub_user=/);
+});
+
+test("parseStubSessionFromCookieHeader skips empty host-only leftovers", () => {
+  const session = createStubSession({
+    email: "mike@maple.example",
+    role: "puller",
+  });
+  const encoded = encodeURIComponent(serializeStubSession(session));
+  const header = `${STUB_SESSION_COOKIE}=; ${STUB_SESSION_COOKIE}=${encoded}`;
+  assert.deepEqual(parseStubSessionFromCookieHeader(header), session);
+});
+
+test("applyHttpCookies sets the live cookie via cookies.set", () => {
+  const set: HttpCookieOptions[] = [];
+  const appended: string[] = [];
+  const live: HttpCookieOptions = {
+    name: STUB_SESSION_COOKIE,
+    value: '{"email":"mike@maple.example","role":"puller","userId":"stub:x"}',
+    httpOnly: true,
+    path: "/",
+    sameSite: "lax",
+    maxAge: 60,
+    secure: true,
+    domain: PRODUCTION_COOKIE_DOMAIN,
+  };
+  applyHttpCookies(
+    {
+      cookies: { set(options) { set.push(options); } },
+      headers: { append(_name, value) { appended.push(value); } },
+    },
+    [live],
+  );
+  assert.equal(set.length, 1);
+  assert.equal(set[0], live);
+  assert.equal(appended.length, 0);
 });
 
 test("localhost stub cookie stays host-only", () => {

@@ -107,25 +107,44 @@ export function appendCookieHeaders(
   }
 }
 
+export function applyHttpCookies(
+  response: {
+    cookies: { set(options: HttpCookieOptions): unknown };
+    headers: { append(name: string, value: string): void };
+  },
+  cookies: HttpCookieOptions[],
+): void {
+  if (cookies.length === 0) return;
+  if (cookies.length === 1) {
+    response.cookies.set(cookies[0]!);
+    return;
+  }
+  const live =
+    cookies.find((cookie) => cookie.maxAge > 0 && cookie.value) ??
+    cookies[cookies.length - 1]!;
+  const extras = cookies.filter((cookie) => cookie !== live);
+  response.cookies.set(live);
+  appendCookieHeaders(response.headers, extras);
+}
+
 /**
- * Set (or clear) a cookie on both the host-only name and the production
- * Domain. Next.js `cookies().set` keys by name only, so dual-domain
- * writes use Set-Cookie headers instead.
+ * Login writes one cookie (Domain=gcfieldlog.com in production). A second
+ * host-only expire in the same response can wipe the session: Chrome's
+ * fetch jar often keeps a single Set-Cookie per name and the expire wins.
+ * Logout still expires both the host-only leftover and the Domain cookie.
  */
 export function cookieWritesForDomain(
   cookie: HttpCookieOptions,
   domain: string | undefined,
 ): HttpCookieOptions[] {
   if (!domain) return [cookie];
+  const scoped: HttpCookieOptions = { ...cookie, domain };
+  if (cookie.maxAge > 0 && cookie.value) {
+    return [scoped];
+  }
   const hostOnly: HttpCookieOptions = { ...cookie };
   delete hostOnly.domain;
-  if (cookie.maxAge > 0 && cookie.value) {
-    return [
-      { ...hostOnly, value: "", maxAge: 0 },
-      { ...cookie, domain },
-    ];
-  }
-  return [hostOnly, { ...cookie, domain }];
+  return [hostOnly, scoped];
 }
 
 export function procoreLinkedCookieOptions(

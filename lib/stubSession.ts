@@ -81,22 +81,21 @@ export function stubSessionCookieWrites(
 ): HttpCookieOptions[] {
   const cookie = stubSessionCookieOptions(session, secure, domain);
   if (!domain) return [cookie];
+  const scoped: HttpCookieOptions = { ...cookie, domain };
+  if (cookie.maxAge > 0 && cookie.value) {
+    return [scoped];
+  }
   const hostOnly: HttpCookieOptions = { ...cookie };
   delete hostOnly.domain;
-  if (cookie.maxAge > 0 && cookie.value) {
-    return [
-      { ...hostOnly, value: "", maxAge: 0 },
-      { ...cookie, domain },
-    ];
-  }
-  return [hostOnly, { ...cookie, domain }];
+  return [hostOnly, scoped];
 }
 
-function readNamedCookie(
+function readNamedCookies(
   cookieHeader: string | null | undefined,
   name: string,
-): string | undefined {
-  if (!cookieHeader) return undefined;
+): string[] {
+  if (!cookieHeader) return [];
+  const values: string[] = [];
   const parts = cookieHeader.split(";");
   for (const part of parts) {
     const trimmed = part.trim();
@@ -104,19 +103,24 @@ function readNamedCookie(
     if (eq <= 0) continue;
     const key = trimmed.slice(0, eq).trim();
     if (key !== name) continue;
+    const raw = trimmed.slice(eq + 1);
     try {
-      return decodeURIComponent(trimmed.slice(eq + 1));
+      values.push(decodeURIComponent(raw));
     } catch {
-      return trimmed.slice(eq + 1);
+      values.push(raw);
     }
   }
-  return undefined;
+  return values;
 }
 
 export function parseStubSessionFromCookieHeader(
   cookieHeader: string | null | undefined,
 ): StubSession | null {
-  return parseStubSession(readNamedCookie(cookieHeader, STUB_SESSION_COOKIE));
+  for (const raw of readNamedCookies(cookieHeader, STUB_SESSION_COOKIE)) {
+    const parsed = parseStubSession(raw);
+    if (parsed) return parsed;
+  }
+  return null;
 }
 
 export async function readStubSession(): Promise<StubSession | null> {

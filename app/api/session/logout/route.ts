@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import {
-  appendCookieHeaders,
+  applyHttpCookies,
   cookieDomainFromRequest,
   cookieSecureFromRequest,
   procoreLinkedCookieWrites,
@@ -15,17 +15,9 @@ export async function GET(request: Request) {
   const domain = cookieDomainFromRequest(request);
   const url = new URL("/", request.url);
   const response = NextResponse.redirect(url);
-  appendCookieHeaders(
-    response.headers,
-    stubSessionCookieWrites(null, secure, domain),
-  );
-  appendCookieHeaders(
-    response.headers,
-    procoreLinkedCookieWrites(false, secure, domain),
-  );
-  appendCookieHeaders(response.headers, [
-    oauthStateCookieOptions(null, secure),
-  ]);
+  applyHttpCookies(response, stubSessionCookieWrites(null, secure, domain));
+  applyHttpCookies(response, procoreLinkedCookieWrites(false, secure, domain));
+  applyHttpCookies(response, [oauthStateCookieOptions(null, secure)]);
   return response;
 }
 

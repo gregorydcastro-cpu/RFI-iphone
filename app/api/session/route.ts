@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import {
-  appendCookieHeaders,
+  applyHttpCookies,
   cookieDomainFromRequest,
   cookieSecureFromRequest,
   procoreLinkedCookieWrites,
@@ -80,13 +80,13 @@ export async function POST(request: Request) {
   });
   const secure = cookieSecureFromRequest(request);
   const domain = cookieDomainFromRequest(request);
-  appendCookieHeaders(
-    response.headers,
+  applyHttpCookies(
+    response,
     stubSessionCookieWrites(session, secure, domain),
   );
   // Puller is the intent to pull; actual Procore link comes from OAuth.
-  appendCookieHeaders(
-    response.headers,
+  applyHttpCookies(
+    response,
     procoreLinkedCookieWrites(false, secure, domain),
   );
   return response;

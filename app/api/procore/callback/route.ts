@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
-  appendCookieHeaders,
+  applyHttpCookies,
   cookieDomainFromRequest,
   cookieSecureFromRequest,
   procoreLinkedCookieWrites,
@@ -118,8 +118,8 @@ export async function GET(request: Request) {
 
   const response = redirectAccount(request, { procore: "connected" });
   response.cookies.set(oauthStateCookieOptions(null, secure));
-  appendCookieHeaders(
-    response.headers,
+  applyHttpCookies(
+    response,
     procoreLinkedCookieWrites(true, secure, cookieDomainFromRequest(request)),
   );
   return response;

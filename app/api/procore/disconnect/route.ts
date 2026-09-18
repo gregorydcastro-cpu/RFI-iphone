@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import {
-  appendCookieHeaders,
+  applyHttpCookies,
   cookieDomainFromRequest,
   cookieSecureFromRequest,
   procoreLinkedCookieWrites,
@@ -32,8 +32,8 @@ export async function POST(request: Request) {
   const accept = request.headers.get("accept") ?? "";
   if (accept.includes("application/json")) {
     const response = NextResponse.json({ ok: true, connected: false });
-    appendCookieHeaders(
-      response.headers,
+    applyHttpCookies(
+      response,
       procoreLinkedCookieWrites(false, secure, domain),
     );
     return response;
@@ -42,8 +42,8 @@ export async function POST(request: Request) {
   const url = new URL("/account", request.url);
   url.searchParams.set("procore", "disconnected");
   const response = NextResponse.redirect(url);
-  appendCookieHeaders(
-    response.headers,
+  applyHttpCookies(
+    response,
     procoreLinkedCookieWrites(false, secure, domain),
   );
   return response;
