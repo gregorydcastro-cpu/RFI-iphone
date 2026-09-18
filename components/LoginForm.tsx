@@ -1,22 +1,19 @@
-"use client";
+import type { FieldRoleName } from "@/lib/auth";
 
-import { useSearchParams } from "next/navigation";
-import { useState } from "react";
-import { safeNextPath, type FieldRoleName } from "@/lib/auth";
+type Props = {
+  next: string;
+  error: string | null;
+  defaultRole?: FieldRoleName;
+};
 
-export function LoginForm() {
-  const searchParams = useSearchParams();
-  const [role, setRole] = useState<FieldRoleName>("viewer");
-  const next = safeNextPath(searchParams.get("next"));
-  const error =
-    searchParams.get("error") === "session"
-      ? "Could not start a session"
-      : null;
-
+/** Server-rendered native form so the POST is a document request (Set-Cookie). */
+export function LoginForm({ next, error, defaultRole = "viewer" }: Props) {
   return (
     <form
       method="post"
       action="/api/session"
+      target="_self"
+      encType="application/x-www-form-urlencoded"
       className="w-full max-w-md space-y-4 border border-line bg-panel p-6 shadow-[0_0_0_1px_rgb(225_6_0_/_0.15)]"
     >
       <input type="hidden" name="next" value={next} />
@@ -65,8 +62,7 @@ export function LoginForm() {
             type="radio"
             name="role"
             value="viewer"
-            checked={role === "viewer"}
-            onChange={() => setRole("viewer")}
+            defaultChecked={defaultRole === "viewer"}
             className="mt-1"
           />
           <span>
@@ -81,8 +77,7 @@ export function LoginForm() {
             type="radio"
             name="role"
             value="puller"
-            checked={role === "puller"}
-            onChange={() => setRole("puller")}
+            defaultChecked={defaultRole === "puller"}
             className="mt-1"
           />
           <span>

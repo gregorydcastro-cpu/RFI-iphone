@@ -46,6 +46,29 @@ function asEmail(value: unknown): string | null {
   return email.includes("@") ? email : null;
 }
 
+function escapeHtmlAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+}
+
+/** 200 HTML + Set-Cookie. 303 redirects drop the cookie in Chrome's jar. */
+function loginInterstitial(nextPath: string): NextResponse {
+  const href = escapeHtmlAttr(nextPath);
+  const assign = JSON.stringify(nextPath);
+  return new NextResponse(
+    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${href}"><title>GC Field Log</title></head><body><p>Entering dashboard…</p><script>location.replace(${assign})</script></body></html>`,
+    {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+      },
+    },
+  );
+}
+
 /**
  * Stub login. Any email+role becomes a httpOnly session cookie.
  * Password is accepted by the form UI and ignored here.
@@ -85,9 +108,7 @@ export async function POST(request: Request) {
 
   if (!email) {
     if (isForm) {
-      const login = new URL("/", request.url);
-      login.searchParams.set("error", "session");
-      return NextResponse.redirect(login, 303);
+      return loginInterstitial("/?error=session");
     }
     return NextResponse.json(
       { ok: false, error: "email is required" },
@@ -99,7 +120,7 @@ export async function POST(request: Request) {
   const secure = cookieSecureFromRequest(request);
   const domain = cookieDomainFromRequest(request);
   const response = isForm
-    ? NextResponse.redirect(new URL(nextPath, request.url), 303)
+    ? loginInterstitial(nextPath)
     : NextResponse.json({
         ok: true,
         userId: session.userId,
