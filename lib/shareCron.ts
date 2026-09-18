@@ -6,12 +6,15 @@
  * Live Procore REST is not called — reserved behind SHARE_WEEKLY_PROCORE_REST
  * until issue #25 lands. PDF re-download uses the existing Drive/proxy path
  * only when that path is configured; otherwise metadata-only.
- * bumps[] is the hook for issue #31 (Notify Mike). No email/SMS here.
+ * After a persisted bump, notifyMikeOnBumps emails Mike (issue #31).
+ * Unchanged sheets do not notify. Missing mail env skips (503 code) and
+ * does not fail the refresh.
  */
 
 import { readGoogleDriveAuth } from "./driveAuth";
 import { requestIdForPinnedSheet } from "./shareCatalog";
 import { procoreRestSummary, weeklyPdfRedownloadFlag } from "./shareCronAuth";
+import { notifyMikeOnBumps, type NotifyMikeSummary } from "./notifyMike";
 import type {
   ShareRefreshBump,
   ShareRefreshError,
@@ -52,7 +55,7 @@ export type WeeklyProcoreRestSummary = ReturnType<typeof procoreRestSummary>;
 export type WeeklyShareRefreshSummary = {
   ok: boolean;
   weeklyCron: true;
-  notify: false;
+  notify: NotifyMikeSummary;
   scanned: number;
   bumped: number;
   unchanged: number;
@@ -151,11 +154,14 @@ export async function runWeeklyShareRefresh(): Promise<WeeklyShareRefreshSummary
   }
 
   const uniqueErrors = dedupeErrors(errorItems);
+  const notify = applied.load_error
+    ? await notifyMikeOnBumps([])
+    : await notifyMikeOnBumps(applied.bumps, applied.errors);
 
   return {
     ok: !applied.load_error,
     weeklyCron: true,
-    notify: false,
+    notify,
     scanned: applied.plan.scanned,
     bumped: applied.plan.bumped,
     unchanged: applied.plan.unchanged,
@@ -168,7 +174,7 @@ export async function runWeeklyShareRefresh(): Promise<WeeklyShareRefreshSummary
     procore_rest: procoreRestSummary(),
     storage: applied.storage,
     note:
-      "Weekly rev-only refresh compared pinned sheets to known pack revs (same as Refresh all) and updated last_seen_rev / last_pulled_at / sheet_revision_cache on a bump. Notify Mike is not sent (issue #31 can hook bumps[]).",
+      "Weekly rev-only refresh compared pinned sheets to known pack revs (same as Refresh all) and updated last_seen_rev / last_pulled_at / sheet_revision_cache on a bump. Mike is emailed only when a bump persists (NOTIFY_MIKE_EMAIL + Resend or Gmail). Unchanged sheets do not notify.",
   };
 }
 

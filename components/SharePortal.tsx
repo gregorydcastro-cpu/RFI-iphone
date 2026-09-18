@@ -11,6 +11,13 @@ import type { PinnedSheetDiscipline } from "@/lib/schema";
 import type { ShareFolderWithPins } from "@/lib/shareStore";
 import type { ShareRefreshItem } from "@/lib/shareRefresh";
 
+type NotifyPayload = {
+  sent?: boolean;
+  skipped?: boolean;
+  code?: string;
+  note?: string;
+};
+
 type RefreshPayload = {
   ok?: boolean;
   error?: string;
@@ -21,10 +28,20 @@ type RefreshPayload = {
   refresh?: string;
   storage?: string;
   weeklyCron?: boolean;
-  notify?: boolean;
+  notify?: NotifyPayload;
   note?: string;
   items?: ShareRefreshItem[];
 };
+
+function notifyStatusLabel(notify: NotifyPayload | undefined): string {
+  if (!notify) return "skipped (unconfigured)";
+  if (notify.sent) return "sent";
+  if (notify.code === "no_bumps") return "skipped (no bumps)";
+  if (notify.code === "notify_unconfigured") return "skipped (unconfigured)";
+  if (notify.code === "send_failed") return "failed (refresh still saved)";
+  if (notify.code === "persist_failed") return "skipped (persist failed)";
+  return notify.code ?? "skipped";
+}
 
 type Props = {
   signedIn: boolean;
@@ -220,8 +237,12 @@ export function SharePortal({
                 sheet_revision_cache
               </span>
               , and records bumps. Pack pulls still need Connect Procore.
-              Weekly cron updates every pin when rev bumps. No text or email
-              to Mike in this slice.
+              Weekly cron updates every pin when rev bumps. Mike is emailed
+              only when a bump persists (
+              <span className="font-mono text-xs text-metal">
+                NOTIFY_MIKE_EMAIL
+              </span>
+              ).
             </p>
             <p className="mt-2 font-mono text-xs text-metal">
               {folders.length} folder{folders.length === 1 ? "" : "s"} · {pinCount}{" "}
@@ -248,7 +269,7 @@ export function SharePortal({
           <p className="mt-3 text-sm text-accent-2" role="status">
             Scanned {refresh.scanned ?? 0}: {refresh.bumped ?? 0} bumped,{" "}
             {refresh.unchanged ?? 0} unchanged, {refresh.missing ?? 0} missing.
-            Notify: off.
+            Notify: {notifyStatusLabel(refresh.notify)}.
           </p>
         ) : null}
       </section>

@@ -6,8 +6,8 @@
  * sheet_revision_cache under the stub session owner_user_id.
  *
  * Manual Refresh all walks one owner's pins. Weekly cron walks every pin
- * (service role) and reuses the same compare + cache write. Do not notify
- * Mike by text/email here (issue #31).
+ * (service role) and reuses the same compare + cache write. Notify Mike
+ * after persist (issue #31) — not from this store.
  */
 
 import {
