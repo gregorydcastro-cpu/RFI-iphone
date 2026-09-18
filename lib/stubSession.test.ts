@@ -6,6 +6,7 @@ import {
   cookieWritesForDomain,
   PRODUCTION_COOKIE_DOMAIN,
   readCookieValue,
+  safeNextPath,
   serializeHttpCookie,
   type HttpCookieOptions,
 } from "./auth.ts";
@@ -17,6 +18,15 @@ import {
   STUB_SESSION_COOKIE,
   stubSessionCookieWrites,
 } from "./stubSession.ts";
+
+test("safeNextPath allows only same-origin relative paths", () => {
+  assert.equal(safeNextPath("/share"), "/share");
+  assert.equal(safeNextPath("/jobs"), "/jobs");
+  assert.equal(safeNextPath("//evil.example"), "/jobs");
+  assert.equal(safeNextPath("https://evil.example"), "/jobs");
+  assert.equal(safeNextPath("/share://x"), "/jobs");
+  assert.equal(safeNextPath(null), "/jobs");
+});
 
 test("cookieDomainFromHost covers apex and www only", () => {
   assert.equal(cookieDomainFromHost("gcfieldlog.com"), PRODUCTION_COOKIE_DOMAIN);

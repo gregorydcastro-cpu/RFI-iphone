@@ -4,6 +4,7 @@ import {
   cookieDomainFromRequest,
   cookieSecureFromRequest,
   procoreLinkedCookieWrites,
+  safeNextPath,
 } from "@/lib/auth";
 import {
   createStubSession,
@@ -48,38 +49,63 @@ function asEmail(value: unknown): string | null {
 /**
  * Stub login. Any email+role becomes a httpOnly session cookie.
  * Password is accepted by the form UI and ignored here.
+ *
+ * Browser login is a document form POST so Chrome stores Set-Cookie
+ * (fetch() often drops the jar). JSON POST remains for API/smoke.
  */
 export async function POST(request: Request) {
-  let json: SessionBody;
-  try {
-    json = (await request.json()) as SessionBody;
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: "Invalid JSON" },
-      { status: 400 },
-    );
+  const contentType = request.headers.get("content-type") ?? "";
+  const isForm =
+    contentType.includes("application/x-www-form-urlencoded") ||
+    contentType.includes("multipart/form-data");
+
+  let email: string | null = null;
+  let role = "viewer";
+  let nextPath = "/jobs";
+
+  if (isForm) {
+    const form = await request.formData();
+    email = asEmail(form.get("email"));
+    const formRole = form.get("role");
+    role = typeof formRole === "string" ? formRole : "viewer";
+    nextPath = safeNextPath(form.get("next"));
+  } else {
+    let json: SessionBody;
+    try {
+      json = (await request.json()) as SessionBody;
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: "Invalid JSON" },
+        { status: 400 },
+      );
+    }
+    email = asEmail(json.email);
+    role = typeof json.role === "string" ? json.role : "viewer";
   }
 
-  const email = asEmail(json.email);
   if (!email) {
+    if (isForm) {
+      const login = new URL("/", request.url);
+      login.searchParams.set("error", "session");
+      return NextResponse.redirect(login, 303);
+    }
     return NextResponse.json(
       { ok: false, error: "email is required" },
       { status: 400 },
     );
   }
 
-  const session = createStubSession({
-    email,
-    role: typeof json.role === "string" ? json.role : "viewer",
-  });
-  const response = NextResponse.json({
-    ok: true,
-    userId: session.userId,
-    email: session.email,
-    role: session.role,
-  });
+  const session = createStubSession({ email, role });
   const secure = cookieSecureFromRequest(request);
   const domain = cookieDomainFromRequest(request);
+  const response = isForm
+    ? NextResponse.redirect(new URL(nextPath, request.url), 303)
+    : NextResponse.json({
+        ok: true,
+        userId: session.userId,
+        email: session.email,
+        role: session.role,
+      });
   applyHttpCookies(
     response,
     stubSessionCookieWrites(session, secure, domain),

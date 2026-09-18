@@ -35,6 +35,16 @@ export type HttpCookieOptions = {
   domain?: string;
 };
 
+/** Same-origin relative path only. Blocks protocol-relative and absolute URLs. */
+export function safeNextPath(raw: unknown): string {
+  if (typeof raw !== "string") return "/jobs";
+  if (!raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) {
+    return "/jobs";
+  }
+  if (raw.includes("://")) return "/jobs";
+  return raw;
+}
+
 export function cookieSecureFromRequest(request: Request): boolean {
   const forwarded = request.headers.get("x-forwarded-proto");
   if (forwarded) return forwarded.split(",")[0]?.trim() === "https";
