@@ -310,6 +310,42 @@ CREATE POLICY room_packs_read_anon ON public.room_packs
 
 Local `npm run dev` does not need any of these variables.
 
+### Share / viewer portal (schema + API stubs)
+
+SQL: `supabase/migrations/20260918020000_share_markup_rfi_trial.sql` plus overlay FK `20260918130000_rfis_markup_overlay_fk.sql`. Types: `lib/schema.ts`. Apply those migrations on the gc-field-log Supabase project when ready; this repo does not auto-apply them.
+
+**Overlap with tables already on main — do not duplicate:**
+
+| Existing migration | Table | This PR |
+| --- | --- | --- |
+| `20260918021000_rfis.sql` (PR #12) | `public.rfis` | Left as-is. `create table` is **not** repeated here. Additive FK `rfis.markup_id` → `markup_overlays` only (`on delete set null`). Generate RFI types stay in `lib/rfiSchema.ts` (re-exports `lib/schema.ts`). |
+| `20260918120000_billing_customers.sql` (Stripe) | `public.billing_customers` | Untouched. `trial_link_tokens` is a separate share-portal token table, not Stripe billing. |
+| `20260918093000_time_tracking.sql` | `job_sites` / `workers` / `time_punches` | Untouched. |
+| `20260918010000_procore_connections.sql` | `procore_connections` | Untouched. `room_packs` RLS stays off. |
+
+**Pack viewer layout is out of scope.** Architectural floor plan first and the oversized red room highlight belong to the Field Log viewer UI work. This PR does not edit pack viewer components, Stripe Checkout, or Time geofence.
+
+These tables do **not** replace `procore_connections`, `room_packs`, `rfis`, or `billing_customers`.
+
+| Table | Purpose | Who writes |
+| --- | --- | --- |
+| `share_folders` | Owner's named pin set | Owner (or **service role** until real auth) |
+| `pinned_sheets` | Sheet in a folder + `discipline` (electrical / lighting / architectural / room) + last seen rev | Folder owner / service role |
+| `sheet_revision_cache` | Rev-only bump metadata: `project_name` + `sheet_id` + `rev` + `checked_at` | **Service role only** |
+| `markup_overlays` | Vector overlay JSON (circle / box / arrow / text) on a pack sheet | Owning `user_id` / service role |
+| `rfis` | Draft RFI (existing PR #12 table; optional `markup_id` FK added here) | Owning `user_id` / service role |
+| `trial_link_tokens` | Trial URL token + `expires_at` + `plan` `free` \| `paid` | Owning `user_id` / service role |
+
+**Weekly rev-only re-pull (future job, not this PR):** a scheduled worker reads `pinned_sheets`, compares each sheet's current Procore top revision to `sheet_revision_cache.rev`, and **re-downloads only when `rev` bumped**. On a bump it updates `sheet_revision_cache` (`rev`, `checked_at`) and `pinned_sheets.last_seen_rev` / `last_pulled_at`. Unchanged revs are metadata-only (no PDF fetch). Notify-on-bump is later.
+
+**Manual force refresh (this PR, stub only):** `POST /api/share/refresh-all` is puller-gated and returns `{ accepted: true, stub: true }`. It does **not** walk pins or call Procore yet.
+
+**RLS (restrictive defaults):** enabled on the new share/markup/trial tables. `anon` has no grants (no public share-folder read until a later PR adds an explicit public flag). `authenticated` may CRUD **own** folders, pins, markups, and trial tokens (`user_id` / folder owner = `auth.uid()::text`). `sheet_revision_cache` has no anon/authenticated policies. `rfis` RLS stays the PR #12 owner policies.
+
+**`SUPABASE_SERVICE_ROLE_KEY` is required for writes** that must succeed under the stub session (`stub:` + sha256 email does not match `auth.uid()`). Same rule as `procore_connections`. Never `NEXT_PUBLIC_` the service role key. Token lookup for expired trial links should also use the service role, not the anon key.
+
+`user_id` / `owner_user_id` are `text` so stub ids and later `auth.uid()::text` both fit. Maple Point demos only in the app; these tables are job-name strings, not a hardcoded company id.
+
 **Cloudflare Pages** can host Next.js later. Keep Vercel as the primary.
 
 ## Routes
@@ -333,6 +369,7 @@ Local `npm run dev` does not need any of these variables.
 | `/api/room-pack/refresh` | Puller POST. Bot refresh, optional `{ pack }` upsert, then latest `room_packs` row. |
 | `/api/room-pack/live` | Anyone GET/POST. Latest `room_packs` row, `no-store`. Does not pull. |
 | `/api/room-pack/status` | Alias of live read (no Drive poll, no webhook). |
+| `/api/share/refresh-all` | Puller POST stub. Mike force-refresh of pinned sheets; no Procore pull yet. |
 | `/api/time` | GET Maple Point site, workers, week punches (memory demo or service-role Supabase) |
 | `/api/time/punches` | POST worker punch (GPS + geofence) or `{ foreman: true }` missed-punch override |
 | `/api/voice/status` | GET. `{ configured }` for Grok Voice — never returns the key |
@@ -524,6 +561,8 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 - Realtime Grok speech-to-speech on site (this PR is batch STT + TTS)
 - Payroll export / ADP
 - Sent pack **snapshots** (text/email frozen copies — not in this PR)
+- Share folder / pinned-sheet UI, markup toolbar, RFI generation from markup, trial-link redeem
+- Weekly rev-only re-pull job (read `sheet_revision_cache`, download only on bump) and a real `POST /api/share/refresh-all` implementation
 - RLS policies on `public.room_packs` (table is currently wide open to the anon key)
 - HostGator DNS cutover to Vercel for gcfieldlog.com
 - No Apple / native iOS
