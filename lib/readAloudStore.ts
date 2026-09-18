@@ -102,6 +102,6 @@ export async function speakAloud(id: string, text: string): Promise<void> {
     if (token !== playToken) return;
     releaseAudio();
     const message = error instanceof Error ? error.message : "Could not read aloud.";
-    setState({ id: null, status: "idle", error: message });
+    setState({ id, status: "idle", error: message });
   }
 }
