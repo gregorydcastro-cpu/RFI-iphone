@@ -1,11 +1,29 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
+import { ProcoreConnectCard } from "@/components/ProcoreConnectCard";
 import { DEMO_JOBS } from "@/lib/jobs";
+import { getProcoreConnectionView, procoreErrorMessage } from "@/lib/procoreStatus";
+import { readStubSession } from "@/lib/stubSession";
 
-export default function JobsPage() {
+export const dynamic = "force-dynamic";
+
+type Props = {
+  searchParams: Promise<{ procore?: string; reason?: string }>;
+};
+
+export default async function JobsPage({ searchParams }: Props) {
+  const query = await searchParams;
+  const session = await readStubSession();
+  const view = await getProcoreConnectionView(session);
+  const error = query.procore === "error" ? procoreErrorMessage(query.reason) : null;
+
   return (
     <div className="flex min-h-dvh flex-col">
-      <AppHeader signedIn />
+      <AppHeader
+        signedIn
+        role={view.role}
+        procoreConnected={view.connected}
+      />
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
         <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
           Select a job
@@ -15,7 +33,25 @@ export default function JobsPage() {
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-muted">
           Fictional demo jobs only. Pick a job, then request a room pack.
+          {view.role === "puller"
+            ? view.connected
+              ? " Procore is connected for this puller."
+              : " Pullers must Connect Procore to pull with their own account."
+            : " View-only sessions do not need a Procore connection."}
         </p>
+        {query.procore === "connected" ? (
+          <p className="mt-4 text-sm text-accent-2" role="status">
+            Procore connected. Tokens are stored for this user only.
+          </p>
+        ) : null}
+        {error ? (
+          <p className="mt-4 text-sm text-cta" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <div className="mt-6 max-w-lg">
+          <ProcoreConnectCard view={view} compact />
+        </div>
         <ul className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2">
           {DEMO_JOBS.map((job) => (
             <li key={job.slug}>

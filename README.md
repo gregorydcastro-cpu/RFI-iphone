@@ -2,11 +2,11 @@
 
 Browser **dashboard for field crews** on **[gcfieldlog.com](https://gcfieldlog.com)**. Foremen and supers sign in (stub), pick a job, request a room pack, then work the sheet: zoomable floor plans, room highlight, linked RFIs, and Generate RFI / Order materials.
 
-This is the product surface. **Native iOS is paused. No Apple.** Real login and **Stripe monthly billing** are later — the login page is UI only. Wordmark is clean text: **GC Field Log** (no extra logo).
+This is the product surface. **Native iOS is paused. No Apple.** Real login and **Stripe monthly billing** are later — the login page is a **stub session** (httpOnly cookie with user id + email + role). Wordmark is clean text: **GC Field Log** (no extra logo).
 
 Host: **Vercel (primary)** with **HostGator DNS** for `gcfieldlog.com` (document only; this PR does not change DNS). Cloudflare Pages is a possible later target.
 
-No real auth, Stripe, HostGator uploads, or live Procore REST API in this MVP. Requesting a room pack **does** POST to Procore’s Room pack webhook when the two lowercase Vercel env keys are set (Production), then polls Drive/status JSON in the background. Local demo leaves those unset: no webhook, no poll, Maple Point JSON.
+No real crew auth, Stripe, HostGator uploads, or live Procore REST API in this MVP. **Pullers** can **Connect Procore** with their own Procore login (OAuth authorization code). Tokens are stored per stub user in Supabase `procore_connections`. Viewers do not need to connect. Requesting a room pack still POSTs to Procore’s Room pack webhook when the two lowercase Vercel env keys are set (Production), then polls Drive/status JSON in the background. Local demo leaves those unset: no webhook, no poll, Maple Point JSON.
 
 ## Locked nav (MVP)
 
@@ -20,8 +20,9 @@ Must match this path — nothing else in the primary nav:
 
 | Area | Behavior |
 | --- | --- |
-| Login (`/`) | Email/password form UI. Any submit goes to jobs. No session server. |
-| Jobs (`/jobs`) | Fictional jobs only (Maple Point and similar). |
+| Login (`/`) | Email/password form UI. Submit creates a stub session cookie (`gcfieldlog_stub_user`) with `userId` + email + role (`viewer` default, or `puller`). Password is not checked. |
+| Jobs (`/jobs`) | Fictional jobs only (Maple Point and similar). Pullers get **Connect Procore**. |
+| Account (`/account`) | Stub session + Procore connected / disconnected state. |
 | Room pack request | Room number (e.g. `733`) → `POST /api/room-pack` → `/pack/[requestId]`. Local demo loads Maple Point JSON immediately (no webhook, no poll). Production POSTs the selected job’s **exact name** to the Procore webhook, opens the pack page as soon as the webhook accepts, and polls `{project_slug}/{request_id}.json` until `ready`. Missing pack JSON still falls back to Maple Point while pending. |
 | Pack viewer | Zoomable plan/sheets + SVG room highlight + linked RFIs |
 | Generate RFI / Materials | Stub pages from the pack action buttons |
@@ -50,8 +51,57 @@ Production host is **gcfieldlog.com**.
 
 1. Import this GitHub repo in [Vercel](https://vercel.com/new) (framework preset: **Next.js**).
 2. Build command: `npm run build`. `postinstall` copies `pdf.worker.min.mjs`.
-3. **Env:** the Maple Point demo needs **no** secrets. Production already has the two lowercase Procore webhook keys (see below). Do not add `PROCORE_ROOM_PACK_*` aliases unless you also wire both directions. Drive API credentials are **not** on Vercel today — polling uses the status interface described below.
+3. **Env:** the Maple Point demo needs **no** secrets. Production already has the two lowercase Procore webhook keys (see below). Procore **user** OAuth (Connect Procore) uses the keys in the next section. Do not add `PROCORE_ROOM_PACK_*` aliases unless you also wire both directions. Drive API credentials are **not** on Vercel today — polling uses the status interface described below.
 4. **DNS (ops, not this repo):** at HostGator, point `gcfieldlog.com` / `www` to Vercel (A / CNAME per Vercel’s domain docs). Do not upload files to HostGator for this app.
+
+### Procore OAuth (Connect Procore)
+
+Pullers click **Connect Procore** → Procore authorize → they sign in with **their own** Procore credentials and approve → callback exchanges the code for tokens → tokens are stored **per user**. End users do **not** create a Developer Portal app.
+
+Register this redirect URI on the sandbox/developer app:
+
+`https://<host>/api/procore/callback` (local: `http://localhost:3000/api/procore/callback`)
+
+Never commit secrets. Never `NEXT_PUBLIC_` them. Never log them. Prefer lowercase on Vercel; uppercase aliases work.
+
+| Key | Role |
+| --- | --- |
+| `procore_client_id` / `PROCORE_CLIENT_ID` | OAuth client id |
+| `procore_client_secret` / `PROCORE_CLIENT_SECRET` | OAuth client secret (server only) |
+| `procore_redirect_uri` / `PROCORE_REDIRECT_URI` | Optional. Default: `{app origin}/api/procore/callback` |
+| `procore_oauth_base` / `PROCORE_OAUTH_BASE` | Optional login host. Default **`https://login-sandbox.procore.com`** (Developer Sandbox). Production / on-demand sandboxes use `https://login.procore.com`. |
+| `procore_api_base` / `PROCORE_API_BASE` | Optional API host. Default follows the login host (`https://sandbox.procore.com` or `https://api.procore.com`). |
+| `SUPABASE_URL` / `supabase_url` | Supabase project URL (same project as `room_packs`) |
+| `SUPABASE_SERVICE_ROLE_KEY` / `supabase_service_role_key` | **Required to write tokens.** The anon key must not read or write `procore_connections`. |
+
+[Procore OAuth docs](https://procore.github.io/documentation/oauth-auth-grant-flow): authorize `GET {login}/oauth/authorize`, token `POST {login}/oauth/token`. Developer Sandbox login host is `login-sandbox.procore.com` (not `login.procore.com`). Access tokens last ~1.5 hours; refresh tokens are stored for later.
+
+#### Token table (`public.procore_connections`)
+
+Applied on the gc-field-log Supabase project. SQL: `supabase/migrations/20260918010000_procore_connections.sql`.
+
+| Column | Notes |
+| --- | --- |
+| `user_id` | Primary key. Stub: `stub:` + sha256(email). Replace with `auth.uid()` when real auth lands. |
+| `email` | Stub session email |
+| `access_token` | Never returned to the browser |
+| `refresh_token` | Never returned to the browser |
+| `expires_at` | Access token expiry |
+| `company_id` | From `/rest/v1.0/companies` or `/me` when Procore returns it |
+| `procore_user_id` | From `/rest/v1.0/me` when available |
+| `created_at` / `updated_at` | Timestamps |
+
+RLS is on. `anon` has no grants. `authenticated` may **SELECT own row** only (`auth.uid()` or JWT email). Service role upserts. Status API selects non-secret columns only.
+
+If `SUPABASE_SERVICE_ROLE_KEY` is missing, Connect still redirects through Procore but the callback cannot persist tokens (`storage_unconfigured`). Do not use `SUPABASE_ANON_KEY` for this table.
+
+#### Stub user until real auth
+
+1. Login POSTs `/api/session` with email + role. Password is ignored.
+2. Server sets httpOnly `gcfieldlog_stub_user` = `{ userId, email, role }`. Same email → same `userId`.
+3. Pullers see Connect Procore on `/jobs`, the job request page, and `/account`. Viewers do not need it.
+4. After OAuth, `gcfieldlog_procore_linked=1` is set (puller linked). Sign out (`/api/session/logout`) clears the stub cookie; tokens stay in Supabase until Disconnect.
+5. Upgrade path: replace the stub cookie with real Supabase/Auth.js session and store `auth.uid()` as `user_id`. Keep RLS as written.
 
 ### Procore Room pack webhook env (Vercel)
 
@@ -95,10 +145,17 @@ Local `npm run dev` does not need any of these variables.
 
 | Path | Purpose |
 | --- | --- |
-| `/` | Stub **login** |
-| `/jobs` | Fictional **job selection** |
+| `/` | Stub **login** (creates session cookie) |
+| `/jobs` | Fictional **job selection** + Connect Procore (puller) |
 | `/jobs/[projectSlug]` | **Request room pack** (room number → `POST /api/room-pack` → `/pack/[requestId]`) |
 | `/jobs/[projectSlug]/rooms/[room]` | Alias → `/pack/{slug}-{room}` (no webhook; use the request form) |
+| `/account` | Stub account + Procore connected state |
+| `/api/session` | POST stub login |
+| `/api/session/logout` | Clear stub session |
+| `/api/procore/connect` | Redirect to Procore OAuth authorize |
+| `/api/procore/callback` | Exchange code, store per-user tokens |
+| `/api/procore/status` | Connected state (no tokens) |
+| `/api/procore/disconnect` | Revoke + delete this user’s tokens |
 | `/api/room-pack` | Server POST. Forwards to Procore when both lowercase webhook keys are set; otherwise demo. |
 | `/api/room-pack/status` | Poll `{project_slug}/{request_id}.json` (local file, public JSON URL, or Drive stub). |
 | `/pack/[requestId]` | Pack viewer. Unknown IDs fall back to local Maple Point demo |
@@ -226,7 +283,8 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 
 ## Later (not implemented)
 
-- Real crew **login**
+- Real crew **login** (replace stub session cookie with Supabase Auth / Auth.js; keep `procore_connections.user_id` = `auth.uid()`)
+- Use stored per-user Procore tokens for live pulls (this PR only **connects** and stores tokens)
 - **Stripe** monthly billing
 - **Tools** and **Time** nav
 - Drive API credentials on Vercel (status poll interface is in; `fetchDrivePackJson` is unconfigured until Field Log stores lowercase creds)

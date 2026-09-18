@@ -1,10 +1,17 @@
 import Link from "next/link";
+import type { FieldRoleName } from "@/lib/auth";
 
 type Props = {
   signedIn?: boolean;
+  role?: FieldRoleName | null;
+  procoreConnected?: boolean;
 };
 
-export function AppHeader({ signedIn = false }: Props) {
+export function AppHeader({
+  signedIn = false,
+  role = null,
+  procoreConnected = false,
+}: Props) {
   return (
     <header className="border-b border-line bg-primary">
       <div className="h-0.5 w-full bg-cta" />
@@ -30,7 +37,38 @@ export function AppHeader({ signedIn = false }: Props) {
               <span className="cursor-default text-tan/50" title="Later">
                 Time
               </span>
-              <Link className="text-accent-2 hover:text-secondary" href="/">
+              <Link
+                className="text-secondary hover:text-cta"
+                href="/account"
+              >
+                Account
+              </Link>
+              {role ? (
+                <span
+                  className={
+                    procoreConnected
+                      ? "border border-cta/40 px-1.5 py-0.5 text-[10px] text-secondary"
+                      : "border border-line px-1.5 py-0.5 text-[10px] text-tan"
+                  }
+                  title={
+                    role === "puller"
+                      ? procoreConnected
+                        ? "Procore connected — can pull"
+                        : "Puller — connect Procore to pull"
+                      : "Read-only viewer — no Procore connect required"
+                  }
+                >
+                  {role === "puller"
+                    ? procoreConnected
+                      ? "Procore connected"
+                      : "Puller"
+                    : "View only"}
+                </span>
+              ) : null}
+              <Link
+                className="text-accent-2 hover:text-secondary"
+                href="/api/session/logout"
+              >
                 Sign out
               </Link>
             </>
