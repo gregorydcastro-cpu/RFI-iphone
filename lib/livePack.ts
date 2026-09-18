@@ -71,6 +71,12 @@ export async function loadLiveRoomPack(input: {
         };
       }
     }
+    const isMapleDemo =
+      input.requestId === "maple-point" ||
+      input.requestId.startsWith("maple-point-");
+    if (!isMapleDemo) {
+      return null;
+    }
   }
 
   const fallback = await maplePointFallback(input.requestId);

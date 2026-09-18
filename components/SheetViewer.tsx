@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   TransformComponent,
   TransformWrapper,
@@ -8,26 +8,45 @@ import {
 } from "react-zoom-pan-pinch";
 import {
   bboxFromPoints,
+  highlightForSheet,
   type OversizedRoomBox,
   type ResolvedHighlight,
 } from "@/lib/highlight";
+import type { Layout } from "@/lib/pack";
 
 type Props = {
   pdfUrl: string;
-  highlight: OversizedRoomBox | ResolvedHighlight | null;
+  highlight?: OversizedRoomBox | ResolvedHighlight | null;
+  layout?: Layout;
+  sheetId?: string;
+  primarySheetId?: string;
 };
 
-export function SheetViewer({ pdfUrl, highlight }: Props) {
+export function SheetViewer({
+  pdfUrl,
+  highlight,
+  layout,
+  sheetId,
+  primarySheetId,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const transformRef = useRef<ReactZoomPanPinchContentRef>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aspect, setAspect] = useState(1224 / 792);
+  const [pagePts, setPagePts] = useState<{ width: number; height: number }>();
+
+  const overlay = useMemo(() => {
+    if (layout && sheetId) {
+      return highlightForSheet(layout, sheetId, pagePts, { primarySheetId });
+    }
+    return highlight ?? null;
+  }, [highlight, layout, pagePts, primarySheetId, sheetId]);
 
   useEffect(() => {
     let cancelled = false;
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!pdfUrl || !canvas) return;
 
     async function render() {
       setReady(false);
@@ -38,10 +57,12 @@ export function SheetViewer({ pdfUrl, highlight }: Props) {
       const doc = await loadingTask.promise;
       if (cancelled) return;
       const page = await doc.getPage(1);
+      const pageSize = page.getViewport({ scale: 1 });
       const viewport = page.getViewport({ scale: 2 });
       if (cancelled || !canvas) return;
       canvas.width = viewport.width;
       canvas.height = viewport.height;
+      setPagePts({ width: pageSize.width, height: pageSize.height });
       setAspect(viewport.width / viewport.height);
       await page.render({ canvas, viewport }).promise;
       if (!cancelled) {
@@ -50,8 +71,9 @@ export function SheetViewer({ pdfUrl, highlight }: Props) {
       }
     }
 
-    render().catch((err: unknown) => {
+    void render().catch((err: unknown) => {
       if (!cancelled) {
+        setReady(true);
         setError(err instanceof Error ? err.message : "Could not render sheet");
       }
     });
@@ -61,8 +83,10 @@ export function SheetViewer({ pdfUrl, highlight }: Props) {
     };
   }, [pdfUrl]);
 
+  const missingPdf = !pdfUrl;
+
   return (
-    <div className="relative h-full min-h-[280px] w-full overflow-hidden bg-charcoal">
+    <div className="relative h-full min-h-0 w-full overflow-hidden bg-charcoal">
       <TransformWrapper
         ref={transformRef}
         minScale={0.4}
@@ -71,7 +95,8 @@ export function SheetViewer({ pdfUrl, highlight }: Props) {
         centerOnInit
         fitOnInit
         limitToBounds={false}
-        wheel={{ step: 0.1 }}
+        wheel={{ disabled: true }}
+        pinch={{ step: 5 }}
         doubleClick={{ mode: "zoomIn", step: 0.7 }}
       >
         {({ zoomIn, zoomOut, resetTransform }) => (
@@ -88,7 +113,7 @@ export function SheetViewer({ pdfUrl, highlight }: Props) {
                   ref={canvasRef}
                   className="absolute inset-0 h-full w-full bg-white"
                 />
-                {ready && highlight ? <HighlightOverlay highlight={highlight} /> : null}
+                {overlay ? <HighlightOverlay highlight={overlay} /> : null}
               </div>
             </TransformComponent>
             <div className="absolute bottom-3 left-3 flex items-center gap-1 border border-line bg-gline-ink/90 p-1 text-paper">
@@ -120,16 +145,16 @@ export function SheetViewer({ pdfUrl, highlight }: Props) {
         )}
       </TransformWrapper>
       <p className="pointer-events-none absolute right-3 bottom-3 bg-gline-ink/80 px-2 py-1 text-[11px] text-metal">
-        Scroll to zoom · drag to pan
+        Pinch or +/− to zoom · drag to pan
       </p>
-      {!ready && !error ? (
+      {!ready && !error && !missingPdf ? (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-charcoal/80 text-sm text-muted">
           Loading sheet…
         </div>
       ) : null}
-      {error ? (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-ink px-4 text-center text-sm text-accent">
-          {error}
+      {error || missingPdf ? (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-ink/80 px-4 py-2 text-center text-xs text-accent">
+          {missingPdf ? "No PDF attached for this sheet" : error}
         </div>
       ) : null}
     </div>
