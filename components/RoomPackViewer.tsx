@@ -7,10 +7,12 @@ import {
   formatPulledAt,
   packActions,
   sheetRevisionLabel,
+  sheetTitle,
   type PackAction,
   type RoomPack,
   type Sheet,
 } from "@/lib/pack";
+import { sheetKindLabel, splitPackSheets } from "@/lib/sheetOrder";
 import { ActionPanel } from "./ActionPanel";
 import { AppHeader } from "./AppHeader";
 import { PackLiveReload } from "./PackLiveReload";
@@ -44,29 +46,29 @@ export function RoomPackViewer({
   const router = useRouter();
   const [livePack, setLivePack] = useState<RoomPack | null>(null);
   const displayedPack = livePack ?? pack;
-  const [sheetId, setSheetId] = useState(displayedPack.sheets[0]?.id ?? "");
   const [toast, setToast] = useState<string | null>(null);
-  const sheet =
-    displayedPack.sheets.find((item) => item.id === sheetId) ??
-    displayedPack.sheets[0];
+  const { primary, rest } = useMemo(
+    () => splitPackSheets(displayedPack.sheets, displayedPack.layout?.sheet),
+    [displayedPack],
+  );
   const actions = useMemo(() => packActions(displayedPack), [displayedPack]);
-  const highlight = sheet
-    ? highlightForSheet(displayedPack.layout, sheet.id)
-    : null;
   const displayedRequest = requestId ?? displayedPack.request_id;
   const showingDemo = Boolean(demoFallback) && !livePack;
+  const primaryHighlight = primary
+    ? highlightForSheet(displayedPack.layout, primary.id, undefined, {
+        primarySheetId: primary.id,
+      })
+    : null;
 
   const handleLivePack = useCallback((next: RoomPack) => {
     setLivePack(next);
-    setSheetId((current) => {
-      if (next.sheets.some((item) => item.id === current)) return current;
-      return next.sheets[0]?.id ?? "";
-    });
   }, []);
 
   function handleAction(action: PackAction) {
     if (action.id === "generate-rfi") {
-      const sheetQuery = sheet ? `?sheet=${encodeURIComponent(sheet.id)}` : "";
+      const sheetQuery = primary
+        ? `?sheet=${encodeURIComponent(primary.id)}`
+        : "";
       router.push(`/pack/${displayedRequest}/rfi/new${sheetQuery}`);
       return;
     }
@@ -80,7 +82,7 @@ export function RoomPackViewer({
     window.setTimeout(() => setToast(null), 3200);
   }
 
-  if (!sheet) {
+  if (!primary) {
     return (
       <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted">
         This pack has no sheets.
@@ -93,7 +95,7 @@ export function RoomPackViewer({
       <AppHeader signedIn procoreLinked={procoreLinked} />
       <PackContextBar
         pack={displayedPack}
-        sheet={sheet}
+        sheet={primary}
         requestId={displayedRequest}
         requestedRoom={requestedRoom}
         requestedJobName={requestedJobName}
@@ -104,29 +106,64 @@ export function RoomPackViewer({
         procoreLinked={procoreLinked}
         onPack={handleLivePack}
       />
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <section className="flex h-[48vh] min-h-[240px] flex-col sm:h-[52vh] lg:h-auto lg:w-[60%]">
-          <SheetTabs
-            sheets={displayedPack.sheets}
-            activeId={sheet.id}
-            onSelect={setSheetId}
+      <JumpNav primary={primary} rest={rest} />
+      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-4 sm:px-4 lg:px-6">
+        <section id="floor-plan" className="flex flex-col">
+          <SheetSectionHeader
+            kind={sheetKindLabel(primary, true)}
+            sheet={primary}
+            roomLabel={roomCaption(displayedPack)}
           />
-          <div className="min-h-0 flex-1">
-            <SheetViewer pdfUrl={sheet.pdf} highlight={highlight} />
+          <div className="h-[calc(100svh-13.5rem)] min-h-[260px] border border-line sm:h-[calc(100svh-12.5rem)]">
+            <SheetViewer pdfUrl={primary.pdf} highlight={primaryHighlight} />
           </div>
         </section>
-        <aside className="flex flex-col gap-5 overflow-y-auto border-t border-line bg-panel p-4 lg:w-[40%] lg:max-w-xl lg:border-t-0 lg:border-l">
-          <ActionPanel
-            actions={actions}
-            onAction={handleAction}
-            procoreLinked={procoreLinked}
-          />
+
+        {rest.length > 0 ? (
+          <section id="detail-sheets" className="grid gap-4 md:grid-cols-2">
+            {rest.map((sheet) => (
+              <article
+                key={`${sheet.id}-${sheet.rev}`}
+                id={`sheet-${cssId(sheet.id)}`}
+                className="flex flex-col"
+              >
+                <SheetSectionHeader
+                  kind={sheetKindLabel(sheet, false)}
+                  sheet={sheet}
+                />
+                <div className="h-[42vh] min-h-[220px] border border-line sm:h-[48vh]">
+                  <SheetViewer
+                    pdfUrl={sheet.pdf}
+                    highlight={highlightForSheet(
+                      displayedPack.layout,
+                      sheet.id,
+                      undefined,
+                      { primarySheetId: primary.id },
+                    )}
+                  />
+                </div>
+              </article>
+            ))}
+          </section>
+        ) : null}
+
+        <div
+          id="rfis"
+          className="grid gap-5 border-t border-line pt-4 pb-8 lg:grid-cols-2"
+        >
           <RfiList rfis={displayedPack.rfis} />
-          <TakeoffCounts
-            takeoff={displayedPack.takeoff}
-            roomName={displayedPack.room.name}
-          />
-        </aside>
+          <div className="flex flex-col gap-5">
+            <ActionPanel
+              actions={actions}
+              onAction={handleAction}
+              procoreLinked={procoreLinked}
+            />
+            <TakeoffCounts
+              takeoff={displayedPack.takeoff}
+              roomName={displayedPack.room.name}
+            />
+          </div>
+        </div>
       </div>
       {toast ? (
         <div
@@ -136,6 +173,101 @@ export function RoomPackViewer({
           {toast}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function roomCaption(pack: RoomPack): string {
+  const number = pack.room.number ? ` ${pack.room.number}` : "";
+  return `Room${number} · ${pack.room.name} · red box around walls`;
+}
+
+function cssId(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
+function JumpNav({
+  primary,
+  rest,
+}: {
+  primary: Sheet;
+  rest: Sheet[];
+}) {
+  return (
+    <nav
+      aria-label="Pack sections"
+      className="flex gap-1 overflow-x-auto border-b border-line bg-primary px-2 py-1 sm:px-4"
+    >
+      <JumpLink targetId="floor-plan" label="Floor plan" hint={sheetRevisionLabel(primary)} />
+      {rest.map((sheet) => (
+        <JumpLink
+          key={sheet.id}
+          targetId={`sheet-${cssId(sheet.id)}`}
+          label={sheetKindLabel(sheet, false)}
+          hint={sheetRevisionLabel(sheet)}
+        />
+      ))}
+      <JumpLink targetId="rfis" label="RFIs" />
+    </nav>
+  );
+}
+
+function JumpLink({
+  targetId,
+  label,
+  hint,
+}: {
+  targetId: string;
+  label: string;
+  hint?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        document.getElementById(targetId)?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        })
+      }
+      className="shrink-0 px-3 py-1.5 text-xs font-semibold tracking-wide whitespace-nowrap text-accent-2 uppercase hover:bg-panel-2 hover:text-secondary"
+    >
+      {label}
+      {hint ? (
+        <span className="ml-1 font-mono font-normal normal-case text-tan">
+          {hint}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+function SheetSectionHeader({
+  kind,
+  sheet,
+  roomLabel,
+}: {
+  kind: string;
+  sheet: Sheet;
+  roomLabel?: string;
+}) {
+  const title = sheetTitle(sheet);
+  return (
+    <div className="flex flex-wrap items-end justify-between gap-2 border-b border-line bg-charcoal px-3 py-2">
+      <div className="min-w-0">
+        <p className="font-display text-[10px] tracking-[0.18em] text-muted uppercase">
+          {kind}
+        </p>
+        <h2 className="truncate text-sm font-medium text-paper sm:text-base">
+          {title === sheet.id ? sheetRevisionLabel(sheet) : title}
+        </h2>
+        {roomLabel ? (
+          <p className="text-[11px] text-tan">{roomLabel}</p>
+        ) : null}
+      </div>
+      <span className="border border-cta/50 bg-panel-2 px-2 py-1 font-mono text-xs">
+        {sheetRevisionLabel(sheet)}
+      </span>
     </div>
   );
 }
@@ -231,37 +363,5 @@ function StatusBadge({ status }: { status: string }) {
     <span className={`border px-2 py-1 font-medium capitalize ${tone}`}>
       {status}
     </span>
-  );
-}
-
-function SheetTabs({
-  sheets,
-  activeId,
-  onSelect,
-}: {
-  sheets: Sheet[];
-  activeId: string;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <div className="flex gap-1 overflow-x-auto border-b border-line bg-charcoal px-2 py-1">
-      {sheets.map((sheet) => {
-        const active = sheet.id === activeId;
-        return (
-          <button
-            key={`${sheet.id}-${sheet.rev}`}
-            type="button"
-            onClick={() => onSelect(sheet.id)}
-            className={`px-3 py-1.5 text-xs font-semibold tracking-wide whitespace-nowrap uppercase ${
-              active
-                ? "bg-cta text-secondary"
-                : "text-accent-2 hover:bg-panel-2 hover:text-secondary"
-            }`}
-          >
-            {sheetRevisionLabel(sheet)}
-          </button>
-        );
-      })}
-    </div>
   );
 }

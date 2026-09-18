@@ -28,7 +28,7 @@ Must match this path — nothing else in the primary nav:
 | Jobs (`/jobs`) | Fictional jobs only (Maple Point and similar). Header shows **Puller** / **Procore connected** / **View only**. Pullers get **Connect Procore**. |
 | Account (`/account`) | Stub session + Procore connected / disconnected state. |
 | Room pack request | Room number (e.g. `733`). **Connected puller:** `POST /api/room-pack` asks the Procore bot to refresh, then opens `/pack/[requestId]`. **Viewer / unconnected puller:** **Open pack** only — no pull. Local demo (no `SUPABASE_URL`) loads Maple Point JSON. |
-| Pack viewer | Zoomable plan/sheets + SVG room highlight + linked RFIs. Top bar and sheet tabs show **drawing number + revision letter** from the pull (`E-101 Rev A`) plus `pulled_at`. Website open always re-reads `room_packs` (no-store). Connected pullers also trigger a bot refresh; viewers cannot. |
+| Pack viewer | Field stack on `/pack/[requestId]`: **architectural floor plan first** (A-*, architectural, floor plan heuristics; else current primary), oversized crimson SVG box around the room walls, then remaining sheets (power, lighting, …) and linked RFIs. Drawing number + revision letter stamps stay on the top bar and each sheet (`A-101 Rev A`). Website open always re-reads `room_packs` (no-store). Connected pullers also trigger a bot refresh; viewers cannot. |
 | Generate RFI / Materials | Stub pages from the pack action buttons |
 | Takeoff counts | Optional placeholder panel |
 
@@ -245,17 +245,18 @@ Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `
   "status": "ready",
   "request_id": "maple-point",
   "pulled_at": "2026-09-18T00:15:17.277Z",
-  "revision_stamp": { "drawing": "E-101", "rev": "A" },
+  "revision_stamp": { "drawing": "A-101", "rev": "A" },
   "project": { "id": "proj-maple-point", "name": "Maple Point Medical Office", "slug": "maple-point" },
   "room": { "id": "room-e101", "name": "Electrical Closet 101", "number": "101" },
   "sheets": [
-    { "id": "E-101", "rev": "A", "pdf": "/packs/maple-point-e101.pdf", "preview": null, "crop": null }
+    { "id": "A-101", "rev": "A", "title": "Level 1 Floor Plan", "discipline": "architectural", "pdf": "/packs/maple-point-a101.pdf", "preview": null, "crop": null },
+    { "id": "E-101", "rev": "A", "title": "Level 1 Power Plan", "discipline": "electrical", "pdf": "/packs/maple-point-e101.pdf", "preview": null, "crop": null }
   ],
   "rfis": [
     { "id": "r1", "number": "RFI-001", "title": "Panel feed clarification", "status": "open", "url": null }
   ],
   "layout": {
-    "sheet": "E-101",
+    "sheet": "A-101",
     "type": "polygon",
     "locator": "Electrical Closet 101",
     "points": [[0.2, 0.2], [0.5, 0.2], [0.5, 0.5], [0.2, 0.5]],
@@ -265,7 +266,7 @@ Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `
     "page_height_pts": 792
   },
   "actions": [
-    { "id": "generate-rfi", "label": "Generate RFI", "href": "/pack/maple-point/rfi/new?sheet=E-101", "enabled": false },
+    { "id": "generate-rfi", "label": "Generate RFI", "href": "/pack/maple-point/rfi/new?sheet=A-101", "enabled": false },
     { "id": "order-materials", "label": "Order materials", "href": "/pack/maple-point/materials", "enabled": false }
   ]
 }
@@ -279,7 +280,7 @@ Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `
 | `project` | `{ id, name, slug }` |
 | `room` | `{ id, name, number? }` |
 | `request_id` | URL key for `/pack/[requestId]` |
-| `sheets[]` | `{ id, rev, pdf, preview?, crop? }` — `id` is the drawing number, `rev` is the revision letter. Tabs and the top bar show `E-101 Rev A`. |
+| `sheets[]` | `{ id, rev, pdf, preview?, crop?, title?, name?, discipline? }` — `id` is the drawing number, `rev` is the revision letter. Viewer stamps show `A-101 Rev A`. Optional `title` / `discipline` help pick the architectural floor plan first. |
 | `rfis[]` | `{ id, number, title, status, url? }` |
 | `layout` | Room locator on the sheet |
 | `actions` | Dashboard buttons |
@@ -287,11 +288,13 @@ Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `
 
 ### Highlight (coordinate-ready)
 
-The overlay is an **SVG** on the sheet (crimson stroke), not a baked highlight image.
+The overlay is an **SVG** on the sheet (racing-red CTA `#e10600` stroke), not a baked highlight image. The crew sees an **oversized box around the room walls** (~8% pad, min ~1.2% of the page) so the target room is easy to find on a phone or iPad.
 
-1. `layout.points` — polygon in **normalized 0–1** coordinates, origin **top-left**.
-2. Else `layout.bbox` `{x,y,w,h}` — same space.
-3. Else Procore `layout.bbox_pdf_pts` — PDF user-space, origin **bottom-left**, mapped with `page_width_pts` / `page_height_pts`.
+1. `layout.points` — wall outline in **normalized 0–1** coordinates, origin **top-left**. Converted to a padded axis-aligned box.
+2. Else `layout.bbox` `{x,y,w,h}` — same space, then padded outward.
+3. Else Procore `layout.bbox_pdf_pts` — PDF user-space, origin **bottom-left**, mapped with `page_width_pts` / `page_height_pts`, then padded.
+
+The viewer prefers a clean **architectural floor plan** as the first (highlighted) page when the pack includes one (`A-*` id, `architectural` discipline, or “floor plan” in the title). Remaining detailed sheets stack below. If none match, the current primary (`layout.sheet`, else `sheets[0]`) stays first.
 
 ### Optional takeoff counts (placeholder)
 
@@ -336,5 +339,6 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 Sample files:
 
 - `public/packs/maple-point.json`
+- `public/packs/maple-point-a101.pdf`
 - `public/packs/maple-point-e101.pdf`
 - `public/packs/maple-point-e102.pdf`

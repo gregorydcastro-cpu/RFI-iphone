@@ -3,7 +3,7 @@
   "status": "ready",
   "request_id": "maple-point",
   "pulled_at": "2026-09-18T00:15:17.277Z",
-  "revision_stamp": { "drawing": "E-101", "rev": "A" },
+  "revision_stamp": { "drawing": "A-101", "rev": "A" },
   "project": {
     "id": "proj-maple-point",
     "name": "Maple Point Medical Office",
@@ -18,13 +18,26 @@
     {
       "id": "E-101",
       "rev": "A",
+      "title": "Level 1 Power Plan",
+      "discipline": "electrical",
       "pdf": "/packs/maple-point-e101.pdf",
+      "preview": null,
+      "crop": null
+    },
+    {
+      "id": "A-101",
+      "rev": "A",
+      "title": "Level 1 Floor Plan",
+      "discipline": "architectural",
+      "pdf": "/packs/maple-point-a101.pdf",
       "preview": null,
       "crop": null
     },
     {
       "id": "E-102",
       "rev": "A",
+      "title": "Level 1 Lighting Plan",
+      "discipline": "electrical",
       "pdf": "/packs/maple-point-e102.pdf",
       "preview": null,
       "crop": null
@@ -54,7 +67,7 @@
     }
   ],
   "layout": {
-    "sheet": "E-101",
+    "sheet": "A-101",
     "type": "polygon",
     "locator": "Electrical Closet 101",
     "points": [
@@ -72,7 +85,7 @@
     {
       "id": "generate-rfi",
       "label": "Generate RFI",
-      "href": "/pack/maple-point/rfi/new?sheet=E-101",
+      "href": "/pack/maple-point/rfi/new?sheet=A-101",
       "enabled": false,
       "note": "Draft to foreman — not a Procore submit"
     },
@@ -87,7 +100,7 @@
   "takeoff": {
     "project": "Maple Point Medical Office",
     "scope": "Electrical Closet 101 — Level 1 power",
-    "sheets": ["E-101"],
+    "sheets": ["A-101", "E-101"],
     "units": "each",
     "by_room": [
       {
