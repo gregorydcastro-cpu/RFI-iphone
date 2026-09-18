@@ -16,7 +16,7 @@ No real crew auth, Stripe, HostGator uploads, or live Procore REST API in this M
 
 Must match this path — nothing else in the primary nav:
 
-**Login (stub) → Jobs → Room pack request → Pack viewer (plan + sheets + RFIs) → Generate RFI / Materials stubs. Time is wired (`/time`).**
+**Login (stub) → Jobs → Room pack request → Pack viewer (plan + sheets + RFIs) → Generate RFI / Order materials (drafts to foreman). Time is wired (`/time`).**
 
 **Tools** stays later (not wired). No Apple.
 
@@ -29,7 +29,7 @@ Must match this path — nothing else in the primary nav:
 | Account (`/account`) | Stub session + Procore connected / disconnected state. |
 | Room pack request | Room number (e.g. `733`). **Connected puller:** `POST /api/room-pack` asks the Procore bot to refresh, then opens `/pack/[requestId]`. **Viewer / unconnected puller:** **Open pack** only — no pull. Local demo (no `SUPABASE_URL`) loads Maple Point JSON. |
 | Pack viewer | Field stack on `/pack/[requestId]`: **architectural floor plan first** (A-*, architectural, floor plan heuristics; else current primary), oversized crimson SVG box around the room walls, then remaining sheets (power, lighting, …) and linked RFIs. Drawing number + revision letter stamps stay on the top bar and each sheet (`A-101 Rev A`). Website open always re-reads `room_packs` (no-store). Connected pullers also trigger a bot refresh; viewers cannot. |
-| Generate RFI / Materials | Stub pages from the pack action buttons |
+| Generate RFI / Materials | Live pack actions. Drafts go to foreman Pat Nguyen — not a Procore submit. |
 | Time (`/time`) | Maple Point **worker punch** (GPS geofence) and **foreman crew week**. Field log only — not payroll/ADP. |
 | Takeoff counts | Optional placeholder panel |
 
@@ -203,8 +203,8 @@ Local `npm run dev` does not need any of these variables.
 | `/api/time` | GET Maple Point site, workers, week punches (memory demo or service-role Supabase) |
 | `/api/time/punches` | POST worker punch (GPS + geofence) or `{ foreman: true }` missed-punch override |
 | `/pack/[requestId]` | Live pack viewer. Re-reads on open. Unknown IDs fall back to local Maple Point demo |
-| `/pack/[requestId]/rfi/new?sheet=` | Stub Generate RFI form |
-| `/pack/[requestId]/materials` | Stub Order materials |
+| `/pack/[requestId]/rfi/new?sheet=` | Generate RFI — draft to foreman (not Procore) |
+| `/pack/[requestId]/materials` | Order materials — draft to foreman (not Procore) |
 
 ## Time tab (Maple Point geofence)
 
@@ -298,8 +298,8 @@ Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `
     "page_height_pts": 792
   },
   "actions": [
-    { "id": "generate-rfi", "label": "Generate RFI", "href": "/pack/maple-point/rfi/new?sheet=A-101", "enabled": false },
-    { "id": "order-materials", "label": "Order materials", "href": "/pack/maple-point/materials", "enabled": false }
+    { "id": "generate-rfi", "label": "Generate RFI", "href": "/pack/maple-point/rfi/new?sheet=A-101", "enabled": true },
+    { "id": "order-materials", "label": "Order materials", "href": "/pack/maple-point/materials", "enabled": true }
   ]
 }
 ```
