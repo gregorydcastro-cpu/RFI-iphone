@@ -1,12 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  fieldRoleFromRedeemedEmail,
-  mintInvite,
-  previewInvite,
-  redeemInvite,
-} from "./inviteStore.ts";
-import {
   asInviteTokenRow,
   canMintInvites,
   canWriteFieldLog,
@@ -19,8 +13,11 @@ import {
   isInviteRole,
   isViewerReadOnly,
   isWritePackAction,
+  latestRedeemedInviteRole,
+  mintInviteRecord,
   normalizeInviteeEmail,
   parseInviteRole,
+  redeemInviteRecord,
   resolveInviteExpiry,
 } from "./invites.ts";
 
@@ -101,82 +98,62 @@ test("generateInviteToken is URL-safe and unique", () => {
   assert.equal(invitePublicUrl("https://www.gcfieldlog.com/", a), `https://www.gcfieldlog.com/invite/${a}`);
 });
 
-test("memory mint + redeem is single-use and binds invitee email", async () => {
-  const memory = [];
-  const minted = await mintInvite(
-    {
-      role: "viewer",
-      createdBy: "stub:foreman",
-      inviteeEmail: "  Alex.Rivera@Crew.Example ",
-    },
-    {
-      memory,
-      supabase: null,
-      now: () => new Date("2026-09-18T12:00:00.000Z"),
-      randomToken: () => "tok_viewer_demo",
-    },
-  );
-  assert.ok(minted);
-  assert.equal(minted.storage, "memory");
-  assert.equal(minted.row.role, "viewer");
-  assert.equal(minted.row.invitee_email, "alex.rivera@crew.example");
-  assert.equal(minted.row.used_at, null);
-
-  const preview = await previewInvite("tok_viewer_demo", {
-    memory,
-    supabase: null,
-    now: () => new Date("2026-09-18T12:00:00.000Z"),
+test("memory mint + redeem is single-use and binds invitee email", () => {
+  const minted = mintInviteRecord({
+    role: "viewer",
+    createdBy: "stub:foreman",
+    inviteeEmail: "  Alex.Rivera@Crew.Example ",
+    token: "tok_viewer_demo",
+    now: new Date("2026-09-18T12:00:00.000Z"),
   });
-  assert.equal(preview.status, "valid");
-  assert.equal(preview.role, "viewer");
+  assert.equal(minted.role, "viewer");
+  assert.equal(minted.invitee_email, "alex.rivera@crew.example");
+  assert.equal(minted.used_at, null);
+  assert.equal(inviteStatus(minted, new Date("2026-09-18T12:00:00.000Z")), "valid");
 
-  const mismatch = await redeemInvite(
-    { token: "tok_viewer_demo", email: "other@crew.example" },
-    { memory, supabase: null, now: () => new Date("2026-09-18T12:05:00.000Z") },
-  );
+  const mismatch = redeemInviteRecord({
+    row: minted,
+    email: "other@crew.example",
+    now: new Date("2026-09-18T12:05:00.000Z"),
+  });
   assert.equal(mismatch.ok, false);
   if (!mismatch.ok) assert.equal(mismatch.status, "email_mismatch");
 
-  const redeemed = await redeemInvite(
-    { token: "tok_viewer_demo", email: "alex.rivera@crew.example" },
-    { memory, supabase: null, now: () => new Date("2026-09-18T12:05:00.000Z") },
-  );
+  const redeemed = redeemInviteRecord({
+    row: minted,
+    email: "alex.rivera@crew.example",
+    now: new Date("2026-09-18T12:05:00.000Z"),
+  });
   assert.equal(redeemed.ok, true);
   if (redeemed.ok) {
     assert.equal(redeemed.row.used_at, "2026-09-18T12:05:00.000Z");
     assert.equal(fieldRoleFromInviteRole(redeemed.row.role), "viewer");
+    const again = redeemInviteRecord({
+      row: redeemed.row,
+      email: "alex.rivera@crew.example",
+      now: new Date("2026-09-18T12:06:00.000Z"),
+    });
+    assert.equal(again.ok, false);
+    if (!again.ok) assert.equal(again.status, "used");
+    assert.equal(
+      latestRedeemedInviteRole([redeemed.row], "alex.rivera@crew.example"),
+      "viewer",
+    );
   }
-
-  const again = await redeemInvite(
-    { token: "tok_viewer_demo", email: "alex.rivera@crew.example" },
-    { memory, supabase: null, now: () => new Date("2026-09-18T12:06:00.000Z") },
-  );
-  assert.equal(again.ok, false);
-  if (!again.ok) assert.equal(again.status, "used");
-
-  const locked = await fieldRoleFromRedeemedEmail("alex.rivera@crew.example", {
-    memory,
-    supabase: null,
-  });
-  assert.equal(locked, "viewer");
 });
 
-test("full invite redeems to puller session role", async () => {
-  const memory = [];
-  const minted = await mintInvite(
-    { role: "full", createdBy: "stub:foreman" },
-    {
-      memory,
-      supabase: null,
-      now: () => new Date("2026-09-18T12:00:00.000Z"),
-      randomToken: () => "tok_full_demo",
-    },
-  );
-  assert.ok(minted);
-  const redeemed = await redeemInvite(
-    { token: "tok_full_demo", email: "jordan.hale@crew.example" },
-    { memory, supabase: null, now: () => new Date("2026-09-18T12:01:00.000Z") },
-  );
+test("full invite redeems to puller session role", () => {
+  const minted = mintInviteRecord({
+    role: "full",
+    createdBy: "stub:foreman",
+    token: "tok_full_demo",
+    now: new Date("2026-09-18T12:00:00.000Z"),
+  });
+  const redeemed = redeemInviteRecord({
+    row: minted,
+    email: "jordan.hale@crew.example",
+    now: new Date("2026-09-18T12:01:00.000Z"),
+  });
   assert.equal(redeemed.ok, true);
   if (redeemed.ok) {
     assert.equal(redeemed.row.invitee_email, "jordan.hale@crew.example");
@@ -184,27 +161,23 @@ test("full invite redeems to puller session role", async () => {
   }
 });
 
-test("expired invite cannot redeem", async () => {
-  const memory = [];
-  await mintInvite(
-    { role: "full", createdBy: "stub:foreman", expiresInMs: 1_000 },
-    {
-      memory,
-      supabase: null,
-      now: () => new Date("2026-09-18T12:00:00.000Z"),
-      randomToken: () => "tok_expired",
-    },
-  );
-  const preview = await previewInvite("tok_expired", {
-    memory,
-    supabase: null,
-    now: () => new Date("2026-09-18T12:00:02.000Z"),
+test("expired invite cannot redeem", () => {
+  const minted = mintInviteRecord({
+    role: "full",
+    createdBy: "stub:foreman",
+    expiresAt: "2026-09-18T12:00:01.000Z",
+    token: "tok_expired",
+    now: new Date("2026-09-18T12:00:00.000Z"),
   });
-  assert.equal(preview.status, "expired");
-  const redeemed = await redeemInvite(
-    { token: "tok_expired", email: "casey.brooks@crew.example" },
-    { memory, supabase: null, now: () => new Date("2026-09-18T12:00:02.000Z") },
+  assert.equal(
+    inviteStatus(minted, new Date("2026-09-18T12:00:02.000Z")),
+    "expired",
   );
+  const redeemed = redeemInviteRecord({
+    row: minted,
+    email: "casey.brooks@crew.example",
+    now: new Date("2026-09-18T12:00:02.000Z"),
+  });
   assert.equal(redeemed.ok, false);
   if (!redeemed.ok) assert.equal(redeemed.status, "expired");
 });

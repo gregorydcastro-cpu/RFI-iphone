@@ -14,11 +14,11 @@ import {
 import { INVITE_TOKENS_TABLE, type InviteTokenRow } from "./schema";
 import {
   asInviteTokenRow,
-  emailsMatch,
-  generateInviteToken,
   inviteStatus,
+  latestRedeemedInviteRole,
+  mintInviteRecord,
   normalizeInviteeEmail,
-  resolveInviteExpiry,
+  redeemInviteRecord,
   type InviteRole,
   type InviteStatus,
 } from "./invites";
@@ -59,13 +59,6 @@ export function resetInviteMemoryForTests(): void {
   g.__gcFieldLogInvites = [];
 }
 
-function newId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, "0").slice(-12)}`;
-}
-
 export function isInviteTableWriteConfigured(): boolean {
   return getSupabaseServiceConfig() !== null;
 }
@@ -81,21 +74,15 @@ export async function mintInvite(
   deps: InviteStoreDeps = {},
 ): Promise<{ row: InviteTokenRow; storage: InviteStorage } | null> {
   const now = deps.now?.() ?? new Date();
-  const token = (deps.randomToken ?? generateInviteToken)();
-  const row: InviteTokenRow = {
-    id: newId(),
-    token,
+  const row = mintInviteRecord({
     role: input.role,
-    created_by: input.createdBy,
-    invitee_email: normalizeInviteeEmail(input.inviteeEmail),
-    expires_at: resolveInviteExpiry({
-      expiresAt: input.expiresAt,
-      expiresInMs: input.expiresInMs,
-      now,
-    }).toISOString(),
-    used_at: null,
-    created_at: now.toISOString(),
-  };
+    createdBy: input.createdBy,
+    inviteeEmail: input.inviteeEmail,
+    expiresAt: input.expiresAt,
+    expiresInMs: input.expiresInMs,
+    token: deps.randomToken?.(),
+    now,
+  });
 
   const config = deps.supabase === undefined ? getSupabaseServiceConfig() : deps.supabase;
   if (!config) {
@@ -135,26 +122,16 @@ export async function redeemInvite(
   | { ok: false; status: InviteStatus | "email_mismatch"; storage: InviteStorage }
 > {
   const now = deps.now?.() ?? new Date();
-  const email = normalizeInviteeEmail(input.email);
-  if (!email) {
-    return { ok: false, status: "not_found", storage: "memory" };
-  }
-
   const found = await findInviteByToken(input.token, deps);
-  const status = inviteStatus(found.row, now);
-  if (!found.row || status !== "valid") {
-    return { ok: false, status, storage: found.storage };
+  const redeemed = redeemInviteRecord({
+    row: found.row,
+    email: input.email,
+    now,
+  });
+  if (!redeemed.ok) {
+    return { ok: false, status: redeemed.status, storage: found.storage };
   }
-  if (!emailsMatch(found.row.invitee_email, email)) {
-    return { ok: false, status: "email_mismatch", storage: found.storage };
-  }
-
-  const usedAt = now.toISOString();
-  const next: InviteTokenRow = {
-    ...found.row,
-    invitee_email: found.row.invitee_email ?? email,
-    used_at: usedAt,
-  };
+  const next = redeemed.row;
 
   const config = deps.supabase === undefined ? getSupabaseServiceConfig() : deps.supabase;
   if (!config) {
@@ -178,13 +155,8 @@ export async function fieldRoleFromRedeemedEmail(
   email: string,
   deps: InviteStoreDeps = {},
 ): Promise<InviteRole | null> {
-  const normalized = normalizeInviteeEmail(email);
-  if (!normalized) return null;
-  const rows = await listUsedInvitesByEmail(normalized, deps);
-  const latest = rows
-    .filter((row) => row.used_at)
-    .sort((a, b) => Date.parse(b.used_at ?? "") - Date.parse(a.used_at ?? ""))[0];
-  return latest?.role ?? null;
+  const rows = await listUsedInvitesByEmail(email, deps);
+  return latestRedeemedInviteRole(rows, email);
 }
 
 async function findInviteByToken(
@@ -207,12 +179,14 @@ async function listUsedInvitesByEmail(
   email: string,
   deps: InviteStoreDeps,
 ): Promise<InviteTokenRow[]> {
+  const normalized = normalizeInviteeEmail(email);
+  if (!normalized) return [];
   const config = deps.supabase === undefined ? getSupabaseServiceConfig() : deps.supabase;
   if (!config) {
     const memory = deps.memory ?? inviteMemory();
-    return memory.filter((row) => row.invitee_email === email && row.used_at);
+    return memory.filter((row) => row.invitee_email === normalized && row.used_at);
   }
-  return selectUsedInvitesByEmail(config, email, deps.fetch);
+  return selectUsedInvitesByEmail(config, normalized, deps.fetch);
 }
 
 async function insertInviteRow(

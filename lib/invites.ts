@@ -9,11 +9,9 @@
 
 import { randomBytes } from "node:crypto";
 import type { FieldRoleName } from "./auth";
-import {
-  INVITE_ROLES,
-  type InviteRole,
-  type InviteTokenRow,
-} from "./schema";
+import type { InviteRole, InviteTokenRow } from "./schema";
+
+export const INVITE_ROLES: readonly InviteRole[] = ["viewer", "full"];
 
 export type { InviteRole, InviteTokenRow };
 
@@ -159,4 +157,74 @@ export function emailsMatch(
   return Boolean(left && right && left === right);
 }
 
-export { INVITE_ROLES };
+function newInviteId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, "0").slice(-12)}`;
+}
+
+export function mintInviteRecord(input: {
+  role: InviteRole;
+  createdBy: string;
+  inviteeEmail?: string | null;
+  expiresAt?: string | null;
+  expiresInMs?: number | null;
+  token?: string;
+  now?: Date;
+}): InviteTokenRow {
+  const now = input.now ?? new Date();
+  return {
+    id: newInviteId(),
+    token: input.token ?? generateInviteToken(),
+    role: input.role,
+    created_by: input.createdBy,
+    invitee_email: normalizeInviteeEmail(input.inviteeEmail),
+    expires_at: resolveInviteExpiry({
+      expiresAt: input.expiresAt,
+      expiresInMs: input.expiresInMs,
+      now,
+    }).toISOString(),
+    used_at: null,
+    created_at: now.toISOString(),
+  };
+}
+
+export function redeemInviteRecord(input: {
+  row: InviteTokenRow | null;
+  email: string;
+  now?: Date;
+}):
+  | { ok: true; row: InviteTokenRow }
+  | { ok: false; status: InviteStatus | "email_mismatch" } {
+  const now = input.now ?? new Date();
+  const email = normalizeInviteeEmail(input.email);
+  if (!email) return { ok: false, status: "not_found" };
+  const status = inviteStatus(input.row, now);
+  if (!input.row || status !== "valid") {
+    return { ok: false, status };
+  }
+  if (!emailsMatch(input.row.invitee_email, email)) {
+    return { ok: false, status: "email_mismatch" };
+  }
+  return {
+    ok: true,
+    row: {
+      ...input.row,
+      invitee_email: input.row.invitee_email ?? email,
+      used_at: now.toISOString(),
+    },
+  };
+}
+
+export function latestRedeemedInviteRole(
+  rows: InviteTokenRow[],
+  email: string,
+): InviteRole | null {
+  const normalized = normalizeInviteeEmail(email);
+  if (!normalized) return null;
+  const latest = rows
+    .filter((row) => row.invitee_email === normalized && row.used_at)
+    .sort((a, b) => Date.parse(b.used_at ?? "") - Date.parse(a.used_at ?? ""))[0];
+  return latest?.role ?? null;
+}
