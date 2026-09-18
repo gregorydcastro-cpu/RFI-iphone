@@ -26,10 +26,7 @@ export function TimeBoard({ initial, sessionEmail, signedIn }: Props) {
   const [workerId, setWorkerId] = useState(() =>
     defaultWorkerId(initial.workers, sessionEmail),
   );
-  const [pin, setPin] = useState(() => {
-    const id = defaultWorkerId(initial.workers, sessionEmail);
-    return initial.workers.find((row) => row.id === id)?.pin_stub ?? "";
-  });
+  const [pin, setPin] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
@@ -99,7 +96,7 @@ export function TimeBoard({ initial, sessionEmail, signedIn }: Props) {
 
   function pickWorker(id: string) {
     setWorkerId(id);
-    setPin(snapshot.workers.find((row) => row.id === id)?.pin_stub ?? "");
+    setPin("");
   }
 
   function pickMode(next: Mode) {
@@ -117,9 +114,10 @@ export function TimeBoard({ initial, sessionEmail, signedIn }: Props) {
         Crew time
       </h1>
       <p className="mt-2 max-w-2xl text-sm text-muted">
-        Replace paper timesheets on this job. Worker punch is GPS-locked to the
-        site fence. Foreman week is the crew log — not ADP, not payroll.
-        Storage: {snapshot.storage === "supabase" ? "Supabase" : "demo memory"}.
+        Replace paper timesheets on this job. Punch in/out on a phone; on a
+        shared iPad switch workers with PIN. GPS fence from this job’s site
+        config. Foreman week is the crew log — not ADP, not payroll. Storage:{" "}
+        {snapshot.storage === "supabase" ? "Supabase" : "demo memory"}.
       </p>
       {!signedIn ? (
         <p className="mt-3 text-sm text-accent-2">

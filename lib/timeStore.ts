@@ -12,7 +12,9 @@ import {
   isOnClock,
   isPunchType,
   mondayOfWeek,
+  TIME_JOB_SLUG,
   todayYmd,
+  type JobSite,
   type PunchType,
   type TimePunch,
   type TimeSnapshot,
@@ -60,13 +62,21 @@ function newId(): string {
   return `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, "0").slice(-12)}`;
 }
 
-export async function getTimeSnapshot(weekStartRaw?: string): Promise<TimeSnapshot> {
+export async function getTimeSnapshot(
+  weekStartRaw?: string,
+  jobSlug = TIME_JOB_SLUG,
+): Promise<TimeSnapshot | null> {
   const weekStart = mondayOfWeek(weekStartRaw || todayYmd());
+  const slug = jobSlug.trim().toLowerCase() || TIME_JOB_SLUG;
+  const isDemo = slug === TIME_JOB_SLUG;
   const configured = isTimeTableWriteConfigured();
+
   if (configured) {
-    const site = await fetchJobSiteBySlug();
+    const site = await fetchJobSiteBySlug(slug);
     if (site) {
       const workers = (await fetchWorkersForSite(site.id)) ?? [];
+      const roster =
+        workers.length > 0 ? workers : isDemo ? MAPLE_POINT_WORKERS : [];
       const window = weekWindow(weekStart);
       const remote = await fetchPunchesInRange({
         jobSiteId: site.id,
@@ -76,7 +86,7 @@ export async function getTimeSnapshot(weekStartRaw?: string): Promise<TimeSnapsh
       if (remote) {
         return {
           site,
-          workers: workers.length ? workers : MAPLE_POINT_WORKERS,
+          workers: roster,
           punches: remote,
           weekStart,
           storage: "supabase",
@@ -84,12 +94,15 @@ export async function getTimeSnapshot(weekStartRaw?: string): Promise<TimeSnapsh
       }
       return {
         site,
-        workers: workers.length ? workers : MAPLE_POINT_WORKERS,
-        punches: memoryPunchesForWeek(weekStart),
+        workers: roster,
+        punches: isDemo ? memoryPunchesForWeek(weekStart) : [],
         weekStart,
         storage: "unavailable",
       };
     }
+    if (!isDemo) return null;
+  } else if (!isDemo) {
+    return null;
   }
 
   return {
@@ -135,6 +148,9 @@ export async function createWorkerPunch(
   input: WorkerPunchInput,
 ): Promise<PunchWriteResult> {
   const snapshot = await getTimeSnapshot();
+  if (!snapshot) {
+    return { ok: false, status: 404, error: "Unknown job site", code: "unknown_job" };
+  }
   const worker = snapshot.workers.find((row) => row.id === input.workerId);
   if (!worker) {
     return { ok: false, status: 400, error: "Unknown worker", code: "unknown_worker" };
@@ -233,6 +249,9 @@ export async function saveForemanPunch(
   input: ForemanPunchInput,
 ): Promise<PunchWriteResult | { ok: true; punches: TimePunch[]; storage: TimeStorage }> {
   const snapshot = await getTimeSnapshot();
+  if (!snapshot) {
+    return { ok: false, status: 404, error: "Unknown job site", code: "unknown_job" };
+  }
   const worker = snapshot.workers.find((row) => row.id === input.workerId);
   if (!worker) {
     return { ok: false, status: 400, error: "Unknown worker", code: "unknown_worker" };
@@ -274,7 +293,7 @@ export async function saveForemanPunch(
 
   const firstType: PunchType = wantsPair ? "in" : (input.punchType ?? "in");
   const first = await persistPunch(
-    makeForemanPunch(snapshot.site.id, worker, firstType, punchedAt, input.note),
+    makeForemanPunch(snapshot.site, worker, firstType, punchedAt, input.note),
     snapshot.storage,
   );
   if (!first.ok) return first;
@@ -282,7 +301,7 @@ export async function saveForemanPunch(
 
   if (wantsPair) {
     const out = await persistPunch(
-      makeForemanPunch(snapshot.site.id, worker, "out", pairOutAt, input.note),
+      makeForemanPunch(snapshot.site, worker, "out", pairOutAt, input.note),
       snapshot.storage,
     );
     if (!out.ok) return out;
@@ -293,7 +312,7 @@ export async function saveForemanPunch(
 }
 
 function makeForemanPunch(
-  jobSiteId: string,
+  site: JobSite,
   worker: Worker,
   punchType: PunchType,
   atMs: number,
@@ -302,12 +321,12 @@ function makeForemanPunch(
   const now = new Date().toISOString();
   return {
     id: newId(),
-    job_site_id: jobSiteId,
+    job_site_id: site.id,
     worker_id: worker.id,
     punch_type: punchType,
     punched_at: new Date(atMs).toISOString(),
-    lat: MAPLE_POINT_SITE.lat,
-    lng: MAPLE_POINT_SITE.lng,
+    lat: site.lat,
+    lng: site.lng,
     accuracy_m: null,
     distance_m: 0,
     geofence_ok: true,

@@ -52,8 +52,9 @@ export function WorkerPunchCard({
   const onClock = worker ? isOnClock(punches, worker.id) : false;
   const last = worker ? latestPunch(punches, worker.id) : null;
   const inside = geo.status === "ready" && geo.inside;
-  const punchInLocked = !inside || onClock || pending || !signedIn;
-  const punchOutLocked = !onClock || pending || !signedIn;
+  const pinOk = Boolean(worker && pin === worker.pin_stub);
+  const punchInLocked = !inside || onClock || pending || !signedIn || !pinOk;
+  const punchOutLocked = !onClock || pending || !signedIn || !pinOk;
   const [hint, setHint] = useState<string | null>(null);
 
   async function punch(type: "in" | "out") {
@@ -68,6 +69,10 @@ export function WorkerPunchCard({
       );
       return;
     }
+    if (worker && pin !== worker.pin_stub) {
+      setHint(`Enter PIN to switch to ${worker.name}.`);
+      return;
+    }
     const coords =
       geo.status === "ready"
         ? { lat: geo.lat, lng: geo.lng, accuracy_m: geo.accuracy_m }
@@ -79,8 +84,8 @@ export function WorkerPunchCard({
     <section className="max-w-lg border border-line bg-panel p-5">
       <h2 className="font-display text-xl tracking-wide text-paper">Punch</h2>
       <p className="mt-1 text-sm text-muted">
-        Phone or job iPad. PIN is a demo stub, not real auth. Punch-in only
-        inside the Maple Point fence.
+        Phone: punch in/out. Shared iPad: pick a worker, enter PIN, punch.
+        Punch-in stays locked until GPS is inside this job’s fence.
       </p>
 
       <label className="mt-4 block text-xs font-semibold tracking-wide text-muted uppercase">
@@ -99,7 +104,7 @@ export function WorkerPunchCard({
       </label>
 
       <label className="mt-3 block text-xs font-semibold tracking-wide text-muted uppercase">
-        PIN stub
+        PIN to switch worker
         <input
           className={inputClass}
           inputMode="numeric"
@@ -112,7 +117,7 @@ export function WorkerPunchCard({
       </label>
       {worker ? (
         <p className="mt-1 font-mono text-xs text-metal">
-          Demo PIN {worker.pin_stub}
+          Maple Point demo PIN {worker.pin_stub} (stub, not real auth)
         </p>
       ) : null}
 
@@ -132,6 +137,11 @@ export function WorkerPunchCard({
       {!signedIn ? (
         <p className="mt-3 text-sm text-cta" role="status">
           Sign in (stub) before punching.
+        </p>
+      ) : null}
+      {signedIn && worker && !pinOk ? (
+        <p className="mt-3 text-sm text-muted">
+          Enter PIN to switch to {worker.name}.
         </p>
       ) : null}
       {hint ? (
@@ -164,7 +174,7 @@ export function WorkerPunchCard({
         </button>
       </div>
       <p className="mt-3 text-xs text-muted">
-        Punch-out can run off-site. Scan paper sign-in is later — not in this
+        Punch-out can run off-site. Paper sign-in scan is phase 2 — not this
         slice.
       </p>
       <button
@@ -173,7 +183,7 @@ export function WorkerPunchCard({
         className="mt-2 w-full cursor-not-allowed border border-dashed border-line px-3 py-2 text-xs tracking-wide text-tan uppercase"
         title="Later"
       >
-        Scan paper sign-in (later)
+        Scan paper sign-in (phase 2)
       </button>
     </section>
   );

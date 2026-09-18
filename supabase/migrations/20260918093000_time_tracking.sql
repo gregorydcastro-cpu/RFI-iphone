@@ -1,5 +1,6 @@
 -- Maple Point Medical Office time tracking (geofence + crew punches).
--- Fictional demo job only. Never Brown / Rossi / real customer names.
+-- Fictional demo job only. Never Danoff / Brown / Rossi / real customer names.
+-- Live jobs load lat/lng/radius_m from this job_sites row (config), not a name map.
 -- Stub-session writes need SUPABASE_SERVICE_ROLE_KEY (same rule as rfis).
 -- Local demo does not need this table — lib/timeStore.ts seeds memory.
 

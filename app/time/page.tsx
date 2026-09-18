@@ -4,6 +4,7 @@ import { getProcoreConnectionView } from "@/lib/procoreStatus";
 import { readStubSession } from "@/lib/stubSession";
 import { getTimeSnapshot } from "@/lib/timeStore";
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export default async function TimePage() {
   const session = await readStubSession();
   const view = await getProcoreConnectionView(session);
   const snapshot = await getTimeSnapshot();
+  if (!snapshot) notFound();
 
   return (
     <div className="flex min-h-dvh flex-col">

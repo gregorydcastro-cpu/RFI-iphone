@@ -23,6 +23,7 @@ export type JobSite = {
   slug: string;
   name: string;
   city: string;
+  /** Fence center from job_sites config (demo seed or live row). Never look up by job name. */
   lat: number;
   lng: number;
   radius_m: number;

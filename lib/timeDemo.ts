@@ -1,6 +1,7 @@
 /**
  * Maple Point Medical Office demo roster + one sample week.
- * Fictional only — never Brown, Rossi, or real customer jobs.
+ * Fictional UI demo only — never Danoff, Brown, Rossi, or real customer jobs.
+ * Live jobs must load lat/lng/radius_m from job_sites (config), not this file.
  */
 
 import { DEMO_FOREMAN, DEMO_JOURNEYMAN } from "./crew";

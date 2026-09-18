@@ -219,20 +219,20 @@ Field log only. No new env keys for the local demo. If `SUPABASE_URL` + `SUPABAS
 | Radius | `300` m |
 | Timezone | `America/Chicago` |
 
-These coords are a public downtown Cedar Falls point so GPS can be tested. The job is fictional.
+These coords are a public downtown Cedar Falls point so GPS can be tested. The job is fictional. Live jobs must **not** hardcode a name → lat/lng map; they read `job_sites.lat` / `lng` / `radius_m` (config row keyed by slug). Maple Point is the only fictional UI demo. Danoff is live field tests only — never put Danoff, Brown, or Rossi in demo UI or seed copy.
 
-**Worker punch:** select a crew member, enter the demo PIN shown on the card, allow location. Punch-in stays **locked** without GPS permission and when the device is outside 300 m. Punch-out may run off-site. The API rejects off-site punch-in (`403`, `code: "off_site"`) unless `{ "foreman": true }`.
+**Worker punch:** phone is punch in/out. Shared iPad: pick a worker, enter PIN to switch, then punch. Punch-in stays **locked** without GPS permission, without the matching PIN, and when the device is outside the site radius. Punch-out may run off-site. The API rejects off-site punch-in (`403`, `code: "off_site"`) unless `{ "foreman": true }`.
 
 **Foreman crew week:** Mon–Sun grid for the Maple Point roster (Pat Nguyen foreman, Alex Rivera, Jordan Hale, Sam Ortiz, Casey Brooks, Riley Chen). Seed week is **Mon 14 Sep 2026**. Daily hours over 8 and week totals over 40 render in racing red (`#e10600`). Click a cell, then save a missed in/out pair or correct a time.
 
 **Manual check (no live GPS needed for the lock + grid):**
 
 1. Sign in (stub) → header **Time**.
-2. Leave location denied, or keep the real GPS (you are not in Cedar Falls): **Punch in** stays disabled and the banner says not on site / no location.
-3. Chrome DevTools → More tools → Sensors → Location override `42.5349`, `-92.4450` → Retry location → Punch in unlocks (enter the demo PIN).
-4. Open **Crew week**: Alex Thursday `10.0` and week total over 40 are red; Jordan Friday is empty — add a missed punch as foreman.
+2. Leave PIN blank, or deny location / keep real GPS (not in Cedar Falls): **Punch in** stays disabled.
+3. Enter the Maple Point demo PIN shown on the card. Chrome DevTools → More tools → Sensors → Location override `42.5349`, `-92.4450` → Retry location → Punch in unlocks.
+4. Open **Crew week**: Alex Thursday `10.0` and Riley week `41.5` are red; Jordan Friday is empty on a fresh seed — add a missed punch as foreman.
 
-Do not use Brown, Rossi, or real customer job names. Paper scan is a disabled stub. Not payroll.
+Paper scan is phase 2 (disabled stub). Not payroll. No Stripe changes.
 
 ## Theme tokens (GlineRacing, adapted)
 
@@ -368,7 +368,7 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 
 ## Demo data
 
-**Maple Point / fictional only.** Do not use Brown, Rossi, ILSB, EL107, Danoff, Suffolk, or any real client names or production sheet IDs.
+**Maple Point / fictional only.** Do not use Brown, Rossi, ILSB, EL107, Danoff, Suffolk, or any real client names or production sheet IDs. Danoff is live field tests only — never in demo UI or seed copy.
 
 Sample files:
 
