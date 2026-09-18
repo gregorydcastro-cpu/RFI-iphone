@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { stampRoomPack, type RoomPack } from "./pack";
+import { coerceRoomPack } from "./packNormalize";
 import { isRoomPackShape } from "./packStatus";
 
 const PACK_ID = /^[a-zA-Z0-9._-]+$/;
@@ -13,7 +14,8 @@ export async function loadPack(requestId: string): Promise<RoomPack | null> {
     const raw = await readFile(file, "utf8");
     const parsed: unknown = JSON.parse(raw);
     if (!isRoomPackShape(parsed)) return null;
-    return stampRoomPack(parsed);
+    const coerced = coerceRoomPack(parsed);
+    return coerced ? stampRoomPack(coerced) : stampRoomPack(parsed);
   } catch {
     return null;
   }

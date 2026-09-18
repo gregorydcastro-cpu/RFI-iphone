@@ -155,16 +155,17 @@ Inspected live. Columns:
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | uuid | PK, `gen_random_uuid()` |
-| `project_name` | text | Job name (e.g. Maple Point Medical Office) |
-| `pack_data` | jsonb | Full `gcpullog.room_pack.v1` document (`request_id`, `room`, `sheets[].id` / `sheets[].rev`, `pulled_at`, …) |
+| `project_name` | text | Job name from the bot / row |
+| `pack_data` | jsonb | Full `gcpullog.room_pack.v1` document (`request_id`, `room`, `sheets[].id` / `sheets[].rev`, `layout` / `wall_bounds`, `pulled_at`, …) |
 | `created_at` | timestamptz | Row insert time |
-| `request_id` | text | Lookup key (nullable; backfilled from `pack_data`) |
-| `room` | text | Room number/name (nullable; backfilled) |
-| `pulled_at` | timestamptz | Pull timestamp (nullable; backfilled) |
 
-Website read: latest row for `request_id` (then job slug), else `project_name` + `room`, else `project_name`, ordered by `pulled_at desc nulls last, created_at desc`.
+`request_id`, `room`, and `pulled_at` live **inside** `pack_data` (not table columns). The website looks up `pack_data->>request_id` with `cache: "no-store"`, then `project_name`, newest `created_at` first.
 
-Bot/ops persist: insert a new row (history) via `POST /api/room-pack/refresh` with `{ pack }` as a puller, or write `room_packs` directly. Latest row is source of truth.
+Bot/ops persist: insert `{ project_name, pack_data }` (history). Latest row is source of truth.
+
+Production verification pack: open **`/pack/sample-arch-bounds-733`** when `SUPABASE_URL` + `SUPABASE_ANON_KEY` are set. That row is a live Procore-bot field test (architectural sheet `A207_N` first, `layout.wall_bounds` in pdf points). Do not copy that job’s name into Maple Point demo files or marketing copy.
+
+Local `npm run dev` without Supabase env cannot load that request id — it is not a Maple Point JSON file.
 
 **RLS is currently disabled** on `public.room_packs`, so the anon key can read and write every row. Enabling RLS without a SELECT policy would block the website. Suggested later (do not apply blindly):
 
@@ -290,11 +291,33 @@ Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `
 
 The overlay is an **SVG** on the sheet (racing-red CTA `#e10600` stroke), not a baked highlight image. The crew sees an **oversized box around the room walls** (~8% pad, min ~1.2% of the page) so the target room is easy to find on a phone or iPad.
 
-1. `layout.points` — wall outline in **normalized 0–1** coordinates, origin **top-left**. Converted to a padded axis-aligned box.
-2. Else `layout.bbox` `{x,y,w,h}` — same space, then padded outward.
-3. Else Procore `layout.bbox_pdf_pts` — PDF user-space, origin **bottom-left**, mapped with `page_width_pts` / `page_height_pts`, then padded.
+Resolution order:
 
-The viewer prefers a clean **architectural floor plan** as the first (highlighted) page when the pack includes one (`A-*` id, `architectural` discipline, or “floor plan” in the title). Remaining detailed sheets stack below. If none match, the current primary (`layout.sheet`, else `sheets[0]`) stays first.
+1. `layout.wall_bounds` (live bot) — `polygon` and/or `bbox` `[x1,y1,x2,y2]`, `units: "pdf_pts"` (PDF user-space, origin **bottom-left**) or normalized 0–1. `sheet_id` tags the architectural sheet. Page size comes from the rendered PDF when possible, else `page_width_pts` / `page_height_pts`.
+2. Else `layout.points` — wall outline in **normalized 0–1** coordinates, origin **top-left**.
+3. Else `layout.bbox` `{x,y,w,h}` — same normalized space.
+4. Else `layout.bbox_pdf_pts` — object `{x,y,w,h}` **or** `[x1,y1,x2,y2]`, origin **bottom-left**, mapped with page size, then padded outward.
+
+Example live `wall_bounds` (fictional coords shown in Maple Point demo; production bot may send the same shape):
+
+```json
+"layout": {
+  "sheet": "A-101",
+  "wall_bounds": {
+    "sheet_id": "A-101",
+    "units": "pdf_pts",
+    "bbox": [244.8, 396, 612, 633.6],
+    "polygon": [[244.8, 396], [612, 396], [612, 633.6], [244.8, 633.6]]
+  },
+  "bbox_pdf_pts": [244.8, 396, 612, 633.6],
+  "page_width_pts": 1224,
+  "page_height_pts": 792
+}
+```
+
+`project` and `room` may be strings (`"733"`) or objects; the website coerces them. Empty `sheets[].rev` shows the drawing number without `Rev ?`.
+
+The viewer prefers a clean **architectural floor plan** as the first (highlighted) page when the pack includes one (`A*` id such as `A207_N` / `A-101`, `architectural` discipline, or “floor plan” in the title). Remaining detailed sheets stack below. If none match, the current primary (`layout.sheet` / `wall_bounds.sheet_id`, else `sheets[0]`) stays first.
 
 ### Optional takeoff counts (placeholder)
 

@@ -11,10 +11,8 @@
  */
 
 import { readEnv } from "./env";
-import {
-  stampRoomPack,
-  type RoomPack,
-} from "./pack";
+import { stampRoomPack, type RoomPack } from "./pack";
+import { coerceRoomPack } from "./packNormalize";
 import { isRoomPackShape } from "./packStatus";
 
 export const SUPABASE_URL_KEY = "SUPABASE_URL" as const;
@@ -32,9 +30,9 @@ export type RoomPackRow = {
   project_name: string;
   pack_data: unknown;
   created_at: string;
-  request_id: string | null;
-  room: string | null;
-  pulled_at: string | null;
+  request_id?: string | null;
+  room?: string | null;
+  pulled_at?: string | null;
 };
 
 export function getSupabaseConfig(): SupabaseConfig | null {
@@ -87,16 +85,18 @@ async function restFetch(
 }
 
 export function roomPackFromRow(row: RoomPackRow): RoomPack | null {
-  if (!isRoomPackShape(row.pack_data)) return null;
+  const coerced = coerceRoomPack(row.pack_data);
+  const pack = coerced ?? (isRoomPackShape(row.pack_data) ? row.pack_data : null);
+  if (!pack) return null;
   const pulledAt =
-    typeof row.pack_data.pulled_at === "string" && row.pack_data.pulled_at
-      ? row.pack_data.pulled_at
+    typeof pack.pulled_at === "string" && pack.pulled_at
+      ? pack.pulled_at
       : (row.pulled_at ?? undefined);
-  return stampRoomPack(row.pack_data, { pulledAt });
+  return stampRoomPack(pack, { pulledAt });
 }
 
 function selectQuery(): string {
-  return "id,project_name,request_id,room,pulled_at,created_at,pack_data";
+  return "id,project_name,pack_data,created_at";
 }
 
 async function fetchRows(
@@ -105,7 +105,7 @@ async function fetchRows(
 ): Promise<RoomPackRow[] | null> {
   filters.set("select", selectQuery());
   if (!filters.has("order")) {
-    filters.set("order", "pulled_at.desc.nullslast,created_at.desc");
+    filters.set("order", "created_at.desc");
   }
   if (!filters.has("limit")) filters.set("limit", "5");
 
@@ -126,9 +126,28 @@ async function fetchRows(
   return json as RoomPackRow[];
 }
 
+function packDataRequestId(row: RoomPackRow): string | undefined {
+  if (!row.pack_data || typeof row.pack_data !== "object") return undefined;
+  const id = (row.pack_data as { request_id?: unknown }).request_id;
+  return typeof id === "string" ? id : undefined;
+}
+
+function packDataRoom(row: RoomPackRow): string | undefined {
+  if (!row.pack_data || typeof row.pack_data !== "object") return undefined;
+  const room = (row.pack_data as { room?: unknown }).room;
+  if (typeof room === "string" || typeof room === "number") return String(room);
+  if (room && typeof room === "object") {
+    const rec = room as { number?: unknown; name?: unknown; id?: unknown };
+    if (typeof rec.number === "string") return rec.number;
+    if (typeof rec.id === "string") return rec.id;
+  }
+  return undefined;
+}
+
 /**
  * Latest `public.room_packs` row for this request/room/project.
- * Never served from Next/fetch cache.
+ * Live table columns are id, project_name, pack_data, created_at.
+ * request_id / room / pulled_at live inside pack_data.
  */
 export async function fetchLatestRoomPackRow(input: {
   requestId: string;
@@ -146,7 +165,7 @@ export async function fetchLatestRoomPackRow(input: {
 
   for (const requestId of requestIds) {
     const filters = new URLSearchParams();
-    filters.set("request_id", `eq.${requestId}`);
+    filters.set("pack_data->>request_id", `eq.${requestId}`);
     filters.set("limit", "1");
     const rows = await fetchRows(config, filters);
     if (rows && rows[0]) return rows[0];
@@ -155,10 +174,10 @@ export async function fetchLatestRoomPackRow(input: {
   if (input.projectName && input.room) {
     const filters = new URLSearchParams();
     filters.set("project_name", `eq.${input.projectName}`);
-    filters.set("room", `eq.${input.room}`);
-    filters.set("limit", "1");
+    filters.set("limit", "5");
     const rows = await fetchRows(config, filters);
-    if (rows && rows[0]) return rows[0];
+    const match = rows?.find((row) => packDataRoom(row) === input.room);
+    if (match) return match;
   }
 
   if (input.projectName) {
@@ -169,7 +188,14 @@ export async function fetchLatestRoomPackRow(input: {
     if (rows && rows[0]) return rows[0];
   }
 
-  return null;
+  const recent = new URLSearchParams();
+  recent.set("limit", "25");
+  const rows = await fetchRows(config, recent);
+  const found = rows?.find((row) => {
+    const id = packDataRequestId(row);
+    return id === input.requestId || Boolean(input.projectSlug && id === input.projectSlug);
+  });
+  return found ?? null;
 }
 
 /**
@@ -188,10 +214,12 @@ export async function insertRoomPackRow(input: {
   const stamped = stampRoomPack(input.pack, { touch: true });
   const body = {
     project_name: input.projectName,
-    request_id: input.requestId,
-    room: input.room,
-    pulled_at: stamped.pulled_at ?? null,
-    pack_data: stamped,
+    pack_data: {
+      ...stamped,
+      request_id: input.requestId,
+      room: stamped.room,
+      pulled_at: stamped.pulled_at ?? null,
+    },
   };
 
   const response = await restFetch(config, "room_packs", {

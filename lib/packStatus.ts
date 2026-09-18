@@ -17,13 +17,18 @@ export function requestBelongsToJob(
 
 export function isRoomPackShape(value: unknown): value is RoomPack {
   if (!value || typeof value !== "object") return false;
-  const pack = value as Partial<RoomPack>;
-  if (typeof pack.status !== "string") return false;
-  if (!pack.project || typeof pack.project !== "object") return false;
-  if (typeof pack.project.name !== "string") return false;
-  if (!pack.room || typeof pack.room !== "object") return false;
+  const pack = value as Partial<RoomPack> & {
+    project?: unknown;
+    room?: unknown;
+  };
   if (!Array.isArray(pack.sheets)) return false;
-  return true;
+  const projectOk =
+    typeof pack.project === "string" ||
+    (pack.project &&
+      typeof pack.project === "object" &&
+      typeof (pack.project as { name?: unknown }).name === "string");
+  const roomOk = pack.room !== undefined && pack.room !== null;
+  return Boolean(projectOk && roomOk);
 }
 
 export function packMatchesJob(
