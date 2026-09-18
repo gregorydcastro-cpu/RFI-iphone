@@ -29,7 +29,7 @@ test("notify email helpers stay Maple Point / fictional only", () => {
   assert.match(blob, /Maple Point Medical Office/);
 });
 
-test("parseNotifyEmailInput trims, lowercases, and rejects junk", () => {
+test("parseNotifyEmailInput trims and lowercases on write", () => {
   assert.deepEqual(parseNotifyEmailInput("  Pat@Crew.Example  "), {
     ok: true,
     notify_email: "pat@crew.example",

@@ -115,7 +115,7 @@ export type NotifyRecipientPlan = {
   skipped: NotifyRecipientSkip[];
 };
 
-/** Trim + basic email validation. Blank becomes null (clear / skip). */
+/** Trim + lowercase on write (Field Log schema lock). Blank → null. */
 export function parseNotifyEmailInput(
   value: string | null | undefined,
 ): NotifyEmailParse {

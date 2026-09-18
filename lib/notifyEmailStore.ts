@@ -72,7 +72,9 @@ export async function fetchNotifyEmailsByUserIds(
 
 /**
  * PATCH notify_email on an existing procore_connections row.
- * Field Log settings save should call this. Does not insert tokens.
+ * Persists trim + lowercase via parseNotifyEmailInput. Field Log
+ * (bc-1b9bb48c) owns the Account settings UI + save API — this is
+ * the shared write helper only. Does not insert tokens.
  */
 export async function upsertNotifyEmail(
   userId: string,

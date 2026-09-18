@@ -108,9 +108,9 @@ That is the default `redirect_uri`. Preview hosts will not match unless `PROCORE
 
 1. Set **`RESEND_API_KEY`** once on Vercel (shared sender). Optional **`NOTIFY_FROM_EMAIL`** / **`RESEND_FROM`**. Never `NEXT_PUBLIC_`.
 2. Apply `supabase/migrations/20260918230000_procore_connections_notify_email.sql` so `procore_connections.notify_email` exists.
-3. Each GC / foreman / puller sets their own notify address in **Account / settings** (GC Field Log UI — not this notify PR). Persist goes to that column via `upsertNotifyEmail` in `lib/notifyEmailStore.ts` (trim + basic validation in `lib/notifyEmail.ts`). A `procore_connections` row must already exist (Connect Procore).
+3. Each GC / foreman / puller sets their own notify address in **Account / settings** (GC Field Log agent **bc-1b9bb48c** owns that UI + save API — not this notify PR). Persist trims + lowercases via `parseNotifyEmailInput` / `upsertNotifyEmail`. A `procore_connections` row must already exist (Connect Procore).
 4. Weekly cron and Refresh all email **that owner's** `notify_email` after a real persisted bump. Unchanged sheets do not notify. Null/empty `notify_email` is a structured skip (`notify_email_unset`) and does **not** fail the refresh.
-5. **`NOTIFY_MIKE_EMAIL` is retired as the primary destination.** Keep it only as a temporary fallback for owners who have not set `notify_email` yet; remove it once everyone has a row.
+5. **`NOTIFY_MIKE_EMAIL` is a legacy fallback only.** Prefer `procore_connections.notify_email`. Remove the env once every owner has a row.
 
 This app does **not** use the Vercel AI SDK / AI Gateway for voice. The key is forwarded only from Next.js API routes. Do not put the key in the client bundle.
 
