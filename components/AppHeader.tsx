@@ -58,17 +58,16 @@ export function AppHeader({
               >
                 Time
               </Link>
-              <Link
+              <a
                 className={
                   shareActive
                     ? "text-cta"
                     : "text-secondary hover:text-cta"
                 }
                 href="/share"
-                prefetch={false}
               >
                 Share
-              </Link>
+              </a>
               <Link
                 className={
                   accountActive
