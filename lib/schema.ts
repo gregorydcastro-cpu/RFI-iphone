@@ -77,7 +77,8 @@ export type PinnedSheetRow = {
 /**
  * Last-seen Procore rev for bump detection. Service-role writes.
  * Future weekly job reads this table and re-downloads a sheet only when
- * `rev` changed; not implemented in this PR.
+ * `rev` changed. Manual `POST /api/share/refresh-all` walks pins against
+ * this cache. Weekly cron is not implemented in this PR.
  */
 export type SheetRevisionCacheRow = {
   id: string;

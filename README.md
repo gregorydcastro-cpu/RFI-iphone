@@ -16,7 +16,7 @@ No real crew auth, HostGator uploads, or live Procore REST API in this MVP. Stri
 
 Must match this path — nothing else in the primary nav:
 
-**Login (stub) → Jobs → Room pack request → Pack viewer (plan + sheets + RFIs) → Generate RFI / Order materials (drafts to foreman). Time is wired (`/time`).**
+**Login (stub) → Jobs → Room pack request → Pack viewer (plan + sheets + RFIs) → Generate RFI / Order materials (drafts to foreman). Time is wired (`/time`). Share folders are wired (`/share`).**
 
 **Tools** stays later (not wired). No Apple.
 
@@ -26,7 +26,8 @@ Must match this path — nothing else in the primary nav:
 | --- | --- |
 | Login (`/`) | Email/password form UI. Submit creates a stub session cookie (`gcfieldlog_stub_user`) with `userId` + email + role (`viewer` default, or `puller`). Password is not checked. |
 | Jobs (`/jobs`) | Fictional jobs only (Maple Point and similar). Header shows **Puller** / **Procore connected** / **View only**. Pullers get **Connect Procore**. |
-| Account (`/account`) | Stub session + Procore connected / disconnected state + link to pricing. |
+| Account (`/account`) | Stub session + Procore connected / disconnected state + link to pricing + share folders. |
+| Share (`/share`) | Create folders, pin full disciplines (electrical / lighting / architectural) or Maple Point room packs, puller-gated **Refresh all**. |
 | Pricing (`/pricing`) | Subscribe CTA → Stripe-hosted Checkout (60-day trial, payment method collected). |
 | Room pack request | Room number (e.g. `733`). **Connected puller:** `POST /api/room-pack` asks the Procore bot to refresh, then opens `/pack/[requestId]`. **Viewer / unconnected puller:** **Open pack** only — no pull. Local demo (no `SUPABASE_URL`) loads Maple Point JSON. |
 | Pack viewer | Field stack on `/pack/[requestId]`: **architectural floor plan first** (A-*, architectural, floor plan heuristics; else current primary), oversized crimson SVG box around the room walls, **vector markup tools** (circle, box, arrow, text note) with one-tap **Create RFI**, then remaining sheets (power, lighting, …) and linked RFIs. Drawing number + revision letter stamps stay on the top bar and each sheet (`A-101 Rev A`). Website open always re-reads `room_packs` (no-store). Connected pullers also trigger a bot refresh; viewers cannot. |
@@ -42,7 +43,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Sign in (stub) → **Time** in the header, or pick **Maple Point Medical Office** → request room `733`.
+Open [http://localhost:3000](http://localhost:3000). Sign in (stub) → **Time** or **Share** in the header, or pick **Maple Point Medical Office** → request room `733`.
 
 Grok Voice (mic / read aloud) needs **`XAI_API_KEY`** on the server. Without it, the buttons still render and `/api/voice/status` reports `configured: false`.
 
@@ -166,7 +167,7 @@ Hands-in-gloves markup on the pack viewer. Vectors stay as SVG/JSON — **not** 
 
 Markups persist to Supabase `public.markup_overlays` (`request_id`, `sheet_id`, `vectors` jsonb, `user_id`, `updated_at`) via service-role `/api/markups` under the stub session — same write path as `rfis` / `procore_connections`. Schema is on main ([PR #9](https://github.com/gregorydcastro-cpu/RFI-iphone/pull/9)): `supabase/migrations/20260918020000_share_markup_rfi_trial.sql` plus `20260918130000_rfis_markup_overlay_fk.sql`. Types: `lib/schema.ts`. **localStorage** (`gcfieldlog.markup:request_id:sheet_id`) is only the offline/demo fallback when `SUPABASE_SERVICE_ROLE_KEY` is missing.
 
-The RFI row’s optional `markup_id` points at the overlay. The draft packet also keeps a vector snapshot + sheet id/rev. Share-folder portal, weekly rev re-pull, and trial-link gating are out of scope.
+The RFI row’s optional `markup_id` points at the overlay. The draft packet also keeps a vector snapshot + sheet id/rev. Weekly rev-only re-pull cron, trial-link gating, and notify-on-bump are out of scope.
 
 ```bash
 curl -s "http://localhost:3000/api/markups?request_id=maple-point&sheet_id=A-101"
@@ -385,7 +386,7 @@ CREATE POLICY room_packs_read_anon ON public.room_packs
 
 Local `npm run dev` does not need any of these variables.
 
-### Share / viewer portal (schema + API stubs)
+### Share / viewer portal (folders + Refresh all)
 
 SQL: `supabase/migrations/20260918020000_share_markup_rfi_trial.sql` plus overlay FK `20260918130000_rfis_markup_overlay_fk.sql`. Types: `lib/schema.ts`. Apply those migrations on the gc-field-log Supabase project when ready; this repo does not auto-apply them.
 
@@ -398,7 +399,7 @@ SQL: `supabase/migrations/20260918020000_share_markup_rfi_trial.sql` plus overla
 | `20260918093000_time_tracking.sql` | `job_sites` / `workers` / `time_punches` | Untouched. |
 | `20260918010000_procore_connections.sql` | `procore_connections` | Untouched. `room_packs` RLS stays off. |
 
-**Pack viewer markup** (this app) writes `markup_overlays` through `/api/markups` and links drafts with `rfis.markup_id`. Share-folder UI, weekly re-pull, and trial-link redeem stay later. Architectural floor plan first and the oversized red room highlight are already on the Field Log viewer.
+**Pack viewer markup** (this app) writes `markup_overlays` through `/api/markups` and links drafts with `rfis.markup_id`. Architectural floor plan first and the oversized red room highlight are already on the Field Log viewer. Trial-link redeem stays later.
 
 These tables do **not** replace `procore_connections`, `room_packs`, `rfis`, or `billing_customers`.
 
@@ -411,9 +412,30 @@ These tables do **not** replace `procore_connections`, `room_packs`, `rfis`, or 
 | `rfis` | Draft RFI (existing PR #12 table; optional `markup_id` FK added here) | Owning `user_id` / service role |
 | `trial_link_tokens` | Trial URL token + `expires_at` + `plan` `free` \| `paid` | Owning `user_id` / service role |
 
-**Weekly rev-only re-pull (future job, not this PR):** a scheduled worker reads `pinned_sheets`, compares each sheet's current Procore top revision to `sheet_revision_cache.rev`, and **re-downloads only when `rev` bumped**. On a bump it updates `sheet_revision_cache` (`rev`, `checked_at`) and `pinned_sheets.last_seen_rev` / `last_pulled_at`. Unchanged revs are metadata-only (no PDF fetch). Notify-on-bump is later.
+**How to try (Maple Point demo):**
 
-**Manual force refresh (this PR, stub only):** `POST /api/share/refresh-all` is puller-gated and returns `{ accepted: true, stub: true }`. It does **not** walk pins or call Procore yet.
+1. Stub login at `/` as **Puller** (any email; password ignored).
+2. Header **Share**, or Account → **Open share folders**.
+3. Create a folder (e.g. `Electrical set`).
+4. Pin a full discipline (**electrical** / **lighting** / **architectural**) or a room pack (Electrical Closet 101 or Room 733). Lighting is its own pin group even though Maple Point JSON stores `E-102` as electrical.
+5. **Refresh all** is puller-gated (stub **Puller** login, Procore-linked cookie after OAuth, or API header `x-procore-linked: true`). Status shows scanned / bumped / unchanged / missing. Pack **pulls** still need Connect Procore.
+6. **Open pack** on a pin still uses the existing Maple Point viewer. Time, Voice, markup → RFI, and the Drive PDF proxy are unchanged.
+
+Without `SUPABASE_SERVICE_ROLE_KEY`, folders live in process memory (same pattern as Time). With the service role and the #9 migration applied, writes go to `share_folders` / `pinned_sheets` / `sheet_revision_cache`.
+
+```bash
+# Viewer / unsigned — Refresh all is puller-gated
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:3000/api/share/refresh-all
+# 403
+
+# Folders require a stub session cookie
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/share/folders
+# 401
+```
+
+**Manual force refresh (this PR):** `POST /api/share/refresh-all` is puller-gated (**stub Puller** session, or Procore-linked cookie / `x-procore-linked` header) **and** requires the stub session. It walks that owner's `pinned_sheets`, compares known pack revs (Maple Point catalog, plus live `room_packs` when Supabase anon is set) to `sheet_revision_cache`, and updates last_seen_rev / last_pulled_at on a bump. It asks the Procore bot to refresh Maple Point (same log-only request as pack open) but **does not** call Procore REST or re-download PDFs. Response: `{ accepted: true, stub: false, implemented: true, weeklyCron: false, notify: false, scanned, bumped, unchanged, missing }`.
+
+**TODO — weekly rev-only re-pull (not this PR):** a scheduled worker should reuse the same compare (`lib/shareRefresh.ts`), read Procore top rev (or the bot pack), **re-download a sheet PDF only when `rev` bumped**, then update `sheet_revision_cache` (`rev`, `checked_at`) and `pinned_sheets.last_seen_rev` / `last_pulled_at`. Unchanged revs are metadata-only (no PDF fetch). **Do not notify Mike by text/email yet** (separate slice). Trial-link redeem stays later.
 
 **RLS (restrictive defaults):** enabled on the new share/markup/trial tables. `anon` has no grants (no public share-folder read until a later PR adds an explicit public flag). `authenticated` may CRUD **own** folders, pins, markups, and trial tokens (`user_id` / folder owner = `auth.uid()::text`). `sheet_revision_cache` has no anon/authenticated policies. `rfis` RLS stays the PR #12 owner policies.
 
@@ -431,9 +453,10 @@ These tables do **not** replace `procore_connections`, `room_packs`, `rfis`, or 
 | `/jobs` | Fictional **job selection** + Connect Procore (puller) |
 | `/jobs/[projectSlug]` | **Pull / open room pack** (connected puller POSTs `/api/room-pack`; viewer opens `/pack/[requestId]` only) |
 | `/jobs/[projectSlug]/rooms/[room]` | Alias → `/pack/{slug}-{room}` (no pull; use the request form) |
-| `/account` | Stub account + Procore connected state + billing link |
+| `/account` | Stub account + Procore connected state + billing link + share folders |
 | `/pricing` | Subscribe CTA → Stripe-hosted Checkout (60-day trial) |
 | `/time` | **Time tab** — worker punch + foreman crew week (Maple Point geofence) |
+| `/share` | **Share folders** — create folders, pin disciplines / room packs, Refresh all |
 | `/api/session` | POST stub login |
 | `/api/session/logout` | Clear stub session |
 | `/api/procore/connect` | Redirect to Procore OAuth authorize |
@@ -445,7 +468,9 @@ These tables do **not** replace `procore_connections`, `room_packs`, `rfis`, or 
 | `/api/room-pack/live` | Anyone GET/POST. Latest `room_packs` row, `no-store`. Does not pull. |
 | `/api/room-pack/status` | Alias of live read (no Drive poll, no webhook). |
 | `/api/sheet-pdf` | GET `?requestId=&sheetId=`. Streams a sheet PDF (Drive proxy or local `/packs`). Secrets stay on the server. |
-| `/api/share/refresh-all` | Puller POST stub. Mike force-refresh of pinned sheets; no Procore pull yet. |
+| `/api/share/folders` | GET/POST/DELETE stub-session share folders (service role or memory) |
+| `/api/share/pins` | POST pin discipline or room pack; DELETE `?id=` unpin |
+| `/api/share/refresh-all` | Puller POST. Walks pins + updates `sheet_revision_cache`. No weekly cron. No notify. |
 | `/api/time` | GET Maple Point site, workers, week punches (memory demo or service-role Supabase) |
 | `/api/time/punches` | POST worker punch (GPS + geofence) or `{ foreman: true }` missed-punch override |
 | `/api/voice/status` | GET. `{ configured }` for Grok Voice — never returns the key |
@@ -638,8 +663,9 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 - Realtime Grok speech-to-speech on site (this PR is batch STT + TTS)
 - Payroll export / ADP
 - Sent pack **snapshots** (text/email frozen copies — not in this PR)
-- Share folder / pinned-sheet UI, weekly rev-only re-pull job, trial-link redeem
-- Weekly rev-only re-pull job (read `sheet_revision_cache`, download only on bump) and a real `POST /api/share/refresh-all` implementation
+- Trial-link redeem / public share-folder read
+- **TODO:** weekly rev-only re-pull cron (read `sheet_revision_cache`, download PDF only on bump). Manual `POST /api/share/refresh-all` is wired in this PR.
+- Notify Mike by text/email when a pinned rev bumps (separate slice)
 - RLS policies on `public.room_packs` (table is currently wide open to the anon key)
 - HostGator DNS cutover to Vercel for gcfieldlog.com
 - No Apple / native iOS
