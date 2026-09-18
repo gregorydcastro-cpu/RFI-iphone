@@ -83,12 +83,12 @@ export default async function AccountPage({ searchParams }: Props) {
             Create share folders, pin electrical / lighting / architectural or
             Maple Point room packs, and run puller-gated Refresh all.
           </p>
-          <Link
+          <a
             href="/share"
             className="mt-4 inline-block bg-cta px-5 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover"
           >
             Open share folders
-          </Link>
+          </a>
         </section>
         <section className="mt-8 max-w-lg border border-line bg-panel p-4">
           <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">

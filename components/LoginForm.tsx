@@ -1,54 +1,22 @@
-"use client";
-
-import { useRouter, useSearchParams } from "next/navigation";
-import { type FormEvent, useState } from "react";
 import type { FieldRoleName } from "@/lib/auth";
 
-export function LoginForm() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [role, setRole] = useState<FieldRoleName>("viewer");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+type Props = {
+  next: string;
+  error: string | null;
+  defaultRole?: FieldRoleName;
+};
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (pending) return;
-    setPending(true);
-    setError(null);
-
-    try {
-      const response = await fetch("/api/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, role }),
-      });
-      const data = (await response.json()) as { ok?: boolean; error?: string };
-      if (!response.ok || !data.ok) {
-        setError(data.error ?? "Could not start a session");
-        return;
-      }
-      console.info("[gcfieldlog] stub login — no real auth yet", {
-        email,
-        role,
-      });
-      const next = searchParams.get("next");
-      router.push(next && next.startsWith("/") ? next : "/jobs");
-      router.refresh();
-    } catch {
-      setError("Could not reach the session service. Try again.");
-    } finally {
-      setPending(false);
-    }
-  }
-
+/** Server-rendered native form so the POST is a document request (Set-Cookie). */
+export function LoginForm({ next, error, defaultRole = "viewer" }: Props) {
   return (
     <form
-      onSubmit={onSubmit}
+      method="post"
+      action="/api/session"
+      target="_self"
+      encType="application/x-www-form-urlencoded"
       className="w-full max-w-md space-y-4 border border-line bg-panel p-6 shadow-[0_0_0_1px_rgb(225_6_0_/_0.15)]"
     >
+      <input type="hidden" name="next" value={next} />
       <div>
         <h1 className="font-display text-3xl tracking-wide text-secondary">
           GC Field Log
@@ -68,9 +36,8 @@ export function LoginForm() {
         <input
           required
           type="email"
+          name="email"
           autoComplete="username"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
           className="mt-1 w-full border border-line bg-ink px-3 py-2 text-sm text-paper outline-none focus:border-cta"
           placeholder="foreman@crew.example"
         />
@@ -80,9 +47,8 @@ export function LoginForm() {
         <input
           required
           type="password"
+          name="password"
           autoComplete="current-password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
           className="mt-1 w-full border border-line bg-ink px-3 py-2 text-sm text-paper outline-none focus:border-cta"
           placeholder="••••••••"
         />
@@ -96,8 +62,7 @@ export function LoginForm() {
             type="radio"
             name="role"
             value="viewer"
-            checked={role === "viewer"}
-            onChange={() => setRole("viewer")}
+            defaultChecked={defaultRole === "viewer"}
             className="mt-1"
           />
           <span>
@@ -112,8 +77,7 @@ export function LoginForm() {
             type="radio"
             name="role"
             value="puller"
-            checked={role === "puller"}
-            onChange={() => setRole("puller")}
+            defaultChecked={defaultRole === "puller"}
             className="mt-1"
           />
           <span>
@@ -132,10 +96,9 @@ export function LoginForm() {
       ) : null}
       <button
         type="submit"
-        disabled={pending}
-        className="w-full bg-cta px-4 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
+        className="w-full bg-cta px-4 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover"
       >
-        {pending ? "Entering…" : "Enter dashboard"}
+        Enter dashboard
       </button>
     </form>
   );

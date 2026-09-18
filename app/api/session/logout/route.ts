@@ -1,17 +1,30 @@
 import { NextResponse } from "next/server";
-import { cookieSecureFromRequest, procoreLinkedCookieOptions } from "@/lib/auth";
+import {
+  applyHttpCookies,
+  cookieDomainFromRequest,
+  cookieSecureFromRequest,
+  isNextPrefetch,
+  procoreLinkedCookieWrites,
+} from "@/lib/auth";
 import { oauthStateCookieOptions } from "@/lib/procoreOAuth";
-import { stubSessionCookieOptions } from "@/lib/stubSession";
+import { stubSessionCookieWrites } from "@/lib/stubSession";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  if (isNextPrefetch(request)) {
+    return new NextResponse(null, {
+      status: 204,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
   const secure = cookieSecureFromRequest(request);
+  const domain = cookieDomainFromRequest(request);
   const url = new URL("/", request.url);
   const response = NextResponse.redirect(url);
-  response.cookies.set(stubSessionCookieOptions(null, secure));
-  response.cookies.set(procoreLinkedCookieOptions(false, secure));
-  response.cookies.set(oauthStateCookieOptions(null, secure));
+  applyHttpCookies(response, stubSessionCookieWrites(null, secure, domain));
+  applyHttpCookies(response, procoreLinkedCookieWrites(false, secure, domain));
+  applyHttpCookies(response, [oauthStateCookieOptions(null, secure)]);
   return response;
 }
 

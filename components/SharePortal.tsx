@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   MAPLE_POINT_REQUEST_ID,
   packHrefForSheet,
@@ -81,8 +81,35 @@ export function SharePortal({
     [folders],
   );
 
+  useEffect(() => {
+    const reloadKey = "gcfieldlog.share-session-reload";
+    if (signedIn) {
+      sessionStorage.removeItem(reloadKey);
+      return;
+    }
+    if (sessionStorage.getItem(reloadKey)) return;
+    let cancelled = false;
+    fetch("/api/session", { credentials: "include", cache: "no-store" })
+      .then((response) => response.json())
+      .then((data: { ok?: boolean; email?: string }) => {
+        if (!cancelled && data.ok && data.email) {
+          sessionStorage.setItem(reloadKey, "1");
+          window.location.reload();
+        }
+      })
+      .catch(() => {
+        /* keep the signed-out prompt */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [signedIn]);
+
   async function reload() {
-    const response = await fetch("/api/share/folders", { cache: "no-store" });
+    const response = await fetch("/api/share/folders", {
+      cache: "no-store",
+      credentials: "include",
+    });
     const data = (await response.json()) as {
       ok?: boolean;
       folders?: ShareFolderWithPins[];
@@ -115,6 +142,7 @@ export function SharePortal({
     await run("Folder created", async () => {
       const response = await fetch("/api/share/folders", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       });
@@ -131,7 +159,7 @@ export function SharePortal({
     await run("Folder deleted", async () => {
       const response = await fetch(
         `/api/share/folders?id=${encodeURIComponent(folderId)}`,
-        { method: "DELETE" },
+        { method: "DELETE", credentials: "include" },
       );
       const data = (await response.json()) as { ok?: boolean; error?: string };
       if (!response.ok || !data.ok) {
@@ -145,6 +173,7 @@ export function SharePortal({
     await run(`Pinned ${discipline}`, async () => {
       const response = await fetch("/api/share/pins", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           folder_id: folderId,
@@ -165,6 +194,7 @@ export function SharePortal({
     await run("Pinned room pack", async () => {
       const response = await fetch("/api/share/pins", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           folder_id: folderId,
@@ -184,7 +214,7 @@ export function SharePortal({
     await run("Sheet unpinned", async () => {
       const response = await fetch(
         `/api/share/pins?id=${encodeURIComponent(pinId)}`,
-        { method: "DELETE" },
+        { method: "DELETE", credentials: "include" },
       );
       const data = (await response.json()) as { ok?: boolean; error?: string };
       if (!response.ok || !data.ok) {
@@ -196,7 +226,10 @@ export function SharePortal({
 
   async function refreshAll() {
     await run("Refresh all finished", async () => {
-      const response = await fetch("/api/share/refresh-all", { method: "POST" });
+      const response = await fetch("/api/share/refresh-all", {
+        method: "POST",
+        credentials: "include",
+      });
       const data = (await response.json()) as RefreshPayload;
       setRefresh(data);
       if (!response.ok || !data.ok) {

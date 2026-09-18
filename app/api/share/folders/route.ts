@@ -1,11 +1,10 @@
-import { readCookieValue } from "@/lib/auth";
 import { SHARE_CATALOG } from "@/lib/shareCatalog";
 import {
   createShareFolder,
   listSharePortal,
   removeShareFolder,
 } from "@/lib/shareStore";
-import { parseStubSession, STUB_SESSION_COOKIE } from "@/lib/stubSession";
+import { parseStubSessionFromCookieHeader } from "@/lib/stubSession";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -17,9 +16,7 @@ function json(data: unknown, status = 200) {
 }
 
 function sessionFromRequest(request: Request) {
-  return parseStubSession(
-    readCookieValue(request.headers.get("cookie"), STUB_SESSION_COOKIE),
-  );
+  return parseStubSessionFromCookieHeader(request.headers.get("cookie"));
 }
 
 function asTrimmed(value: unknown): string | null {

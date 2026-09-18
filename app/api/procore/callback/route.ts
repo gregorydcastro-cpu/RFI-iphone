@@ -1,6 +1,11 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { cookieSecureFromRequest, procoreLinkedCookieOptions } from "@/lib/auth";
+import {
+  applyHttpCookies,
+  cookieDomainFromRequest,
+  cookieSecureFromRequest,
+  procoreLinkedCookieWrites,
+} from "@/lib/auth";
 import { upsertProcoreConnection } from "@/lib/procoreConnections";
 import {
   PROCORE_OAUTH_STATE_COOKIE,
@@ -10,7 +15,7 @@ import {
   getProcoreOAuthConfig,
   oauthStateCookieOptions,
 } from "@/lib/procoreOAuth";
-import { STUB_SESSION_COOKIE, parseStubSession } from "@/lib/stubSession";
+import { STUB_SESSION_COOKIE, parseStubSession, parseStubSessionFromCookieHeader } from "@/lib/stubSession";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +63,9 @@ export async function GET(request: Request) {
     });
   }
 
-  const session = parseStubSession(jar.get(STUB_SESSION_COOKIE)?.value);
+  const session =
+    parseStubSession(jar.get(STUB_SESSION_COOKIE)?.value) ??
+    parseStubSessionFromCookieHeader(request.headers.get("cookie"));
   if (!session) {
     const login = new URL("/", request.url);
     login.searchParams.set("next", "/account");
@@ -111,6 +118,9 @@ export async function GET(request: Request) {
 
   const response = redirectAccount(request, { procore: "connected" });
   response.cookies.set(oauthStateCookieOptions(null, secure));
-  response.cookies.set(procoreLinkedCookieOptions(true, secure));
+  applyHttpCookies(
+    response,
+    procoreLinkedCookieWrites(true, secure, cookieDomainFromRequest(request)),
+  );
   return response;
 }

@@ -23,7 +23,7 @@ export default async function TimePage() {
   return (
     <div className="flex min-h-dvh flex-col">
       <AppHeader
-        signedIn
+        signedIn={Boolean(session)}
         role={view.role}
         procoreConnected={view.connected}
         procoreLinked={view.role === "puller" && view.connected}

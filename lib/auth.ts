@@ -21,6 +21,44 @@ export function isPullerRole(role: string | null | undefined): boolean {
   return role === "puller";
 }
 
+/** Apex + www share this Domain so one stub login covers both hosts. */
+export const PRODUCTION_COOKIE_DOMAIN = "gcfieldlog.com";
+
+export type HttpCookieOptions = {
+  name: string;
+  value: string;
+  httpOnly: boolean;
+  path: string;
+  sameSite: "lax";
+  maxAge: number;
+  secure: boolean;
+  domain?: string;
+};
+
+/** Next.js Link prefetch of /api/session/logout must not clear the stub cookie. */
+export function isNextPrefetch(request: Request): boolean {
+  try {
+    if (new URL(request.url).searchParams.has("_rsc")) return true;
+  } catch {
+    /* keep header checks */
+  }
+  const rsc = request.headers.get("rsc");
+  const routerPrefetch = request.headers.get("next-router-prefetch");
+  const purpose =
+    request.headers.get("purpose") ?? request.headers.get("sec-purpose") ?? "";
+  return rsc === "1" || routerPrefetch === "1" || purpose.toLowerCase().includes("prefetch");
+}
+
+/** Same-origin relative path only. Blocks protocol-relative and absolute URLs. */
+export function safeNextPath(raw: unknown): string {
+  if (typeof raw !== "string") return "/jobs";
+  if (!raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) {
+    return "/jobs";
+  }
+  if (raw.includes("://")) return "/jobs";
+  return raw;
+}
+
 export function cookieSecureFromRequest(request: Request): boolean {
   const forwarded = request.headers.get("x-forwarded-proto");
   if (forwarded) return forwarded.split(",")[0]?.trim() === "https";
@@ -31,18 +69,113 @@ export function cookieSecureFromRequest(request: Request): boolean {
   }
 }
 
+export function requestHostname(request: Request): string | undefined {
+  try {
+    const forwarded = request.headers.get("x-forwarded-host");
+    const host = (forwarded ?? new URL(request.url).host)
+      .split(",")[0]
+      ?.trim()
+      .toLowerCase();
+    if (!host) return undefined;
+    return host.replace(/:\d+$/, "");
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Host-only cookies on localhost / Vercel previews.
+ * Production apex + www get Domain=gcfieldlog.com so `/share` keeps the
+ * stub session after a 308 between gcfieldlog.com and www.gcfieldlog.com.
+ */
+export function cookieDomainFromHost(
+  host: string | null | undefined,
+): string | undefined {
+  if (!host) return undefined;
+  const hostname = host.split(",")[0]?.trim().toLowerCase().replace(/:\d+$/, "");
+  if (
+    hostname === PRODUCTION_COOKIE_DOMAIN ||
+    hostname === `www.${PRODUCTION_COOKIE_DOMAIN}`
+  ) {
+    return PRODUCTION_COOKIE_DOMAIN;
+  }
+  return undefined;
+}
+
+export function cookieDomainFromRequest(request: Request): string | undefined {
+  return cookieDomainFromHost(requestHostname(request));
+}
+
+export function serializeHttpCookie(options: HttpCookieOptions): string {
+  const parts = [
+    `${options.name}=${encodeURIComponent(options.value)}`,
+    `Path=${options.path || "/"}`,
+    `Max-Age=${options.maxAge}`,
+    "SameSite=Lax",
+  ];
+  if (options.maxAge <= 0) {
+    parts.push("Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+  }
+  if (options.httpOnly) parts.push("HttpOnly");
+  if (options.secure) parts.push("Secure");
+  if (options.domain) parts.push(`Domain=${options.domain}`);
+  return parts.join("; ");
+}
+
+export function appendCookieHeaders(
+  headers: { append(name: string, value: string): void },
+  cookies: HttpCookieOptions[],
+): void {
+  for (const cookie of cookies) {
+    headers.append("set-cookie", serializeHttpCookie(cookie));
+  }
+}
+
+export function applyHttpCookies(
+  response: {
+    cookies: { set(options: HttpCookieOptions): unknown };
+    headers: { append(name: string, value: string): void };
+  },
+  cookies: HttpCookieOptions[],
+): void {
+  if (cookies.length === 0) return;
+  if (cookies.length === 1) {
+    response.cookies.set(cookies[0]!);
+    return;
+  }
+  const live =
+    cookies.find((cookie) => cookie.maxAge > 0 && cookie.value) ??
+    cookies[cookies.length - 1]!;
+  const extras = cookies.filter((cookie) => cookie !== live);
+  response.cookies.set(live);
+  appendCookieHeaders(response.headers, extras);
+}
+
+/**
+ * Login writes one cookie (Domain=gcfieldlog.com in production). A second
+ * host-only expire in the same response can wipe the session: Chrome's
+ * fetch jar often keeps a single Set-Cookie per name and the expire wins.
+ * Logout still expires both the host-only leftover and the Domain cookie.
+ */
+export function cookieWritesForDomain(
+  cookie: HttpCookieOptions,
+  domain: string | undefined,
+): HttpCookieOptions[] {
+  if (!domain) return [cookie];
+  const scoped: HttpCookieOptions = { ...cookie, domain };
+  if (cookie.maxAge > 0 && cookie.value) {
+    return [scoped];
+  }
+  const hostOnly: HttpCookieOptions = { ...cookie };
+  delete hostOnly.domain;
+  return [hostOnly, scoped];
+}
+
 export function procoreLinkedCookieOptions(
   linked: boolean,
   secure: boolean,
-): {
-  name: string;
-  value: string;
-  httpOnly: boolean;
-  path: string;
-  sameSite: "lax";
-  maxAge: number;
-  secure: boolean;
-} {
+  domain?: string,
+): HttpCookieOptions {
   return {
     name: PROCORE_LINKED_COOKIE,
     value: linked ? "1" : "",
@@ -51,7 +184,19 @@ export function procoreLinkedCookieOptions(
     sameSite: "lax",
     maxAge: linked ? 60 * 60 * 24 * 30 : 0,
     secure,
+    ...(domain ? { domain } : {}),
   };
+}
+
+export function procoreLinkedCookieWrites(
+  linked: boolean,
+  secure: boolean,
+  domain?: string,
+): HttpCookieOptions[] {
+  return cookieWritesForDomain(
+    procoreLinkedCookieOptions(linked, secure, domain),
+    domain,
+  );
 }
 
 function isTruthyFlag(value: string | null | undefined): boolean {

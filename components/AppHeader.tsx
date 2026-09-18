@@ -58,16 +58,23 @@ export function AppHeader({
               >
                 Time
               </Link>
-              <Link
+              <a
                 className={
                   shareActive
                     ? "text-cta"
                     : "text-secondary hover:text-cta"
                 }
                 href="/share"
+                onClick={(event) => {
+                  event.preventDefault();
+                  // Full document load so the httpOnly stub cookie is sent.
+                  // Next.js Link can reuse a signed-out RSC payload for /share.
+                  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- cookie-gated Share
+                  window.location.assign("/share");
+                }}
               >
                 Share
-              </Link>
+              </a>
               <Link
                 className={
                   accountActive
@@ -100,19 +107,21 @@ export function AppHeader({
                     : "View only"}
                 </span>
               ) : null}
-              <Link
+              <a
                 className="text-accent-2 hover:text-secondary"
                 href="/api/session/logout"
               >
                 Sign out
-              </Link>
+              </a>
             </>
           ) : (
             <>
               <Link className="text-secondary hover:text-cta" href="/pricing">
                 Pricing
               </Link>
-              <span className="text-accent-2">Login</span>
+              <Link className="text-accent-2 hover:text-secondary" href="/">
+                Login
+              </Link>
             </>
           )}
         </nav>

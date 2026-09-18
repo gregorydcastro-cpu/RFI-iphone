@@ -8,6 +8,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export const metadata: Metadata = {
   title: "Share — GC Field Log",

@@ -1,9 +1,9 @@
-import { readCookieValue, readFieldRoleFromRequest } from "@/lib/auth";
+import { readFieldRoleFromRequest } from "@/lib/auth";
 import { notifyMikeOnBumps } from "@/lib/notifyMike";
 import { PROCORE_BOT_ID, requestProcoreBotRefresh } from "@/lib/procoreBot";
 import { MAPLE_POINT_PROJECT_NAME, MAPLE_POINT_REQUEST_ID } from "@/lib/shareCatalog";
 import { refreshAllPinnedSheets } from "@/lib/shareStore";
-import { parseStubSession, STUB_SESSION_COOKIE } from "@/lib/stubSession";
+import { parseStubSessionFromCookieHeader } from "@/lib/stubSession";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -24,8 +24,8 @@ function json(data: unknown, status = 200) {
  * Emails Mike after a persisted bump (issue #31). Missing notify env skips.
  */
 export async function POST(request: Request) {
-  const session = parseStubSession(
-    readCookieValue(request.headers.get("cookie"), STUB_SESSION_COOKIE),
+  const session = parseStubSessionFromCookieHeader(
+    request.headers.get("cookie"),
   );
   const linked = readFieldRoleFromRequest(request);
   const puller = linked.procoreLinked || session?.role === "puller";

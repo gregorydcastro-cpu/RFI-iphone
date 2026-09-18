@@ -65,7 +65,7 @@ Production host is **gcfieldlog.com**.
 1. Import this GitHub repo in [Vercel](https://vercel.com/new) (framework preset: **Next.js**).
 2. Build command: `npm run build`. `postinstall` copies `pdf.worker.min.mjs`.
 3. **Env:** the Maple Point demo needs **no** secrets. Production reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` for live `room_packs`. Live sheet PDFs (Google Drive links in `sheets[].pdf`) need **`GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`** (or **`GOOGLE_CLIENT_EMAIL` + `GOOGLE_PRIVATE_KEY`**) so `/api/sheet-pdf` can stream files the browser cannot fetch. Procore **user** OAuth (Connect Procore) uses **`PROCORE_CLIENT_ID` / `PROCORE_CLIENT_SECRET`** and **`SUPABASE_SERVICE_ROLE_KEY`** on Vercel (server-only, never `NEXT_PUBLIC_`). **Weekly share refresh** uses **`CRON_SECRET`** (server-only, never `NEXT_PUBLIC_`) — Vercel Cron hits `GET /api/share/weekly-refresh` Mondays 12:00 UTC per `vercel.json`. **Notify Mike** on a persisted pinned-sheet bump uses **`NOTIFY_MIKE_EMAIL`** plus **`RESEND_API_KEY`** or **`GMAIL_APP_PASSWORD`** (server-only, never `NEXT_PUBLIC_`). **Grok Voice** (RFI/materials dictation + RFI read-aloud) uses **`XAI_API_KEY`** (server-only, never `NEXT_PUBLIC_`). Copy OAuth id/secret from `/home/box/.secrets/procore_client_id` and `procore_client_secret` — do not commit. Do **not** restore `procore_room_pack_webhook_url` / `procore_room_pack_webhook_authorization` for this live path — that routine is deleted. Stripe Checkout (optional until you sell) uses the keys in **Stripe Checkout (Vercel + Dashboard)** below.
-4. **DNS (ops, not this repo):** at HostGator, point `gcfieldlog.com` / `www` to Vercel (A / CNAME per Vercel’s domain docs). Do not upload files to HostGator for this app.
+4. **DNS (ops, not this repo):** at HostGator, point `gcfieldlog.com` / `www` to Vercel (A / CNAME per Vercel’s domain docs). Do not upload files to HostGator for this app. Vercel 308-redirects apex → `www.gcfieldlog.com`. The stub session cookie uses `Path=/` and, on those two hosts, `Domain=gcfieldlog.com` so www and apex share one Puller login.
 
 ### Procore OAuth (Connect Procore)
 
@@ -277,10 +277,10 @@ RLS is on. `anon` has no grants. `authenticated` may **SELECT own row** by JWT e
 
 #### Stub user until real auth
 
-1. Login POSTs `/api/session` with email + role. Password is ignored.
-2. Server sets httpOnly `gcfieldlog_stub_user` = `{ userId, email, role }`. Same email → same `userId`.
+1. Login is a **document form POST** to `/api/session` with email + role (password ignored). The handler returns **200 HTML** (meta-refresh to `/jobs` or safe `next`) and sets the httpOnly cookie on that document response so Chrome stores it. A 303 from the same POST is followed inside Next and the `Set-Cookie` never reaches the jar — `/jobs` can look signed-in while `/share` is not. JSON POST still works for API/smoke.
+2. Server sets httpOnly `gcfieldlog_stub_user` = `{ userId, email, role }`. Same email → same `userId`. Cookie flags: `Path=/`, `SameSite=Lax`, `HttpOnly`, `Secure` on HTTPS. Production (`gcfieldlog.com` and `www.gcfieldlog.com`) also sets `Domain=gcfieldlog.com` so one Puller login is sent to both hosts — Vercel 308-redirects apex → www, and a host-only cookie would drop on that hop (Share, Refresh all, pin APIs). Login writes **one** `Set-Cookie` (via Next `cookies.set`); a second host-only expire in the same response can wipe the jar in Chrome fetch. Localhost and `*.vercel.app` stay host-only (no Domain). Logout expires both the host-only leftover and the Domain cookie.
 3. Pullers see Connect Procore on `/jobs`, the job request page, and `/account`. Viewers do not need it.
-4. After OAuth, `gcfieldlog_procore_linked=1` is set (puller linked). Sign out (`/api/session/logout`) clears the stub cookie; tokens stay in Supabase until Disconnect.
+4. After OAuth, `gcfieldlog_procore_linked=1` is set (puller linked). Sign out is a plain `/api/session/logout` document GET (not a Next `Link` — prefetch of that URL was logging the user out before they opened Share). RSC/`_rsc` prefetches return 204 and do not clear cookies. Tokens stay in Supabase until Disconnect.
 5. Upgrade path: replace the stub cookie with real Supabase/Auth.js session and store `auth.uid()` as `user_id`. Keep RLS as written.
 
 ### Roles (stub MVP)
@@ -422,8 +422,8 @@ These tables do **not** replace `procore_connections`, `room_packs`, `rfis`, or 
 
 **How to try (Maple Point demo):**
 
-1. Stub login at `/` as **Puller** (any email; password ignored).
-2. Header **Share**, or Account → **Open share folders**.
+1. Stub login at `/` as **Puller** (any email; password ignored). One login is enough — the httpOnly session cookie is `Path=/` (and `Domain=gcfieldlog.com` in production, covering www + apex).
+2. Header **Share**, or Account → **Open share folders**. Folder UI should load without a second sign-in.
 3. Create a folder (e.g. `Electrical set`).
 4. Pin a full discipline (**electrical** / **lighting** / **architectural**) or a room pack (Electrical Closet 101 or Room 733). Lighting is its own pin group even though Maple Point JSON stores `E-102` as electrical.
 5. **Refresh all** is puller-gated (stub **Puller** login, Procore-linked cookie after OAuth, or API header `x-procore-linked: true`). Status shows scanned / bumped / unchanged / missing. Pack **pulls** still need Connect Procore.
