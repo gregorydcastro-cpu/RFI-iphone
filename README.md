@@ -308,6 +308,27 @@ CREATE POLICY room_packs_read_anon ON public.room_packs
 
 Local `npm run dev` does not need any of these variables.
 
+### Next-layer tables (schema only)
+
+SQL: `supabase/migrations/20260918020000_share_markup_rfi_trial.sql`. Types: `lib/schema.ts`. **No UI in this PR.** Apply the migration on the gc-field-log Supabase project when ready; this repo does not auto-apply it.
+
+These tables do **not** replace `procore_connections` or `room_packs`. Do not enable RLS on `room_packs` here.
+
+| Table | Purpose | Who writes |
+| --- | --- | --- |
+| `share_folders` | Owner's named pin set | Owner (or **service role** until real auth) |
+| `pinned_sheets` | Sheet in a folder + last seen rev | Folder owner / service role |
+| `sheet_revision_cache` | Last checked `project_name` + `sheet_id` + `rev` | **Service role only** |
+| `markup_overlays` | Vector overlay JSON (circle / box / arrow / text) on a pack sheet | Owning `user_id` / service role |
+| `rfis` | Draft RFI (`subject`, `description`, `location`, `sheet_id`, optional `markup_id`, status `draft` \| `ready`) | Owning `user_id` / service role |
+| `trial_link_tokens` | Trial URL token + `expires_at` + `plan` `free` \| `paid` | Owning `user_id` / service role |
+
+**RLS (restrictive defaults):** enabled on all six. `anon` has no grants (no public share-folder read until a later PR adds an explicit public flag). `authenticated` may CRUD **own** folders, pins, markups, RFIs, and trial tokens (`user_id` / folder owner = `auth.uid()::text`). `sheet_revision_cache` has no anon/authenticated policies.
+
+**`SUPABASE_SERVICE_ROLE_KEY` is required for writes** that must succeed under the stub session (`stub:` + sha256 email does not match `auth.uid()`). Same rule as `procore_connections`. Never `NEXT_PUBLIC_` the service role key. Token lookup for expired trial links should also use the service role, not the anon key.
+
+`user_id` / `owner_user_id` are `text` so stub ids and later `auth.uid()::text` both fit. Maple Point demos only in the app; these tables are job-name strings, not a hardcoded company id.
+
 **Cloudflare Pages** can host Next.js later. Keep Vercel as the primary.
 
 ## Routes
@@ -522,6 +543,7 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 - Realtime Grok speech-to-speech on site (this PR is batch STT + TTS)
 - Payroll export / ADP
 - Sent pack **snapshots** (text/email frozen copies — not in this PR)
+- Share folder / pinned-sheet UI, markup toolbar, RFI generation from markup, revision-check API, trial-link redeem
 - RLS policies on `public.room_packs` (table is currently wide open to the anon key)
 - HostGator DNS cutover to Vercel for gcfieldlog.com
 - No Apple / native iOS
