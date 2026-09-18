@@ -21,6 +21,20 @@ export function isPullerRole(role: string | null | undefined): boolean {
   return role === "puller";
 }
 
+/** Apex + www share this Domain so one stub login covers both hosts. */
+export const PRODUCTION_COOKIE_DOMAIN = "gcfieldlog.com";
+
+export type HttpCookieOptions = {
+  name: string;
+  value: string;
+  httpOnly: boolean;
+  path: string;
+  sameSite: "lax";
+  maxAge: number;
+  secure: boolean;
+  domain?: string;
+};
+
 export function cookieSecureFromRequest(request: Request): boolean {
   const forwarded = request.headers.get("x-forwarded-proto");
   if (forwarded) return forwarded.split(",")[0]?.trim() === "https";
@@ -31,18 +45,94 @@ export function cookieSecureFromRequest(request: Request): boolean {
   }
 }
 
+export function requestHostname(request: Request): string | undefined {
+  try {
+    const forwarded = request.headers.get("x-forwarded-host");
+    const host = (forwarded ?? new URL(request.url).host)
+      .split(",")[0]
+      ?.trim()
+      .toLowerCase();
+    if (!host) return undefined;
+    return host.replace(/:\d+$/, "");
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Host-only cookies on localhost / Vercel previews.
+ * Production apex + www get Domain=gcfieldlog.com so `/share` keeps the
+ * stub session after a 308 between gcfieldlog.com and www.gcfieldlog.com.
+ */
+export function cookieDomainFromHost(
+  host: string | null | undefined,
+): string | undefined {
+  if (!host) return undefined;
+  const hostname = host.split(",")[0]?.trim().toLowerCase().replace(/:\d+$/, "");
+  if (
+    hostname === PRODUCTION_COOKIE_DOMAIN ||
+    hostname === `www.${PRODUCTION_COOKIE_DOMAIN}`
+  ) {
+    return PRODUCTION_COOKIE_DOMAIN;
+  }
+  return undefined;
+}
+
+export function cookieDomainFromRequest(request: Request): string | undefined {
+  return cookieDomainFromHost(requestHostname(request));
+}
+
+export function serializeHttpCookie(options: HttpCookieOptions): string {
+  const parts = [
+    `${options.name}=${encodeURIComponent(options.value)}`,
+    `Path=${options.path || "/"}`,
+    `Max-Age=${options.maxAge}`,
+    "SameSite=Lax",
+  ];
+  if (options.maxAge <= 0) {
+    parts.push("Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+  }
+  if (options.httpOnly) parts.push("HttpOnly");
+  if (options.secure) parts.push("Secure");
+  if (options.domain) parts.push(`Domain=${options.domain}`);
+  return parts.join("; ");
+}
+
+export function appendCookieHeaders(
+  headers: { append(name: string, value: string): void },
+  cookies: HttpCookieOptions[],
+): void {
+  for (const cookie of cookies) {
+    headers.append("set-cookie", serializeHttpCookie(cookie));
+  }
+}
+
+/**
+ * Set (or clear) a cookie on both the host-only name and the production
+ * Domain. Next.js `cookies().set` keys by name only, so dual-domain
+ * writes use Set-Cookie headers instead.
+ */
+export function cookieWritesForDomain(
+  cookie: HttpCookieOptions,
+  domain: string | undefined,
+): HttpCookieOptions[] {
+  if (!domain) return [cookie];
+  const hostOnly: HttpCookieOptions = { ...cookie };
+  delete hostOnly.domain;
+  if (cookie.maxAge > 0 && cookie.value) {
+    return [
+      { ...hostOnly, value: "", maxAge: 0 },
+      { ...cookie, domain },
+    ];
+  }
+  return [hostOnly, { ...cookie, domain }];
+}
+
 export function procoreLinkedCookieOptions(
   linked: boolean,
   secure: boolean,
-): {
-  name: string;
-  value: string;
-  httpOnly: boolean;
-  path: string;
-  sameSite: "lax";
-  maxAge: number;
-  secure: boolean;
-} {
+  domain?: string,
+): HttpCookieOptions {
   return {
     name: PROCORE_LINKED_COOKIE,
     value: linked ? "1" : "",
@@ -51,7 +141,19 @@ export function procoreLinkedCookieOptions(
     sameSite: "lax",
     maxAge: linked ? 60 * 60 * 24 * 30 : 0,
     secure,
+    ...(domain ? { domain } : {}),
   };
+}
+
+export function procoreLinkedCookieWrites(
+  linked: boolean,
+  secure: boolean,
+  domain?: string,
+): HttpCookieOptions[] {
+  return cookieWritesForDomain(
+    procoreLinkedCookieOptions(linked, secure, domain),
+    domain,
+  );
 }
 
 function isTruthyFlag(value: string | null | undefined): boolean {

@@ -85,6 +85,7 @@ export default async function AccountPage({ searchParams }: Props) {
           </p>
           <Link
             href="/share"
+            prefetch={false}
             className="mt-4 inline-block bg-cta px-5 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover"
           >
             Open share folders

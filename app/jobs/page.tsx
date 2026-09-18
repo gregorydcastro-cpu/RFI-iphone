@@ -22,7 +22,7 @@ export default async function JobsPage({ searchParams }: Props) {
   return (
     <div className="flex min-h-dvh flex-col">
       <AppHeader
-        signedIn
+        signedIn={view.signedIn}
         role={view.role}
         procoreConnected={view.connected}
         procoreLinked={canPull}

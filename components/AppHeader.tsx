@@ -65,6 +65,7 @@ export function AppHeader({
                     : "text-secondary hover:text-cta"
                 }
                 href="/share"
+                prefetch={false}
               >
                 Share
               </Link>
@@ -112,7 +113,9 @@ export function AppHeader({
               <Link className="text-secondary hover:text-cta" href="/pricing">
                 Pricing
               </Link>
-              <span className="text-accent-2">Login</span>
+              <Link className="text-accent-2 hover:text-secondary" href="/">
+                Login
+              </Link>
             </>
           )}
         </nav>

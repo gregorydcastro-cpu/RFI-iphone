@@ -1,11 +1,18 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import type { FieldRoleName } from "@/lib/auth";
 
+function safeNextPath(raw: string | null): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) {
+    return "/jobs";
+  }
+  if (raw.includes("://")) return "/jobs";
+  return raw;
+}
+
 export function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,6 +29,7 @@ export function LoginForm() {
     try {
       const response = await fetch("/api/session", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, role }),
       });
@@ -34,9 +42,9 @@ export function LoginForm() {
         email,
         role,
       });
-      const next = searchParams.get("next");
-      router.push(next && next.startsWith("/") ? next : "/jobs");
-      router.refresh();
+      // Full document navigation so the httpOnly cookie is on the next
+      // request (Share / Jobs) instead of a stale Next.js client cache.
+      window.location.assign(safeNextPath(searchParams.get("next")));
     } catch {
       setError("Could not reach the session service. Try again.");
     } finally {

@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
-import { cookies } from "next/headers";
-import type { FieldRoleName } from "./auth";
+import {
+  cookieWritesForDomain,
+  readCookieValue,
+  type FieldRoleName,
+  type HttpCookieOptions,
+} from "./auth";
 
 export const STUB_SESSION_COOKIE = "gcfieldlog_stub_user";
 
@@ -18,22 +22,36 @@ export function stubUserIdFromEmail(email: string): string {
   return `stub:${digest}`;
 }
 
+function sessionFromParsed(parsed: Partial<StubSession>): StubSession | null {
+  const email =
+    typeof parsed.email === "string" ? parsed.email.trim().toLowerCase() : "";
+  if (!email || !email.includes("@")) return null;
+  const role: FieldRoleName = parsed.role === "puller" ? "puller" : "viewer";
+  const userId =
+    typeof parsed.userId === "string" && parsed.userId.startsWith("stub:")
+      ? parsed.userId
+      : stubUserIdFromEmail(email);
+  return { userId, email, role };
+}
+
 export function parseStubSession(raw: string | undefined | null): StubSession | null {
   if (!raw) return null;
+  const candidates = [raw];
   try {
-    const parsed = JSON.parse(raw) as Partial<StubSession>;
-    const email =
-      typeof parsed.email === "string" ? parsed.email.trim().toLowerCase() : "";
-    if (!email || !email.includes("@")) return null;
-    const role: FieldRoleName = parsed.role === "puller" ? "puller" : "viewer";
-    const userId =
-      typeof parsed.userId === "string" && parsed.userId.startsWith("stub:")
-        ? parsed.userId
-        : stubUserIdFromEmail(email);
-    return { userId, email, role };
+    const decoded = decodeURIComponent(raw);
+    if (decoded !== raw) candidates.push(decoded);
   } catch {
-    return null;
+    /* keep raw */
   }
+  for (const candidate of candidates) {
+    try {
+      const parsed = sessionFromParsed(JSON.parse(candidate) as Partial<StubSession>);
+      if (parsed) return parsed;
+    } catch {
+      /* try the next encoding */
+    }
+  }
+  return null;
 }
 
 export function serializeStubSession(session: StubSession): string {
@@ -47,15 +65,8 @@ export function serializeStubSession(session: StubSession): string {
 export function stubSessionCookieOptions(
   session: StubSession | null,
   secure: boolean,
-): {
-  name: string;
-  value: string;
-  httpOnly: boolean;
-  path: string;
-  sameSite: "lax";
-  maxAge: number;
-  secure: boolean;
-} {
+  domain?: string,
+): HttpCookieOptions {
   return {
     name: STUB_SESSION_COOKIE,
     value: session ? serializeStubSession(session) : "",
@@ -64,12 +75,34 @@ export function stubSessionCookieOptions(
     sameSite: "lax",
     maxAge: session ? COOKIE_MAX_AGE : 0,
     secure,
+    ...(domain ? { domain } : {}),
   };
 }
 
+export function stubSessionCookieWrites(
+  session: StubSession | null,
+  secure: boolean,
+  domain?: string,
+): HttpCookieOptions[] {
+  return cookieWritesForDomain(
+    stubSessionCookieOptions(session, secure, domain),
+    domain,
+  );
+}
+
+export function parseStubSessionFromCookieHeader(
+  cookieHeader: string | null | undefined,
+): StubSession | null {
+  return parseStubSession(readCookieValue(cookieHeader, STUB_SESSION_COOKIE));
+}
+
 export async function readStubSession(): Promise<StubSession | null> {
+  const { cookies, headers } = await import("next/headers");
   const jar = await cookies();
-  return parseStubSession(jar.get(STUB_SESSION_COOKIE)?.value);
+  const fromJar = parseStubSession(jar.get(STUB_SESSION_COOKIE)?.value);
+  if (fromJar) return fromJar;
+  const hdrs = await headers();
+  return parseStubSessionFromCookieHeader(hdrs.get("cookie"));
 }
 
 export function createStubSession(input: {
