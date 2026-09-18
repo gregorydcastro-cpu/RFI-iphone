@@ -4,7 +4,9 @@
  * Live packs use SUPABASE_URL / SUPABASE_ANON_KEY. Service-role token writes
  * use SUPABASE_SERVICE_ROLE_KEY. Grok Voice (STT/TTS) uses XAI_API_KEY.
  * Stripe Checkout uses STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
- * STRIPE_PRICE_ID (server-only). The only public Stripe key is
+ * STRIPE_PRICE_ID (server-only). Live Drive sheet PDFs use
+ * GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON (or GOOGLE_CLIENT_EMAIL +
+ * GOOGLE_PRIVATE_KEY). The only public Stripe key is
  * NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY. Never NEXT_PUBLIC_ for secrets.
  */
 export function readEnv(key: string): string | undefined {

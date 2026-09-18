@@ -61,7 +61,7 @@ Production host is **gcfieldlog.com**.
 
 1. Import this GitHub repo in [Vercel](https://vercel.com/new) (framework preset: **Next.js**).
 2. Build command: `npm run build`. `postinstall` copies `pdf.worker.min.mjs`.
-3. **Env:** the Maple Point demo needs **no** secrets. Production reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` for live `room_packs`. Procore **user** OAuth (Connect Procore) uses **`PROCORE_CLIENT_ID` / `PROCORE_CLIENT_SECRET`** and **`SUPABASE_SERVICE_ROLE_KEY`** on Vercel (server-only, never `NEXT_PUBLIC_`). **Grok Voice** (RFI/materials dictation + RFI read-aloud) uses **`XAI_API_KEY`** (server-only, never `NEXT_PUBLIC_`). Copy OAuth id/secret from `/home/box/.secrets/procore_client_id` and `procore_client_secret` — do not commit. Do **not** restore `procore_room_pack_webhook_url` / `procore_room_pack_webhook_authorization` for this live path — that routine is deleted. Stripe Checkout (optional until you sell) uses the keys in **Stripe Checkout (Vercel + Dashboard)** below.
+3. **Env:** the Maple Point demo needs **no** secrets. Production reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` for live `room_packs`. Live sheet PDFs (Google Drive links in `sheets[].pdf`) need **`GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`** (or **`GOOGLE_CLIENT_EMAIL` + `GOOGLE_PRIVATE_KEY`**) so `/api/sheet-pdf` can stream files the browser cannot fetch. Procore **user** OAuth (Connect Procore) uses **`PROCORE_CLIENT_ID` / `PROCORE_CLIENT_SECRET`** and **`SUPABASE_SERVICE_ROLE_KEY`** on Vercel (server-only, never `NEXT_PUBLIC_`). **Grok Voice** (RFI/materials dictation + RFI read-aloud) uses **`XAI_API_KEY`** (server-only, never `NEXT_PUBLIC_`). Copy OAuth id/secret from `/home/box/.secrets/procore_client_id` and `procore_client_secret` — do not commit. Do **not** restore `procore_room_pack_webhook_url` / `procore_room_pack_webhook_authorization` for this live path — that routine is deleted. Stripe Checkout (optional until you sell) uses the keys in **Stripe Checkout (Vercel + Dashboard)** below.
 4. **DNS (ops, not this repo):** at HostGator, point `gcfieldlog.com` / `www` to Vercel (A / CNAME per Vercel’s domain docs). Do not upload files to HostGator for this app.
 
 ### Procore OAuth (Connect Procore)
@@ -87,6 +87,11 @@ That is the default `redirect_uri`. Preview hosts will not match unless `PROCORE
 | `SUPABASE_SERVICE_ROLE_KEY` | **Required to write tokens.** Anon key must not read or write `procore_connections`. |
 | `SUPABASE_ANON_KEY` | Live `room_packs` reads (not token storage) |
 | `XAI_API_KEY` | **Grok Voice.** Server-only. Batch STT (`POST https://api.x.ai/v1/stt`) and TTS (`POST https://api.x.ai/v1/tts`). Never `NEXT_PUBLIC_`. Alias `xai_api_key` also read. |
+| `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON` | **Live sheet PDFs.** Preferred. Full Google service account JSON. Server-only. Share the Procore bot Drive folder with `client_email`. |
+| `GOOGLE_CLIENT_EMAIL` | Alternate to JSON. Service account email (`…@….iam.gserviceaccount.com`). |
+| `GOOGLE_PRIVATE_KEY` | Alternate to JSON. PEM private key (`-----BEGIN PRIVATE KEY-----`; `\n` escapes are fine). |
+| `GOOGLE_DRIVE_API_KEY` | Optional. Only works for Drive files shared “Anyone with the link”. Live bot packs are typically private. |
+| `GOOGLE_DRIVE_FOLDER_ID` | Optional ops note (not required for download). Folder the Procore bot writes pack PDFs into — share that folder with the service account as **Viewer**. |
 
 This app does **not** use the Vercel AI SDK / AI Gateway for voice. The key is forwarded only from Next.js API routes. Do not put the key in the client bundle.
 
@@ -320,6 +325,49 @@ Production verification pack: open **`/pack/sample-arch-bounds-733`** when `SUPA
 
 Local `npm run dev` without Supabase env cannot load that request id — it is not a Maple Point JSON file.
 
+### Live sheet PDFs (Google Drive proxy)
+
+The Procore bot stores drawing files in **Google Drive**. Inspected live `sample-arch-bounds-733` `sheets[]` shape:
+
+| Field | Production value |
+| --- | --- |
+| `pdf` | `https://drive.google.com/uc?export=download&id=<FILE_ID>` |
+| `preview` | `https://drive.google.com/file/d/<FILE_ID>/view` |
+| empty sheet | `pdf` / `preview` `""` when the bot has no file (viewer: “No PDF attached”) |
+
+Those Drive hosts do **not** allow browser `pdf.js` fetches (private file → Google login redirect, plus CORS). That is the **Failed to fetch** error on the live pack viewer. Maple Point demo paths (`/packs/*.pdf`) are same-origin and still load **directly**.
+
+**Website path:** `GET /api/sheet-pdf?requestId=&sheetId=` uses the same `room_packs` lookup as the pack viewer, resolves that sheet’s `pdf` URL, and streams `application/pdf` (`Cache-Control: private, max-age=300`). Drive tokens never go to the client.
+
+**Fetch order (server):**
+
+1. Local `/packs/*.pdf` from `public/packs` (Maple Point).
+2. **Google Drive** file id → Drive API `files.get?alt=media&supportsAllDrives=true` when a service account or API key is configured. If credentials are missing, try an unauthenticated download; a login wall returns **503** `{ code: "drive_auth_missing" }`.
+3. Other **https** public/signed URLs (private IPs blocked).
+4. **procore.com** URLs are **not** fetched (bot owns the Procore pull). **502** `{ code: "procore_pdf_unsupported" }` — store a Drive or public/signed URL in `sheets[].pdf`.
+
+**Ops — share the bot folder with the website service account:**
+
+1. Google Cloud → create a service account with no extra roles required beyond Drive file access via sharing.
+2. Paste the JSON into Vercel **`GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`** (Production; Preview if you test live packs there). Never `NEXT_PUBLIC_`. Never commit.
+3. In Drive, share the folder the Procore bot writes pack PDFs into with that `client_email` as **Viewer** (same folder as the `A207_N` / lighting sheet files). Optional: set `GOOGLE_DRIVE_FOLDER_ID` to that folder id as an ops reminder — the download uses the file id already in `sheets[].pdf`.
+4. Without these keys, the viewer shows the 503 message instead of **Failed to fetch**. With keys but a file not shared, expect **502** `{ code: "drive_forbidden" }`.
+
+```bash
+# Missing requestId/sheetId
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:3000/api/sheet-pdf"
+# 400
+
+# Maple Point local PDF (no Drive keys needed)
+curl -s -o /tmp/a101.pdf -w "%{http_code} %{content_type}\n" \
+  "http://localhost:3000/api/sheet-pdf?requestId=maple-point&sheetId=A-101"
+# 200 application/pdf
+
+# Live Drive sheet without Vercel Drive credentials (after deploy, or locally with Supabase):
+curl -s "https://www.gcfieldlog.com/api/sheet-pdf?requestId=sample-arch-bounds-733&sheetId=A207_N"
+# 503 {"ok":false,"code":"drive_auth_missing",...}  until GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON is set + folder shared
+```
+
 **RLS is currently disabled** on `public.room_packs`, so the anon key can read and write every row. Enabling RLS without a SELECT policy would block the website. Suggested later (do not apply blindly):
 
 ```sql
@@ -390,6 +438,7 @@ These tables do **not** replace `procore_connections`, `room_packs`, `rfis`, or 
 | `/api/room-pack/refresh` | Puller POST. Bot refresh, optional `{ pack }` upsert, then latest `room_packs` row. |
 | `/api/room-pack/live` | Anyone GET/POST. Latest `room_packs` row, `no-store`. Does not pull. |
 | `/api/room-pack/status` | Alias of live read (no Drive poll, no webhook). |
+| `/api/sheet-pdf` | GET `?requestId=&sheetId=`. Streams a sheet PDF (Drive proxy or local `/packs`). Secrets stay on the server. |
 | `/api/share/refresh-all` | Puller POST stub. Mike force-refresh of pinned sheets; no Procore pull yet. |
 | `/api/time` | GET Maple Point site, workers, week punches (memory demo or service-role Supabase) |
 | `/api/time/punches` | POST worker punch (GPS + geofence) or `{ foreman: true }` missed-punch override |
@@ -509,7 +558,7 @@ Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `
 | `project` | `{ id, name, slug }` |
 | `room` | `{ id, name, number? }` |
 | `request_id` | URL key for `/pack/[requestId]` |
-| `sheets[]` | `{ id, rev, pdf, preview?, crop?, title?, name?, discipline? }` — `id` is the drawing number, `rev` is the revision letter. Viewer stamps show `A-101 Rev A`. Optional `title` / `discipline` help pick the architectural floor plan first. |
+| `sheets[]` | `{ id, rev, pdf, preview?, crop?, title?, name?, discipline? }` — `id` is the drawing number, `rev` is the revision letter. Viewer stamps show `A-101 Rev A`. Optional `title` / `discipline` help pick the architectural floor plan first. Demo `pdf` is a same-origin `/packs/….pdf`. Live bot `pdf` is a Google Drive `uc?export=download&id=` URL (`preview` is `/file/d/…/view`); the viewer loads those through `/api/sheet-pdf`. |
 | `rfis[]` | `{ id, number, title, status, url? }` |
 | `layout` | Room locator on the sheet |
 | `actions` | Dashboard buttons. **Generate RFI** and **Order materials** are live (drafts to foreman, not Procore — [PR #12](https://github.com/gregorydcastro-cpu/RFI-iphone/pull/12)). Pack JSON `"Coming soon"` / `enabled: false` for those two is ignored. |

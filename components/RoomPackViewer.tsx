@@ -14,6 +14,7 @@ import {
 } from "@/lib/pack";
 import { layoutSheetId, resolveSheetPdf } from "@/lib/packNormalize";
 import { sheetKindLabel, splitPackSheets } from "@/lib/sheetOrder";
+import { viewerSheetPdfSrc } from "@/lib/sheetPdfUrl";
 import { ActionPanel } from "./ActionPanel";
 import { AppHeader } from "./AppHeader";
 import { PackLiveReload } from "./PackLiveReload";
@@ -120,7 +121,11 @@ export function RoomPackViewer({
           />
           <div className="h-[min(64vw,calc(100svh-12.5rem))] min-h-[220px] border border-line md:h-[calc(100svh-12.5rem)]">
             <SheetViewer
-              pdfUrl={resolveSheetPdf(primary)}
+              pdfUrl={viewerSheetPdfSrc({
+                requestId: displayedRequest,
+                sheetId: primary.id,
+                pdfUrl: resolveSheetPdf(primary),
+              })}
               layout={displayedPack.layout}
               sheetId={primary.id}
               sheetRev={primary.rev}
@@ -147,7 +152,11 @@ export function RoomPackViewer({
                 />
                 <div className="h-[min(56vw,42vh)] min-h-[200px] border border-line sm:h-[42vh] md:h-[48vh]">
                   <SheetViewer
-                    pdfUrl={resolveSheetPdf(sheet)}
+                    pdfUrl={viewerSheetPdfSrc({
+                      requestId: displayedRequest,
+                      sheetId: sheet.id,
+                      pdfUrl: resolveSheetPdf(sheet),
+                    })}
                     layout={displayedPack.layout}
                     sheetId={sheet.id}
                     sheetRev={sheet.rev}
