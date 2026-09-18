@@ -5,10 +5,13 @@
  * Lighting is its own pin group even when pack JSON stores E-102 as electrical.
  */
 
-import {
-  PINNED_SHEET_DISCIPLINES,
-  type PinnedSheetDiscipline,
-} from "./schema";
+import type { PinnedSheetDiscipline } from "./schema";
+
+export const SHARE_PIN_DISCIPLINES: readonly PinnedSheetDiscipline[] = [
+  "electrical",
+  "lighting",
+  "architectural",
+];
 
 export const MAPLE_POINT_PROJECT_NAME = "Maple Point Medical Office";
 export const MAPLE_POINT_REQUEST_ID = "maple-point";
@@ -75,7 +78,7 @@ const MAPLE_POINT_SHEETS: SharePinCandidate[] = [
 
 export const SHARE_CATALOG: ShareCatalog = {
   project_name: MAPLE_POINT_PROJECT_NAME,
-  disciplines: [...PINNED_SHEET_DISCIPLINES],
+  disciplines: [...SHARE_PIN_DISCIPLINES],
   sheets: MAPLE_POINT_SHEETS,
   room_packs: [
     {
@@ -102,7 +105,7 @@ export function isPinnedSheetDiscipline(
 ): value is PinnedSheetDiscipline {
   return (
     typeof value === "string" &&
-    (PINNED_SHEET_DISCIPLINES as readonly string[]).includes(value)
+    (SHARE_PIN_DISCIPLINES as readonly string[]).includes(value)
   );
 }
 

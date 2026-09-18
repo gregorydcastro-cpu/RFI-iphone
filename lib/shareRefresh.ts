@@ -12,7 +12,10 @@
  */
 
 import type { PinnedSheetRow, SheetRevisionCacheRow } from "./schema";
-import { shareSheetKey } from "./shareCatalog";
+
+function sheetKey(projectName: string, sheetId: string): string {
+  return `${projectName.trim().toLowerCase()}::${sheetId.trim().toLowerCase()}`;
+}
 
 export type ShareRefreshStatus = "bumped" | "unchanged" | "missing";
 
@@ -42,7 +45,7 @@ export function planShareRefresh(
 ): ShareRefreshPlan {
   const cacheByKey = new Map<string, SheetRevisionCacheRow>();
   for (const row of cache) {
-    cacheByKey.set(shareSheetKey(row.project_name, row.sheet_id), row);
+    cacheByKey.set(sheetKey(row.project_name, row.sheet_id), row);
   }
 
   const items: ShareRefreshItem[] = [];
@@ -51,7 +54,7 @@ export function planShareRefresh(
   let missing = 0;
 
   for (const pin of pins) {
-    const key = shareSheetKey(pin.project_name, pin.sheet_id);
+    const key = sheetKey(pin.project_name, pin.sheet_id);
     const cached = cacheByKey.get(key) ?? null;
     const current = currentRevs.get(key) ?? null;
     const previous = cached?.rev || pin.last_seen_rev || "";

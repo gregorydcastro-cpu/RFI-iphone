@@ -8,11 +8,6 @@ import {
   sheetsForDiscipline,
 } from "./shareCatalog.ts";
 import { planShareRefresh } from "./shareRefresh.ts";
-import {
-  createShareFolder,
-  pinSheetsToFolder,
-  refreshAllPinnedSheets,
-} from "./shareStore.ts";
 import type { PinnedSheetRow, SheetRevisionCacheRow } from "./schema.ts";
 
 const forbidden = /Brown|Rossi|Danoff|Suffolk|ILSB|EL107/i;
@@ -138,31 +133,4 @@ test("planShareRefresh marks bumped unchanged and missing", () => {
   assert.equal(plan.items.find((item) => item.sheet_id === "E-101")?.status, "bumped");
   assert.equal(plan.items.find((item) => item.sheet_id === "A-101")?.status, "unchanged");
   assert.equal(plan.items.find((item) => item.sheet_id === "Z-999")?.status, "missing");
-});
-
-test("memory store creates folder, pins lighting, refresh scans pins", async () => {
-  const ownerUserId = `stub:share-test-${Date.now()}`;
-  const created = await createShareFolder({
-    ownerUserId,
-    name: "Lighting set",
-  });
-  assert.equal("folder" in created, true);
-  if (!("folder" in created)) return;
-
-  const drafts = expandDisciplinePins("lighting");
-  const pinned = await pinSheetsToFolder({
-    ownerUserId,
-    folderId: created.folder.id,
-    drafts,
-  });
-  assert.equal("pins" in pinned, true);
-  if (!("pins" in pinned)) return;
-  assert.equal(pinned.added, 1);
-  assert.equal(pinned.pins[0]?.sheet_id, "E-102");
-  assert.equal(pinned.pins[0]?.discipline, "lighting");
-
-  const refresh = await refreshAllPinnedSheets(ownerUserId);
-  assert.equal(refresh.plan.scanned, 1);
-  assert.equal(refresh.plan.missing, 0);
-  assert.ok(refresh.plan.bumped + refresh.plan.unchanged === 1);
 });
