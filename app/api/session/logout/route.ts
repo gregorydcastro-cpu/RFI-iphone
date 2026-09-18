@@ -3,6 +3,7 @@ import {
   applyHttpCookies,
   cookieDomainFromRequest,
   cookieSecureFromRequest,
+  isNextPrefetch,
   procoreLinkedCookieWrites,
 } from "@/lib/auth";
 import { oauthStateCookieOptions } from "@/lib/procoreOAuth";
@@ -11,6 +12,12 @@ import { stubSessionCookieWrites } from "@/lib/stubSession";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  if (isNextPrefetch(request)) {
+    return new NextResponse(null, {
+      status: 204,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
   const secure = cookieSecureFromRequest(request);
   const domain = cookieDomainFromRequest(request);
   const url = new URL("/", request.url);

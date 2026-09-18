@@ -4,6 +4,7 @@ import {
   applyHttpCookies,
   cookieDomainFromHost,
   cookieWritesForDomain,
+  isNextPrefetch,
   PRODUCTION_COOKIE_DOMAIN,
   readCookieValue,
   safeNextPath,
@@ -18,6 +19,25 @@ import {
   STUB_SESSION_COOKIE,
   stubSessionCookieWrites,
 } from "./stubSession.ts";
+
+test("isNextPrefetch detects RSC logout prefetch", () => {
+  assert.equal(
+    isNextPrefetch(new Request("http://localhost:3000/api/session/logout?_rsc=abc")),
+    true,
+  );
+  assert.equal(
+    isNextPrefetch(
+      new Request("http://localhost:3000/api/session/logout", {
+        headers: { RSC: "1" },
+      }),
+    ),
+    true,
+  );
+  assert.equal(
+    isNextPrefetch(new Request("http://localhost:3000/api/session/logout")),
+    false,
+  );
+});
 
 test("safeNextPath allows only same-origin relative paths", () => {
   assert.equal(safeNextPath("/share"), "/share");

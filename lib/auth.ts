@@ -35,6 +35,20 @@ export type HttpCookieOptions = {
   domain?: string;
 };
 
+/** Next.js Link prefetch of /api/session/logout must not clear the stub cookie. */
+export function isNextPrefetch(request: Request): boolean {
+  try {
+    if (new URL(request.url).searchParams.has("_rsc")) return true;
+  } catch {
+    /* keep header checks */
+  }
+  const rsc = request.headers.get("rsc");
+  const routerPrefetch = request.headers.get("next-router-prefetch");
+  const purpose =
+    request.headers.get("purpose") ?? request.headers.get("sec-purpose") ?? "";
+  return rsc === "1" || routerPrefetch === "1" || purpose.toLowerCase().includes("prefetch");
+}
+
 /** Same-origin relative path only. Blocks protocol-relative and absolute URLs. */
 export function safeNextPath(raw: unknown): string {
   if (typeof raw !== "string") return "/jobs";
