@@ -4,6 +4,8 @@ import {
   classifyShareDiscipline,
   expandDisciplinePins,
   expandRoomPackPins,
+  MAPLE_POINT_REQUEST_ID,
+  requestIdForPinnedSheet,
   SHARE_CATALOG,
   sheetsForDiscipline,
 } from "./shareCatalog.ts";
@@ -68,6 +70,17 @@ test("pin full discipline expands Maple Point sheets", () => {
     ["E-102"],
   );
   assert.equal(sheetsForDiscipline("lighting").length, 1);
+});
+
+test("requestIdForPinnedSheet maps Maple Point sheets", () => {
+  assert.equal(
+    requestIdForPinnedSheet("Maple Point Medical Office", "A-101"),
+    MAPLE_POINT_REQUEST_ID,
+  );
+  assert.equal(
+    requestIdForPinnedSheet("Unknown Job", "X-1"),
+    MAPLE_POINT_REQUEST_ID,
+  );
 });
 
 test("pin room pack uses room label as discipline", () => {

@@ -429,10 +429,3 @@ export async function weeklyRefreshPinnedSheets(): Promise<
   };
 }
 
-/** Test helper: wipe the in-process share store. */
-export function resetShareMemoryForTests(): void {
-  const store = memory();
-  store.folders = [];
-  store.pins = [];
-  store.cache = [];
-}

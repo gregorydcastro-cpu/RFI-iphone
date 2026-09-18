@@ -9,10 +9,9 @@
  * bumps[] is the hook for issue #31 (Notify Mike). No email/SMS here.
  */
 
-import { timingSafeEqual } from "node:crypto";
 import { readGoogleDriveAuth } from "./driveAuth";
-import { readEnv } from "./env";
-import { MAPLE_POINT_REQUEST_ID, SHARE_CATALOG, shareSheetKey } from "./shareCatalog";
+import { requestIdForPinnedSheet } from "./shareCatalog";
+import { procoreRestSummary, weeklyPdfRedownloadFlag } from "./shareCronAuth";
 import type {
   ShareRefreshBump,
   ShareRefreshError,
@@ -21,9 +20,17 @@ import type {
 import { weeklyRefreshPinnedSheets } from "./shareStore";
 import { loadSheetPdf } from "./sheetPdf";
 
-export const CRON_SECRET_KEY = "CRON_SECRET";
-export const SHARE_WEEKLY_PROCORE_REST_FLAG = "SHARE_WEEKLY_PROCORE_REST";
-export const SHARE_WEEKLY_PDF_REDOWNLOAD_FLAG = "SHARE_WEEKLY_PDF_REDOWNLOAD";
+export {
+  authorizeCronHeaders,
+  cronSecretConfigured,
+  CRON_SECRET_KEY,
+  procoreRestSummary,
+  readCronSecret,
+  SHARE_WEEKLY_PDF_REDOWNLOAD_FLAG,
+  SHARE_WEEKLY_PROCORE_REST_FLAG,
+  weeklyPdfRedownloadFlag,
+  weeklyProcoreRestEnabled,
+} from "./shareCronAuth";
 
 export type WeeklyPdfSummary = {
   attempted: boolean;
@@ -40,14 +47,7 @@ export type WeeklyPdfSummary = {
   }>;
 };
 
-export type WeeklyProcoreRestSummary = {
-  enabled: boolean;
-  called: false;
-  todo: true;
-  flag: typeof SHARE_WEEKLY_PROCORE_REST_FLAG;
-  issue: 25;
-  note: string;
-};
+export type WeeklyProcoreRestSummary = ReturnType<typeof procoreRestSummary>;
 
 export type WeeklyShareRefreshSummary = {
   ok: boolean;
@@ -67,65 +67,18 @@ export type WeeklyShareRefreshSummary = {
   note: string;
 };
 
-export function readCronSecret(): string | undefined {
-  return readEnv(CRON_SECRET_KEY);
-}
-
-export function cronSecretConfigured(): boolean {
-  return Boolean(readCronSecret());
-}
-
-function timingSafeEqualString(provided: string, expected: string): boolean {
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) {
-    timingSafeEqual(a, a);
-    return false;
-  }
-  return timingSafeEqual(a, b);
-}
-
-export function authorizeCronHeaders(headers: Headers): boolean {
-  const secret = readCronSecret();
-  if (!secret) return false;
-
-  const authorization = headers.get("authorization");
-  const bearer =
-    authorization && /^Bearer\s+/i.test(authorization)
-      ? authorization.replace(/^Bearer\s+/i, "").trim()
-      : "";
-  const headerSecret = headers.get("x-cron-secret")?.trim() ?? "";
-  const provided = bearer || headerSecret;
-  if (!provided) return false;
-  return timingSafeEqualString(provided, secret);
-}
-
-export function weeklyProcoreRestEnabled(): boolean {
-  return readEnv(SHARE_WEEKLY_PROCORE_REST_FLAG) === "1";
-}
-
 /**
  * Safe Drive/proxy re-download is on when Drive auth exists, or when
  * SHARE_WEEKLY_PDF_REDOWNLOAD=1 (uses GET /api/sheet-pdf's loadSheetPdf).
  * SHARE_WEEKLY_PDF_REDOWNLOAD=0 forces metadata-only.
  */
 export function weeklyPdfRedownloadEnabled(): boolean {
-  const flag = readEnv(SHARE_WEEKLY_PDF_REDOWNLOAD_FLAG);
-  if (flag === "0") return false;
-  if (flag === "1") return true;
+  const flag = weeklyPdfRedownloadFlag();
+  if (flag !== null) return flag;
   return readGoogleDriveAuth() !== null;
 }
 
-export function requestIdForPinnedSheet(
-  projectName: string,
-  sheetId: string,
-): string {
-  const key = shareSheetKey(projectName, sheetId);
-  const sheet = SHARE_CATALOG.sheets.find(
-    (row) => shareSheetKey(row.project_name, row.sheet_id) === key,
-  );
-  return sheet?.request_id ?? MAPLE_POINT_REQUEST_ID;
-}
+export { requestIdForPinnedSheet };
 
 export async function redownloadBumpedPdfs(
   bumps: ShareRefreshBump[],
@@ -176,20 +129,6 @@ export async function redownloadBumpedPdfs(
     note:
       "Fetched bumped sheet PDFs through the existing Drive/proxy path (loadSheetPdf). Bytes are not persisted — pack viewer already streams /api/sheet-pdf. There is no Procore REST download.",
     items,
-  };
-}
-
-export function procoreRestSummary(): WeeklyProcoreRestSummary {
-  const enabled = weeklyProcoreRestEnabled();
-  return {
-    enabled,
-    called: false,
-    todo: true,
-    flag: SHARE_WEEKLY_PROCORE_REST_FLAG,
-    issue: 25,
-    note: enabled
-      ? "SHARE_WEEKLY_PROCORE_REST=1 is reserved. Live Procore REST is not wired on main (issue #25). This run compared catalog + room_packs only and did not call Procore."
-      : "Live Procore REST is not called. Set SHARE_WEEKLY_PROCORE_REST=1 later when issue #25 lands; until then the cron uses the same Maple Point catalog + room_packs sources as Refresh all.",
   };
 }
 
