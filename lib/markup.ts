@@ -1,73 +1,50 @@
 /**
- * Vector markup overlays for pack sheets (PR #9 `markup_overlays` shape).
+ * Vector markup overlays for pack sheets.
  *
+ * Row shape matches `lib/schema.ts` / `public.markup_overlays`
+ * (request_id, sheet_id, vectors jsonb, user_id, updated_at).
  * Coordinates are normalized 0–1, origin top-left (same space as pack layout).
- * Persist to Supabase `markup_overlays` when configured; otherwise
- * localStorage keyed by request_id + sheet_id.
  *
- * TODO: migrate localStorage overlays to public.markup_overlays after
- * `supabase/migrations/20260918020000_share_markup_rfi_trial.sql` (and the
- * markup FK follow-up) are applied on the gc-field-log project.
+ * Persist via service-role `/api/markups` (stub session). localStorage is
+ * only the offline/demo fallback when SUPABASE_SERVICE_ROLE_KEY is missing.
  */
 
+import type {
+  MarkupArrow,
+  MarkupCircle,
+  MarkupKind,
+  MarkupOverlayRow,
+  MarkupTextNote,
+  MarkupVector,
+  MarkupVectorsJson,
+} from "./schema";
+
+export type {
+  MarkupArrow,
+  MarkupBox,
+  MarkupCircle,
+  MarkupKind,
+  MarkupOverlayRow,
+  MarkupTextNote,
+  MarkupVector,
+  MarkupVectorsJson,
+} from "./schema";
+
+/** Same constant as `lib/schema.ts` — value copy so node tests need no schema import. */
 export const MARKUP_OVERLAYS_TABLE = "markup_overlays";
+
 export const MARKUP_STORAGE_PREFIX = "gcfieldlog.markup";
 export const MARKUP_RFI_PREFILL_KEY = "gcfieldlog.markup_rfi_prefill";
 
-export type MarkupKind = "circle" | "box" | "arrow" | "text";
 export type MarkupTool = "pan" | MarkupKind;
 
 export type Point = { x: number; y: number };
 
-export type MarkupCircle = {
-  id: string;
-  kind: "circle";
-  cx: number;
-  cy: number;
-  r: number;
-};
-
-export type MarkupBox = {
-  id: string;
-  kind: "box";
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-};
-
-export type MarkupArrow = {
-  id: string;
-  kind: "arrow";
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-};
-
-export type MarkupTextNote = {
-  id: string;
-  kind: "text";
-  x: number;
-  y: number;
-  text: string;
-};
-
-export type MarkupVector =
-  | MarkupCircle
-  | MarkupBox
-  | MarkupArrow
-  | MarkupTextNote;
-
-export type MarkupVectorsJson = {
-  items: MarkupVector[];
-};
-
-export type MarkupOverlayRecord = {
-  id: string;
-  request_id: string;
-  sheet_id: string;
-  vectors: MarkupVectorsJson;
+/** Client overlay row. Same columns as `MarkupOverlayRow`; timestamps optional until saved. */
+export type MarkupOverlayRecord = Pick<
+  MarkupOverlayRow,
+  "id" | "request_id" | "sheet_id" | "vectors"
+> & {
   user_id?: string;
   created_at?: string;
   updated_at?: string;

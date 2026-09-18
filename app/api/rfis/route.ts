@@ -40,11 +40,12 @@ function newUuid(): string {
 }
 
 /**
- * Create a draft RFI row in `public.rfis` (PR #9 columns).
+ * Create a draft RFI row in `public.rfis`.
  * Sent to foreman Pat Nguyen. Never a Procore submit.
  *
  * Service-role persist when configured; otherwise the client keeps
  * localStorage and this returns `persisted: false`.
+ * `markup_id` is the optional overlay FK when Create RFI came from a markup.
  */
 export async function POST(request: Request) {
   let body: RfiBody;

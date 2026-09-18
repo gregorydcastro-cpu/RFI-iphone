@@ -1,18 +1,16 @@
 /**
- * Server read/upsert for `public.markup_overlays` (PR #9 column shape).
+ * Server read/upsert for `public.markup_overlays`.
+ *
+ * Columns: request_id, sheet_id, vectors jsonb (circle/box/arrow/text),
+ * user_id, updated_at. Unique on (request_id, sheet_id, user_id).
  *
  * Writes use SUPABASE_SERVICE_ROLE_KEY because stub session ids
  * (`stub:` + sha256 email) are not auth.uid(). Anon has no grants.
- * Never call Procore from here.
+ * Same pattern as `procore_connections` / `rfis`. Never call Procore.
  */
 
-import {
-  asOverlayRecord,
-  MARKUP_OVERLAYS_TABLE,
-  parseVectors,
-  type MarkupOverlayRecord,
-  type MarkupVectorsJson,
-} from "./markup";
+import { asOverlayRecord, parseVectors, type MarkupOverlayRecord, type MarkupVectorsJson } from "./markup";
+import { MARKUP_OVERLAYS_TABLE } from "./schema";
 import {
   getSupabaseServiceConfig,
   type SupabaseServiceConfig,

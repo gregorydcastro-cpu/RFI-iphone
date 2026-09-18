@@ -122,22 +122,24 @@ export function SheetViewer({
     setSelectedId(null);
   }
 
-  function handleCreateRfi() {
+  async function handleCreateRfi() {
     if (!requestId || !sheetId || !selected) return;
+    const saved = await markup.flush();
+    const overlayId = saved.id || markup.overlayId;
     const prefill = buildMarkupRfiPrefill({
       requestId,
-      overlayId: markup.overlayId,
+      overlayId,
       item: selected,
       sheetId,
       sheetRev: sheetRev ?? "",
       roomName: roomName ?? "",
       roomNumber,
-      vectors: markup.vectors,
+      vectors: saved.vectors,
     });
     writeMarkupRfiPrefill(prefill);
     const params = new URLSearchParams({
       sheet: sheetId,
-      markup: markup.overlayId,
+      markup: overlayId,
       item: selected.id,
       subject: prefill.subject,
       question: prefill.question,

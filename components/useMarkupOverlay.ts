@@ -30,13 +30,61 @@ function emptyRecord(requestId: string, sheetId: string): MarkupOverlayRecord {
   };
 }
 
+function applyRow(
+  requestId: string,
+  sheetId: string,
+  fallbackId: string,
+  row: MarkupOverlayRecord,
+): MarkupOverlayRecord {
+  return {
+    id: row.id || fallbackId,
+    request_id: requestId,
+    sheet_id: sheetId,
+    vectors: parseVectors(row.vectors),
+    user_id: row.user_id,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
 export function useMarkupOverlay(requestId: string, sheetId: string) {
   const [record, setRecord] = useState<MarkupOverlayRecord>(() =>
     emptyRecord(requestId, sheetId),
   );
-  const [storage, setStorage] = useState<StorageKind>("local");
+  const [storage, setStorage] = useState<StorageKind>("unconfigured");
   const [ready, setReady] = useState(false);
   const recordRef = useRef<MarkupOverlayRecord>(emptyRecord(requestId, sheetId));
+
+  const persist = useCallback(async (next: MarkupOverlayRecord) => {
+    try {
+      const response = await fetch("/api/markups", {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: next.id,
+          request_id: next.request_id,
+          sheet_id: next.sheet_id,
+          vectors: next.vectors,
+        }),
+      });
+      const data = (await response.json()) as ApiResponse;
+      if (response.ok && data.ok && data.row?.id) {
+        const saved = applyRow(next.request_id, next.sheet_id, next.id, data.row);
+        recordRef.current = saved;
+        setRecord(saved);
+        if (data.storage) setStorage(data.storage);
+        if (data.storage === "supabase") return saved;
+        saveLocalOverlay(saved);
+        return saved;
+      }
+    } catch {
+      // fall through to localStorage
+    }
+    saveLocalOverlay(next);
+    setStorage("local");
+    return next;
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,12 +96,8 @@ export function useMarkupOverlay(requestId: string, sheetId: string) {
         setReady(true);
         return;
       }
+
       const local = loadLocalOverlay(requestId, sheetId);
-      const initial = local ?? emptyRecord(requestId, sheetId);
-      recordRef.current = initial;
-      setRecord(initial);
-      setStorage("local");
-      setReady(true);
 
       try {
         const params = new URLSearchParams({
@@ -65,23 +109,44 @@ export function useMarkupOverlay(requestId: string, sheetId: string) {
           cache: "no-store",
         });
         const data = (await response.json()) as ApiResponse;
-        if (cancelled || !response.ok || !data.ok) return;
+        if (cancelled || !response.ok || !data.ok) {
+          const fallback = local ?? emptyRecord(requestId, sheetId);
+          recordRef.current = fallback;
+          setRecord(fallback);
+          setStorage("local");
+          setReady(true);
+          return;
+        }
+
         if (data.storage) setStorage(data.storage);
-        if (recordRef.current.vectors.items.length > 0) return;
+
         if (data.row?.vectors) {
-          const next: MarkupOverlayRecord = {
-            id: data.row.id || initial.id,
-            request_id: requestId,
-            sheet_id: sheetId,
-            vectors: parseVectors(data.row.vectors),
-            updated_at: data.row.updated_at,
-          };
+          const next = applyRow(requestId, sheetId, local?.id ?? newMarkupId(), data.row);
           recordRef.current = next;
           setRecord(next);
-          saveLocalOverlay(next);
+          setReady(true);
+          return;
         }
+
+        const initial = local ?? emptyRecord(requestId, sheetId);
+        recordRef.current = initial;
+        setRecord(initial);
+        setReady(true);
+
+        if (
+          data.storage !== "unconfigured" &&
+          initial.vectors.items.length > 0
+        ) {
+          void persist(initial);
+        }
+        return;
       } catch {
-        // localStorage still holds the overlay for the demo
+        const fallback = local ?? emptyRecord(requestId, sheetId);
+        if (cancelled) return;
+        recordRef.current = fallback;
+        setRecord(fallback);
+        setStorage("local");
+        setReady(true);
       }
     }
 
@@ -89,41 +154,7 @@ export function useMarkupOverlay(requestId: string, sheetId: string) {
     return () => {
       cancelled = true;
     };
-  }, [requestId, sheetId]);
-
-  const persist = useCallback((next: MarkupOverlayRecord) => {
-    saveLocalOverlay(next);
-    void (async () => {
-      try {
-        const response = await fetch("/api/markups", {
-          method: "PUT",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: next.id,
-            request_id: next.request_id,
-            sheet_id: next.sheet_id,
-            vectors: next.vectors,
-          }),
-        });
-        const data = (await response.json()) as ApiResponse;
-        if (response.ok && data.ok && data.row?.id) {
-          const saved: MarkupOverlayRecord = {
-            ...next,
-            id: data.row.id,
-            vectors: parseVectors(data.row.vectors),
-            updated_at: data.row.updated_at,
-          };
-          recordRef.current = saved;
-          setRecord(saved);
-          saveLocalOverlay(saved);
-          if (data.storage) setStorage(data.storage);
-        }
-      } catch {
-        // keep local
-      }
-    })();
-  }, []);
+  }, [persist, requestId, sheetId]);
 
   const setItems = useCallback(
     (items: MarkupVector[] | ((current: MarkupVector[]) => MarkupVector[])) => {
@@ -138,10 +169,14 @@ export function useMarkupOverlay(requestId: string, sheetId: string) {
       };
       recordRef.current = next;
       setRecord(next);
-      persist(next);
+      void persist(next);
     },
     [persist],
   );
+
+  const flush = useCallback(async () => {
+    return persist(recordRef.current);
+  }, [persist]);
 
   return {
     overlayId: record.id,
@@ -150,5 +185,6 @@ export function useMarkupOverlay(requestId: string, sheetId: string) {
     storage,
     ready,
     setItems,
+    flush,
   };
 }

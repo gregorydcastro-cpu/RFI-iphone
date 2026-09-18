@@ -38,7 +38,8 @@ function sessionUserId(request: Request): string {
 
 /**
  * Load a vector overlay for a pack sheet. Never a raster bake.
- * Service-role persist when configured; otherwise the client keeps localStorage.
+ * Service-role read of `markup_overlays` when configured; otherwise
+ * the client falls back to localStorage.
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -57,13 +58,15 @@ export async function GET(request: Request) {
   return json({
     ok: true,
     persisted: Boolean(row),
-    storage: row ? "supabase" : configured ? "unavailable" : "unconfigured",
+    storage: configured ? "supabase" : "unconfigured",
     row,
   });
 }
 
 /**
  * Upsert vector overlay JSON for a pack sheet. Not a flattened image.
+ * Service-role write under the stub session (`user_id`). localStorage is
+ * only the client fallback when this returns storage: unconfigured.
  */
 export async function PUT(request: Request) {
   let body: MarkupBody;
