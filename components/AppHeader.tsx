@@ -91,7 +91,12 @@ export function AppHeader({
               </Link>
             </>
           ) : (
-            <span className="text-accent-2">Login</span>
+            <>
+              <Link className="text-secondary hover:text-cta" href="/pricing">
+                Pricing
+              </Link>
+              <span className="text-accent-2">Login</span>
+            </>
           )}
         </nav>
       </div>

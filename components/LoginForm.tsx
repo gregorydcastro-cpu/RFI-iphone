@@ -54,9 +54,13 @@ export function LoginForm() {
           GC Field Log
         </h1>
         <p className="mt-2 text-sm text-accent-2">
-          Stub login. No real auth, Stripe, or Apple sign-in. Viewers open
-          packs without Procore. Pullers connect their own Procore account
-          to pull.
+          Stub login. No real auth or Apple sign-in. Viewers open packs
+          without Procore. Pullers connect their own Procore account to
+          pull. Monthly billing is a 60-day Stripe Checkout trial on{" "}
+          <a href="/pricing" className="text-accent underline">
+            /pricing
+          </a>
+          .
         </p>
       </div>
       <label className="block text-xs font-semibold tracking-wide text-muted uppercase">

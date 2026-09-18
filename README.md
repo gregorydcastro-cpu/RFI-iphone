@@ -2,11 +2,11 @@
 
 Browser **dashboard for field crews** on **[gcfieldlog.com](https://gcfieldlog.com)**. Foremen and supers sign in (stub), pick a job, request a room pack, then work the sheet: zoomable floor plans, room highlight, linked RFIs, Generate RFI / Order materials, and a **Time** tab (geofenced punch-in + crew week).
 
-This is the product surface. **Native iOS is paused. No Apple.** Real login and **Stripe monthly billing** are later — the login page is a **stub session** (httpOnly cookie with user id + email + role). Wordmark is clean text: **GC Field Log** (no extra logo).
+This is the product surface. **Native iOS is paused. No Apple.** Real login is later — the login page is a **stub session** (httpOnly cookie with user id + email + role). **Stripe Checkout** (60-day trial → monthly) is scaffolded at `/pricing`. Wordmark is clean text: **GC Field Log** (no extra logo).
 
 Host: **Vercel (primary)** with **HostGator DNS** for `gcfieldlog.com` (document only; this PR does not change DNS). Cloudflare Pages is a possible later target.
 
-No real crew auth, Stripe, HostGator uploads, or live Procore REST API in this MVP. The **Room pack webhook routine is deleted** — this app does **not** call `procore_room_pack_webhook_url` / webhook Authorization.
+No real crew auth, HostGator uploads, or live Procore REST API in this MVP. Stripe Checkout + webhook are scaffolded (secrets stay in Vercel; Maple Point demos do not need them). The **Room pack webhook routine is deleted** — this app does **not** call `procore_room_pack_webhook_url` / webhook Authorization.
 
 **Pullers** can **Connect Procore** with their own Procore login (OAuth authorization code). Tokens are stored per stub user in Supabase `procore_connections`. Viewers do not need to connect and cannot trigger a pull.
 
@@ -26,7 +26,8 @@ Must match this path — nothing else in the primary nav:
 | --- | --- |
 | Login (`/`) | Email/password form UI. Submit creates a stub session cookie (`gcfieldlog_stub_user`) with `userId` + email + role (`viewer` default, or `puller`). Password is not checked. |
 | Jobs (`/jobs`) | Fictional jobs only (Maple Point and similar). Header shows **Puller** / **Procore connected** / **View only**. Pullers get **Connect Procore**. |
-| Account (`/account`) | Stub session + Procore connected / disconnected state. |
+| Account (`/account`) | Stub session + Procore connected / disconnected state + link to pricing. |
+| Pricing (`/pricing`) | Subscribe CTA → Stripe-hosted Checkout (60-day trial, payment method collected). |
 | Room pack request | Room number (e.g. `733`). **Connected puller:** `POST /api/room-pack` asks the Procore bot to refresh, then opens `/pack/[requestId]`. **Viewer / unconnected puller:** **Open pack** only — no pull. Local demo (no `SUPABASE_URL`) loads Maple Point JSON. |
 | Pack viewer | Field stack on `/pack/[requestId]`: **architectural floor plan first** (A-*, architectural, floor plan heuristics; else current primary), oversized crimson SVG box around the room walls, then remaining sheets (power, lighting, …) and linked RFIs. Drawing number + revision letter stamps stay on the top bar and each sheet (`A-101 Rev A`). Website open always re-reads `room_packs` (no-store). Connected pullers also trigger a bot refresh; viewers cannot. |
 | Generate RFI / Materials | Live pack actions. Drafts go to foreman Pat Nguyen — not a Procore submit. **Dictate** fills the form from the mic; **Read aloud** speaks RFIs. |
@@ -60,7 +61,7 @@ Production host is **gcfieldlog.com**.
 
 1. Import this GitHub repo in [Vercel](https://vercel.com/new) (framework preset: **Next.js**).
 2. Build command: `npm run build`. `postinstall` copies `pdf.worker.min.mjs`.
-3. **Env:** the Maple Point demo needs **no** secrets. Production reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` for live `room_packs`. Procore **user** OAuth (Connect Procore) uses **`PROCORE_CLIENT_ID` / `PROCORE_CLIENT_SECRET`** and **`SUPABASE_SERVICE_ROLE_KEY`** on Vercel (server-only, never `NEXT_PUBLIC_`). **Grok Voice** (RFI/materials dictation + RFI read-aloud) uses **`XAI_API_KEY`** (server-only, never `NEXT_PUBLIC_`). Copy OAuth id/secret from `/home/box/.secrets/procore_client_id` and `procore_client_secret` — do not commit. Do **not** restore `procore_room_pack_webhook_url` / `procore_room_pack_webhook_authorization` for this live path — that routine is deleted.
+3. **Env:** the Maple Point demo needs **no** secrets. Production reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` for live `room_packs`. Procore **user** OAuth (Connect Procore) uses **`PROCORE_CLIENT_ID` / `PROCORE_CLIENT_SECRET`** and **`SUPABASE_SERVICE_ROLE_KEY`** on Vercel (server-only, never `NEXT_PUBLIC_`). **Grok Voice** (RFI/materials dictation + RFI read-aloud) uses **`XAI_API_KEY`** (server-only, never `NEXT_PUBLIC_`). Copy OAuth id/secret from `/home/box/.secrets/procore_client_id` and `procore_client_secret` — do not commit. Do **not** restore `procore_room_pack_webhook_url` / `procore_room_pack_webhook_authorization` for this live path — that routine is deleted. Stripe Checkout (optional until you sell) uses the keys in **Stripe Checkout (Vercel + Dashboard)** below.
 4. **DNS (ops, not this repo):** at HostGator, point `gcfieldlog.com` / `www` to Vercel (A / CNAME per Vercel’s domain docs). Do not upload files to HostGator for this app.
 
 ### Procore OAuth (Connect Procore)
@@ -171,6 +172,70 @@ RLS is on. `anon` has no grants. `authenticated` may **SELECT own row** only (`a
 
 If `SUPABASE_SERVICE_ROLE_KEY` is missing, Connect still redirects through Procore but the callback cannot persist tokens (`storage_unconfigured`). Do not use `SUPABASE_ANON_KEY` for this table.
 
+### Stripe Checkout (Vercel + Dashboard)
+
+60-day free trial that **auto-converts** to the monthly Price because Checkout collects a payment method (`payment_method_collection: always`). Hosted Checkout is used — no Stripe.js on the pricing page. Maple Point local demo does **not** need these keys.
+
+**Vercel env (Production / Preview as needed):**
+
+| Key | Role |
+| --- | --- |
+| `STRIPE_SECRET_KEY` | Server-only secret (`sk_test_…` / `sk_live_…`). Creates Checkout Sessions and verifies webhooks. **Never** `NEXT_PUBLIC_`. |
+| `STRIPE_WEBHOOK_SECRET` | Server-only signing secret (`whsec_…`) from the webhook endpoint. **Never** `NEXT_PUBLIC_`. |
+| `STRIPE_PRICE_ID` | Recurring Price id (`price_…`) for the monthly subscription. **Never** `NEXT_PUBLIC_`. |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Publishable only (`pk_test_…` / `pk_live_…`). Not required for hosted Checkout; set it anyway for later Stripe.js. Safe to expose. |
+| `SUPABASE_URL` | Same project as `room_packs` / `procore_connections` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Webhook upserts `public.billing_customers`. Anon key must not write this table. |
+
+Never commit secret values. Never log them.
+
+**Dashboard — Product / Price**
+
+1. [Products](https://dashboard.stripe.com/products) → **Add product** (e.g. GC Field Log monthly).
+2. Add a **recurring** Price (monthly, USD or your currency). Copy the Price id (`price_…`) into Vercel `STRIPE_PRICE_ID`.
+3. Do not put the amount in git — Checkout reads it from the Price.
+
+**Dashboard — payment methods (cards + Apple Pay + PayPal)**
+
+1. [Payment methods](https://dashboard.stripe.com/settings/payment_methods) — enable **Cards**. Checkout then shows Apple Pay / Google Pay as wallets on eligible devices with no extra app code.
+2. [Payment method domains](https://dashboard.stripe.com/settings/payment_method_domains) — add **`gcfieldlog.com`** and **`www.gcfieldlog.com`** (and `localhost` for test). Apple Pay domain registration is required for wallets on your own pages; hosted Checkout also presents Apple Pay on Stripe’s domain.
+3. Enable **PayPal** on the same Payment methods page if your Stripe account country supports it ([PayPal via Stripe](https://docs.stripe.com/payments/paypal)). US/other countries may need Stripe’s PayPal onboarding. Do **not** pass `payment_method_types` in code — Dashboard configuration is the source of truth.
+
+**Optional later — crypto / stablecoins**
+
+No crypto or stablecoin code in this app. Later you can turn on Stripe’s crypto/stablecoin payment methods in the Dashboard (or a separate Payment method configuration) without changing Checkout code, as long as `payment_method_types` stays unset.
+
+**Dashboard — webhook**
+
+1. [Webhooks](https://dashboard.stripe.com/webhooks) → **Add endpoint**.
+2. Endpoint URL: **`https://gcfieldlog.com/api/stripe/webhook`** (use the Preview URL + `/api/stripe/webhook` for Vercel previews).
+3. Events (at least): `checkout.session.completed`, `customer.subscription.updated`, `invoice.paid`.
+4. Copy the endpoint **Signing secret** into Vercel `STRIPE_WEBHOOK_SECRET`.
+5. Apply the SQL in `supabase/migrations/20260918120000_billing_customers.sql` on the gc-field-log Supabase project so the webhook can upsert rows.
+
+**App routes**
+
+- `POST /api/stripe/checkout` — creates a subscription Checkout Session (`trial_period_days: 60`, promotion codes allowed). Redirects the browser to Stripe-hosted Checkout. `success_url` / `cancel_url` return to `/pricing` on gcfieldlog.com (localhost and `*.vercel.app` use the request origin).
+- `POST /api/stripe/webhook` — verifies `Stripe-Signature`, logs the event, upserts `billing_customers`. Does **not** send email yet (TODO in the handler).
+- `/pricing` — Subscribe CTA.
+
+If Stripe env is missing, `/pricing` still renders and Checkout returns `billing_unconfigured` (503). Pack viewer and Procore OAuth are unchanged.
+
+#### Billing table (`public.billing_customers`)
+
+SQL: `supabase/migrations/20260918120000_billing_customers.sql`.
+
+| Column | Notes |
+| --- | --- |
+| `email` | Checkout / Customer email (nullable until Stripe provides it) |
+| `stripe_customer_id` | Unique. Upsert key from webhooks |
+| `stripe_subscription_id` | Latest subscription id |
+| `status` | `trialing` \| `active` \| `canceled` \| `past_due` |
+| `trial_end` | From the Stripe Subscription |
+| `created_at` / `updated_at` | Timestamps |
+
+RLS is on. `anon` has no grants. `authenticated` may **SELECT own row** by JWT email. Service role upserts.
+
 #### Stub user until real auth
 
 1. Login POSTs `/api/session` with email + role. Password is ignored.
@@ -253,7 +318,8 @@ Local `npm run dev` does not need any of these variables.
 | `/jobs` | Fictional **job selection** + Connect Procore (puller) |
 | `/jobs/[projectSlug]` | **Pull / open room pack** (connected puller POSTs `/api/room-pack`; viewer opens `/pack/[requestId]` only) |
 | `/jobs/[projectSlug]/rooms/[room]` | Alias → `/pack/{slug}-{room}` (no pull; use the request form) |
-| `/account` | Stub account + Procore connected state |
+| `/account` | Stub account + Procore connected state + billing link |
+| `/pricing` | Subscribe CTA → Stripe-hosted Checkout (60-day trial) |
 | `/time` | **Time tab** — worker punch + foreman crew week (Maple Point geofence) |
 | `/api/session` | POST stub login |
 | `/api/session/logout` | Clear stub session |
@@ -270,6 +336,8 @@ Local `npm run dev` does not need any of these variables.
 | `/api/voice/status` | GET. `{ configured }` for Grok Voice — never returns the key |
 | `/api/dictation` | POST multipart `file`. Server-side Grok STT (`XAI_API_KEY`) |
 | `/api/tts` | POST `{ text }`. Server-side Grok TTS MP3 (`XAI_API_KEY`) |
+| `/api/stripe/checkout` | POST. Creates a subscription Checkout Session (60-day trial). |
+| `/api/stripe/webhook` | POST. Stripe signature + `billing_customers` upsert. |
 | `/pack/[requestId]` | Live pack viewer. Re-reads on open. Unknown IDs fall back to local Maple Point demo |
 | `/pack/[requestId]/rfi/new?sheet=` | Generate RFI — draft to foreman (not Procore) |
 | `/pack/[requestId]/materials` | Order materials — draft to foreman (not Procore) |
@@ -447,7 +515,8 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 
 - Real crew **login** (replace stub session cookie with Supabase Auth / Auth.js; keep `procore_connections.user_id` = `auth.uid()`)
 - Use stored per-user Procore tokens for live pulls (Connect Procore only **stores** tokens today; pack refresh still goes through the Procore bot)
-- **Stripe** monthly billing
+- Stripe **Customer Portal**, entitlement gating, and receipt / trial emails (Checkout + webhook scaffold is in this PR; no email send yet)
+- Stripe **crypto / stablecoin** payment methods (Dashboard-only later — no app code)
 - **Tools** nav
 - Paper timesheet **photo scan / OCR** (Time tab has a disabled stub)
 - Realtime Grok speech-to-speech on site (this PR is batch STT + TTS)
