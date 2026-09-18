@@ -3,16 +3,32 @@ import type { PackAction } from "@/lib/pack";
 type Props = {
   actions: PackAction[];
   onAction: (action: PackAction) => void;
+  procoreLinked?: boolean;
 };
 
-export function ActionPanel({ actions, onAction }: Props) {
+export function ActionPanel({ actions, onAction, procoreLinked = false }: Props) {
+  const visible = actions.filter((action) => {
+    if (procoreLinked) return true;
+    const id = action.id.toLowerCase();
+    const label = action.label.toLowerCase();
+    if (id.includes("pull") || label.includes("pull")) return false;
+    if (id.includes("download") || label.includes("download")) return false;
+    return true;
+  });
+
   return (
     <section className="space-y-2">
       <h2 className="font-display text-xs tracking-[0.18em] text-muted uppercase">
         Actions
       </h2>
+      {!procoreLinked ? (
+        <p className="text-xs text-tan">
+          View only. Pull and file-pull controls stay with a linked Procore
+          account.
+        </p>
+      ) : null}
       <div className="flex flex-col gap-2">
-        {actions.map((action) => (
+        {visible.map((action) => (
           <button
             key={action.id}
             type="button"

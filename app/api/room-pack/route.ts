@@ -1,13 +1,13 @@
+import { readFieldRoleFromRequest } from "@/lib/auth";
 import { getJob, makeRequestId } from "@/lib/jobs";
-import { drivePackJsonPath } from "@/lib/packStatus";
-import {
-  buildRoomPackWebhookPayload,
-  getProcoreRoomPackWebhookConfig,
-  postRoomPackWebhook,
-} from "@/lib/procoreRoomPack";
+import { refreshLiveRoomPack } from "@/lib/livePack";
+import { PROCORE_BOT_ID } from "@/lib/procoreBot";
+import { getSupabaseConfig } from "@/lib/supabaseRoomPack";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+
+const NO_STORE = { "Cache-Control": "no-store" };
 
 type RoomPackRequestJson = {
   projectSlug?: unknown;
@@ -20,79 +20,84 @@ function asNonEmptyString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function json(data: unknown, status = 200) {
+  return NextResponse.json(data, { status, headers: NO_STORE });
+}
+
 /**
  * Request a room pack from `/jobs/[projectSlug]`.
  *
- * When both lowercase Vercel webhook keys are set, POSTs to Procore and
- * returns as soon as the webhook accepts. The pack page then polls status.
- * Otherwise local demo (no POST, no poll).
+ * Puller only. Coordinates a Procore bot refresh and reads
+ * `public.room_packs`. Does not call the deleted webhook.
+ * Local demo when Supabase env is unset.
  */
 export async function POST(request: Request) {
-  let json: RoomPackRequestJson;
-  try {
-    json = (await request.json()) as RoomPackRequestJson;
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: "Invalid JSON" },
-      { status: 400 },
+  const role = readFieldRoleFromRequest(request);
+  if (!role.procoreLinked) {
+    return json(
+      {
+        ok: false,
+        error:
+          "Puller role required. Link a Procore account (procoreLinked cookie or x-procore-linked header).",
+      },
+      403,
     );
   }
 
-  const projectSlug = asNonEmptyString(json.projectSlug);
-  const room = asNonEmptyString(json.room);
+  let body: RoomPackRequestJson;
+  try {
+    body = (await request.json()) as RoomPackRequestJson;
+  } catch {
+    return json({ ok: false, error: "Invalid JSON" }, 400);
+  }
+
+  const projectSlug = asNonEmptyString(body.projectSlug);
+  const room = asNonEmptyString(body.room);
   if (!projectSlug || !room) {
-    return NextResponse.json(
+    return json(
       { ok: false, error: "projectSlug and room are required" },
-      { status: 400 },
+      400,
     );
   }
 
   const job = getJob(projectSlug);
   if (!job) {
-    return NextResponse.json(
-      { ok: false, error: "Unknown job" },
-      { status: 404 },
-    );
+    return json({ ok: false, error: "Unknown job" }, 404);
   }
 
   const requestId = makeRequestId(job.slug, room);
-  const config = getProcoreRoomPackWebhookConfig();
+  const supabaseConfigured = Boolean(getSupabaseConfig());
 
-  if (!config) {
-    return NextResponse.json({
+  if (!supabaseConfigured) {
+    return json({
       ok: true,
       mode: "demo" as const,
       requestId,
       job: job.slug,
       room,
-      accepted: false,
-      poll: false,
+      refresh: false,
+      botId: PROCORE_BOT_ID,
+      procoreLinked: true,
     });
   }
 
-  const payload = buildRoomPackWebhookPayload({
-    projectName: job.name,
-    room,
+  const live = await refreshLiveRoomPack({
     requestId,
+    job,
+    room,
   });
 
-  const result = await postRoomPackWebhook(config, payload);
-  if (!result.ok) {
-    return NextResponse.json(
-      { ok: false, error: "Room pack request was not accepted" },
-      { status: 502 },
-    );
-  }
-
-  return NextResponse.json({
+  return json({
     ok: true,
-    mode: "webhook" as const,
+    mode: "live" as const,
     requestId,
     job: job.slug,
     room,
-    accepted: true,
-    poll: true,
-    drivePath: drivePackJsonPath(job.slug, requestId),
-    statusUrl: result.statusUrl,
+    refresh: true,
+    source: live?.source ?? "none",
+    pulled_at: live?.pack.pulled_at,
+    revision_stamp: live?.pack.revision_stamp,
+    botId: PROCORE_BOT_ID,
+    procoreLinked: true,
   });
 }
