@@ -48,12 +48,19 @@ function clearNotifyEnv() {
   delete process.env.NOTIFY_MIKE_SMS;
 }
 
+const mapleOwner = "stub:maple-puller";
+
 const mapleBump: ShareRefreshBump = {
   sheet_id: "E-101",
   old_rev: "A",
   new_rev: "B",
   project_name: "Maple Point Medical Office",
+  owner_user_id: mapleOwner,
 };
+
+function emails(map: Record<string, string | null>) {
+  return async () => new Map(Object.entries(map));
+}
 
 test("notify copy stays Maple Point / fictional only", () => {
   const message = formatNotifyMikeMessage([mapleBump]);
@@ -85,13 +92,13 @@ test("notifyEligibleBumps skips unchanged and persist failures", () => {
   );
 });
 
-test("missing notify env skips without sending", async () => {
+test("missing mailer env skips without sending", async () => {
   clearNotifyEnv();
   assert.equal(notifyMikeConfigured(), false);
   assert.equal(notifyMailerConfigured(), false);
-  assert.equal(readNotifyMikeEmail(), undefined);
 
   const result = await notifyMikeOnBumps([mapleBump], [], {
+    lookupNotifyEmails: emails({ [mapleOwner]: "foreman@crew.example" }),
     fetch: async () => {
       throw new Error("fetch should not run when unconfigured");
     },
@@ -103,14 +110,14 @@ test("missing notify env skips without sending", async () => {
   assert.equal(result.status, 503);
   assert.equal(result.bumps, 1);
   assert.equal(result.sms.attempted, false);
-  assert.match(result.note, /NOTIFY_MIKE_EMAIL/);
+  assert.match(result.note, /RESEND_API_KEY/);
 });
 
 test("unchanged sheets do not notify even when mail env is set", async () => {
   clearNotifyEnv();
-  process.env.NOTIFY_MIKE_EMAIL = "mike@crew.example";
   process.env.RESEND_API_KEY = "re_test_key";
   const result = await notifyMikeOnBumps([], [], {
+    lookupNotifyEmails: emails({ [mapleOwner]: "foreman@crew.example" }),
     fetch: async () => {
       throw new Error("fetch should not run when there are no bumps");
     },
@@ -120,10 +127,9 @@ test("unchanged sheets do not notify even when mail env is set", async () => {
   assert.equal(result.skipped, true);
   assert.equal(result.status, 200);
   assert.equal(result.bumps, 0);
-  assert.equal(result.to_configured, true);
 });
 
-test("Resend send uses sheet id + new rev and does not leak the key", async () => {
+test("Resend send uses the owner's notify_email, not NOTIFY_MIKE_EMAIL", async () => {
   clearNotifyEnv();
   process.env.NOTIFY_MIKE_EMAIL = "mike@crew.example";
   process.env.RESEND_API_KEY = "re_test_key";
@@ -131,6 +137,7 @@ test("Resend send uses sheet id + new rev and does not leak the key", async () =
 
   let called = 0;
   const result = await notifyMikeOnBumps([mapleBump], [], {
+    lookupNotifyEmails: emails({ [mapleOwner]: "foreman@crew.example" }),
     fetch: async (input, init) => {
       called += 1;
       assert.equal(String(input), "https://api.resend.com/emails");
@@ -141,7 +148,7 @@ test("Resend send uses sheet id + new rev and does not leak the key", async () =
         subject: string;
         text: string;
       };
-      assert.deepEqual(body.to, ["mike@crew.example"]);
+      assert.deepEqual(body.to, ["foreman@crew.example"]);
       assert.match(body.subject, /E-101/);
       assert.match(body.subject, /Rev B/);
       assert.match(body.text, /A → B/);
@@ -155,20 +162,59 @@ test("Resend send uses sheet id + new rev and does not leak the key", async () =
   assert.equal(result.provider, "resend");
   assert.equal(result.status, 200);
   assert.equal(result.bumps, 1);
+  assert.equal(result.recipients, 1);
+  assert.equal(result.fallback_used, false);
   assert.equal(JSON.stringify(result).includes("re_test_key"), false);
+  assert.equal(JSON.stringify(result).includes("foreman@crew.example"), false);
 });
 
-test("Gmail path sends when app password is set", async () => {
+test("unset notify_email skips that bump without failing refresh", async () => {
+  clearNotifyEnv();
+  process.env.RESEND_API_KEY = "re_test_key";
+  const result = await notifyMikeOnBumps([mapleBump], [], {
+    lookupNotifyEmails: emails({ [mapleOwner]: null }),
+    fetch: async () => {
+      throw new Error("fetch should not run when notify_email is unset");
+    },
+  });
+  assert.equal(result.code, "notify_email_unset");
+  assert.equal(result.sent, false);
+  assert.equal(result.skipped, true);
+  assert.equal(result.status, 200);
+  assert.equal(result.skipped_unset, 1);
+  assert.match(result.note, /notify_email/);
+});
+
+test("NOTIFY_MIKE_EMAIL is a temporary fallback only when notify_email is unset", async () => {
   clearNotifyEnv();
   process.env.NOTIFY_MIKE_EMAIL = "mike@crew.example";
-  process.env.GMAIL_USER = "mike@crew.example";
+  process.env.RESEND_API_KEY = "re_test_key";
+  let to: string[] = [];
+  const result = await notifyMikeOnBumps([mapleBump], [], {
+    lookupNotifyEmails: emails({ [mapleOwner]: null }),
+    fetch: async (_input, init) => {
+      const body = JSON.parse(String(init?.body)) as { to: string[] };
+      to = body.to;
+      return new Response(JSON.stringify({ id: "mock" }), { status: 200 });
+    },
+  });
+  assert.deepEqual(to, ["mike@crew.example"]);
+  assert.equal(result.code, "sent");
+  assert.equal(result.fallback_used, true);
+  assert.equal(readNotifyMikeEmail(), "mike@crew.example");
+});
+
+test("Gmail path sends to the per-user notify_email", async () => {
+  clearNotifyEnv();
+  process.env.GMAIL_USER = "sender@crew.example";
   process.env.GMAIL_APP_PASSWORD = "not-a-real-password";
 
   let called = 0;
   const result = await notifyMikeOnBumps([mapleBump], [], {
+    lookupNotifyEmails: emails({ [mapleOwner]: "foreman@crew.example" }),
     sendGmail: async (input) => {
       called += 1;
-      assert.equal(input.to, "mike@crew.example");
+      assert.equal(input.to, "foreman@crew.example");
       assert.match(input.subject, /E-101 bumped to Rev B/);
       return { ok: true };
     },
@@ -178,21 +224,13 @@ test("Gmail path sends when app password is set", async () => {
   assert.equal(result.provider, "gmail");
 });
 
-test("GMAIL_USER is the destination when NOTIFY_MIKE_EMAIL is unset", () => {
-  clearNotifyEnv();
-  process.env.GMAIL_USER = "mike@crew.example";
-  process.env.GMAIL_APP_PASSWORD = "not-a-real-password";
-  assert.equal(readNotifyMikeEmail(), "mike@crew.example");
-  assert.equal(notifyMikeConfigured(), true);
-});
-
 test("persist failure skips notify", async () => {
   clearNotifyEnv();
-  process.env.NOTIFY_MIKE_EMAIL = "mike@crew.example";
   process.env.RESEND_API_KEY = "re_test_key";
   const result = await notifyMikeOnBumps([mapleBump], [
     { error: "sheet_revision_cache upsert failed" },
   ], {
+    lookupNotifyEmails: emails({ [mapleOwner]: "foreman@crew.example" }),
     fetch: async () => {
       throw new Error("fetch should not run after persist failure");
     },
@@ -204,9 +242,9 @@ test("persist failure skips notify", async () => {
 
 test("send failure does not throw and stays structured", async () => {
   clearNotifyEnv();
-  process.env.NOTIFY_MIKE_EMAIL = "mike@crew.example";
   process.env.RESEND_API_KEY = "re_test_key";
   const result = await notifyMikeOnBumps([mapleBump], [], {
+    lookupNotifyEmails: emails({ [mapleOwner]: "foreman@crew.example" }),
     fetch: async () => new Response(JSON.stringify({ message: "rate limited" }), { status: 429 }),
   });
   assert.equal(result.code, "send_failed");

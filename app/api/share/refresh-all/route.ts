@@ -21,7 +21,8 @@ function json(data: unknown, status = 200) {
  * known pack rev to `sheet_revision_cache`, and updates last_seen_rev when
  * the rev bumped. Does not call Procore REST. Does not download PDFs.
  * Weekly automation is GET/POST `/api/share/weekly-refresh` (CRON_SECRET).
- * Emails Mike after a persisted bump (issue #31). Missing notify env skips.
+ * Emails this owner's notify_email after a persisted bump. Missing
+ * notify_email skips (refresh still succeeds).
  */
 export async function POST(request: Request) {
   const session = parseStubSession(
@@ -69,6 +70,6 @@ export async function POST(request: Request) {
     items: plan.items,
     botId: PROCORE_BOT_ID,
     note:
-      "Force refresh compared this owner's pinned sheets to known pack revs and updated sheet_revision_cache. Weekly cron is GET/POST /api/share/weekly-refresh. Mike is emailed only when a bump persists.",
+      "Force refresh compared this owner's pinned sheets to known pack revs and updated sheet_revision_cache. Weekly cron is GET/POST /api/share/weekly-refresh. The folder owner is emailed only when a bump persists and notify_email is set.",
   });
 }

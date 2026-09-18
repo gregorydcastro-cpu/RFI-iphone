@@ -138,6 +138,30 @@ export async function selectPinnedSheets(
   });
 }
 
+/** Service-role scan of every share folder. Used by weekly notify owner lookup. */
+export async function selectAllShareFolders(): Promise<ShareFolderRow[] | null> {
+  const config = getSupabaseServiceConfig();
+  if (!config) return null;
+
+  const params = new URLSearchParams();
+  params.set("select", "id,owner_user_id,name,created_at");
+  params.set("order", "created_at.desc");
+  params.set("limit", SHARE_LIST_LIMIT);
+
+  const response = await restFetch(
+    config,
+    `${SHARE_FOLDERS_TABLE}?${params.toString()}`,
+    { method: "GET" },
+  );
+  if (!response || !response.ok) return null;
+  const json: unknown = await response.json().catch(() => null);
+  if (!Array.isArray(json)) return null;
+  return json.flatMap((row) => {
+    const parsed = asShareFolderRow(row);
+    return parsed ? [parsed] : [];
+  });
+}
+
 /** Service-role scan of every pin. Used by the weekly cron, not Refresh all. */
 export async function selectAllPinnedSheets(): Promise<PinnedSheetRow[] | null> {
   const config = getSupabaseServiceConfig();

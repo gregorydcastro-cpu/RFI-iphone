@@ -6,7 +6,7 @@
  * and cache on a bump. PDF re-download stays in the weekly worker.
  * Live Procore REST is the connected pack-request path — this planner
  * only records the rev decision.
- * Notify Mike after persist via notifyMikeOnBumps (issue #31), not here.
+ * Notify after persist via notifyMikeOnBumps (per-user notify_email), not here.
  */
 
 import type { PinnedSheetRow, SheetRevisionCacheRow } from "./schema";
@@ -36,12 +36,17 @@ export type ShareRefreshPlan = {
   items: ShareRefreshItem[];
 };
 
-/** Persisted bump payload for issue #31 (Notify Mike). */
+/** Persisted bump payload. Notify resolves owner via folder → connection. */
 export type ShareRefreshBump = {
   sheet_id: string;
   old_rev: string;
   new_rev: string;
   project_name: string;
+  /**
+   * share_folders.owner_user_id for the pin's folder. Weekly cron / Refresh
+   * all look up procore_connections.notify_email for this id.
+   */
+  owner_user_id: string | null;
 };
 
 export type ShareRefreshError = {
@@ -51,7 +56,10 @@ export type ShareRefreshError = {
   error: string;
 };
 
-export function bumpsFromPlan(plan: ShareRefreshPlan): ShareRefreshBump[] {
+export function bumpsFromPlan(
+  plan: ShareRefreshPlan,
+  ownerByFolderId?: Map<string, string>,
+): ShareRefreshBump[] {
   const bumps: ShareRefreshBump[] = [];
   for (const item of plan.items) {
     if (item.status !== "bumped" || !item.current_rev) continue;
@@ -60,6 +68,7 @@ export function bumpsFromPlan(plan: ShareRefreshPlan): ShareRefreshBump[] {
       old_rev: item.previous_rev,
       new_rev: item.current_rev,
       project_name: item.project_name,
+      owner_user_id: ownerByFolderId?.get(item.folder_id) ?? null,
     });
   }
   return bumps;
