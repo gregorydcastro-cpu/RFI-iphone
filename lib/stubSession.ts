@@ -44,7 +44,10 @@ export function serializeStubSession(session: StubSession): string {
   });
 }
 
-export function stubSessionCookieOptions(session: StubSession | null): {
+export function stubSessionCookieOptions(
+  session: StubSession | null,
+  secure: boolean,
+): {
   name: string;
   value: string;
   httpOnly: boolean;
@@ -60,7 +63,7 @@ export function stubSessionCookieOptions(session: StubSession | null): {
     path: "/",
     sameSite: "lax",
     maxAge: session ? COOKIE_MAX_AGE : 0,
-    secure: process.env.NODE_ENV === "production",
+    secure,
   };
 }
 

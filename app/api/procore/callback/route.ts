@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { procoreLinkedCookieOptions } from "@/lib/auth";
+import { cookieSecureFromRequest, procoreLinkedCookieOptions } from "@/lib/auth";
 import { upsertProcoreConnection } from "@/lib/procoreConnections";
 import {
   PROCORE_OAUTH_STATE_COOKIE,
@@ -30,6 +30,7 @@ function redirectAccount(
  * per stub user. Tokens are never returned to the browser.
  */
 export async function GET(request: Request) {
+  const secure = cookieSecureFromRequest(request);
   const url = new URL(request.url);
   const errorParam = url.searchParams.get("error");
   if (errorParam) {
@@ -64,7 +65,7 @@ export async function GET(request: Request) {
     login.searchParams.set("procore", "error");
     login.searchParams.set("reason", "missing_session");
     const response = NextResponse.redirect(login);
-    response.cookies.set(oauthStateCookieOptions(null));
+    response.cookies.set(oauthStateCookieOptions(null, secure));
     return response;
   }
 
@@ -74,7 +75,7 @@ export async function GET(request: Request) {
       procore: "error",
       reason: "missing_oauth_config",
     });
-    response.cookies.set(oauthStateCookieOptions(null));
+    response.cookies.set(oauthStateCookieOptions(null, secure));
     return response;
   }
 
@@ -84,7 +85,7 @@ export async function GET(request: Request) {
       procore: "error",
       reason: "token_exchange_failed",
     });
-    response.cookies.set(oauthStateCookieOptions(null));
+    response.cookies.set(oauthStateCookieOptions(null, secure));
     return response;
   }
 
@@ -104,12 +105,12 @@ export async function GET(request: Request) {
       procore: "error",
       reason: "storage_unconfigured",
     });
-    response.cookies.set(oauthStateCookieOptions(null));
+    response.cookies.set(oauthStateCookieOptions(null, secure));
     return response;
   }
 
   const response = redirectAccount(request, { procore: "connected" });
-  response.cookies.set(oauthStateCookieOptions(null));
-  response.cookies.set(procoreLinkedCookieOptions(true));
+  response.cookies.set(oauthStateCookieOptions(null, secure));
+  response.cookies.set(procoreLinkedCookieOptions(true, secure));
   return response;
 }

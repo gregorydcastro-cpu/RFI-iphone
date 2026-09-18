@@ -18,7 +18,20 @@ export function isPullerRole(role: string | null | undefined): boolean {
   return role === "puller";
 }
 
-export function procoreLinkedCookieOptions(linked: boolean): {
+export function cookieSecureFromRequest(request: Request): boolean {
+  const forwarded = request.headers.get("x-forwarded-proto");
+  if (forwarded) return forwarded.split(",")[0]?.trim() === "https";
+  try {
+    return new URL(request.url).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export function procoreLinkedCookieOptions(
+  linked: boolean,
+  secure: boolean,
+): {
   name: string;
   value: string;
   httpOnly: boolean;
@@ -34,6 +47,6 @@ export function procoreLinkedCookieOptions(linked: boolean): {
     path: "/",
     sameSite: "lax",
     maxAge: linked ? 60 * 60 * 24 * 30 : 0,
-    secure: process.env.NODE_ENV === "production",
+    secure,
   };
 }

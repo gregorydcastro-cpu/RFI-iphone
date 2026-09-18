@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { procoreLinkedCookieOptions } from "@/lib/auth";
+import { cookieSecureFromRequest, procoreLinkedCookieOptions } from "@/lib/auth";
 import {
   deleteProcoreConnection,
   fetchProcoreConnectionSecrets,
@@ -22,16 +22,17 @@ export async function POST(request: Request) {
   }
   await deleteProcoreConnection(session.userId);
 
+  const secure = cookieSecureFromRequest(request);
   const accept = request.headers.get("accept") ?? "";
   if (accept.includes("application/json")) {
     const response = NextResponse.json({ ok: true, connected: false });
-    response.cookies.set(procoreLinkedCookieOptions(false));
+    response.cookies.set(procoreLinkedCookieOptions(false, secure));
     return response;
   }
 
   const url = new URL("/account", request.url);
   url.searchParams.set("procore", "disconnected");
   const response = NextResponse.redirect(url);
-  response.cookies.set(procoreLinkedCookieOptions(false));
+  response.cookies.set(procoreLinkedCookieOptions(false, secure));
   return response;
 }

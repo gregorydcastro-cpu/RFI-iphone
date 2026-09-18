@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { procoreLinkedCookieOptions } from "@/lib/auth";
+import { cookieSecureFromRequest, procoreLinkedCookieOptions } from "@/lib/auth";
 import { createStubSession, stubSessionCookieOptions } from "@/lib/stubSession";
 
 export const dynamic = "force-dynamic";
@@ -48,9 +48,10 @@ export async function POST(request: Request) {
     email: session.email,
     role: session.role,
   });
-  const sessionCookie = stubSessionCookieOptions(session);
+  const secure = cookieSecureFromRequest(request);
+  const sessionCookie = stubSessionCookieOptions(session, secure);
   response.cookies.set(sessionCookie);
   // Puller is the intent to pull; actual Procore link comes from OAuth.
-  response.cookies.set(procoreLinkedCookieOptions(false));
+  response.cookies.set(procoreLinkedCookieOptions(false, secure));
   return response;
 }

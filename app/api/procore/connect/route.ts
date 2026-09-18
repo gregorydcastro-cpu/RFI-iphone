@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
+import { cookieSecureFromRequest } from "@/lib/auth";
 import {
   buildAuthorizeUrl,
   getProcoreOAuthConfig,
@@ -39,6 +40,8 @@ export async function GET(request: Request) {
 
   const state = randomBytes(24).toString("hex");
   const response = NextResponse.redirect(buildAuthorizeUrl(config, state));
-  response.cookies.set(oauthStateCookieOptions(state));
+  response.cookies.set(
+    oauthStateCookieOptions(state, cookieSecureFromRequest(request)),
+  );
   return response;
 }

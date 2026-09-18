@@ -75,7 +75,10 @@ export function buildAuthorizeUrl(
   return url.toString();
 }
 
-export function oauthStateCookieOptions(state: string | null): {
+export function oauthStateCookieOptions(
+  state: string | null,
+  secure: boolean,
+): {
   name: string;
   value: string;
   httpOnly: boolean;
@@ -91,7 +94,7 @@ export function oauthStateCookieOptions(state: string | null): {
     path: "/",
     sameSite: "lax",
     maxAge: state ? 60 * 10 : 0,
-    secure: process.env.NODE_ENV === "production",
+    secure,
   };
 }
 
