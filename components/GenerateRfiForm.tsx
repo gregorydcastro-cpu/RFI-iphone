@@ -1,7 +1,10 @@
 "use client";
 
 import { type ChangeEvent, type FormEvent, useMemo, useState } from "react";
+import { DictationButton } from "@/components/DictationButton";
 import { DraftToForemanSuccess } from "@/components/DraftToForemanSuccess";
+import { ReadAloudButton } from "@/components/ReadAloudButton";
+import { VoiceSetupNote } from "@/components/VoiceSetupNote";
 import { DEMO_FOREMAN, DEMO_JOURNEYMAN } from "@/lib/crew";
 import {
   newUuid,
@@ -10,6 +13,7 @@ import {
   type RfiDraftPacket,
 } from "@/lib/fieldDrafts";
 import { sheetRevisionLabel, type RoomPack } from "@/lib/pack";
+import { parseRfiDictation, rfiSpeakText } from "@/lib/rfiDictation";
 
 const inputClass =
   "mt-1 w-full border border-line bg-ink px-3 py-3 text-base text-paper outline-none focus:border-cta";
@@ -64,6 +68,14 @@ export function GenerateRfiForm({
     return `${name} · ${email}`;
   }, [authorEmail, authorName]);
 
+  const draftSpeak = rfiSpeakText({
+    title: subject || "Untitled RFI",
+    status: "draft",
+    question: question || undefined,
+    location: location || undefined,
+    draftToForeman: true,
+  });
+
   function onPhotos(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
     if (!files.length) return;
@@ -80,11 +92,14 @@ export function GenerateRfiForm({
     event.target.value = "";
   }
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submitDraft(fields: {
+    subject: string;
+    question: string;
+    location: string;
+  }) {
     if (pending) return;
-    const nextSubject = subject.trim();
-    const nextQuestion = question.trim();
+    const nextSubject = fields.subject.trim();
+    const nextQuestion = fields.question.trim();
     if (!nextSubject || !nextQuestion) {
       setError("Subject and question are required.");
       return;
@@ -93,7 +108,7 @@ export function GenerateRfiForm({
     setError(null);
 
     const sheetPinId = selectedSheet?.id ?? pack.revision_stamp?.drawing ?? "";
-    const locationValue = location.trim() || pack.room.name;
+    const locationValue = fields.location.trim() || pack.room.name;
     let packet: RfiDraftPacket = {
       id: newUuid(),
       createdAt: new Date().toISOString(),
@@ -161,7 +176,37 @@ export function GenerateRfiForm({
     setPending(false);
   }
 
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await submitDraft({ subject, question, location });
+  }
+
+  async function onDictate(text: string) {
+    const parsed = parseRfiDictation(text);
+    const nextSubject = parsed.subject || subject;
+    const nextQuestion = parsed.question || question;
+    const nextLocation = parsed.location || location;
+    if (parsed.subject) setSubject(parsed.subject);
+    if (parsed.question) setQuestion(parsed.question);
+    if (parsed.location) setLocation(parsed.location);
+    setError(null);
+    if (parsed.send) {
+      await submitDraft({
+        subject: nextSubject,
+        question: nextQuestion,
+        location: nextLocation,
+      });
+    }
+  }
+
   if (saved) {
+    const confirmationSpeak = rfiSpeakText({
+      title: saved.subject,
+      status: saved.status,
+      question: saved.question,
+      location: saved.location,
+      draftToForeman: true,
+    });
     return (
       <DraftToForemanSuccess
         heading="RFI draft sent"
@@ -175,6 +220,8 @@ export function GenerateRfiForm({
         }
         authorLabel={`${saved.authorName} · ${saved.authorEmail}`}
         backHref={`/pack/${requestId}`}
+        speakId={`rfi-draft-${saved.id}`}
+        speakText={confirmationSpeak}
       >
         <div className="border border-line bg-ink p-3 text-sm">
           <p className="font-medium text-paper">{saved.subject}</p>
@@ -210,6 +257,26 @@ export function GenerateRfiForm({
           . Draft only — never a Procore RFI.
         </span>
       </p>
+
+      <div className="space-y-2 border border-line bg-ink p-3">
+        <p className="text-xs font-semibold tracking-wide text-muted uppercase">
+          Hands-free
+        </p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <DictationButton
+            onTranscript={onDictate}
+            disabled={pending}
+            label="Dictate RFI"
+            hint="Tap mic, speak subject and question, tap again. Say a room to fill location. Say “send draft” to send to Pat Nguyen."
+          />
+          <ReadAloudButton
+            id={`rfi-form-${requestId}`}
+            text={draftSpeak}
+            disabled={!subject && !question}
+          />
+        </div>
+        <VoiceSetupNote />
+      </div>
 
       <label className="block text-xs font-semibold tracking-wide text-muted uppercase">
         Job

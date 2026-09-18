@@ -1,3 +1,7 @@
+"use client";
+
+import { ReadAloudButton } from "@/components/ReadAloudButton";
+import { rfiSpeakText } from "@/lib/rfiDictation";
 import type { Rfi } from "@/lib/pack";
 
 const STATUS_CLASS: Record<string, string> = {
@@ -10,18 +14,42 @@ type Props = {
   rfis: Rfi[];
 };
 
+function speakOne(rfi: Rfi): string {
+  return rfiSpeakText({
+    number: rfi.number,
+    title: rfi.title,
+    status: rfi.status,
+  });
+}
+
+function speakAll(rfis: Rfi[]): string {
+  if (!rfis.length) return "No RFIs linked to this room.";
+  return rfis
+    .map((rfi, index) => `${index + 1}. ${speakOne(rfi)}`)
+    .join(" ");
+}
+
 export function RfiList({ rfis }: Props) {
   return (
     <section className="space-y-2">
-      <h2 className="font-display text-xs tracking-[0.18em] text-muted uppercase">
-        RFIs
-      </h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-display text-xs tracking-[0.18em] text-muted uppercase">
+          RFIs
+        </h2>
+        {rfis.length ? (
+          <ReadAloudButton
+            id="pack-rfis-all"
+            text={speakAll(rfis)}
+            label="Read all"
+          />
+        ) : null}
+      </div>
       {rfis.length === 0 ? (
         <p className="text-sm text-muted">No RFIs linked to this room.</p>
       ) : (
         <ul className="divide-y divide-line border border-line bg-ink">
           {rfis.map((rfi) => (
-            <li key={rfi.id} className="px-3 py-2">
+            <li key={rfi.id} className="px-3 py-3">
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="font-mono text-xs text-metal">{rfi.number}</p>
@@ -43,6 +71,13 @@ export function RfiList({ rfis }: Props) {
                 >
                   {rfi.status}
                 </span>
+              </div>
+              <div className="mt-2">
+                <ReadAloudButton
+                  id={`pack-rfi-${rfi.id}`}
+                  text={speakOne(rfi)}
+                  label="Speak"
+                />
               </div>
             </li>
           ))}
