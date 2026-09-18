@@ -1,43 +1,50 @@
+import { getFieldRole } from "@/lib/auth.server";
 import { RoomPackViewer } from "@/components/RoomPackViewer";
 import { getJob } from "@/lib/jobs";
-import { loadPack } from "@/lib/loadPack";
+import { loadLiveRoomPack } from "@/lib/livePack";
 import { notFound } from "next/navigation";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type Props = {
   params: Promise<{ requestId: string }>;
   searchParams: Promise<{
     job?: string;
     room?: string;
-    accepted?: string;
-    poll?: string;
   }>;
 };
 
 /**
- * Primary room-pack route.
- * Unknown requestIds still fall back to the local Maple Point pack.
- * When the Procore webhook accepted the request, the page shows pending and
- * polls Drive/status JSON without replacing that demo fallback until ready.
+ * Primary room-pack route (website live view).
+ * Always re-reads the latest `public.room_packs` row (no-store).
+ * Pullers additionally trigger a Procore bot refresh on open.
+ * Unknown IDs still fall back to the local Maple Point pack when live
+ * data is missing.
  */
 export default async function PackPage({ params, searchParams }: Props) {
   const { requestId } = await params;
   const query = await searchParams;
-  const pack = await loadPack(requestId);
-  const demoPack = pack ?? (await loadPack("maple-point"));
-  if (!demoPack) notFound();
-
+  const role = await getFieldRole();
   const requestedJob = query.job ? getJob(query.job) : undefined;
-  const webhookAccepted = query.accepted === "1" || query.poll === "1";
+  const live = await loadLiveRoomPack({
+    requestId,
+    job: requestedJob,
+    room: query.room,
+  });
+  if (!live) notFound();
 
   return (
     <RoomPackViewer
-      pack={demoPack}
+      pack={live.pack}
       requestId={requestId}
       requestedRoom={query.room}
       requestedJobName={requestedJob?.name}
       projectSlug={requestedJob?.slug}
-      demoFallback={!pack}
-      webhookAccepted={webhookAccepted}
+      demoFallback={live.demoFallback}
+      supabaseConfigured={live.supabaseConfigured}
+      source={live.source}
+      procoreLinked={role.procoreLinked}
     />
   );
 }

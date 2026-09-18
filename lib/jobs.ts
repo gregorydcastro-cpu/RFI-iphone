@@ -42,6 +42,12 @@ export function getJob(slug: string): DemoJob | undefined {
   return DEMO_JOBS.find((job) => job.slug === slug);
 }
 
+export function jobFromRequestId(requestId: string): DemoJob | undefined {
+  const exact = DEMO_JOBS.find((job) => job.slug === requestId);
+  if (exact) return exact;
+  return DEMO_JOBS.find((job) => requestId.startsWith(`${job.slug}-`));
+}
+
 export function makeRequestId(projectSlug: string, room: string): string {
   const safeRoom = room.trim().replace(/[^a-zA-Z0-9._-]+/g, "-") || "room";
   return `${projectSlug}-${safeRoom}`.toLowerCase();

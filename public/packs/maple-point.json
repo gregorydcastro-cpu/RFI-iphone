@@ -2,6 +2,8 @@
   "schema": "gcpullog.room_pack.v1",
   "status": "ready",
   "request_id": "maple-point",
+  "pulled_at": "2026-09-18T00:15:17.277Z",
+  "revision_stamp": { "drawing": "E-101", "rev": "A" },
   "project": {
     "id": "proj-maple-point",
     "name": "Maple Point Medical Office",

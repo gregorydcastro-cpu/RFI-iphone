@@ -1,10 +1,20 @@
+"use client";
+
 import Link from "next/link";
+import { procoreLinkedCookie, type FieldRoleName } from "@/lib/auth";
 
 type Props = {
   signedIn?: boolean;
+  procoreLinked?: boolean;
 };
 
-export function AppHeader({ signedIn = false }: Props) {
+export function AppHeader({ signedIn = false, procoreLinked = false }: Props) {
+  const role: FieldRoleName = procoreLinked ? "puller" : "viewer";
+
+  function clearRoleCookie() {
+    document.cookie = procoreLinkedCookie(false);
+  }
+
   return (
     <header className="border-b border-line bg-primary">
       <div className="h-0.5 w-full bg-cta" />
@@ -30,7 +40,25 @@ export function AppHeader({ signedIn = false }: Props) {
               <span className="cursor-default text-tan/50" title="Later">
                 Time
               </span>
-              <Link className="text-accent-2 hover:text-secondary" href="/">
+              <span
+                className={
+                  procoreLinked
+                    ? "border border-cta/40 px-1.5 py-0.5 text-[10px] text-secondary"
+                    : "border border-line px-1.5 py-0.5 text-[10px] text-tan"
+                }
+                title={
+                  procoreLinked
+                    ? "Linked Procore account — can pull packs"
+                    : "Read-only viewer — cannot pull packs"
+                }
+              >
+                {role === "puller" ? "Puller" : "View only"}
+              </span>
+              <Link
+                className="text-accent-2 hover:text-secondary"
+                href="/"
+                onClick={clearRoleCookie}
+              >
                 Sign out
               </Link>
             </>
