@@ -139,7 +139,9 @@ export function ForemanWeekGrid({
                   const label = day.missedOut
                     ? "missed out"
                     : day.open
-                      ? `${formatHours(day.hours)} · on`
+                      ? day.hours > 0.05
+                        ? `${formatHours(day.hours)} · on`
+                        : "on"
                       : formatHours(day.hours);
                   return (
                     <td key={day.ymd} className="border-b border-line px-2 py-2">

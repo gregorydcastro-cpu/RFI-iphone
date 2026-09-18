@@ -203,8 +203,8 @@ function ModeTab({
       onClick={onClick}
       className={
         active
-          ? "border-b-2 border-cta px-3 py-2 text-xs font-semibold tracking-wide text-paper uppercase"
-          : "border-b-2 border-transparent px-3 py-2 text-xs font-semibold tracking-wide text-tan uppercase hover:text-paper"
+          ? "bg-transparent border-b-2 border-cta px-3 py-2 text-xs font-semibold tracking-wide text-paper uppercase"
+          : "bg-transparent border-b-2 border-transparent px-3 py-2 text-xs font-semibold tracking-wide text-tan uppercase hover:text-paper"
       }
     >
       {children}
