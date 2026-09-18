@@ -1,9 +1,14 @@
 -- Next-layer tables for share folders, revision cache, markup overlays,
--- RFI drafts, and trial links.
+-- and trial links.
 --
--- Does NOT create or alter public.procore_connections or public.room_packs.
--- Those already exist; leave them as-is (room_packs currently has RLS off so
--- the anon key can live-read packs).
+-- Does NOT create or alter:
+--   public.procore_connections, public.room_packs (leave room_packs RLS off)
+--   public.rfis — already created by 20260918021000_rfis.sql (PR #12)
+--   public.billing_customers — already created by 20260918120000 (Stripe)
+--   public.job_sites / workers / time_punches — 20260918093000_time_tracking
+--
+-- Overlay FK on rfis.markup_id is added later in
+-- 20260918130000_rfis_markup_overlay_fk.sql (after rfis exists).
 --
 -- user_id / owner_user_id are text to match stub sessions (`stub:` + sha256)
 -- and later auth.uid()::text. Until real Supabase Auth lands, website writes
@@ -251,67 +256,8 @@ create policy markup_overlays_owner_delete
   to authenticated
   using (user_id = (select auth.uid())::text);
 
--- ---------------------------------------------------------------------------
--- rfis (draft / ready — not a Procore submit)
--- ---------------------------------------------------------------------------
-
-create table if not exists public.rfis (
-  id uuid primary key default gen_random_uuid(),
-  user_id text not null,
-  subject text not null default '',
-  description text not null default '',
-  location text,
-  sheet_id text,
-  markup_id uuid references public.markup_overlays (id) on delete set null,
-  status text not null default 'draft',
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  constraint rfis_status_check check (status in ('draft', 'ready'))
-);
-
-create index if not exists rfis_user_id_idx
-  on public.rfis (user_id);
-
-create index if not exists rfis_markup_id_idx
-  on public.rfis (markup_id);
-
-alter table public.rfis enable row level security;
-
-revoke all on table public.rfis from anon;
-revoke all on table public.rfis from authenticated;
-
-grant select, insert, update, delete on table public.rfis to authenticated;
-grant all on table public.rfis to service_role;
-
-drop policy if exists rfis_owner_select on public.rfis;
-drop policy if exists rfis_owner_insert on public.rfis;
-drop policy if exists rfis_owner_update on public.rfis;
-drop policy if exists rfis_owner_delete on public.rfis;
-
-create policy rfis_owner_select
-  on public.rfis
-  for select
-  to authenticated
-  using (user_id = (select auth.uid())::text);
-
-create policy rfis_owner_insert
-  on public.rfis
-  for insert
-  to authenticated
-  with check (user_id = (select auth.uid())::text);
-
-create policy rfis_owner_update
-  on public.rfis
-  for update
-  to authenticated
-  using (user_id = (select auth.uid())::text)
-  with check (user_id = (select auth.uid())::text);
-
-create policy rfis_owner_delete
-  on public.rfis
-  for delete
-  to authenticated
-  using (user_id = (select auth.uid())::text);
+-- public.rfis is owned by 20260918021000_rfis.sql (PR #12). Do not recreate
+-- it here. markup_id FK is added in 20260918130000_rfis_markup_overlay_fk.sql.
 
 -- ---------------------------------------------------------------------------
 -- trial_link_tokens

@@ -1,13 +1,20 @@
 /**
  * Row types for GC Field Log tables.
  *
- * Existing (do not recreate):
+ * Already on main (do not recreate):
  *   public.procore_connections — per-user Procore OAuth tokens
  *   public.room_packs — live pack snapshots from the Procore bot
+ *   public.rfis — draft RFIs from PR #12 (`20260918021000_rfis.sql`)
+ *   public.job_sites / workers / time_punches — Time tab
+ *   public.billing_customers — Stripe Checkout (`20260918120000`)
  *
  * New (supabase/migrations/20260918020000_share_markup_rfi_trial.sql):
  *   share_folders, pinned_sheets, sheet_revision_cache,
- *   markup_overlays, rfis, trial_link_tokens
+ *   markup_overlays, trial_link_tokens
+ *
+ * Overlay FK: supabase/migrations/20260918130000_rfis_markup_overlay_fk.sql
+ * attaches rfis.markup_id → markup_overlays. Row shape stays RfiDraftRow
+ * (same columns as lib/rfiSchema.ts / Generate RFI).
  *
  * Writes that must succeed under the stub session (`stub:` + sha256 email)
  * require SUPABASE_SERVICE_ROLE_KEY. Authenticated RLS matches auth.uid()
@@ -140,6 +147,7 @@ export type MarkupOverlayRow = {
 
 export type RfiDraftStatus = "draft" | "ready";
 
+/** Same row as `public.rfis` from PR #12. `markup_id` is optional overlay FK. */
 export type RfiDraftRow = {
   id: string;
   user_id: string;
@@ -152,6 +160,10 @@ export type RfiDraftRow = {
   created_at: string;
   updated_at: string;
 };
+
+export function isRfiDraftStatus(value: unknown): value is RfiDraftStatus {
+  return value === "draft" || value === "ready";
+}
 
 export type TrialLinkPlan = "free" | "paid";
 
