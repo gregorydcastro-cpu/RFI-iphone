@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 export default async function SharePage() {
   const session = await readStubSession();
   const view = await getProcoreConnectionView(session);
-  const canRefresh = view.role === "puller" && view.connected;
+  const canRefresh = view.role === "puller";
   const snapshot = session ? await listSharePortal(session.userId) : null;
 
   return (
@@ -27,7 +27,7 @@ export default async function SharePage() {
         signedIn={view.signedIn}
         role={view.role}
         procoreConnected={view.connected}
-        procoreLinked={canRefresh}
+        procoreLinked={view.role === "puller" && view.connected}
       />
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-8 sm:px-6">
         <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
@@ -53,7 +53,7 @@ export default async function SharePage() {
               view.role === "puller"
                 ? view.connected
                   ? "puller · Procore connected"
-                  : "puller · connect Procore to refresh"
+                  : "puller · Refresh all (metadata)"
                 : view.signedIn
                   ? "view only"
                   : "signed out"

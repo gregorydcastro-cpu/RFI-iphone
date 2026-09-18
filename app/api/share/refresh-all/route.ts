@@ -26,21 +26,21 @@ function json(data: unknown, status = 200) {
  * metadata-only. Do not notify Mike by text/email yet.
  */
 export async function POST(request: Request) {
-  const role = readFieldRoleFromRequest(request);
-  if (!role.procoreLinked) {
+  const session = parseStubSession(
+    readCookieValue(request.headers.get("cookie"), STUB_SESSION_COOKIE),
+  );
+  const linked = readFieldRoleFromRequest(request);
+  const puller = linked.procoreLinked || session?.role === "puller";
+  if (!puller) {
     return json(
       {
         ok: false,
         error:
-          "Puller role required. Connect Procore (procoreLinked cookie after OAuth, or x-procore-linked header).",
+          "Puller role required. Sign in as Puller, or Connect Procore (procoreLinked cookie after OAuth, or x-procore-linked header).",
       },
       403,
     );
   }
-
-  const session = parseStubSession(
-    readCookieValue(request.headers.get("cookie"), STUB_SESSION_COOKIE),
-  );
   if (!session) {
     return json({ ok: false, error: "Sign in first (stub session)." }, 401);
   }

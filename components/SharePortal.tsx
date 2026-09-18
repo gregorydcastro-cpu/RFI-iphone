@@ -219,8 +219,9 @@ export function SharePortal({
               <span className="font-mono text-xs text-metal">
                 sheet_revision_cache
               </span>
-              , and records bumps. Weekly cron is not scheduled. No text or
-              email to Mike in this slice.
+              , and records bumps. Pack pulls still need Connect Procore.
+              Weekly cron is not scheduled. No text or email to Mike in this
+              slice.
             </p>
             <p className="mt-2 font-mono text-xs text-metal">
               {folders.length} folder{folders.length === 1 ? "" : "s"} · {pinCount}{" "}
@@ -238,8 +239,9 @@ export function SharePortal({
         </div>
         {!canRefresh ? (
           <p className="mt-3 text-sm text-tan">
-            Connect Procore as a puller to run Refresh all. Viewers can still
-            create folders and pin Maple Point packs.
+            Sign in as a puller to run Refresh all. Viewers can still create
+            folders and pin Maple Point packs. Pack pulls still need Connect
+            Procore.
           </p>
         ) : null}
         {refresh?.ok ? (

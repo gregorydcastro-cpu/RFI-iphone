@@ -414,7 +414,7 @@ These tables do **not** replace `procore_connections`, `room_packs`, `rfis`, or 
 2. Header **Share**, or Account → **Open share folders**.
 3. Create a folder (e.g. `Electrical set`).
 4. Pin a full discipline (**electrical** / **lighting** / **architectural**) or a room pack (Electrical Closet 101 or Room 733). Lighting is its own pin group even though Maple Point JSON stores `E-102` as electrical.
-5. **Refresh all** needs Procore connected (`gcfieldlog_procore_linked` after OAuth, or API header `x-procore-linked: true`). Status shows scanned / bumped / unchanged / missing.
+5. **Refresh all** is puller-gated (stub **Puller** login, Procore-linked cookie after OAuth, or API header `x-procore-linked: true`). Status shows scanned / bumped / unchanged / missing. Pack **pulls** still need Connect Procore.
 6. **Open pack** on a pin still uses the existing Maple Point viewer. Time, Voice, markup → RFI, and the Drive PDF proxy are unchanged.
 
 Without `SUPABASE_SERVICE_ROLE_KEY`, folders live in process memory (same pattern as Time). With the service role and the #9 migration applied, writes go to `share_folders` / `pinned_sheets` / `sheet_revision_cache`.
@@ -429,7 +429,7 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/share/folders
 # 401
 ```
 
-**Manual force refresh (this PR):** `POST /api/share/refresh-all` is puller-gated **and** requires the stub session. It walks that owner's `pinned_sheets`, compares known pack revs (Maple Point catalog, plus live `room_packs` when Supabase anon is set) to `sheet_revision_cache`, and updates last_seen_rev / last_pulled_at on a bump. It asks the Procore bot to refresh Maple Point (same log-only request as pack open) but **does not** call Procore REST or re-download PDFs. Response: `{ accepted: true, stub: false, implemented: true, weeklyCron: false, notify: false, scanned, bumped, unchanged, missing }`.
+**Manual force refresh (this PR):** `POST /api/share/refresh-all` is puller-gated (**stub Puller** session, or Procore-linked cookie / `x-procore-linked` header) **and** requires the stub session. It walks that owner's `pinned_sheets`, compares known pack revs (Maple Point catalog, plus live `room_packs` when Supabase anon is set) to `sheet_revision_cache`, and updates last_seen_rev / last_pulled_at on a bump. It asks the Procore bot to refresh Maple Point (same log-only request as pack open) but **does not** call Procore REST or re-download PDFs. Response: `{ accepted: true, stub: false, implemented: true, weeklyCron: false, notify: false, scanned, bumped, unchanged, missing }`.
 
 **TODO — weekly rev-only re-pull (not this PR):** a scheduled worker should reuse the same compare (`lib/shareRefresh.ts`), read Procore top rev (or the bot pack), **re-download a sheet PDF only when `rev` bumped**, then update `sheet_revision_cache` (`rev`, `checked_at`) and `pinned_sheets.last_seen_rev` / `last_pulled_at`. Unchanged revs are metadata-only (no PDF fetch). **Do not notify Mike by text/email yet** (separate slice). Trial-link redeem stays later.
 
