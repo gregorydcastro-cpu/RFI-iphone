@@ -1,4 +1,5 @@
 import { DEMO_FOREMAN } from "./crew";
+import type { MarkupKind, MarkupVectorsJson } from "./markup";
 
 export const RFI_DRAFTS_STORAGE_KEY = "gcfieldlog.rfi_drafts";
 export const MATERIAL_DRAFTS_STORAGE_KEY = "gcfieldlog.material_order_drafts";
@@ -6,6 +7,18 @@ export const MATERIAL_DRAFTS_STORAGE_KEY = "gcfieldlog.material_order_drafts";
 export type DraftPhoto = {
   name: string;
   size: number;
+  mime?: string;
+  /** Camera / file as a data URL on the draft. Not a Procore upload. */
+  dataUrl?: string;
+};
+
+export type RfiMarkupRef = {
+  overlayId: string;
+  itemId: string;
+  sheetId: string;
+  sheetRev: string;
+  kind: MarkupKind;
+  vectors: MarkupVectorsJson;
 };
 
 export type RfiDraftPacket = {
@@ -23,6 +36,9 @@ export type RfiDraftPacket = {
   question: string;
   location: string;
   photos: DraftPhoto[];
+  markupId?: string | null;
+  markupItemId?: string | null;
+  markupRef?: RfiMarkupRef | null;
   sentTo: {
     name: string;
     role: string;
@@ -91,7 +107,19 @@ export function loadRfiDrafts(): RfiDraftPacket[] {
 
 export function saveRfiDraft(draft: RfiDraftPacket): void {
   const next = [draft, ...loadRfiDrafts().filter((item) => item.id !== draft.id)];
-  writeList(RFI_DRAFTS_STORAGE_KEY, next);
+  try {
+    writeList(RFI_DRAFTS_STORAGE_KEY, next);
+  } catch {
+    const slim = next.map((item) => ({
+      ...item,
+      photos: item.photos.map((photo) => ({
+        name: photo.name,
+        size: photo.size,
+        mime: photo.mime,
+      })),
+    }));
+    writeList(RFI_DRAFTS_STORAGE_KEY, slim);
+  }
 }
 
 export function loadMaterialDrafts(): MaterialOrderDraft[] {

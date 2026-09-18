@@ -1,6 +1,7 @@
 /**
  * `public.rfis` row shape — matches PR #9 `lib/schema.ts` (`RfiDraftRow`).
- * Share-portal tables stay in that PR. Prefer `lib/schema.ts` after #9 merges.
+ * `markup_id` references `public.markup_overlays` after
+ * `20260918020000_share_markup_rfi_trial.sql` + the FK follow-up.
  *
  * Drafts go to the foreman. Never a Procore RFI submit.
  */

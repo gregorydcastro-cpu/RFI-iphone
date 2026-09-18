@@ -123,8 +123,12 @@ export function RoomPackViewer({
               pdfUrl={resolveSheetPdf(primary)}
               layout={displayedPack.layout}
               sheetId={primary.id}
+              sheetRev={primary.rev}
               primarySheetId={primary.id}
               highlight={primaryHighlight}
+              requestId={displayedRequest}
+              roomName={displayedPack.room.name}
+              roomNumber={displayedPack.room.number}
             />
           </div>
         </section>
@@ -146,6 +150,7 @@ export function RoomPackViewer({
                     pdfUrl={resolveSheetPdf(sheet)}
                     layout={displayedPack.layout}
                     sheetId={sheet.id}
+                    sheetRev={sheet.rev}
                     primarySheetId={primary.id}
                     highlight={highlightForSheet(
                       displayedPack.layout,
@@ -153,6 +158,9 @@ export function RoomPackViewer({
                       undefined,
                       { primarySheetId: primary.id },
                     )}
+                    requestId={displayedRequest}
+                    roomName={displayedPack.room.name}
+                    roomNumber={displayedPack.room.number}
                   />
                 </div>
               </article>

@@ -11,17 +11,32 @@ import {
   saveRfiDraft,
   type DraftPhoto,
   type RfiDraftPacket,
+  type RfiMarkupRef,
 } from "@/lib/fieldDrafts";
+import {
+  buildMarkupRfiPrefill,
+  loadLocalOverlay,
+  markupKindLabel,
+  readMarkupRfiPrefill,
+} from "@/lib/markup";
 import { sheetRevisionLabel, type RoomPack } from "@/lib/pack";
 import { parseRfiDictation, rfiSpeakText } from "@/lib/rfiDictation";
 
 const inputClass =
   "mt-1 w-full border border-line bg-ink px-3 py-3 text-base text-paper outline-none focus:border-cta";
 
+const MAX_PHOTO_BYTES = 3_500_000;
+
 type Props = {
   pack: RoomPack;
   requestId: string;
   sheetQuery?: string;
+  markupQuery?: string;
+  markupItemQuery?: string;
+  initialSubject?: string;
+  initialQuestion?: string;
+  initialLocation?: string;
+  markupKindQuery?: string;
   authorName: string;
   authorEmail: string;
 };
@@ -30,6 +45,12 @@ export function GenerateRfiForm({
   pack,
   requestId,
   sheetQuery,
+  markupQuery,
+  markupItemQuery,
+  initialSubject,
+  initialQuestion,
+  initialLocation,
+  markupKindQuery,
   authorName,
   authorEmail,
 }: Props) {
@@ -43,13 +64,14 @@ export function GenerateRfiForm({
     sheets[0];
   const initialSheet = queried ?? fallback;
 
-  const [subject, setSubject] = useState("");
-  const [question, setQuestion] = useState("");
+  const [subject, setSubject] = useState(initialSubject ?? "");
+  const [question, setQuestion] = useState(initialQuestion ?? "");
   const [location, setLocation] = useState(
-    pack.room.name || pack.layout?.locator || "",
+    initialLocation || pack.room.name || pack.layout?.locator || "",
   );
   const [sheetId, setSheetId] = useState(initialSheet?.id ?? "");
   const [photos, setPhotos] = useState<DraftPhoto[]>([]);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [saved, setSaved] = useState<RfiDraftPacket | null>(null);
@@ -78,18 +100,36 @@ export function GenerateRfiForm({
 
   function onPhotos(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
     if (!files.length) return;
-    setPhotos((current) => {
-      const next = [...current];
+    setPhotoError(null);
+    void (async () => {
+      const added: DraftPhoto[] = [];
       for (const file of files) {
-        if (next.some((item) => item.name === file.name && item.size === file.size)) {
+        if (file.size > MAX_PHOTO_BYTES) {
+          setPhotoError("Photo is too large for this draft (max ~3.5 MB).");
           continue;
         }
-        next.push({ name: file.name, size: file.size });
+        const dataUrl = await readFileDataUrl(file);
+        added.push({
+          name: file.name || "phone-photo.jpg",
+          size: file.size,
+          mime: file.type,
+          dataUrl,
+        });
       }
-      return next.slice(0, 8);
-    });
-    event.target.value = "";
+      if (!added.length) return;
+      setPhotos((current) => {
+        const next = [...current];
+        for (const photo of added) {
+          if (next.some((item) => item.name === photo.name && item.size === photo.size)) {
+            continue;
+          }
+          next.push(photo);
+        }
+        return next.slice(0, 8);
+      });
+    })();
   }
 
   async function submitDraft(fields: {
@@ -109,6 +149,13 @@ export function GenerateRfiForm({
 
     const sheetPinId = selectedSheet?.id ?? pack.revision_stamp?.drawing ?? "";
     const locationValue = fields.location.trim() || pack.room.name;
+    const resolvedMarkup = resolveMarkupAttachment({
+      requestId,
+      pack,
+      sheetQuery: sheetId || sheetQuery,
+      markupQuery,
+      markupItemQuery,
+    });
     let packet: RfiDraftPacket = {
       id: newUuid(),
       createdAt: new Date().toISOString(),
@@ -124,6 +171,9 @@ export function GenerateRfiForm({
       question: nextQuestion,
       location: locationValue,
       photos,
+      markupId: resolvedMarkup?.overlayId ?? markupQuery ?? null,
+      markupItemId: resolvedMarkup?.itemId ?? markupItemQuery ?? null,
+      markupRef: resolvedMarkup,
       sentTo: {
         name: DEMO_FOREMAN.name,
         role: DEMO_FOREMAN.role,
@@ -145,7 +195,7 @@ export function GenerateRfiForm({
           description: nextQuestion,
           location: locationValue,
           sheet_id: sheetPinId || null,
-          markup_id: null,
+          markup_id: resolvedMarkup?.overlayId ?? markupQuery ?? null,
           status: "draft",
         }),
       });
@@ -226,10 +276,27 @@ export function GenerateRfiForm({
         <div className="border border-line bg-ink p-3 text-sm">
           <p className="font-medium text-paper">{saved.subject}</p>
           <p className="mt-2 whitespace-pre-wrap text-muted">{saved.question}</p>
+          {saved.markupRef ? (
+            <p className="mt-2 text-xs text-tan">
+              Vector overlay {markupKindLabel(saved.markupRef.kind)} on{" "}
+              {saved.markupRef.sheetId}
+              {saved.markupRef.sheetRev ? ` Rev ${saved.markupRef.sheetRev}` : ""}.
+            </p>
+          ) : null}
           {saved.photos.length ? (
-            <ul className="mt-2 list-disc pl-4 text-xs text-metal">
+            <ul className="mt-2 space-y-2">
               {saved.photos.map((photo) => (
-                <li key={`${photo.name}-${photo.size}`}>{photo.name}</li>
+                <li key={`${photo.name}-${photo.size}`} className="text-xs text-metal">
+                  {photo.dataUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={photo.dataUrl}
+                      alt={photo.name}
+                      className="mb-1 max-h-32 border border-line"
+                    />
+                  ) : null}
+                  {photo.name}
+                </li>
               ))}
             </ul>
           ) : null}
@@ -257,6 +324,25 @@ export function GenerateRfiForm({
           . Draft only — never a Procore RFI.
         </span>
       </p>
+
+      {markupQuery || markupKindQuery ? (
+        <div className="border border-cta/50 bg-ink p-3 text-sm text-muted">
+          <p className="font-semibold tracking-wide text-cta uppercase">
+            From sheet markup
+          </p>
+          <p className="mt-1 text-paper">
+            {markupKindLabel(
+              markupKindQuery === "circle" ||
+                markupKindQuery === "box" ||
+                markupKindQuery === "arrow" ||
+                markupKindQuery === "text"
+                ? markupKindQuery
+                : "box",
+            )}{" "}
+            on {sheetQuery || pin}. Vector overlay stays attached to this draft.
+          </p>
+        </div>
+      ) : null}
 
       <div className="space-y-2 border border-line bg-ink p-3">
         <p className="text-xs font-semibold tracking-wide text-muted uppercase">
@@ -341,27 +427,55 @@ export function GenerateRfiForm({
       </label>
 
       <div>
-        <label className="block text-xs font-semibold tracking-wide text-muted uppercase">
-          Photo (optional)
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={onPhotos}
-            className="mt-1 w-full text-sm text-paper file:mr-3 file:border file:border-cta file:bg-cta file:px-3 file:py-2 file:text-sm file:font-semibold file:text-secondary"
-          />
-        </label>
+        <p className="text-xs font-semibold tracking-wide text-muted uppercase">
+          Phone photo (optional)
+        </p>
+        <div className="mt-1 grid grid-cols-2 gap-2">
+          <label className="flex min-h-12 cursor-pointer items-center justify-center border border-cta bg-cta px-3 text-center text-xs font-semibold tracking-wide text-secondary uppercase">
+            Take photo
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={onPhotos}
+              className="sr-only"
+            />
+          </label>
+          <label className="flex min-h-12 cursor-pointer items-center justify-center border border-line bg-panel-2 px-3 text-center text-xs font-semibold tracking-wide text-paper uppercase">
+            Choose photo
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={onPhotos}
+              className="sr-only"
+            />
+          </label>
+        </div>
+        {photoError ? (
+          <p role="alert" className="mt-1 text-sm text-cta">
+            {photoError}
+          </p>
+        ) : null}
         {photos.length ? (
-          <ul className="mt-2 space-y-1 text-sm text-metal">
+          <ul className="mt-2 space-y-2 text-sm text-metal">
             {photos.map((photo) => (
               <li
                 key={`${photo.name}-${photo.size}`}
-                className="flex items-center justify-between gap-2 border border-line bg-ink px-2 py-2"
+                className="flex items-center gap-2 border border-line bg-ink px-2 py-2"
               >
-                <span className="truncate">{photo.name}</span>
+                {photo.dataUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={photo.dataUrl}
+                    alt=""
+                    className="h-14 w-14 shrink-0 object-cover"
+                  />
+                ) : null}
+                <span className="min-w-0 flex-1 truncate">{photo.name}</span>
                 <button
                   type="button"
-                  className="shrink-0 text-xs text-accent uppercase"
+                  className="min-h-10 shrink-0 px-2 text-xs text-accent uppercase"
                   onClick={() =>
                     setPhotos((current) =>
                       current.filter(
@@ -378,7 +492,7 @@ export function GenerateRfiForm({
           </ul>
         ) : (
           <p className="mt-1 text-xs text-muted">
-            Names stay on this device for the demo. Files are not uploaded.
+            Photo stays on this draft as a data URL. Not uploaded to Procore.
           </p>
         )}
       </div>
@@ -398,4 +512,57 @@ export function GenerateRfiForm({
       </button>
     </form>
   );
+}
+
+function readFileDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read photo"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function resolveMarkupAttachment(input: {
+  requestId: string;
+  pack: RoomPack;
+  sheetQuery?: string;
+  markupQuery?: string;
+  markupItemQuery?: string;
+}): RfiMarkupRef | null {
+  const fromSession = readMarkupRfiPrefill(input.requestId);
+  if (fromSession) {
+    return {
+      overlayId: fromSession.overlayId,
+      itemId: fromSession.itemId,
+      sheetId: fromSession.sheetId,
+      sheetRev: fromSession.sheetRev,
+      kind: fromSession.kind,
+      vectors: fromSession.vectors,
+    };
+  }
+  if (!input.sheetQuery || !input.markupItemQuery) return null;
+  const overlay = loadLocalOverlay(input.requestId, input.sheetQuery);
+  if (!overlay) return null;
+  const item = overlay.vectors.items.find((entry) => entry.id === input.markupItemQuery);
+  if (!item) return null;
+  const sheet = input.pack.sheets.find((entry) => entry.id === input.sheetQuery);
+  const prefill = buildMarkupRfiPrefill({
+    requestId: input.requestId,
+    overlayId: input.markupQuery || overlay.id,
+    item,
+    sheetId: input.sheetQuery,
+    sheetRev: sheet?.rev ?? "",
+    roomName: input.pack.room.name,
+    roomNumber: input.pack.room.number,
+    vectors: overlay.vectors,
+  });
+  return {
+    overlayId: prefill.overlayId,
+    itemId: prefill.itemId,
+    sheetId: prefill.sheetId,
+    sheetRev: prefill.sheetRev,
+    kind: prefill.kind,
+    vectors: prefill.vectors,
+  };
 }
