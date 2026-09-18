@@ -30,7 +30,7 @@ Must match this path — nothing else in the primary nav:
 | Pricing (`/pricing`) | Subscribe CTA → Stripe-hosted Checkout (60-day trial, payment method collected). |
 | Room pack request | Room number (e.g. `733`). **Connected puller:** `POST /api/room-pack` asks the Procore bot to refresh, then opens `/pack/[requestId]`. **Viewer / unconnected puller:** **Open pack** only — no pull. Local demo (no `SUPABASE_URL`) loads Maple Point JSON. |
 | Pack viewer | Field stack on `/pack/[requestId]`: **architectural floor plan first** (A-*, architectural, floor plan heuristics; else current primary), oversized crimson SVG box around the room walls, then remaining sheets (power, lighting, …) and linked RFIs. Drawing number + revision letter stamps stay on the top bar and each sheet (`A-101 Rev A`). Website open always re-reads `room_packs` (no-store). Connected pullers also trigger a bot refresh; viewers cannot. |
-| Generate RFI / Materials | Live pack actions. Drafts go to foreman Pat Nguyen — not a Procore submit. **Dictate** fills the form from the mic; **Read aloud** speaks RFIs. |
+| Generate RFI / Materials | Shipped in [PR #12](https://github.com/gregorydcastro-cpu/RFI-iphone/pull/12). Live pack actions — drafts to foreman Pat Nguyen, not a Procore submit. Not Coming soon. **Dictate** fills the form from the mic; **Read aloud** speaks RFIs. |
 | Voice (Grok) | Server-side `XAI_API_KEY` → `/api/dictation` (STT) and `/api/tts` (TTS). Never `NEXT_PUBLIC_`. |
 | Time (`/time`) | Maple Point **worker punch** (GPS geofence) and **foreman crew week**. Field log only — not payroll/ADP. |
 | Takeoff counts | Optional placeholder panel |
@@ -173,6 +173,8 @@ RLS is on. `anon` has no grants. `authenticated` may **SELECT own row** only (`a
 If `SUPABASE_SERVICE_ROLE_KEY` is missing, Connect still redirects through Procore but the callback cannot persist tokens (`storage_unconfigured`). Do not use `SUPABASE_ANON_KEY` for this table.
 
 ### Stripe Checkout (Vercel + Dashboard)
+
+Go-live operator checklist: **[STRIPE_GO_LIVE.md](STRIPE_GO_LIVE.md)**.
 
 60-day free trial that **auto-converts** to the monthly Price because Checkout collects a payment method (`payment_method_collection: always`). Hosted Checkout is used — no Stripe.js on the pricing page. Maple Point local demo does **not** need these keys.
 
@@ -434,8 +436,8 @@ Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `
     "page_height_pts": 792
   },
   "actions": [
-    { "id": "generate-rfi", "label": "Generate RFI", "href": "/pack/maple-point/rfi/new?sheet=A-101", "enabled": true },
-    { "id": "order-materials", "label": "Order materials", "href": "/pack/maple-point/materials", "enabled": true }
+    { "id": "generate-rfi", "label": "Generate RFI", "href": "/pack/maple-point/rfi/new?sheet=A-101", "enabled": true, "note": "Draft to foreman — not a Procore submit" },
+    { "id": "order-materials", "label": "Order materials", "href": "/pack/maple-point/materials", "enabled": true, "note": "Draft to foreman — not a Procore PO" }
   ]
 }
 ```
@@ -451,7 +453,7 @@ Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `
 | `sheets[]` | `{ id, rev, pdf, preview?, crop?, title?, name?, discipline? }` — `id` is the drawing number, `rev` is the revision letter. Viewer stamps show `A-101 Rev A`. Optional `title` / `discipline` help pick the architectural floor plan first. |
 | `rfis[]` | `{ id, number, title, status, url? }` |
 | `layout` | Room locator on the sheet |
-| `actions` | Dashboard buttons |
+| `actions` | Dashboard buttons. **Generate RFI** and **Order materials** are live (drafts to foreman, not Procore — [PR #12](https://github.com/gregorydcastro-cpu/RFI-iphone/pull/12)). Pack JSON `"Coming soon"` / `enabled: false` for those two is ignored. |
 | `takeoff` | **Optional.** If missing, Takeoff counts is empty |
 
 ### Highlight (coordinate-ready)
