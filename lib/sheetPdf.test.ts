@@ -57,6 +57,52 @@ test("stamp/resolve keep Drive preview links as uc download URLs", () => {
   );
 });
 
+test("live bot empty pdf uses crop/preview Drive view URLs", () => {
+  const view =
+    "https://drive.google.com/file/d/1-UluTsR9__FBCyfiQay_A3k_ulGW5rmx/view";
+  const resolved = resolveSheetPdf({
+    pdf: "",
+    preview: view,
+    crop: view,
+  });
+  assert.equal(
+    resolved,
+    "https://drive.google.com/uc?export=download&id=1-UluTsR9__FBCyfiQay_A3k_ulGW5rmx",
+  );
+  assert.equal(
+    viewerSheetPdfSrc({
+      requestId: "sample-arch-bounds-733",
+      sheetId: "A207_N",
+      pdfUrl: resolved,
+    }),
+    "/api/sheet-pdf?requestId=sample-arch-bounds-733&sheetId=A207_N",
+  );
+});
+
+test("crop Drive view URL is enough when preview is also empty", () => {
+  const resolved = resolveSheetPdf({
+    pdf: "",
+    preview: "",
+    crop: "https://drive.google.com/file/d/1-UluTsR9__FBCyfiQay_A3k_ulGW5rmx/view",
+  });
+  assert.equal(
+    resolved,
+    "https://drive.google.com/uc?export=download&id=1-UluTsR9__FBCyfiQay_A3k_ulGW5rmx",
+  );
+});
+
+test("bbox crop does not hide a preview Drive view URL", () => {
+  const resolved = resolveSheetPdf({
+    pdf: "",
+    preview: "https://drive.google.com/file/d/abc123/view",
+    crop: { x: 0.2, y: 0.2, w: 0.3, h: 0.3 },
+  });
+  assert.equal(
+    resolved,
+    "https://drive.google.com/uc?export=download&id=abc123",
+  );
+});
+
 test("empty pdf does not invent a proxy URL", () => {
   assert.equal(
     viewerSheetPdfSrc({

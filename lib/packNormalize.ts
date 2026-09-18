@@ -46,20 +46,61 @@ export function driveFileId(url: string): string | null {
   return query?.[1] ? decodeURIComponent(query[1]) : null;
 }
 
-/** Best-effort PDF URL: attached pdf, then preview, then a Drive crop/preview link. */
+export function driveDownloadUrl(fileId: string): string {
+  return `https://drive.google.com/uc?export=download&id=${fileId}`;
+}
+
+function isUsablePdfLocation(url: string): boolean {
+  if (url.startsWith("/") && !url.startsWith("//")) return true;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+function urlCandidatesFromUnknown(value: unknown): string[] {
+  const parsed = parseMaybeJson(value);
+  if (typeof parsed === "string") {
+    const trimmed = parsed.trim();
+    return trimmed ? [trimmed] : [];
+  }
+  const rec = asRecord(parsed);
+  if (!rec) return [];
+  const out: string[] = [];
+  for (const key of ["pdf", "preview", "crop", "path", "url", "href", "src"]) {
+    const item = rec[key];
+    if (typeof item === "string" && item.trim()) out.push(item.trim());
+  }
+  return out;
+}
+
+function normalizePdfLocation(url: string): string {
+  const id = driveFileId(url);
+  return id ? driveDownloadUrl(id) : url;
+}
+
+/**
+ * Live bot rows often store `pdf: ""` and put a Drive *view* URL on
+ * `crop` / `preview` (`https://drive.google.com/file/d/<id>/view`).
+ * Prefer a non-empty same-origin or absolute `pdf`; otherwise extract a
+ * Drive file id from crop, then preview.
+ */
 export function resolveSheetPdf(sheet: Pick<Sheet, "pdf" | "preview"> & {
   crop?: unknown;
 }): string {
-  const crop =
-    typeof sheet.crop === "string" ? sheet.crop : undefined;
-  const raw = [sheet.pdf, sheet.preview, crop].find(
-    (item) => typeof item === "string" && item.trim(),
-  );
-  if (!raw) return "";
-  const url = raw.trim();
-  const id = driveFileId(url);
-  if (id) return `https://drive.google.com/uc?export=download&id=${id}`;
-  return url;
+  const pdf = typeof sheet.pdf === "string" ? sheet.pdf.trim() : "";
+  if (pdf && isUsablePdfLocation(pdf)) return normalizePdfLocation(pdf);
+
+  for (const source of [sheet.crop, sheet.preview]) {
+    for (const candidate of urlCandidatesFromUnknown(source)) {
+      const id = driveFileId(candidate);
+      if (id) return driveDownloadUrl(id);
+      if (isUsablePdfLocation(candidate)) return candidate;
+    }
+  }
+  return "";
 }
 
 export function numberPairList(value: unknown): [number, number][] | undefined {

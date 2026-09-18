@@ -1,3 +1,5 @@
+import { resolveSheetPdf } from "./packNormalize";
+
 export type PackStatus = "ready" | "pending" | "error" | string;
 
 export type Project = {
@@ -275,18 +277,13 @@ export function stampSheet(sheet: {
   const id = typeof sheet.id === "string" ? sheet.id.trim() : "";
   const rev = typeof sheet.rev === "string" ? sheet.rev.trim() : "";
   const preview = typeof sheet.preview === "string" ? sheet.preview : null;
-  const cropUrl = typeof sheet.crop === "string" ? sheet.crop : null;
-  const pdfRaw =
-    (typeof sheet.pdf === "string" && sheet.pdf.trim()) ||
-    (typeof preview === "string" && preview.trim()) ||
-    (cropUrl && cropUrl.trim()) ||
-    "";
+  const pdf = resolveSheetPdf({
+    pdf: typeof sheet.pdf === "string" ? sheet.pdf : "",
+    preview,
+    crop: sheet.crop,
+  });
   const crop =
     sheet.crop && typeof sheet.crop === "object" ? sheet.crop : null;
-  const driveId = pdfRaw.match(/drive\.google\.com\/file\/d\/([^/?#]+)/i)?.[1];
-  const pdf = driveId
-    ? `https://drive.google.com/uc?export=download&id=${driveId}`
-    : pdfRaw;
   return {
     id: id || "UNKNOWN",
     rev,

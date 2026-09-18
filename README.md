@@ -327,17 +327,19 @@ Local `npm run dev` without Supabase env cannot load that request id — it is n
 
 ### Live sheet PDFs (Google Drive proxy)
 
-The Procore bot stores drawing files in **Google Drive**. Inspected live `sample-arch-bounds-733` `sheets[]` shape:
+The Procore bot stores drawing files in **Google Drive**. Inspected live `sample-arch-bounds-733` `sheets[]` **as stored in `room_packs`**:
 
 | Field | Production value |
 | --- | --- |
-| `pdf` | `https://drive.google.com/uc?export=download&id=<FILE_ID>` |
-| `preview` | `https://drive.google.com/file/d/<FILE_ID>/view` |
-| empty sheet | `pdf` / `preview` `""` when the bot has no file (viewer: “No PDF attached”) |
+| `pdf` | `""` (empty string) |
+| `crop` / `preview` | `https://drive.google.com/file/d/<FILE_ID>/view` (Drive **view** URL, not PDF bytes) |
+| empty sheet | `pdf` / `crop` / `preview` all `""` (viewer: “No PDF attached”) |
 
-Those Drive hosts do **not** allow browser `pdf.js` fetches (private file → Google login redirect, plus CORS). That is the **Failed to fetch** error on the live pack viewer. Maple Point demo paths (`/packs/*.pdf`) are same-origin and still load **directly**.
+Example: `A207_N` crop/preview file id `1-UluTsR9__FBCyfiQay_A3k_ulGW5rmx`. `A257_N` has no crop/preview.
 
-**Website path:** `GET /api/sheet-pdf?requestId=&sheetId=` uses the same `room_packs` lookup as the pack viewer, resolves that sheet’s `pdf` URL, and streams `application/pdf` (`Cache-Control: private, max-age=300`). Drive tokens never go to the client.
+The website resolves a sheet PDF as: non-empty same-origin or absolute `pdf` first; otherwise extract a Drive file id from `crop`, then `preview`. pdf.js is never pointed at Drive. Maple Point demo paths (`/packs/*.pdf`) are same-origin and still load **directly**.
+
+**Website path:** `GET /api/sheet-pdf?requestId=&sheetId=` uses the same `room_packs` lookup as the pack viewer, resolves crop/preview Drive ids, downloads the file (Drive export/API), and streams `application/pdf` (`Cache-Control: private, max-age=300`). Drive tokens never go to the client.
 
 **Fetch order (server):**
 
@@ -558,7 +560,7 @@ Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `
 | `project` | `{ id, name, slug }` |
 | `room` | `{ id, name, number? }` |
 | `request_id` | URL key for `/pack/[requestId]` |
-| `sheets[]` | `{ id, rev, pdf, preview?, crop?, title?, name?, discipline? }` — `id` is the drawing number, `rev` is the revision letter. Viewer stamps show `A-101 Rev A`. Optional `title` / `discipline` help pick the architectural floor plan first. Demo `pdf` is a same-origin `/packs/….pdf`. Live bot `pdf` is a Google Drive `uc?export=download&id=` URL (`preview` is `/file/d/…/view`); the viewer loads those through `/api/sheet-pdf`. |
+| `sheets[]` | `{ id, rev, pdf, preview?, crop?, title?, name?, discipline? }` — `id` is the drawing number, `rev` is the revision letter. Viewer stamps show `A-101 Rev A`. Optional `title` / `discipline` help pick the architectural floor plan first. Demo `pdf` is a same-origin `/packs/….pdf`. Live bot rows often have `pdf: ""` with Drive **view** URLs on `crop` / `preview` (`/file/d/<id>/view`); the viewer resolves a file id and loads the PDF through `/api/sheet-pdf`. |
 | `rfis[]` | `{ id, number, title, status, url? }` |
 | `layout` | Room locator on the sheet |
 | `actions` | Dashboard buttons. **Generate RFI** and **Order materials** are live (drafts to foreman, not Procore — [PR #12](https://github.com/gregorydcastro-cpu/RFI-iphone/pull/12)). Pack JSON `"Coming soon"` / `enabled: false` for those two is ignored. |
