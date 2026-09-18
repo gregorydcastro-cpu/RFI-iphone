@@ -104,13 +104,9 @@ export function RequestPackForm({ job }: Props) {
           {job.name}
         </h1>
         <p className="mt-2 text-sm text-muted">
-          Local demo loads Maple Point JSON and does not call Procore. Production
-          POSTs this job’s exact name (
-          <span className="text-paper">{job.name}</span>
-          ) to the Room pack webhook, then opens{" "}
-          <code className="font-mono text-metal">/pack/&lt;requestId&gt;</code>{" "}
-          as soon as the request is accepted and polls Drive status in the
-          background.
+          Local demo loads Maple Point JSON and does not call Procore.
+          Production POSTs this job’s exact name and company id, then opening
+          the pack viewer pulls a fresh pack (drawing + rev + pulled_at).
         </p>
       </div>
       <label className="block text-xs font-semibold tracking-wide text-muted uppercase">

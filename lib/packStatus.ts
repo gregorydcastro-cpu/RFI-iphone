@@ -64,6 +64,16 @@ export function resolveStatusUrlTemplate(
     .replaceAll("{path}", path);
 }
 
+export function pickPackFromWebhookBody(body: unknown): RoomPack | null {
+  if (!body || typeof body !== "object") return null;
+  const rec = body as Record<string, unknown>;
+  for (const key of ["pack", "pack_data", "room_pack"] as const) {
+    if (isRoomPackShape(rec[key])) return rec[key];
+  }
+  if (isRoomPackShape(body)) return body;
+  return null;
+}
+
 export function pickStatusUrlFromWebhookBody(body: unknown): string | undefined {
   if (!body || typeof body !== "object") return undefined;
   const rec = body as Record<string, unknown>;
@@ -103,6 +113,12 @@ export function packMatchesJob(
     typeof pack.project.slug === "string" && pack.project.slug === job.slug;
   const nameOk = pack.project.name === job.name;
   if (!slugOk && !nameOk) return false;
-  if (pack.request_id && pack.request_id !== requestId) return false;
+  if (
+    pack.request_id &&
+    pack.request_id !== requestId &&
+    pack.request_id !== job.slug
+  ) {
+    return false;
+  }
   return true;
 }

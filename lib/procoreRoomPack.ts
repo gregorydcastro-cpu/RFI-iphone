@@ -6,7 +6,8 @@
  */
 
 import { readLowercaseEnv } from "./env";
-import { pickStatusUrlFromWebhookBody } from "./packStatus";
+import { pickPackFromWebhookBody, pickStatusUrlFromWebhookBody } from "./packStatus";
+import type { RoomPack } from "./pack";
 
 export const PROCORE_ROOM_PACK_WEBHOOK_URL_KEY =
   "procore_room_pack_webhook_url" as const;
@@ -20,6 +21,8 @@ export type RoomPackWebhookPayload = {
   project: string;
   room: string;
   request_id: string;
+  /** Dynamic per job — never a single hardcoded company. */
+  company_id: string;
 };
 
 export type ProcoreRoomPackWebhookConfig = {
@@ -28,7 +31,7 @@ export type ProcoreRoomPackWebhookConfig = {
 };
 
 export type RoomPackWebhookPostResult =
-  | { ok: true; status: number; statusUrl?: string }
+  | { ok: true; status: number; statusUrl?: string; pack?: RoomPack }
   | { ok: false; status: number | null; aborted: boolean };
 
 /**
@@ -53,11 +56,13 @@ export function buildRoomPackWebhookPayload(input: {
   projectName: string;
   room: string;
   requestId: string;
+  companyId: string;
 }): RoomPackWebhookPayload {
   return {
     project: input.projectName,
     room: input.room,
     request_id: input.requestId,
+    company_id: input.companyId,
   };
 }
 
@@ -84,16 +89,19 @@ export async function postRoomPackWebhook(
     // Parse for an optional status/json URL. Never log the body.
     const raw = await response.text().catch(() => "");
     let statusUrl: string | undefined;
+    let pack: RoomPack | undefined;
     if (raw) {
       try {
-        statusUrl = pickStatusUrlFromWebhookBody(JSON.parse(raw) as unknown);
+        const parsed: unknown = JSON.parse(raw);
+        statusUrl = pickStatusUrlFromWebhookBody(parsed);
+        pack = pickPackFromWebhookBody(parsed) ?? undefined;
       } catch {
         statusUrl = undefined;
       }
     }
 
     if (response.ok) {
-      return { ok: true, status: response.status, statusUrl };
+      return { ok: true, status: response.status, statusUrl, pack };
     }
 
     console.error("[gcfieldlog] room-pack webhook was not accepted", {

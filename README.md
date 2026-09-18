@@ -6,7 +6,7 @@ This is the product surface. **Native iOS is paused. No Apple.** Real login and 
 
 Host: **Vercel (primary)** with **HostGator DNS** for `gcfieldlog.com` (document only; this PR does not change DNS). Cloudflare Pages is a possible later target.
 
-No real auth, Stripe, HostGator uploads, or live Procore REST API in this MVP. Requesting a room pack **does** POST to Procore’s Room pack webhook when the two lowercase Vercel env keys are set (Production), then polls Drive/status JSON in the background. Local demo leaves those unset: no webhook, no poll, Maple Point JSON.
+No real auth, Stripe, HostGator uploads, or live Procore REST API in this MVP. Opening a website pack view **POSTs a fresh pull** to Procore’s Room pack webhook when the two lowercase Vercel env keys are set. Local demo leaves those unset: Maple Point JSON, no webhook. Optional `SUPABASE_URL` + `SUPABASE_ANON_KEY` can serve the latest `public.room_packs` row after that pull.
 
 ## Locked nav (MVP)
 
@@ -22,8 +22,8 @@ Must match this path — nothing else in the primary nav:
 | --- | --- |
 | Login (`/`) | Email/password form UI. Any submit goes to jobs. No session server. |
 | Jobs (`/jobs`) | Fictional jobs only (Maple Point and similar). |
-| Room pack request | Room number (e.g. `733`) → `POST /api/room-pack` → `/pack/[requestId]`. Local demo loads Maple Point JSON immediately (no webhook, no poll). Production POSTs the selected job’s **exact name** to the Procore webhook, opens the pack page as soon as the webhook accepts, and polls `{project_slug}/{request_id}.json` until `ready`. Missing pack JSON still falls back to Maple Point while pending. |
-| Pack viewer | Zoomable plan/sheets + SVG room highlight + linked RFIs |
+| Room pack request | Room number (e.g. `733`) → `POST /api/room-pack` → `/pack/[requestId]`. Local demo loads Maple Point JSON (no webhook). Production POSTs the selected job’s **exact name** plus that job’s **company_id**. |
+| Pack viewer | Zoomable plan/sheets + SVG room highlight + linked RFIs. Top bar and sheet tabs show **drawing number + revision letter** (`E-101 Rev A`) and `pulled_at`. **Every open** of `/pack/[requestId]` triggers a fresh webhook pull (no expiry, no website cache as source of truth). |
 | Generate RFI / Materials | Stub pages from the pack action buttons |
 | Takeoff counts | Optional placeholder panel |
 
@@ -50,12 +50,12 @@ Production host is **gcfieldlog.com**.
 
 1. Import this GitHub repo in [Vercel](https://vercel.com/new) (framework preset: **Next.js**).
 2. Build command: `npm run build`. `postinstall` copies `pdf.worker.min.mjs`.
-3. **Env:** the Maple Point demo needs **no** secrets. Production already has the two lowercase Procore webhook keys (see below). Do not add `PROCORE_ROOM_PACK_*` aliases unless you also wire both directions. Drive API credentials are **not** on Vercel today — polling uses the status interface described below.
+3. **Env:** the Maple Point demo needs **no** secrets. Production has the two lowercase Procore webhook keys (see below). Optional `SUPABASE_URL` + `SUPABASE_ANON_KEY` read the latest `room_packs` row after a pull. Do not add `PROCORE_ROOM_PACK_*` aliases unless you also wire both directions.
 4. **DNS (ops, not this repo):** at HostGator, point `gcfieldlog.com` / `www` to Vercel (A / CNAME per Vercel’s domain docs). Do not upload files to HostGator for this app.
 
 ### Procore Room pack webhook env (Vercel)
 
-Read **only** these exact lowercase keys from `process.env` on the server (`POST /api/room-pack`). They are already set on **Vercel Production**. Never commit values, never `NEXT_PUBLIC_` them, never log them.
+Read **only** these exact lowercase keys from `process.env` on the server. They are already set on **Vercel Production**. Never commit values, never `NEXT_PUBLIC_` them, never log them.
 
 | Key | Role |
 | --- | --- |
@@ -67,27 +67,33 @@ process.env.procore_room_pack_webhook_url
 process.env.procore_room_pack_webhook_authorization
 ```
 
-- **Both set** (Production): request pack POSTs `{ "project": "<exact job name>", "room": "<room>", "request_id": "..." }` and treats a 2xx as accepted. The UI navigates to `/pack/[requestId]?accepted=1` without waiting for the full pack, then polls status in the background.
-- **Missing / local:** same as today — local Maple Point JSON, **no** webhook call, **no** Drive poll.
-- **Hard rule:** `project` is the selected job’s exact `name` from the jobs list (looked up server-side from `projectSlug`). Never send another job’s name. Never mix jobs.
+Payload (fresh pull on every website pack open, and on `POST /api/room-pack`):
 
-### Drive / status poll (after accept)
+```json
+{
+  "project": "<exact job name>",
+  "room": "<room>",
+  "request_id": "...",
+  "company_id": "<that job's company id>"
+}
+```
 
-Live packs land at `{project_slug}/{request_id}.json` under [GC Field Log room packs](https://drive.google.com/drive/folders/19Ixner0dApGlfpG13M2XOw2rzReQGl3P).
+`company_id` is **per job** (see `DEMO_JOBS[].companyId`). Never send one hardcoded company for every job.
 
-`GET`/`POST /api/room-pack/status` is the poll client:
+- **Both webhook keys set (Production):** opening `/pack/[requestId]` POSTs that payload (`cache: "no-store"`) then reads the latest pack. Local `public/packs/*.json` is **not** the live source of truth.
+- **Missing / local:** Maple Point JSON, **no** webhook.
+- **Hard rule:** `project` is the selected job’s exact `name`. Never mix jobs.
 
-1. Local `public/packs/<requestId>.json` if present and `status` is `ready` (and the pack’s project matches the selected job).
-2. Else HTTP GET of a public JSON / status URL:
-   - Optional lowercase `procore_room_pack_status_url` (not on Production today) — template with `{project_slug}`, `{request_id}`, `{path}`.
-   - Or `status_url` / `json_url` / `pack_url` on the webhook accept JSON (https Drive/Google hosts only).
-3. Else **Drive API stub**: no Drive credentials are in Vercel env, so the interface returns `pending` / `unconfigured` and the pack page keeps showing accepted/pending + Maple Point demo. It does **not** block waiting for the file.
+Optional after the pull, if set on Vercel:
 
-The viewer polls about every 3s and stops after ~2 minutes (refresh to check again). Secrets are never logged.
+```ts
+process.env.SUPABASE_URL
+process.env.SUPABASE_ANON_KEY
+```
 
-**To finish Drive fetch later (not invented on Vercel):** a Google service account or API key that can read folder `19Ixner0dApGlfpG13M2XOw2rzReQGl3P`, stored under whatever **lowercase** key Field Log actually adds. Wire that in `fetchDrivePackJson` — do not add `DRIVE_*` uppercase names unless you also alias both directions. Until then, set `procore_room_pack_status_url` to a public JSON URL template, or have the webhook return a status URL.
+The website GETs the latest `public.room_packs` row for the request/job (project `aejevzkqvlwbmjbqdxuu`). This is a thin read, not a schema redesign. If those keys are unset, status JSON / Maple Point demo is used instead.
 
-Local `npm run dev` does not need any of these variables.
+No pack expiry timers. No heavy website cache. Re-pull on open.
 
 **Cloudflare Pages** can host Next.js later. Keep Vercel as the primary.
 
@@ -99,9 +105,10 @@ Local `npm run dev` does not need any of these variables.
 | `/jobs` | Fictional **job selection** |
 | `/jobs/[projectSlug]` | **Request room pack** (room number → `POST /api/room-pack` → `/pack/[requestId]`) |
 | `/jobs/[projectSlug]/rooms/[room]` | Alias → `/pack/{slug}-{room}` (no webhook; use the request form) |
-| `/api/room-pack` | Server POST. Forwards to Procore when both lowercase webhook keys are set; otherwise demo. |
-| `/api/room-pack/status` | Poll `{project_slug}/{request_id}.json` (local file, public JSON URL, or Drive stub). |
-| `/pack/[requestId]` | Pack viewer. Unknown IDs fall back to local Maple Point demo |
+| `/api/room-pack` | Server POST. Webhook pull when lowercase keys are set; otherwise demo. |
+| `/api/room-pack/refresh` | Fresh webhook pull + latest pack read (used on every `/pack/[requestId]` open). |
+| `/api/room-pack/status` | Latest pack JSON (skips local files when webhook live). |
+| `/pack/[requestId]` | Live pack viewer. Re-pulls on open. Unknown IDs fall back to Maple Point demo |
 | `/pack/[requestId]/rfi/new?sheet=` | Stub Generate RFI form |
 | `/pack/[requestId]/materials` | Stub Order materials |
 
@@ -128,22 +135,15 @@ Defined in `app/globals.css`.
 
 ## Where production packs come from
 
-Live packs are produced by **Procore’s Room pack webhook**, schema `gcpullog.room_pack.v1`.
+Live packs come from **Procore’s Room pack webhook**, schema `gcpullog.room_pack.v1`.
 
-**Request (this app, Production):** `POST /api/room-pack` reads the lowercase Vercel keys and POSTs `{ project, room, request_id }` to `procore_room_pack_webhook_url` with `Authorization` from `procore_room_pack_webhook_authorization`. A 2xx is accepted; the dashboard does **not** wait for the pack to finish. It opens `/pack/[requestId]` (accepted/pending) and polls `/api/room-pack/status` until `status` is `ready`. Maple Point demo fallback stays until that JSON exists and matches the selected job.
+**Website live view:** every open of `/pack/[requestId]` POSTs `{ project, room, request_id, company_id }` to `procore_room_pack_webhook_url` with `Authorization` from `procore_room_pack_webhook_authorization`. Then the app reads the latest pack (optional Supabase `public.room_packs`, else status JSON). Local demo JSON is **not** served as the live source of truth.
 
-**Local demo:** webhook keys unset → no webhook POST → no poll → local Maple Point JSON.
+**Request form:** `POST /api/room-pack` does the same webhook POST, then navigates to the pack page (which pulls again on open).
 
-### Drive layout (Greg / ops — not secrets)
+**Local demo:** webhook keys unset → no webhook → local Maple Point JSON.
 
-```
-{project_slug}/{request_id}.json
-{project_slug}/Room_{room}/
-```
-
-Drive root: [GC Field Log room packs](https://drive.google.com/drive/folders/19Ixner0dApGlfpG13M2XOw2rzReQGl3P)
-
-That folder is an ops pointer, not a credential. Do not put Drive API keys or webhook secrets in this app.
+Drive folder [GC Field Log room packs](https://drive.google.com/drive/folders/19Ixner0dApGlfpG13M2XOw2rzReQGl3P) remains an ops pointer, not a credential.
 
 ## Pack JSON contract (`gcpullog.room_pack.v1`)
 
@@ -154,6 +154,8 @@ Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `
   "schema": "gcpullog.room_pack.v1",
   "status": "ready",
   "request_id": "maple-point",
+  "pulled_at": "2026-09-18T00:15:17.277Z",
+  "revision_stamp": { "drawing": "E-101", "rev": "A" },
   "project": { "id": "proj-maple-point", "name": "Maple Point Medical Office", "slug": "maple-point" },
   "room": { "id": "room-e101", "name": "Electrical Closet 101", "number": "101" },
   "sheets": [
@@ -182,10 +184,12 @@ Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `
 | Field | Notes |
 | --- | --- |
 | `status` | e.g. `ready` / `pending` — shown in the top bar |
+| `pulled_at` | ISO timestamp of this pull. Shown in the viewer. Not a cache expiry. |
+| `revision_stamp` | `{ drawing, rev }` for the primary sheet at pull time |
 | `project` | `{ id, name, slug }` |
 | `room` | `{ id, name, number? }` |
 | `request_id` | URL key for `/pack/[requestId]` |
-| `sheets[]` | `{ id, rev, pdf, preview?, crop? }` |
+| `sheets[]` | `{ id, rev, pdf, preview?, crop? }` — `id` is the drawing number, `rev` is the revision letter |
 | `rfis[]` | `{ id, number, title, status, url? }` |
 | `layout` | Room locator on the sheet |
 | `actions[]` | Dashboard buttons |
@@ -227,9 +231,10 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 ## Later (not implemented)
 
 - Real crew **login**
+- Read-only vs puller **roles**
+- Texted/emailed pack **snapshots**
 - **Stripe** monthly billing
 - **Tools** and **Time** nav
-- Drive API credentials on Vercel (status poll interface is in; `fetchDrivePackJson` is unconfigured until Field Log stores lowercase creds)
 - HostGator DNS cutover to Vercel for gcfieldlog.com
 - No Apple / native iOS
 

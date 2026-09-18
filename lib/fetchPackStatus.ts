@@ -1,3 +1,4 @@
+import { stampRoomPack } from "./pack";
 import type { DemoJob } from "./jobs";
 import { loadPack } from "./loadPack";
 import {
@@ -158,34 +159,38 @@ export async function fetchPackStatus(input: {
   requestId: string;
   statusUrl?: string;
   poll: boolean;
+  /** Live website view: do not treat local public/packs JSON as source of truth. */
+  skipLocal?: boolean;
 }): Promise<PackStatusSnapshot> {
   const drivePath = drivePackJsonPath(input.job.slug, input.requestId);
 
-  const local = await loadPack(input.requestId);
-  if (local && isRoomPackShape(local)) {
-    if (!packMatchesJob(local, input.job, input.requestId)) {
-      return rejectMismatchedPack(drivePath, "local");
-    }
-    if (local.status === "ready") {
-      return {
-        state: "ready",
-        source: "local",
-        drivePath,
-        pack: local,
-        poll: false,
-        unconfigured: false,
-      };
-    }
-    if (local.status === "error") {
-      return {
-        state: "error",
-        source: "local",
-        drivePath,
-        pack: null,
-        poll: false,
-        unconfigured: false,
-        error: "Pack status is error",
-      };
+  if (!input.skipLocal) {
+    const local = await loadPack(input.requestId);
+    if (local && isRoomPackShape(local)) {
+      if (!packMatchesJob(local, input.job, input.requestId)) {
+        return rejectMismatchedPack(drivePath, "local");
+      }
+      if (local.status === "ready") {
+        return {
+          state: "ready",
+          source: "local",
+          drivePath,
+          pack: stampRoomPack(local),
+          poll: false,
+          unconfigured: false,
+        };
+      }
+      if (local.status === "error") {
+        return {
+          state: "error",
+          source: "local",
+          drivePath,
+          pack: null,
+          poll: false,
+          unconfigured: false,
+          error: "Pack status is error",
+        };
+      }
     }
   }
 
@@ -213,7 +218,7 @@ export async function fetchPackStatus(input: {
         state: "ready",
         source: "http",
         drivePath,
-        pack: json,
+        pack: stampRoomPack(json),
         poll: false,
         unconfigured: false,
       };

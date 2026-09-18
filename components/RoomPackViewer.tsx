@@ -3,10 +3,17 @@
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { highlightForSheet } from "@/lib/highlight";
-import { packActions, type PackAction, type RoomPack, type Sheet } from "@/lib/pack";
+import {
+  formatPulledAt,
+  packActions,
+  sheetRevisionLabel,
+  type PackAction,
+  type RoomPack,
+  type Sheet,
+} from "@/lib/pack";
 import { ActionPanel } from "./ActionPanel";
 import { AppHeader } from "./AppHeader";
-import { PackPollStub } from "./PackPollStub";
+import { PackLiveReload } from "./PackLiveReload";
 import { RfiList } from "./RfiList";
 import { SheetViewer } from "./SheetViewer";
 import { TakeoffCounts } from "./TakeoffCounts";
@@ -18,7 +25,8 @@ type Props = {
   requestedJobName?: string;
   projectSlug?: string;
   demoFallback?: boolean;
-  webhookAccepted?: boolean;
+  liveConfigured?: boolean;
+  source?: "webhook" | "supabase" | "http" | "local";
 };
 
 export function RoomPackViewer({
@@ -28,7 +36,8 @@ export function RoomPackViewer({
   requestedJobName,
   projectSlug,
   demoFallback,
-  webhookAccepted,
+  liveConfigured,
+  source,
 }: Props) {
   const router = useRouter();
   const [livePack, setLivePack] = useState<RoomPack | null>(null);
@@ -43,12 +52,14 @@ export function RoomPackViewer({
     ? highlightForSheet(displayedPack.layout, sheet.id)
     : null;
   const displayedRequest = requestId ?? displayedPack.request_id;
-  const showingDemo = demoFallback && !livePack;
-  const polling = Boolean(webhookAccepted && showingDemo && projectSlug);
+  const showingDemo = Boolean(demoFallback) && !livePack;
 
   const handleLivePack = useCallback((next: RoomPack) => {
     setLivePack(next);
-    setSheetId(next.sheets[0]?.id ?? "");
+    setSheetId((current) => {
+      if (next.sheets.some((item) => item.id === current)) return current;
+      return next.sheets[0]?.id ?? "";
+    });
   }, []);
 
   function handleAction(action: PackAction) {
@@ -86,8 +97,8 @@ export function RoomPackViewer({
         requestedJobName={requestedJobName}
         projectSlug={projectSlug}
         demoFallback={showingDemo}
-        webhookAccepted={webhookAccepted}
-        polling={polling}
+        liveConfigured={Boolean(liveConfigured)}
+        source={source}
         onPack={handleLivePack}
       />
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
@@ -130,8 +141,8 @@ function PackContextBar({
   requestedJobName,
   projectSlug,
   demoFallback,
-  webhookAccepted,
-  polling,
+  liveConfigured,
+  source,
   onPack,
 }: {
   pack: RoomPack;
@@ -141,14 +152,12 @@ function PackContextBar({
   requestedJobName?: string;
   projectSlug?: string;
   demoFallback?: boolean;
-  webhookAccepted?: boolean;
-  polling?: boolean;
+  liveConfigured: boolean;
+  source?: "webhook" | "supabase" | "http" | "local";
   onPack: (pack: RoomPack) => void;
 }) {
-  const status =
-    webhookAccepted && demoFallback
-      ? "pending"
-      : pack.status;
+  const stamp = sheetRevisionLabel(sheet);
+  const pulled = formatPulledAt(pack.pulled_at);
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-primary px-4 py-2 text-secondary">
@@ -161,27 +170,35 @@ function PackContextBar({
             {requestedRoom ? ` · requested ${requestedRoom}` : ""}
           </span>
         </h1>
-        {polling && projectSlug ? (
-          <PackPollStub
-            requestId={requestId}
-            projectSlug={projectSlug}
-            jobName={requestedJobName ?? pack.project.name}
-            requestedRoom={requestedRoom}
-            onPack={onPack}
-          />
-        ) : demoFallback ? (
+        <PackLiveReload
+          requestId={requestId}
+          projectSlug={projectSlug}
+          requestedRoom={requestedRoom}
+          liveConfigured={liveConfigured}
+          demoFallback={Boolean(demoFallback)}
+          onPack={onPack}
+        />
+        {requestedJobName && requestedJobName !== pack.project.name ? (
           <p className="mt-0.5 text-xs text-tan">
-            Demo pack (Maple Point). Local demo does not call the Procore
-            webhook or poll Drive. Production POSTs then polls{" "}
-            <span className="font-mono">{requestId}.json</span>.
+            Requested job {requestedJobName}
+            {source === "local" ? " · showing Maple Point demo" : ""}.
           </p>
         ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
-        <span className="border border-line bg-panel-2 px-2 py-1 font-mono">
-          {sheet.id} Rev {sheet.rev}
+        <span className="border border-cta/50 bg-panel-2 px-2 py-1 font-mono">
+          {stamp}
         </span>
-        <StatusBadge status={status} />
+        {pulled ? (
+          <span className="border border-line bg-panel px-2 py-1 text-tan">
+            Pulled {pulled}
+          </span>
+        ) : null}
+        <StatusBadge
+          status={
+            demoFallback && liveConfigured ? "pending" : demoFallback ? "demo" : pack.status
+          }
+        />
       </div>
     </div>
   );
@@ -216,7 +233,7 @@ function SheetTabs({
         const active = sheet.id === activeId;
         return (
           <button
-            key={sheet.id}
+            key={`${sheet.id}-${sheet.rev}`}
             type="button"
             onClick={() => onSelect(sheet.id)}
             className={`px-3 py-1.5 text-xs font-semibold tracking-wide whitespace-nowrap uppercase ${
@@ -225,8 +242,7 @@ function SheetTabs({
                 : "text-accent-2 hover:bg-panel-2 hover:text-secondary"
             }`}
           >
-            {sheet.id}
-            <span className="ml-1 opacity-70">Rev {sheet.rev}</span>
+            {sheetRevisionLabel(sheet)}
           </button>
         );
       })}

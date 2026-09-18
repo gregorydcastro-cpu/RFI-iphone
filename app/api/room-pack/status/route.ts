@@ -47,6 +47,7 @@ async function handleStatus(input: {
     requestId,
     statusUrl: input.statusUrl ?? undefined,
     poll: live,
+    skipLocal: live,
   });
 
   return NextResponse.json({

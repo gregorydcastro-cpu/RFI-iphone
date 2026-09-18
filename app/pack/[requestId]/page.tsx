@@ -1,7 +1,14 @@
 import { RoomPackViewer } from "@/components/RoomPackViewer";
-import { getJob } from "@/lib/jobs";
-import { loadPack } from "@/lib/loadPack";
+import {
+  getJob,
+  jobFromRequestId,
+  roomFromRequestId,
+} from "@/lib/jobs";
+import { refreshLiveRoomPack, loadLiveRoomPack } from "@/lib/livePack";
 import { notFound } from "next/navigation";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type Props = {
   params: Promise<{ requestId: string }>;
@@ -14,30 +21,37 @@ type Props = {
 };
 
 /**
- * Primary room-pack route.
- * Unknown requestIds still fall back to the local Maple Point pack.
- * When the Procore webhook accepted the request, the page shows pending and
- * polls Drive/status JSON without replacing that demo fallback until ready.
+ * Website live pack view. Always re-pulls via the Procore webhook when
+ * those env keys are set — local JSON is not the live source of truth.
  */
 export default async function PackPage({ params, searchParams }: Props) {
   const { requestId } = await params;
   const query = await searchParams;
-  const pack = await loadPack(requestId);
-  const demoPack = pack ?? (await loadPack("maple-point"));
-  if (!demoPack) notFound();
+  const job =
+    (query.job ? getJob(query.job) : undefined) ?? jobFromRequestId(requestId);
+  const room =
+    query.room ?? (job ? roomFromRequestId(requestId, job) : undefined);
 
-  const requestedJob = query.job ? getJob(query.job) : undefined;
-  const webhookAccepted = query.accepted === "1" || query.poll === "1";
+  const live = job
+    ? await refreshLiveRoomPack({
+        requestId,
+        job,
+        room: room ?? "room",
+      })
+    : await loadLiveRoomPack({ requestId, room });
+
+  if (!live) notFound();
 
   return (
     <RoomPackViewer
-      pack={demoPack}
+      pack={live.pack}
       requestId={requestId}
-      requestedRoom={query.room}
-      requestedJobName={requestedJob?.name}
-      projectSlug={requestedJob?.slug}
-      demoFallback={!pack}
-      webhookAccepted={webhookAccepted}
+      requestedRoom={query.room ?? room}
+      requestedJobName={job?.name}
+      projectSlug={job?.slug}
+      demoFallback={live.demoFallback}
+      liveConfigured={live.liveConfigured}
+      source={live.source}
     />
   );
 }

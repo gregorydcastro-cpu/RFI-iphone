@@ -74,6 +74,7 @@ export async function POST(request: Request) {
     projectName: job.name,
     room,
     requestId,
+    companyId: job.companyId,
   });
 
   const result = await postRoomPackWebhook(config, payload);
