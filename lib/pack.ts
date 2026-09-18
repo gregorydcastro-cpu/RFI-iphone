@@ -20,11 +20,19 @@ export type NormalizedBBox = {
 };
 
 export type Sheet = {
+  /** Drawing number (sheet id) at pull time. */
   id: string;
+  /** Revision letter at pull time. */
   rev: string;
   pdf: string;
   preview?: string | null;
   crop?: NormalizedBBox | null;
+};
+
+/** Drawing number + revision letter stamped when the pack was pulled. */
+export type RevisionStamp = {
+  drawing: string;
+  rev: string;
 };
 
 export type PdfPointBBox = {
@@ -104,6 +112,10 @@ export type RoomPack = {
   schema?: "gcpullog.room_pack.v1";
   status: PackStatus;
   request_id: string;
+  /** ISO timestamp of this pull. Live website views re-pull; do not treat as cache expiry. */
+  pulled_at?: string;
+  /** Primary sheet drawing + rev at pull time (usually layout.sheet / sheets[0]). */
+  revision_stamp?: RevisionStamp;
   project: Project;
   room: Room;
   sheets: Sheet[];
@@ -147,4 +159,75 @@ export function packActions(pack: RoomPack): PackAction[] {
     ...action,
     href: action.href?.replace("maple-point", pack.request_id),
   }));
+}
+
+export function sheetRevisionLabel(sheet: Pick<Sheet, "id" | "rev">): string {
+  return `${sheet.id} Rev ${sheet.rev}`;
+}
+
+export function stampSheet(sheet: {
+  id?: string | null;
+  rev?: string | null;
+  pdf?: string | null;
+  preview?: string | null;
+  crop?: NormalizedBBox | null;
+}): Sheet {
+  const id = typeof sheet.id === "string" ? sheet.id.trim() : "";
+  const rev = typeof sheet.rev === "string" ? sheet.rev.trim() : "";
+  return {
+    id: id || "UNKNOWN",
+    rev: rev || "?",
+    pdf: typeof sheet.pdf === "string" ? sheet.pdf : "",
+    preview: sheet.preview ?? null,
+    crop: sheet.crop ?? null,
+  };
+}
+
+export function primaryRevisionStamp(pack: {
+  sheets: Sheet[];
+  layout?: Layout;
+  revision_stamp?: RevisionStamp;
+}): RevisionStamp | undefined {
+  if (
+    pack.revision_stamp &&
+    pack.revision_stamp.drawing &&
+    pack.revision_stamp.rev
+  ) {
+    return {
+      drawing: pack.revision_stamp.drawing,
+      rev: pack.revision_stamp.rev,
+    };
+  }
+  const preferredId = pack.layout?.sheet;
+  const sheet =
+    (preferredId
+      ? pack.sheets.find((item) => item.id === preferredId)
+      : undefined) ?? pack.sheets[0];
+  if (!sheet) return undefined;
+  return { drawing: sheet.id, rev: sheet.rev };
+}
+
+export function stampRoomPack(
+  pack: RoomPack,
+  options?: { pulledAt?: string; touch?: boolean },
+): RoomPack {
+  const sheets = (pack.sheets ?? []).map((sheet) => stampSheet(sheet));
+  const pulledAt = options?.touch
+    ? (options.pulledAt ?? new Date().toISOString())
+    : (pack.pulled_at ?? options?.pulledAt);
+  const next: RoomPack = {
+    ...pack,
+    schema: "gcpullog.room_pack.v1",
+    sheets,
+    pulled_at: pulledAt,
+  };
+  next.revision_stamp = primaryRevisionStamp(next);
+  return next;
+}
+
+export function formatPulledAt(iso?: string | null): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toISOString().replace("T", " ").replace(/\.\d+Z$/, "Z");
 }

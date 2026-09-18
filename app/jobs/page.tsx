@@ -16,6 +16,7 @@ export default async function JobsPage({ searchParams }: Props) {
   const session = await readStubSession();
   const view = await getProcoreConnectionView(session);
   const error = query.procore === "error" ? procoreErrorMessage(query.reason) : null;
+  const canPull = view.role === "puller" && view.connected;
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -23,6 +24,7 @@ export default async function JobsPage({ searchParams }: Props) {
         signedIn
         role={view.role}
         procoreConnected={view.connected}
+        procoreLinked={canPull}
       />
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
         <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
@@ -32,12 +34,13 @@ export default async function JobsPage({ searchParams }: Props) {
           Field jobs
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-muted">
-          Fictional demo jobs only. Pick a job, then request a room pack.
+          Fictional demo jobs only. Pick a job, then {canPull ? "pull" : "open"} a
+          room pack.
           {view.role === "puller"
             ? view.connected
               ? " Procore is connected for this puller."
               : " Pullers must Connect Procore to pull with their own account."
-            : " View-only sessions do not need a Procore connection."}
+            : " This session is view only — it cannot trigger a Procore pull."}
         </p>
         {query.procore === "connected" ? (
           <p className="mt-4 text-sm text-accent-2" role="status">

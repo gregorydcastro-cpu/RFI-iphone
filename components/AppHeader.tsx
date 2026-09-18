@@ -1,17 +1,25 @@
+"use client";
+
 import Link from "next/link";
 import type { FieldRoleName } from "@/lib/auth";
 
 type Props = {
   signedIn?: boolean;
   role?: FieldRoleName | null;
+  procoreLinked?: boolean;
   procoreConnected?: boolean;
 };
 
 export function AppHeader({
   signedIn = false,
   role = null,
+  procoreLinked = false,
   procoreConnected = false,
 }: Props) {
+  const resolvedRole: FieldRoleName | null =
+    role ?? (signedIn ? (procoreLinked ? "puller" : "viewer") : null);
+  const connected = procoreConnected || procoreLinked;
+
   return (
     <header className="border-b border-line bg-primary">
       <div className="h-0.5 w-full bg-cta" />
@@ -43,23 +51,23 @@ export function AppHeader({
               >
                 Account
               </Link>
-              {role ? (
+              {resolvedRole ? (
                 <span
                   className={
-                    procoreConnected
+                    connected
                       ? "border border-cta/40 px-1.5 py-0.5 text-[10px] text-secondary"
                       : "border border-line px-1.5 py-0.5 text-[10px] text-tan"
                   }
                   title={
-                    role === "puller"
-                      ? procoreConnected
+                    resolvedRole === "puller"
+                      ? connected
                         ? "Procore connected — can pull"
                         : "Puller — connect Procore to pull"
-                      : "Read-only viewer — no Procore connect required"
+                      : "Read-only viewer — cannot pull packs"
                   }
                 >
-                  {role === "puller"
-                    ? procoreConnected
+                  {resolvedRole === "puller"
+                    ? connected
                       ? "Procore connected"
                       : "Puller"
                     : "View only"}

@@ -2,22 +2,20 @@
 
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
-import { type DemoJob } from "@/lib/jobs";
-import { packStatusSessionKey } from "@/lib/packStatus";
+import { type DemoJob, makeRequestId } from "@/lib/jobs";
 
 type Props = {
   job: DemoJob;
+  procoreLinked?: boolean;
 };
 
 type RoomPackApiOk = {
   ok: true;
-  mode: "demo" | "webhook";
+  mode: "demo" | "live";
   requestId: string;
   job: string;
   room: string;
-  accepted: boolean;
-  poll?: boolean;
-  statusUrl?: string;
+  refresh?: boolean;
 };
 
 type RoomPackApiErr = {
@@ -25,7 +23,7 @@ type RoomPackApiErr = {
   error?: string;
 };
 
-export function RequestPackForm({ job }: Props) {
+export function RequestPackForm({ job, procoreLinked = false }: Props) {
   const router = useRouter();
   const [room, setRoom] = useState("733");
   const [pending, setPending] = useState(false);
@@ -40,8 +38,20 @@ export function RequestPackForm({ job }: Props) {
     setError(null);
 
     try {
+      if (!procoreLinked) {
+        const requestId = makeRequestId(job.slug, roomValue);
+        const params = new URLSearchParams({
+          job: job.slug,
+          room: roomValue,
+        });
+        router.push(`/pack/${requestId}?${params.toString()}`);
+        return;
+      }
+
       const response = await fetch("/api/room-pack", {
         method: "POST",
+        cache: "no-store",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectSlug: job.slug, room: roomValue }),
       });
@@ -60,27 +70,13 @@ export function RequestPackForm({ job }: Props) {
         job: data.job,
         room: data.room,
       });
-      if (data.accepted) params.set("accepted", "1");
-      if (data.poll) params.set("poll", "1");
-
-      if (data.statusUrl) {
-        try {
-          window.sessionStorage.setItem(
-            packStatusSessionKey(data.requestId),
-            data.statusUrl,
-          );
-        } catch {
-          // sessionStorage may be unavailable; env template still polls.
-        }
-      }
 
       console.info("[gcfieldlog] room-pack request", {
         job: data.job,
         room: data.room,
         requestId: data.requestId,
         mode: data.mode,
-        accepted: data.accepted,
-        poll: Boolean(data.poll),
+        refresh: Boolean(data.refresh),
       });
 
       router.push(`/pack/${data.requestId}?${params.toString()}`);
@@ -98,19 +94,27 @@ export function RequestPackForm({ job }: Props) {
     >
       <div>
         <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
-          Request room pack
+          {procoreLinked ? "Pull room pack" : "Open room pack"}
         </p>
         <h1 className="font-display mt-1 text-2xl tracking-wide text-paper sm:text-3xl">
           {job.name}
         </h1>
         <p className="mt-2 text-sm text-muted">
-          Local demo loads Maple Point JSON and does not call Procore. Production
-          POSTs this job’s exact name (
-          <span className="text-paper">{job.name}</span>
-          ) to the Room pack webhook, then opens{" "}
-          <code className="font-mono text-metal">/pack/&lt;requestId&gt;</code>{" "}
-          as soon as the request is accepted and polls Drive status in the
-          background.
+          {procoreLinked ? (
+            <>
+              Puller session. This asks the Procore bot to refresh, then reads{" "}
+              <code className="font-mono text-metal">public.room_packs</code>.
+              Local demo (no{" "}
+              <code className="font-mono text-metal">SUPABASE_URL</code>) loads
+              Maple Point JSON and does not pull.
+            </>
+          ) : (
+            <>
+              View-only session. You can open the current pack but cannot
+              trigger a Procore pull. Sign in as a puller and{" "}
+              <span className="text-paper">Connect Procore</span> to pull.
+            </>
+          )}
         </p>
       </div>
       <label className="block text-xs font-semibold tracking-wide text-muted uppercase">
@@ -134,7 +138,13 @@ export function RequestPackForm({ job }: Props) {
         disabled={pending}
         className="bg-cta px-5 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
       >
-        {pending ? "Requesting…" : "Request pack"}
+        {pending
+          ? procoreLinked
+            ? "Pulling…"
+            : "Opening…"
+          : procoreLinked
+            ? "Pull pack"
+            : "Open pack"}
       </button>
     </form>
   );

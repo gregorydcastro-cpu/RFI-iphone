@@ -17,6 +17,7 @@ export default async function JobPage({ params }: Props) {
   const job = getJob(projectSlug);
   if (!job) notFound();
   const view = await getProcoreConnectionView(await readStubSession());
+  const canPull = view.role === "puller" && view.connected;
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -24,12 +25,13 @@ export default async function JobPage({ params }: Props) {
         signedIn
         role={view.role}
         procoreConnected={view.connected}
+        procoreLinked={canPull}
       />
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-4 px-4 py-8 sm:px-6">
         {view.role === "puller" && !view.connected ? (
           <ProcoreConnectCard view={view} compact />
         ) : null}
-        <RequestPackForm job={job} />
+        <RequestPackForm job={job} procoreLinked={canPull} />
       </main>
     </div>
   );

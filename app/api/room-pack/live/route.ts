@@ -1,5 +1,5 @@
-import { loadLiveRoomPack } from "@/lib/livePack";
 import { getJob } from "@/lib/jobs";
+import { loadLiveRoomPack } from "@/lib/livePack";
 import { requestBelongsToJob } from "@/lib/packStatus";
 import { NextResponse } from "next/server";
 
@@ -23,11 +23,7 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: NO_STORE });
 }
 
-/**
- * Alias of `/api/room-pack/live` — latest `public.room_packs` row, no-store.
- * Viewers may read. Does not trigger a pull. Does not call the deleted webhook.
- */
-async function handleStatus(input: {
+async function handleLive(input: {
   projectSlug: string | null;
   requestId: string | null;
   room: string | null;
@@ -55,20 +51,25 @@ async function handleStatus(input: {
 
   return json({
     ok: true,
-    state: live.pack.status === "ready" ? "ready" : live.pack.status,
+    mode: live.supabaseConfigured ? "live" : "demo",
     source: live.source,
     demoFallback: live.demoFallback,
-    poll: false,
-    unconfigured: !live.supabaseConfigured,
+    requestId,
+    job: job?.slug,
+    room: input.room,
     pulled_at: live.pack.pulled_at,
     revision_stamp: live.pack.revision_stamp,
     pack: live.pack,
   });
 }
 
+/**
+ * Read-only live pack. Viewers allowed. Always no-store.
+ * Does not trigger a Procore bot pull.
+ */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  return handleStatus({
+  return handleLive({
     projectSlug: searchParams.get("job") ?? searchParams.get("projectSlug"),
     requestId: searchParams.get("requestId"),
     room: searchParams.get("room"),
@@ -76,22 +77,21 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  let jsonBody: {
+  let body: {
     projectSlug?: unknown;
     job?: unknown;
     requestId?: unknown;
     room?: unknown;
   };
   try {
-    jsonBody = (await request.json()) as typeof jsonBody;
+    body = (await request.json()) as typeof body;
   } catch {
     return json({ ok: false, error: "Invalid JSON" }, 400);
   }
 
-  return handleStatus({
-    projectSlug:
-      asNonEmptyString(jsonBody.projectSlug) ?? asNonEmptyString(jsonBody.job),
-    requestId: asNonEmptyString(jsonBody.requestId),
-    room: asNonEmptyString(jsonBody.room),
+  return handleLive({
+    projectSlug: asNonEmptyString(body.projectSlug) ?? asNonEmptyString(body.job),
+    requestId: asNonEmptyString(body.requestId),
+    room: asNonEmptyString(body.room),
   });
 }

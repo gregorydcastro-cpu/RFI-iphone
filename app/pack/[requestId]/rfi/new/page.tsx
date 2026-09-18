@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
+import { getFieldRole } from "@/lib/auth.server";
 
 type Props = {
   params: Promise<{ requestId: string }>;
@@ -10,10 +11,11 @@ type Props = {
 export default async function NewRfiStubPage({ params, searchParams }: Props) {
   const { requestId } = await params;
   const { sheet } = await searchParams;
+  const role = await getFieldRole();
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <AppHeader signedIn />
+      <AppHeader signedIn procoreLinked={role.procoreLinked} />
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4 p-6">
         <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
           Coming soon

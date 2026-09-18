@@ -99,7 +99,7 @@ export function LoginForm() {
           <span>
             <span className="font-medium">View only</span>
             <span className="mt-0.5 block text-xs text-muted">
-              Open packs. No Procore connect required.
+              Open packs. No Procore connect required. Cannot trigger a pull.
             </span>
           </span>
         </label>
