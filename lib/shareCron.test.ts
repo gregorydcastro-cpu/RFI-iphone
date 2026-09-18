@@ -61,20 +61,21 @@ test("authorizeCronHeaders requires CRON_SECRET bearer or x-cron-secret", () => 
   );
 });
 
-test("SHARE_WEEKLY_PROCORE_REST stays a no-call TODO flag", () => {
+test("weekly cron does not call Procore REST (bot/catalog fallback)", () => {
   delete process.env.SHARE_WEEKLY_PROCORE_REST;
   assert.equal(weeklyProcoreRestEnabled(), false);
   const off = procoreRestSummary();
   assert.equal(off.called, false);
-  assert.equal(off.todo, true);
+  assert.equal(off.todo, false);
   assert.equal(off.issue, 25);
+  assert.match(off.note, /catalog|bot|REST/);
 
   process.env.SHARE_WEEKLY_PROCORE_REST = "1";
   assert.equal(weeklyProcoreRestEnabled(), true);
   const reserved = procoreRestSummary();
   assert.equal(reserved.called, false);
   assert.equal(reserved.enabled, true);
-  assert.match(reserved.note, /did not call Procore|not wired/);
+  assert.match(reserved.note, /bot|catalog|no per-user token/);
 });
 
 test("SHARE_WEEKLY_PDF_REDOWNLOAD flag is 1 / 0 / inherit", () => {

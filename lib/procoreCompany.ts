@@ -2,20 +2,36 @@
  * Company ID is dynamic per Procore project. Never hardcode a company.
  * This app only looks up Maple Point / other DEMO_JOBS names.
  *
- * Live pack re-pull stays on the parallel room_packs PR. This helper is
- * for later per-user Procore API calls that need Procore-Company-Id.
+ * Live pack pulls use resolveProjectForName so REST calls send
+ * Procore-Company-Id for the company that actually owns the demo job.
  */
 
 import { DEMO_JOBS } from "./jobs";
 import {
   procoreApiGet,
-  readProcoreId,
   type ProcoreOAuthConfig,
 } from "./procoreOAuth";
+import {
+  isDemoProjectName as nameIsDemo,
+  pickResolvedProject,
+  readProcoreId,
+  type ResolvedProcoreProject,
+} from "./procoreProjectMatch";
+
+export type { ResolvedProcoreProject };
+
+export {
+  matchProjectName,
+  pickResolvedProject,
+  readProcoreId,
+} from "./procoreProjectMatch";
+
+function demoNames(): string[] {
+  return DEMO_JOBS.map((job) => job.name);
+}
 
 export function isDemoProjectName(projectName: string): boolean {
-  const want = projectName.trim().toLowerCase();
-  return DEMO_JOBS.some((job) => job.name.toLowerCase() === want);
+  return nameIsDemo(projectName, demoNames());
 }
 
 /**
@@ -27,6 +43,18 @@ export async function resolveCompanyIdForProject(
   accessToken: string,
   projectName: string,
 ): Promise<string | null> {
+  const resolved = await resolveProjectForName(config, accessToken, projectName);
+  return resolved?.companyId ?? null;
+}
+
+/**
+ * Company + project ids for a demo job name. No hardcoded company id.
+ */
+export async function resolveProjectForName(
+  config: ProcoreOAuthConfig,
+  accessToken: string,
+  projectName: string,
+): Promise<ResolvedProcoreProject | null> {
   if (!isDemoProjectName(projectName)) return null;
 
   const companies = await procoreApiGet(
@@ -36,7 +64,7 @@ export async function resolveCompanyIdForProject(
   );
   if (!Array.isArray(companies)) return null;
 
-  const want = projectName.trim().toLowerCase();
+  const projectsByCompany: Array<{ companyId: string; projects: unknown }> = [];
   for (const company of companies) {
     const companyId = readProcoreId(company);
     if (!companyId) continue;
@@ -46,14 +74,8 @@ export async function resolveCompanyIdForProject(
       `/rest/v1.0/projects?company_id=${encodeURIComponent(companyId)}`,
       { "Procore-Company-Id": companyId },
     );
-    if (!Array.isArray(projects)) continue;
-    for (const project of projects) {
-      const name =
-        project && typeof project === "object" && "name" in project
-          ? String((project as { name: unknown }).name ?? "")
-          : "";
-      if (name.trim().toLowerCase() === want) return companyId;
-    }
+    projectsByCompany.push({ companyId, projects });
   }
-  return null;
+
+  return pickResolvedProject(companies, projectsByCompany, projectName, demoNames());
 }

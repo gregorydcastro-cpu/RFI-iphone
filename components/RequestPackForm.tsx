@@ -115,11 +115,13 @@ export function RequestPackForm({
         <p className="mt-2 text-sm text-muted">
           {procoreLinked ? (
             <>
-              Puller session. This asks the Procore bot to refresh, then reads{" "}
+              Puller session. With a valid Procore connection this calls
+              Procore REST for a fresh room pack (sheets + RFIs), then reads{" "}
               <code className="font-mono text-metal">public.room_packs</code>.
-              Local demo (no{" "}
+              The bot is the fallback when tokens are missing or REST cannot
+              see the demo project. Local demo (no{" "}
               <code className="font-mono text-metal">SUPABASE_URL</code>) loads
-              Maple Point JSON and does not pull.
+              Maple Point JSON unless a live REST pull succeeds.
             </>
           ) : (
             <>

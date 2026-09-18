@@ -11,13 +11,15 @@ type Props = {
   procoreLinked: boolean;
   supabaseConfigured: boolean;
   demoFallback: boolean;
-  onPack: (pack: RoomPack) => void;
+  onPack: (pack: RoomPack, meta?: { source?: string; pull?: string }) => void;
 };
 
 type LivePayload = {
   ok?: boolean;
   error?: string;
   source?: string;
+  pull?: string;
+  restReason?: string;
   demoFallback?: boolean;
   pulled_at?: string;
   revision_stamp?: { drawing: string; rev: string };
@@ -26,8 +28,8 @@ type LivePayload = {
 
 /**
  * On every website pack open: re-read latest room_packs (no-store).
- * Pullers also POST a Procore bot refresh first. Viewers never trigger a pull.
- * No expiry poll loop.
+ * Pullers POST a refresh that tries Procore REST first, then the bot.
+ * Viewers never trigger a pull. No expiry poll loop.
  */
 export function PackLiveReload({
   requestId,
@@ -70,7 +72,7 @@ export function PackLiveReload({
             return;
           }
           if (refresh.ok && data.ok && data.pack) {
-            onPack(data.pack);
+            onPack(data.pack, { source: data.source, pull: data.pull });
             setMessage(statusLine(data, requestedRoom));
             return;
           }
@@ -87,7 +89,7 @@ export function PackLiveReload({
         const data = (await live.json()) as LivePayload;
         if (cancelled) return;
         if (live.ok && data.ok && data.pack) {
-          onPack(data.pack);
+          onPack(data.pack, { source: data.source, pull: data.pull });
           setMessage(statusLine(data, requestedRoom));
           return;
         }
@@ -136,7 +138,7 @@ export function PackLiveReload({
                 });
                 const data = (await refresh.json()) as LivePayload;
                 if (refresh.ok && data.ok && data.pack) {
-                  onPack(data.pack);
+                  onPack(data.pack, { source: data.source, pull: data.pull });
                   setMessage(statusLine(data, requestedRoom));
                 } else if (refresh.status === 403) {
                   setMessage("View only — pulls are disabled for this session.");
@@ -173,12 +175,17 @@ function statusLine(data: LivePayload, room?: string): string {
       : null;
   const pulled = formatPulledAt(data.pulled_at ?? data.pack?.pulled_at);
   const roomLabel = room ? ` · room ${room}` : "";
-  if (data.demoFallback || data.source === "local") {
-    return `Demo pack (Maple Point)${roomLabel}${stamp ? ` · ${stamp}` : ""}${
-      pulled ? ` · pulled ${pulled}` : ""
-    }.`;
-  }
-  return `Live pack${roomLabel}${stamp ? ` · ${stamp}` : ""}${
+  const suffix = `${roomLabel}${stamp ? ` · ${stamp}` : ""}${
     pulled ? ` · pulled ${pulled}` : ""
   }.`;
+  if (data.pull === "procore" || data.source === "procore") {
+    return `Live (Procore REST)${suffix}`;
+  }
+  if (data.demoFallback || data.source === "local") {
+    return `Demo pack (Maple Point)${suffix}`;
+  }
+  if (data.pull === "bot") {
+    return `Cached pack (bot fallback)${suffix}`;
+  }
+  return `Cached pack${suffix}`;
 }

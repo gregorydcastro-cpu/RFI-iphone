@@ -30,7 +30,8 @@ type Props = {
   projectSlug?: string;
   demoFallback?: boolean;
   supabaseConfigured?: boolean;
-  source?: "supabase" | "local" | "none";
+  source?: "procore" | "supabase" | "local" | "none";
+  pull?: "procore" | "bot" | "none";
   procoreLinked?: boolean;
 };
 
@@ -43,10 +44,13 @@ export function RoomPackViewer({
   demoFallback,
   supabaseConfigured,
   source,
+  pull,
   procoreLinked = false,
 }: Props) {
   const router = useRouter();
   const [livePack, setLivePack] = useState<RoomPack | null>(null);
+  const [liveSource, setLiveSource] = useState(source);
+  const [livePull, setLivePull] = useState(pull);
   const displayedPack = livePack ?? pack;
   const [toast, setToast] = useState<string | null>(null);
   const { primary, rest } = useMemo(
@@ -65,9 +69,18 @@ export function RoomPackViewer({
       })
     : null;
 
-  const handleLivePack = useCallback((next: RoomPack) => {
-    setLivePack(next);
-  }, []);
+  const handleLivePack = useCallback(
+    (next: RoomPack, meta?: { source?: string; pull?: string }) => {
+      setLivePack(next);
+      if (meta?.source) {
+        setLiveSource(meta.source as typeof liveSource);
+      }
+      if (meta?.pull) {
+        setLivePull(meta.pull as typeof livePull);
+      }
+    },
+    [],
+  );
 
   function handleAction(action: PackAction) {
     if (action.id === "generate-rfi") {
@@ -107,7 +120,8 @@ export function RoomPackViewer({
         projectSlug={projectSlug}
         demoFallback={Boolean(demoFallback)}
         supabaseConfigured={Boolean(supabaseConfigured)}
-        source={source}
+        source={liveSource}
+        pull={livePull}
         procoreLinked={procoreLinked}
         onPack={handleLivePack}
       />
@@ -312,6 +326,7 @@ function PackContextBar({
   demoFallback,
   supabaseConfigured,
   source,
+  pull,
   procoreLinked,
   onPack,
 }: {
@@ -323,9 +338,10 @@ function PackContextBar({
   projectSlug?: string;
   demoFallback?: boolean;
   supabaseConfigured: boolean;
-  source?: "supabase" | "local" | "none";
+  source?: "procore" | "supabase" | "local" | "none";
+  pull?: "procore" | "bot" | "none";
   procoreLinked: boolean;
-  onPack: (pack: RoomPack) => void;
+  onPack: (pack: RoomPack, meta?: { source?: string; pull?: string }) => void;
 }) {
   const stamp = sheetRevisionLabel(sheet);
   const pulled = formatPulledAt(pack.pulled_at);
@@ -378,20 +394,42 @@ function PackContextBar({
           </span>
         ) : null}
         <StatusBadge
-          status={demoFallback ? (supabaseConfigured ? "pending" : "demo") : pack.status}
+          status={freshnessLabel({
+            demoFallback,
+            supabaseConfigured,
+            source,
+            pull,
+            packStatus: pack.status,
+          })}
         />
       </div>
     </div>
   );
 }
 
+function freshnessLabel(input: {
+  demoFallback?: boolean;
+  supabaseConfigured: boolean;
+  source?: string;
+  pull?: string;
+  packStatus: string;
+}): string {
+  if (input.pull === "procore" || input.source === "procore") return "live";
+  if (input.demoFallback && !input.supabaseConfigured) return "demo";
+  if (input.source === "local" || input.demoFallback) return "demo";
+  if (input.source === "supabase" || input.pull === "bot") return "cached";
+  return input.packStatus;
+}
+
 function StatusBadge({ status }: { status: string }) {
   const tone =
-    status === "ready"
+    status === "ready" || status === "live"
       ? "border-emerald-700/60 bg-emerald-950/50 text-emerald-300"
       : status === "pending" || status === "accepted"
         ? "border-accent/50 bg-accent-deep/40 text-paper"
-        : "border-line bg-panel text-muted";
+        : status === "cached"
+          ? "border-accent-2/50 bg-panel text-accent-2"
+          : "border-line bg-panel text-muted";
   return (
     <span className={`border px-2 py-1 font-medium capitalize ${tone}`}>
       {status}

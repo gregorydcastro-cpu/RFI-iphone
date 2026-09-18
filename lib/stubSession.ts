@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
-import type { FieldRoleName } from "./auth";
+import { readCookieValue, type FieldRoleName } from "./auth";
 
 export const STUB_SESSION_COOKIE = "gcfieldlog_stub_user";
 
@@ -16,6 +16,12 @@ export function stubUserIdFromEmail(email: string): string {
   const normalized = email.trim().toLowerCase();
   const digest = createHash("sha256").update(normalized).digest("hex").slice(0, 32);
   return `stub:${digest}`;
+}
+
+export function stubSessionFromRequest(request: Request): StubSession | null {
+  return parseStubSession(
+    readCookieValue(request.headers.get("cookie"), STUB_SESSION_COOKIE),
+  );
 }
 
 export function parseStubSession(raw: string | undefined | null): StubSession | null {

@@ -53,6 +53,7 @@ async function handleLive(input: {
     ok: true,
     mode: live.supabaseConfigured ? "live" : "demo",
     source: live.source,
+    pull: live.pull,
     demoFallback: live.demoFallback,
     requestId,
     job: job?.slug,

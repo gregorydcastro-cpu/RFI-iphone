@@ -22,7 +22,8 @@ function json(data: unknown, status = 200) {
  *
  * Vercel Cron sends GET with `Authorization: Bearer $CRON_SECRET`.
  * Manual ops can POST the same path with that header or `x-cron-secret`.
- * Never NEXT_PUBLIC_ the secret. Does not call Procore REST (issue #25).
+ * Never NEXT_PUBLIC_ the secret. Weekly path stays catalog + bot
+ * (no per-user token). Live REST is on connected puller pack routes.
  * Emails Mike after a persisted bump (issue #31). Missing notify env skips.
  */
 async function handle(request: Request) {

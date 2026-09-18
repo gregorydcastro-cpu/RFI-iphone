@@ -67,7 +67,7 @@ export function weeklyPdfRedownloadFlag(): boolean | null {
 export function procoreRestSummary(): {
   enabled: boolean;
   called: false;
-  todo: true;
+  todo: false;
   flag: typeof SHARE_WEEKLY_PROCORE_REST_FLAG;
   issue: 25;
   note: string;
@@ -76,11 +76,11 @@ export function procoreRestSummary(): {
   return {
     enabled,
     called: false,
-    todo: true,
+    todo: false,
     flag: SHARE_WEEKLY_PROCORE_REST_FLAG,
     issue: 25,
     note: enabled
-      ? "SHARE_WEEKLY_PROCORE_REST=1 is reserved. Live Procore REST is not wired on main (issue #25). This run compared catalog + room_packs only and did not call Procore."
-      : "Live Procore REST is not called. Set SHARE_WEEKLY_PROCORE_REST=1 later when issue #25 lands; until then the cron uses the same Maple Point catalog + room_packs sources as Refresh all.",
+      ? "SHARE_WEEKLY_PROCORE_REST=1 is on, but weekly cron has no per-user token. Connected pullers use live REST on /api/room-pack; this scheduled run compared catalog + room_packs and asked the bot (bulk fallback)."
+      : "Weekly/scheduled refresh stays on the Maple Point catalog + room_packs + bot path. Connected pullers request a fresh pack via Procore REST on POST /api/room-pack when tokens are valid.",
   };
 }

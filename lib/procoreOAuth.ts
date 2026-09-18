@@ -8,11 +8,14 @@
  */
 
 import { readEnvAlias } from "./env";
+import { readProcoreId } from "./procoreProjectMatch";
 import {
   readProcoreClientId,
   readProcoreClientSecret,
   readProcoreRedirectUri,
 } from "./procoreSecrets";
+
+export { readProcoreId };
 
 export const PROCORE_OAUTH_STATE_COOKIE = "gcfieldlog_procore_oauth_state";
 
@@ -245,12 +248,18 @@ async function postToken(
   }
 }
 
-export async function procoreApiGet(
+export type ProcoreApiResult = {
+  ok: boolean;
+  status: number;
+  body: unknown;
+};
+
+export async function procoreApiRequest(
   config: ProcoreOAuthConfig,
   accessToken: string,
   path: string,
   extraHeaders?: Record<string, string>,
-): Promise<unknown> {
+): Promise<ProcoreApiResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TOKEN_TIMEOUT_MS);
   try {
@@ -264,20 +273,21 @@ export async function procoreApiGet(
       cache: "no-store",
       signal: controller.signal,
     });
-    if (!response.ok) return null;
-    return await response.json().catch(() => null);
+    const body = await response.json().catch(() => null);
+    return { ok: response.ok, status: response.status, body };
   } catch {
-    return null;
+    return { ok: false, status: 0, body: null };
   } finally {
     clearTimeout(timer);
   }
 }
 
-export function readProcoreId(value: unknown): string | null {
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  if (typeof value === "string" && value.trim()) return value.trim();
-  if (value && typeof value === "object" && "id" in value) {
-    return readProcoreId((value as { id: unknown }).id);
-  }
-  return null;
+export async function procoreApiGet(
+  config: ProcoreOAuthConfig,
+  accessToken: string,
+  path: string,
+  extraHeaders?: Record<string, string>,
+): Promise<unknown> {
+  const result = await procoreApiRequest(config, accessToken, path, extraHeaders);
+  return result.ok ? result.body : null;
 }
