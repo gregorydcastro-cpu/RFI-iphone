@@ -76,15 +76,10 @@ export async function speakAloud(id: string, text: string): Promise<void> {
       const data = (await response.json().catch(() => null)) as
         | { error?: string; configured?: boolean }
         | null;
-      const fallback =
-        response.status === 503 || data?.configured === false
-          ? "Voice is not configured on the server."
-          : "Could not read aloud.";
-      throw new Error(
-        response.status === 503 || data?.configured === false
-          ? fallback
-          : (data?.error ?? fallback),
-      );
+      if (response.status === 503 || data?.configured === false) {
+        throw new Error("Voice is not configured on the server.");
+      }
+      throw new Error(data?.error ?? "Could not read aloud.");
     }
     const blob = await response.blob();
     if (token !== playToken) return;
