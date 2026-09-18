@@ -46,17 +46,32 @@ export type ShareFolderRow = {
   created_at: string;
 };
 
+/** Usual viewer-portal pin groups. SQL `discipline` stays free text. */
+export const PINNED_SHEET_DISCIPLINES = [
+  "electrical",
+  "lighting",
+  "architectural",
+] as const;
+
+export type PinnedSheetDiscipline =
+  (typeof PINNED_SHEET_DISCIPLINES)[number];
+
 export type PinnedSheetRow = {
   id: string;
   folder_id: string;
   project_name: string;
   sheet_id: string;
+  /** electrical / lighting / architectural, or a room label. */
   discipline: string | null;
   last_seen_rev: string;
   last_pulled_at: string | null;
 };
 
-/** Lightweight last-seen revision for bump detection. Service-role writes. */
+/**
+ * Last-seen Procore rev for bump detection. Service-role writes.
+ * Future weekly job reads this table and re-downloads a sheet only when
+ * `rev` changed; not implemented in this PR.
+ */
 export type SheetRevisionCacheRow = {
   id: string;
   project_name: string;

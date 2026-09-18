@@ -68,6 +68,7 @@ create policy share_folders_owner_delete
 
 -- ---------------------------------------------------------------------------
 -- pinned_sheets (owned through share_folders)
+-- discipline is free text: electrical / lighting / architectural / room label.
 -- ---------------------------------------------------------------------------
 
 create table if not exists public.pinned_sheets (
@@ -163,7 +164,10 @@ create policy pinned_sheets_owner_delete
   );
 
 -- ---------------------------------------------------------------------------
--- sheet_revision_cache (bot/service-role metadata for revision-check)
+-- sheet_revision_cache (rev-only bump metadata)
+-- Future weekly job (not this migration): for each pinned_sheets row, compare
+-- Procore top rev to this cache. Re-download only when rev bumped; then update
+-- rev + checked_at. Manual path: POST /api/share/refresh-all (stub).
 -- ---------------------------------------------------------------------------
 
 create table if not exists public.sheet_revision_cache (

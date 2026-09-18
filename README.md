@@ -308,20 +308,26 @@ CREATE POLICY room_packs_read_anon ON public.room_packs
 
 Local `npm run dev` does not need any of these variables.
 
-### Next-layer tables (schema only)
+### Share / viewer portal (schema + API stubs)
 
-SQL: `supabase/migrations/20260918020000_share_markup_rfi_trial.sql`. Types: `lib/schema.ts`. **No UI in this PR.** Apply the migration on the gc-field-log Supabase project when ready; this repo does not auto-apply it.
+SQL: `supabase/migrations/20260918020000_share_markup_rfi_trial.sql`. Types: `lib/schema.ts`. Apply the migration on the gc-field-log Supabase project when ready; this repo does not auto-apply it.
+
+**Pack viewer layout is out of scope.** Architectural floor plan first and the oversized red room highlight belong to the Field Log viewer UI work. This PR does not edit pack viewer components.
 
 These tables do **not** replace `procore_connections` or `room_packs`. Do not enable RLS on `room_packs` here.
 
 | Table | Purpose | Who writes |
 | --- | --- | --- |
 | `share_folders` | Owner's named pin set | Owner (or **service role** until real auth) |
-| `pinned_sheets` | Sheet in a folder + last seen rev | Folder owner / service role |
-| `sheet_revision_cache` | Last checked `project_name` + `sheet_id` + `rev` | **Service role only** |
+| `pinned_sheets` | Sheet in a folder + `discipline` (electrical / lighting / architectural / room) + last seen rev | Folder owner / service role |
+| `sheet_revision_cache` | Rev-only bump metadata: `project_name` + `sheet_id` + `rev` + `checked_at` | **Service role only** |
 | `markup_overlays` | Vector overlay JSON (circle / box / arrow / text) on a pack sheet | Owning `user_id` / service role |
 | `rfis` | Draft RFI (`subject`, `description`, `location`, `sheet_id`, optional `markup_id`, status `draft` \| `ready`) | Owning `user_id` / service role |
 | `trial_link_tokens` | Trial URL token + `expires_at` + `plan` `free` \| `paid` | Owning `user_id` / service role |
+
+**Weekly rev-only re-pull (future job, not this PR):** a scheduled worker reads `pinned_sheets`, compares each sheet's current Procore top revision to `sheet_revision_cache.rev`, and **re-downloads only when `rev` bumped**. On a bump it updates `sheet_revision_cache` (`rev`, `checked_at`) and `pinned_sheets.last_seen_rev` / `last_pulled_at`. Unchanged revs are metadata-only (no PDF fetch). Notify-on-bump is later.
+
+**Manual force refresh (this PR, stub only):** `POST /api/share/refresh-all` is puller-gated and returns `{ accepted: true, stub: true }`. It does **not** walk pins or call Procore yet.
 
 **RLS (restrictive defaults):** enabled on all six. `anon` has no grants (no public share-folder read until a later PR adds an explicit public flag). `authenticated` may CRUD **own** folders, pins, markups, RFIs, and trial tokens (`user_id` / folder owner = `auth.uid()::text`). `sheet_revision_cache` has no anon/authenticated policies.
 
@@ -352,6 +358,7 @@ These tables do **not** replace `procore_connections` or `room_packs`. Do not en
 | `/api/room-pack/refresh` | Puller POST. Bot refresh, optional `{ pack }` upsert, then latest `room_packs` row. |
 | `/api/room-pack/live` | Anyone GET/POST. Latest `room_packs` row, `no-store`. Does not pull. |
 | `/api/room-pack/status` | Alias of live read (no Drive poll, no webhook). |
+| `/api/share/refresh-all` | Puller POST stub. Mike force-refresh of pinned sheets; no Procore pull yet. |
 | `/api/time` | GET Maple Point site, workers, week punches (memory demo or service-role Supabase) |
 | `/api/time/punches` | POST worker punch (GPS + geofence) or `{ foreman: true }` missed-punch override |
 | `/api/voice/status` | GET. `{ configured }` for Grok Voice — never returns the key |
@@ -543,7 +550,8 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 - Realtime Grok speech-to-speech on site (this PR is batch STT + TTS)
 - Payroll export / ADP
 - Sent pack **snapshots** (text/email frozen copies — not in this PR)
-- Share folder / pinned-sheet UI, markup toolbar, RFI generation from markup, revision-check API, trial-link redeem
+- Share folder / pinned-sheet UI, markup toolbar, RFI generation from markup, trial-link redeem
+- Weekly rev-only re-pull job (read `sheet_revision_cache`, download only on bump) and a real `POST /api/share/refresh-all` implementation
 - RLS policies on `public.room_packs` (table is currently wide open to the anon key)
 - HostGator DNS cutover to Vercel for gcfieldlog.com
 - No Apple / native iOS
