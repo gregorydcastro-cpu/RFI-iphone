@@ -1,4 +1,5 @@
 import { readCookieValue, readFieldRoleFromRequest } from "@/lib/auth";
+import { notifyMikeOnBumps } from "@/lib/notifyMike";
 import { PROCORE_BOT_ID, requestProcoreBotRefresh } from "@/lib/procoreBot";
 import { MAPLE_POINT_PROJECT_NAME, MAPLE_POINT_REQUEST_ID } from "@/lib/shareCatalog";
 import { refreshAllPinnedSheets } from "@/lib/shareStore";
@@ -20,7 +21,7 @@ function json(data: unknown, status = 200) {
  * known pack rev to `sheet_revision_cache`, and updates last_seen_rev when
  * the rev bumped. Does not call Procore REST. Does not download PDFs.
  * Weekly automation is GET/POST `/api/share/weekly-refresh` (CRON_SECRET).
- * Do not notify Mike by text/email yet (issue #31).
+ * Emails Mike after a persisted bump (issue #31). Missing notify env skips.
  */
 export async function POST(request: Request) {
   const session = parseStubSession(
@@ -48,7 +49,8 @@ export async function POST(request: Request) {
     requestId: MAPLE_POINT_REQUEST_ID,
   });
 
-  const { plan, storage, bumps } = await refreshAllPinnedSheets(session.userId);
+  const { plan, storage, bumps, errors } = await refreshAllPinnedSheets(session.userId);
+  const notify = await notifyMikeOnBumps(bumps, errors);
 
   return json({
     ok: true,
@@ -57,7 +59,7 @@ export async function POST(request: Request) {
     implemented: true,
     refresh: plan.scanned === 0 ? "empty" : "complete",
     weeklyCron: false,
-    notify: false,
+    notify,
     storage,
     scanned: plan.scanned,
     bumped: plan.bumped,
@@ -67,6 +69,6 @@ export async function POST(request: Request) {
     items: plan.items,
     botId: PROCORE_BOT_ID,
     note:
-      "Force refresh compared this owner's pinned sheets to known pack revs and updated sheet_revision_cache. Weekly cron is GET/POST /api/share/weekly-refresh. Do not notify Mike by text/email yet.",
+      "Force refresh compared this owner's pinned sheets to known pack revs and updated sheet_revision_cache. Weekly cron is GET/POST /api/share/weekly-refresh. Mike is emailed only when a bump persists.",
   });
 }

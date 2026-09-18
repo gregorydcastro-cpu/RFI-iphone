@@ -7,7 +7,9 @@
  * Stripe Checkout uses STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
  * STRIPE_PRICE_ID (server-only). Live Drive sheet PDFs use
  * GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON (or GOOGLE_CLIENT_EMAIL +
- * GOOGLE_PRIVATE_KEY). The only public Stripe key is
+ * GOOGLE_PRIVATE_KEY). Notify Mike on a pinned rev bump uses
+ * NOTIFY_MIKE_EMAIL plus RESEND_API_KEY or GMAIL_APP_PASSWORD
+ * (server-only, never NEXT_PUBLIC_). The only public Stripe key is
  * NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY. Never NEXT_PUBLIC_ for secrets.
  */
 export function readEnv(key: string): string | undefined {
