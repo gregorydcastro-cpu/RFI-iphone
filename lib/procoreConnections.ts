@@ -1,9 +1,12 @@
 /**
  * Per-user Procore tokens in `public.procore_connections`.
  *
- * Writes require SUPABASE_SERVICE_ROLE_KEY (or supabase_service_role_key).
- * The anon key must never read or write this table — RLS + grants keep
- * tokens off the public API. Status endpoints never return token values.
+ * Writes require SUPABASE_SERVICE_ROLE_KEY (service role). The anon key
+ * must never read or write this table — never expose tokens in the browser.
+ * Status endpoints never select access_token / refresh_token.
+ *
+ * company_id is last-known from /me only. Live API calls must resolve
+ * company id per project (see resolveCompanyIdForProject).
  */
 
 import { readEnvAlias } from "./env";

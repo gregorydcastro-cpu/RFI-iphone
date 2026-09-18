@@ -69,7 +69,7 @@ export async function GET(request: Request) {
     return response;
   }
 
-  const config = getProcoreOAuthConfig(request);
+  const config = getProcoreOAuthConfig();
   if (!config) {
     const response = redirectAccount(request, {
       procore: "error",
@@ -96,7 +96,7 @@ export async function GET(request: Request) {
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token ?? null,
     expiresAt: expiresAtFromToken(tokens),
-    companyId: account.companyId,
+    companyId: account.lastCompanyId,
     procoreUserId: account.procoreUserId,
   });
 

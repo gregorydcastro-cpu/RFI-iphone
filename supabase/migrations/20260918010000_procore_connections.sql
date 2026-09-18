@@ -8,6 +8,7 @@ create table if not exists public.procore_connections (
   access_token text not null,
   refresh_token text,
   expires_at timestamptz,
+  -- Last-known from GET /me only. Live calls resolve company id per project.
   company_id text,
   procore_user_id text,
   created_at timestamptz not null default now(),

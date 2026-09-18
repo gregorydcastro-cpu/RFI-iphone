@@ -8,6 +8,11 @@
  */
 
 import { readEnvAlias } from "./env";
+import {
+  readProcoreClientId,
+  readProcoreClientSecret,
+  readProcoreRedirectUri,
+} from "./procoreSecrets";
 
 export const PROCORE_OAUTH_STATE_COOKIE = "gcfieldlog_procore_oauth_state";
 
@@ -29,38 +34,35 @@ export type ProcoreTokenResponse = {
 
 const TOKEN_TIMEOUT_MS = 12_000;
 
-export function getProcoreOAuthConfig(request: Request): ProcoreOAuthConfig | null {
-  const clientId = readEnvAlias("procore_client_id", "PROCORE_CLIENT_ID");
-  const clientSecret = readEnvAlias(
-    "procore_client_secret",
-    "PROCORE_CLIENT_SECRET",
-  );
+export function getProcoreOAuthConfig(): ProcoreOAuthConfig | null {
+  const clientId = readProcoreClientId();
+  const clientSecret = readProcoreClientSecret();
   if (!clientId || !clientSecret) return null;
 
   const loginBase = stripSlash(
     readEnvAlias(
-      "procore_oauth_base",
       "PROCORE_OAUTH_BASE",
-      "procore_login_url",
+      "procore_oauth_base",
       "PROCORE_LOGIN_URL",
+      "procore_login_url",
     ) ?? "https://login-sandbox.procore.com",
   );
   const apiBase = stripSlash(
-    readEnvAlias("procore_api_base", "PROCORE_API_BASE") ??
+    readEnvAlias("PROCORE_API_BASE", "procore_api_base") ??
       defaultApiBase(loginBase),
   );
-  const redirectUri =
-    readEnvAlias("procore_redirect_uri", "PROCORE_REDIRECT_URI") ??
-    `${originFromRequest(request)}/api/procore/callback`;
 
-  return { clientId, clientSecret, loginBase, apiBase, redirectUri };
+  return {
+    clientId,
+    clientSecret,
+    loginBase,
+    apiBase,
+    redirectUri: readProcoreRedirectUri(),
+  };
 }
 
 export function isProcoreOAuthConfigured(): boolean {
-  return Boolean(
-    readEnvAlias("procore_client_id", "PROCORE_CLIENT_ID") &&
-      readEnvAlias("procore_client_secret", "PROCORE_CLIENT_SECRET"),
-  );
+  return Boolean(readProcoreClientId() && readProcoreClientSecret());
 }
 
 export function buildAuthorizeUrl(
@@ -167,20 +169,15 @@ export function expiresAtFromToken(token: ProcoreTokenResponse): string | null {
 export async function fetchProcoreAccount(
   config: ProcoreOAuthConfig,
   accessToken: string,
-): Promise<{ companyId: string | null; procoreUserId: string | null }> {
-  const me = await procoreJson(config, accessToken, "/rest/v1.0/me");
-  const companies = await procoreJson(config, accessToken, "/rest/v1.0/companies");
-
-  const procoreUserId = readId(me);
-  let companyId: string | null = null;
-  if (Array.isArray(companies) && companies[0]) {
-    companyId = readId(companies[0]);
-  } else if (me && typeof me === "object") {
+): Promise<{ lastCompanyId: string | null; procoreUserId: string | null }> {
+  const me = await procoreApiGet(config, accessToken, "/rest/v1.0/me");
+  const procoreUserId = readProcoreId(me);
+  let lastCompanyId: string | null = null;
+  if (me && typeof me === "object") {
     const record = me as Record<string, unknown>;
-    companyId = readId(record.company) ?? readId(record.company_id);
+    lastCompanyId = readProcoreId(record.company) ?? readProcoreId(record.company_id);
   }
-
-  return { companyId, procoreUserId };
+  return { lastCompanyId, procoreUserId };
 }
 
 function defaultApiBase(loginBase: string): string {
@@ -191,21 +188,6 @@ function defaultApiBase(loginBase: string): string {
     return "https://sandbox.procore.com";
   }
   return "https://api.procore.com";
-}
-
-function originFromRequest(request: Request): string {
-  const forwardedProto = request.headers.get("x-forwarded-proto");
-  const forwardedHost = request.headers.get("x-forwarded-host");
-  const host = forwardedHost ?? request.headers.get("host");
-  if (host) {
-    const proto =
-      forwardedProto ??
-      (host.startsWith("localhost") || host.startsWith("127.0.0.1")
-        ? "http"
-        : "https");
-    return `${proto}://${host}`;
-  }
-  return new URL(request.url).origin;
 }
 
 function stripSlash(value: string): string {
@@ -263,10 +245,11 @@ async function postToken(
   }
 }
 
-async function procoreJson(
+export async function procoreApiGet(
   config: ProcoreOAuthConfig,
   accessToken: string,
   path: string,
+  extraHeaders?: Record<string, string>,
 ): Promise<unknown> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TOKEN_TIMEOUT_MS);
@@ -276,6 +259,7 @@ async function procoreJson(
       headers: {
         Accept: "application/json",
         Authorization: `Bearer ${accessToken}`,
+        ...extraHeaders,
       },
       cache: "no-store",
       signal: controller.signal,
@@ -289,11 +273,11 @@ async function procoreJson(
   }
 }
 
-function readId(value: unknown): string | null {
+export function readProcoreId(value: unknown): string | null {
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   if (typeof value === "string" && value.trim()) return value.trim();
   if (value && typeof value === "object" && "id" in value) {
-    return readId((value as { id: unknown }).id);
+    return readProcoreId((value as { id: unknown }).id);
   }
   return null;
 }

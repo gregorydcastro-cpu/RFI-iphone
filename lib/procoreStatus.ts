@@ -62,7 +62,7 @@ export function procoreErrorMessage(reason: string | undefined): string | null {
     case "viewer_only":
       return "View-only sessions do not connect Procore. Sign in as a puller to connect.";
     case "missing_oauth_config":
-      return "Procore OAuth is not configured. Set procore_client_id and procore_client_secret on the server.";
+      return "Procore OAuth is not configured. Set PROCORE_CLIENT_ID and PROCORE_CLIENT_SECRET on Vercel (server-only, not NEXT_PUBLIC).";
     case "missing_code":
       return "Procore did not return an authorization code.";
     case "invalid_state":

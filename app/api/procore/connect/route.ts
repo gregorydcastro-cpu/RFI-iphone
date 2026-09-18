@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     return redirectWithError(request, "viewer_only");
   }
 
-  const config = getProcoreOAuthConfig(request);
+  const config = getProcoreOAuthConfig();
   if (!config) {
     return redirectWithError(request, "missing_oauth_config");
   }

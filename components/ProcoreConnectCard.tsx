@@ -41,13 +41,9 @@ export function ProcoreConnectCard({ view, compact = false }: Props) {
               (<span className="text-paper">{view.email}</span>)
             </>
           ) : null}
-          . End users do not use the developer portal.
+          . Company id is resolved per project from Procore — never hardcoded.
+          End users do not use the developer portal.
         </p>
-        {view.companyId ? (
-          <p className="mt-1 font-mono text-xs text-metal">
-            company_id {view.companyId}
-          </p>
-        ) : null}
         <form action="/api/procore/disconnect" method="post" className="mt-4">
           <button
             type="submit"
@@ -74,9 +70,9 @@ export function ProcoreConnectCard({ view, compact = false }: Props) {
       </p>
       {!view.oauthConfigured ? (
         <p className="mt-2 text-sm text-cta">
-          Set <code className="font-mono">procore_client_id</code> and{" "}
-          <code className="font-mono">procore_client_secret</code> on the
-          server before connecting.
+          Set <code className="font-mono">PROCORE_CLIENT_ID</code> and{" "}
+          <code className="font-mono">PROCORE_CLIENT_SECRET</code> on Vercel
+          (server-only, not NEXT_PUBLIC) before connecting.
         </p>
       ) : null}
       {!view.storageConfigured ? (

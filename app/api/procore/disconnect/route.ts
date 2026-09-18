@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   }
 
   const secrets = await fetchProcoreConnectionSecrets(session.userId);
-  const config = getProcoreOAuthConfig(request);
+  const config = getProcoreOAuthConfig();
   if (secrets && config) {
     await revokeAccessToken(config, secrets.accessToken);
   }

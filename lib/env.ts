@@ -1,6 +1,7 @@
 /**
  * Read a Vercel env key at runtime. Bracket access so Next.js does not inline
- * at build time. Prefer lowercase keys; aliases may include uppercase.
+ * at build time. OAuth uses PROCORE_CLIENT_ID / PROCORE_CLIENT_SECRET
+ * first; webhook keys stay lowercase-only.
  */
 export function readEnv(key: string): string | undefined {
   const value = process.env[key];
@@ -9,7 +10,7 @@ export function readEnv(key: string): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-/** First non-empty match among aliases (lowercase preferred first). */
+/** First non-empty match among aliases (pass preferred key first). */
 export function readEnvAlias(...keys: string[]): string | undefined {
   for (const key of keys) {
     const value = readEnv(key);

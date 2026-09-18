@@ -51,30 +51,38 @@ Production host is **gcfieldlog.com**.
 
 1. Import this GitHub repo in [Vercel](https://vercel.com/new) (framework preset: **Next.js**).
 2. Build command: `npm run build`. `postinstall` copies `pdf.worker.min.mjs`.
-3. **Env:** the Maple Point demo needs **no** secrets. Production already has the two lowercase Procore webhook keys (see below). Procore **user** OAuth (Connect Procore) uses the keys in the next section. Do not add `PROCORE_ROOM_PACK_*` aliases unless you also wire both directions. Drive API credentials are **not** on Vercel today — polling uses the status interface described below.
+3. **Env:** the Maple Point demo needs **no** secrets. Production already has the two lowercase Procore webhook keys (see below). Procore **user** OAuth (Connect Procore) uses **`PROCORE_CLIENT_ID` / `PROCORE_CLIENT_SECRET`** on Vercel (server-only, never `NEXT_PUBLIC_`). Copy from `/home/box/.secrets/procore_client_id` and `procore_client_secret` — do not commit. Do not add `PROCORE_ROOM_PACK_*` aliases unless you also wire both directions. Drive API credentials are **not** on Vercel today — polling uses the status interface described below.
 4. **DNS (ops, not this repo):** at HostGator, point `gcfieldlog.com` / `www` to Vercel (A / CNAME per Vercel’s domain docs). Do not upload files to HostGator for this app.
 
 ### Procore OAuth (Connect Procore)
 
-Pullers click **Connect Procore** → Procore authorize → they sign in with **their own** Procore credentials and approve → callback exchanges the code for tokens → tokens are stored **per user**. End users do **not** create a Developer Portal app.
+Pullers click **Connect Procore** → Procore authorize → they sign in with **their own** Procore credentials and approve → callback exchanges the code for tokens → tokens are stored **per user** in Supabase (service role writes). End users do **not** create a Developer Portal app.
 
-Register this redirect URI on the sandbox/developer app:
+This PR is **additive** and separate from the live `room_packs` re-pull work. Pack viewer / webhook paths stay as they are on `main`.
 
-`https://<host>/api/procore/callback` (local: `http://localhost:3000/api/procore/callback`)
+**Redirect URI** allowlisted on Greg’s Procore developer app (exact):
 
-Never commit secrets. Never `NEXT_PUBLIC_` them. Never log them. Prefer lowercase on Vercel; uppercase aliases work.
+`https://www.gcfieldlog.com/api/procore/callback`
+
+That is the default `redirect_uri`. Preview hosts will not match unless `PROCORE_REDIRECT_URI` is set **and** that URI is added in the developer app.
+
+**Vercel (server-only, never `NEXT_PUBLIC_`):**
 
 | Key | Role |
 | --- | --- |
-| `procore_client_id` / `PROCORE_CLIENT_ID` | OAuth client id |
-| `procore_client_secret` / `PROCORE_CLIENT_SECRET` | OAuth client secret (server only) |
-| `procore_redirect_uri` / `PROCORE_REDIRECT_URI` | Optional. Default: `{app origin}/api/procore/callback` |
-| `procore_oauth_base` / `PROCORE_OAUTH_BASE` | Optional login host. Default **`https://login-sandbox.procore.com`** (Developer Sandbox). Production / on-demand sandboxes use `https://login.procore.com`. |
-| `procore_api_base` / `PROCORE_API_BASE` | Optional API host. Default follows the login host (`https://sandbox.procore.com` or `https://api.procore.com`). |
-| `SUPABASE_URL` / `supabase_url` | Supabase project URL (same project as `room_packs`) |
-| `SUPABASE_SERVICE_ROLE_KEY` / `supabase_service_role_key` | **Required to write tokens.** The anon key must not read or write `procore_connections`. |
+| `PROCORE_CLIENT_ID` | OAuth client id (`procore_client_id` alias also read) |
+| `PROCORE_CLIENT_SECRET` | OAuth client secret (`procore_client_secret` alias also read) |
+| `PROCORE_REDIRECT_URI` | Optional. Default: `https://www.gcfieldlog.com/api/procore/callback` |
+| `PROCORE_OAUTH_BASE` | Optional login host. Default **`https://login-sandbox.procore.com`** (Developer Sandbox). Production / on-demand: `https://login.procore.com`. |
+| `PROCORE_API_BASE` | Optional API host. Default follows the login host. |
+| `SUPABASE_URL` | Supabase project URL (same project as `room_packs`) |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Required to write tokens.** Anon key must not read or write `procore_connections`. |
 
-[Procore OAuth docs](https://procore.github.io/documentation/oauth-auth-grant-flow): authorize `GET {login}/oauth/authorize`, token `POST {login}/oauth/token`. Developer Sandbox login host is `login-sandbox.procore.com` (not `login.procore.com`). Access tokens last ~1.5 hours; refresh tokens are stored for later.
+Never commit secrets. Never log them. Sandbox id/secret live on the shared box at `/home/box/.secrets/procore_client_id` and `/home/box/.secrets/procore_client_secret` — copy those values into Vercel env; do not put them in git. If those files are present at runtime and Vercel env is unset, the server will read them as a fallback.
+
+[Procore OAuth docs](https://procore.github.io/documentation/oauth-auth-grant-flow): authorize `GET {login}/oauth/authorize`, token `POST {login}/oauth/token`. Developer Sandbox login host is `login-sandbox.procore.com`. Access tokens last ~1.5 hours; refresh tokens are stored for later.
+
+**Company id** is dynamic per project (Maple Point demos only in this app). Do not hardcode a company. `procore_connections.company_id` is last-known from `/me` only. Later API calls must use `resolveCompanyIdForProject` against the selected demo job name.
 
 #### Token table (`public.procore_connections`)
 
@@ -87,7 +95,7 @@ Applied on the gc-field-log Supabase project. SQL: `supabase/migrations/20260918
 | `access_token` | Never returned to the browser |
 | `refresh_token` | Never returned to the browser |
 | `expires_at` | Access token expiry |
-| `company_id` | From `/rest/v1.0/companies` or `/me` when Procore returns it |
+| `company_id` | Last-known from `/me` only. **Not** a hardcoded Field Log company. Resolve per project. |
 | `procore_user_id` | From `/rest/v1.0/me` when available |
 | `created_at` / `updated_at` | Timestamps |
 
