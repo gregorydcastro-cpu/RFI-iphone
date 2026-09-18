@@ -2,11 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
+import { VoiceCommandBar } from "@/components/VoiceCommandBar";
 import { type DemoJob, makeRequestId } from "@/lib/jobs";
 
 type Props = {
   job: DemoJob;
   procoreLinked?: boolean;
+  initialRoom?: string;
 };
 
 type RoomPackApiOk = {
@@ -23,17 +25,18 @@ type RoomPackApiErr = {
   error?: string;
 };
 
-export function RequestPackForm({ job, procoreLinked = false }: Props) {
+export function RequestPackForm({
+  job,
+  procoreLinked = false,
+  initialRoom,
+}: Props) {
   const router = useRouter();
-  const [room, setRoom] = useState("733");
+  const [room, setRoom] = useState(initialRoom?.trim() || "733");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function openOrPull(roomValue: string) {
     if (pending) return;
-
-    const roomValue = room.trim();
     setPending(true);
     setError(null);
 
@@ -87,6 +90,16 @@ export function RequestPackForm({ job, procoreLinked = false }: Props) {
     }
   }
 
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const roomValue = room.trim();
+    if (!roomValue) {
+      setError("Room is required.");
+      return;
+    }
+    await openOrPull(roomValue);
+  }
+
   return (
     <form
       onSubmit={onSubmit}
@@ -117,6 +130,14 @@ export function RequestPackForm({ job, procoreLinked = false }: Props) {
           )}
         </p>
       </div>
+      <VoiceCommandBar
+        mode="pack-request"
+        job={job}
+        procoreLinked={procoreLinked}
+        room={room}
+        onRoom={setRoom}
+        onOpen={(nextRoom) => openOrPull(nextRoom)}
+      />
       <label className="block text-xs font-semibold tracking-wide text-muted uppercase">
         Room
         <input
@@ -124,7 +145,7 @@ export function RequestPackForm({ job, procoreLinked = false }: Props) {
           value={room}
           onChange={(event) => setRoom(event.target.value)}
           disabled={pending}
-          className="mt-1 w-full border border-line bg-ink px-3 py-2 font-mono text-sm text-paper outline-none focus:border-cta disabled:opacity-60"
+          className="mt-1 w-full border border-line bg-ink px-3 py-3 font-mono text-base text-paper outline-none focus:border-cta disabled:opacity-60"
           placeholder="733"
         />
       </label>
@@ -136,7 +157,7 @@ export function RequestPackForm({ job, procoreLinked = false }: Props) {
       <button
         type="submit"
         disabled={pending}
-        className="bg-cta px-5 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
+        className="min-h-12 bg-cta px-5 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
       >
         {pending
           ? procoreLinked

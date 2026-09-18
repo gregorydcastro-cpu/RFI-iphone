@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { ProcoreConnectCard } from "@/components/ProcoreConnectCard";
+import { VoiceCommandBar } from "@/components/VoiceCommandBar";
 import { DEMO_JOBS } from "@/lib/jobs";
 import { getProcoreConnectionView, procoreErrorMessage } from "@/lib/procoreStatus";
 import { readStubSession } from "@/lib/stubSession";
@@ -52,8 +53,13 @@ export default async function JobsPage({ searchParams }: Props) {
             {error}
           </p>
         ) : null}
-        <div className="mt-6 max-w-lg">
+        <div className="mt-6 max-w-lg space-y-4">
           <ProcoreConnectCard view={view} compact />
+          <VoiceCommandBar
+            mode="jobs"
+            jobs={DEMO_JOBS}
+            procoreLinked={canPull}
+          />
         </div>
         <ul className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2">
           {DEMO_JOBS.map((job) => (

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { ReadAloudButton } from "@/components/ReadAloudButton";
 import { DEMO_FOREMAN } from "@/lib/crew";
 
 type Props = {
@@ -10,6 +11,8 @@ type Props = {
   pin?: string;
   authorLabel: string;
   backHref: string;
+  speakId?: string;
+  speakText?: string;
   children?: ReactNode;
 };
 
@@ -21,6 +24,8 @@ export function DraftToForemanSuccess({
   pin,
   authorLabel,
   backHref,
+  speakId,
+  speakText,
   children,
 }: Props) {
   return (
@@ -63,6 +68,9 @@ export function DraftToForemanSuccess({
         </div>
       </dl>
       {children}
+      {speakId && speakText ? (
+        <ReadAloudButton id={speakId} text={speakText} label="Read draft" />
+      ) : null}
       <Link
         href={backHref}
         className="inline-flex min-h-12 w-full items-center justify-center bg-cta px-4 py-3 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover"

@@ -1,20 +1,22 @@
 "use client";
 
 import { type FormEvent, useMemo, useState } from "react";
+import { DictationButton } from "@/components/DictationButton";
 import { DraftToForemanSuccess } from "@/components/DraftToForemanSuccess";
+import { VoiceSetupNote } from "@/components/VoiceSetupNote";
 import { DEMO_FOREMAN, DEMO_JOURNEYMAN } from "@/lib/crew";
+import { newDraftId, saveMaterialDraft, type MaterialOrderDraft } from "@/lib/fieldDrafts";
 import {
-  newDraftId,
-  saveMaterialDraft,
-  type MaterialDraftLine,
-  type MaterialOrderDraft,
-} from "@/lib/fieldDrafts";
+  applyMaterialOps,
+  parseMaterialsDictation,
+  type MaterialLineState,
+} from "@/lib/materialsDictation";
 import { takeoffLineItems, type RoomPack, type Takeoff } from "@/lib/pack";
 
 const inputClass =
   "mt-1 w-full border border-line bg-ink px-3 py-3 text-base text-paper outline-none focus:border-cta";
 
-type LineState = MaterialDraftLine & { included: boolean };
+type LineState = MaterialLineState;
 
 type Props = {
   pack: RoomPack;
@@ -90,6 +92,21 @@ export function OrderMaterialsForm({
     ]);
     setCustomType("");
     setCustomQty("1");
+  }
+
+  function onDictate(text: string) {
+    const ops = parseMaterialsDictation(text);
+    if (!ops.length) {
+      setNote((current) => (current ? `${current} ${text.trim()}` : text.trim()));
+      setError(null);
+      return;
+    }
+    const applied = applyMaterialOps(lines, ops, pack.room.name);
+    setLines(applied.lines);
+    if (applied.note) {
+      setNote((current) => (current ? `${current} ${applied.note}` : applied.note ?? ""));
+    }
+    setError(null);
   }
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -204,6 +221,19 @@ export function OrderMaterialsForm({
         {takeoff?.scope ? (
           <p className="mt-1 text-xs text-muted">{takeoff.scope}</p>
         ) : null}
+      </div>
+
+      <div className="space-y-2 border border-line bg-panel p-3">
+        <p className="text-xs font-semibold tracking-wide text-muted uppercase">
+          Hands-free
+        </p>
+        <DictationButton
+          onTranscript={onDictate}
+          disabled={pending}
+          label="Dictate items"
+          hint='Say “add 4 junction boxes”, “order 2 duplex receptacles”, “set panelboard to 1”, or “note need by Friday”.'
+        />
+        <VoiceSetupNote />
       </div>
 
       {lines.length === 0 ? (
