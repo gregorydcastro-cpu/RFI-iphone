@@ -2,18 +2,13 @@ import type { DemoJob } from "./jobs";
 import { loadPack } from "./loadPack";
 import { stampRoomPack, type RoomPack } from "./pack";
 import { packMatchesJob } from "./packStatus";
-import {
-  buildRoomPackWebhookPayload,
-  getProcoreRoomPackWebhookConfig,
-  postRoomPackWebhook,
-} from "./procoreRoomPack";
-import { fetchPackStatus } from "./fetchPackStatus";
+import { requestProcoreBotRefresh } from "./procoreBot";
 import {
   fetchLatestRoomPackRow,
   getSupabaseConfig,
 } from "./supabaseRoomPack";
 
-export type LivePackSource = "webhook" | "supabase" | "http" | "local";
+export type LivePackSource = "supabase" | "local";
 
 export type LivePackLoad = {
   pack: RoomPack;
@@ -42,31 +37,23 @@ function jobPackOk(
   );
 }
 
+function withJobCompany(pack: RoomPack, job?: DemoJob): RoomPack {
+  if (!job || pack.company_id) return pack;
+  return { ...pack, company_id: job.companyId };
+}
+
 /**
- * Latest pack for a live website view. Local JSON is not source of truth
- * when the webhook or Supabase path is configured.
+ * Latest `public.room_packs` row (pack_data jsonb). Local Maple Point JSON
+ * only when Supabase is unset or has no matching row.
  */
 export async function loadLiveRoomPack(input: {
   requestId: string;
   job?: DemoJob;
   room?: string;
-  statusUrl?: string;
-  webhookPack?: RoomPack;
 }): Promise<LivePackLoad | null> {
-  const liveConfigured = Boolean(getProcoreRoomPackWebhookConfig());
-  const supabaseConfigured = Boolean(getSupabaseConfig());
+  const liveConfigured = Boolean(getSupabaseConfig());
 
-  if (input.webhookPack && jobPackOk(input.webhookPack, input.job, input.requestId)) {
-    return {
-      pack: stampRoomPack(input.webhookPack, { touch: true }),
-      source: "webhook",
-      demoFallback: false,
-      liveConfigured,
-      requestId: input.requestId,
-    };
-  }
-
-  if (supabaseConfigured) {
+  if (liveConfigured) {
     const fromSb = await fetchLatestRoomPackRow({
       requestId: input.requestId,
       projectName: input.job?.name,
@@ -75,27 +62,8 @@ export async function loadLiveRoomPack(input: {
     });
     if (fromSb && jobPackOk(fromSb, input.job, input.requestId)) {
       return {
-        pack: fromSb,
+        pack: withJobCompany(fromSb, input.job),
         source: "supabase",
-        demoFallback: false,
-        liveConfigured,
-        requestId: input.requestId,
-      };
-    }
-  }
-
-  if (input.job && (liveConfigured || supabaseConfigured)) {
-    const snapshot = await fetchPackStatus({
-      job: input.job,
-      requestId: input.requestId,
-      statusUrl: input.statusUrl,
-      poll: liveConfigured,
-      skipLocal: true,
-    });
-    if (snapshot.pack && jobPackOk(snapshot.pack, input.job, input.requestId)) {
-      return {
-        pack: stampRoomPack(snapshot.pack),
-        source: snapshot.source === "http" ? "http" : "local",
         demoFallback: false,
         liveConfigured,
         requestId: input.requestId,
@@ -115,40 +83,26 @@ export async function loadLiveRoomPack(input: {
 }
 
 /**
- * Fresh Procore webhook pull, then read the latest pack (Supabase / status).
- * Maple Point demo when webhook env is unset.
+ * Coordinate a Procore bot refresh, then read the latest room_packs row.
+ * Webhook writes are not used. Maple Point demo when Supabase is unset.
  */
 export async function refreshLiveRoomPack(input: {
   requestId: string;
   job: DemoJob;
   room: string;
-  statusUrl?: string;
 }): Promise<LivePackLoad | null> {
-  const config = getProcoreRoomPackWebhookConfig();
-  let webhookPack: RoomPack | undefined;
-  let statusUrl = input.statusUrl;
-
-  if (config) {
-    const result = await postRoomPackWebhook(
-      config,
-      buildRoomPackWebhookPayload({
-        projectName: input.job.name,
-        room: input.room,
-        requestId: input.requestId,
-        companyId: input.job.companyId,
-      }),
-    );
-    if (result.ok) {
-      webhookPack = result.pack;
-      statusUrl = result.statusUrl ?? statusUrl;
-    }
+  if (getSupabaseConfig()) {
+    await requestProcoreBotRefresh({
+      projectName: input.job.name,
+      room: input.room,
+      requestId: input.requestId,
+      companyId: input.job.companyId,
+    });
   }
 
   return loadLiveRoomPack({
     requestId: input.requestId,
     job: input.job,
     room: input.room,
-    statusUrl,
-    webhookPack,
   });
 }

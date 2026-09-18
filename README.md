@@ -6,7 +6,7 @@ This is the product surface. **Native iOS is paused. No Apple.** Real login and 
 
 Host: **Vercel (primary)** with **HostGator DNS** for `gcfieldlog.com` (document only; this PR does not change DNS). Cloudflare Pages is a possible later target.
 
-No real auth, Stripe, HostGator uploads, or live Procore REST API in this MVP. Opening a website pack view **POSTs a fresh pull** to Procore’s Room pack webhook when the two lowercase Vercel env keys are set. Local demo leaves those unset: Maple Point JSON, no webhook. Optional `SUPABASE_URL` + `SUPABASE_ANON_KEY` can serve the latest `public.room_packs` row after that pull.
+No real auth, Stripe, HostGator uploads, or live Procore REST API in this MVP. Opening a website pack view **asks the Procore bot** to refresh, then reads the latest `public.room_packs.pack_data` row with `SUPABASE_URL` + `SUPABASE_ANON_KEY` (`cache: "no-store"`). Webhook writes are abandoned. Local demo leaves Supabase unset: Maple Point JSON.
 
 ## Locked nav (MVP)
 
@@ -22,8 +22,8 @@ Must match this path — nothing else in the primary nav:
 | --- | --- |
 | Login (`/`) | Email/password form UI. Any submit goes to jobs. No session server. |
 | Jobs (`/jobs`) | Fictional jobs only (Maple Point and similar). |
-| Room pack request | Room number (e.g. `733`) → `POST /api/room-pack` → `/pack/[requestId]`. Local demo loads Maple Point JSON (no webhook). Production POSTs the selected job’s **exact name** plus that job’s **company_id**. |
-| Pack viewer | Zoomable plan/sheets + SVG room highlight + linked RFIs. Top bar and sheet tabs show **drawing number + revision letter** (`E-101 Rev A`) and `pulled_at`. **Every open** of `/pack/[requestId]` triggers a fresh webhook pull (no expiry, no website cache as source of truth). |
+| Room pack request | Room number (e.g. `733`) → `POST /api/room-pack` → `/pack/[requestId]`. Local demo loads Maple Point JSON when Supabase is unset. Live asks the Procore bot to refresh, then reads `room_packs`. |
+| Pack viewer | Zoomable plan/sheets + SVG room highlight + linked RFIs. Top bar and sheet tabs show **drawing number + revision letter** (`E-101 Rev A`) and `pulled_at`. **Every open** of `/pack/[requestId]` coordinates a bot refresh and re-reads `pack_data` (no expiry, no website cache as source of truth). |
 | Generate RFI / Materials | Stub pages from the pack action buttons |
 | Takeoff counts | Optional placeholder panel |
 
@@ -50,48 +50,34 @@ Production host is **gcfieldlog.com**.
 
 1. Import this GitHub repo in [Vercel](https://vercel.com/new) (framework preset: **Next.js**).
 2. Build command: `npm run build`. `postinstall` copies `pdf.worker.min.mjs`.
-3. **Env:** the Maple Point demo needs **no** secrets. Production has the two lowercase Procore webhook keys (see below). Optional `SUPABASE_URL` + `SUPABASE_ANON_KEY` read the latest `room_packs` row after a pull. Do not add `PROCORE_ROOM_PACK_*` aliases unless you also wire both directions.
+3. **Env:** the Maple Point demo needs **no** secrets. Production reads `SUPABASE_URL` and `SUPABASE_ANON_KEY`. Webhook writes (`procore_room_pack_webhook_*`) are **abandoned** — do not POST them from this app.
 4. **DNS (ops, not this repo):** at HostGator, point `gcfieldlog.com` / `www` to Vercel (A / CNAME per Vercel’s domain docs). Do not upload files to HostGator for this app.
 
-### Procore Room pack webhook env (Vercel)
+### Supabase `public.room_packs` (locked contract)
 
-Read **only** these exact lowercase keys from `process.env` on the server. They are already set on **Vercel Production**. Never commit values, never `NEXT_PUBLIC_` them, never log them.
-
-| Key | Role |
-| --- | --- |
-| `procore_room_pack_webhook_url` | Webhook URL (POST target) |
-| `procore_room_pack_webhook_authorization` | Sent as the `Authorization` header, verbatim |
-
-```ts
-process.env.procore_room_pack_webhook_url
-process.env.procore_room_pack_webhook_authorization
-```
-
-Payload (fresh pull on every website pack open, and on `POST /api/room-pack`):
-
-```json
-{
-  "project": "<exact job name>",
-  "room": "<room>",
-  "request_id": "...",
-  "company_id": "<that job's company id>"
-}
-```
-
-`company_id` is **per job** (see `DEMO_JOBS[].companyId`). Never send one hardcoded company for every job.
-
-- **Both webhook keys set (Production):** opening `/pack/[requestId]` POSTs that payload (`cache: "no-store"`) then reads the latest pack. Local `public/packs/*.json` is **not** the live source of truth.
-- **Missing / local:** Maple Point JSON, **no** webhook.
-- **Hard rule:** `project` is the selected job’s exact `name`. Never mix jobs.
-
-Optional after the pull, if set on Vercel:
+Project `aejevzkqvlwbmjbqdxuu`. Read with exact Vercel keys (never `NEXT_PUBLIC_`, never log):
 
 ```ts
 process.env.SUPABASE_URL
 process.env.SUPABASE_ANON_KEY
 ```
 
-The website GETs the latest `public.room_packs` row for the request/job (project `aejevzkqvlwbmjbqdxuu`). This is a thin read, not a schema redesign. If those keys are unset, status JSON / Maple Point demo is used instead.
+Table columns (only these):
+
+| Column | Type |
+| --- | --- |
+| `id` | uuid PK, `gen_random_uuid()` |
+| `project_name` | text |
+| `pack_data` | jsonb default `{}` |
+| `created_at` | timestamptz default `now()` |
+
+`request_id`, `room`, `pulled_at`, `company_id` live **inside** `pack_data`, not as columns.
+
+`pack_data` is `gcpullog.room_pack.v1`: `request_id`, `status`, `project` (exact name), `room`, `pulled_at`, `company_id` (from the selected job — never one hardcoded company), `project_id`, `sheets[{id, rev, …}]`, `rfis`, `locator`, `pack_pdf`, `layout`, `actions`, `flags`.
+
+Website live view: latest row ordered by `created_at desc`, filtered by `project_name` / `pack_data.request_id` / `pack_data.room` as available (`cache: "no-store"`).
+
+Procore bot id `969a9d8e-c07f-44c3-ae9d-862704cd60c7` owns the Procore pull and writes `room_packs`. Opening `/pack/[requestId]` requests that refresh, then reads. **Missing / local:** Maple Point JSON.
 
 No pack expiry timers. No heavy website cache. Re-pull on open.
 
@@ -104,10 +90,10 @@ No pack expiry timers. No heavy website cache. Re-pull on open.
 | `/` | Stub **login** |
 | `/jobs` | Fictional **job selection** |
 | `/jobs/[projectSlug]` | **Request room pack** (room number → `POST /api/room-pack` → `/pack/[requestId]`) |
-| `/jobs/[projectSlug]/rooms/[room]` | Alias → `/pack/{slug}-{room}` (no webhook; use the request form) |
-| `/api/room-pack` | Server POST. Webhook pull when lowercase keys are set; otherwise demo. |
-| `/api/room-pack/refresh` | Fresh webhook pull + latest pack read (used on every `/pack/[requestId]` open). |
-| `/api/room-pack/status` | Latest pack JSON (skips local files when webhook live). |
+| `/jobs/[projectSlug]/rooms/[room]` | Alias → `/pack/{slug}-{room}` |
+| `/api/room-pack` | Server POST. Procore bot refresh + `room_packs` read when Supabase is set; otherwise demo. |
+| `/api/room-pack/refresh` | Bot refresh + latest `pack_data` (used on every `/pack/[requestId]` open). |
+| `/api/room-pack/status` | Latest `pack_data` row, no-store, no pull. |
 | `/pack/[requestId]` | Live pack viewer. Re-pulls on open. Unknown IDs fall back to Maple Point demo |
 | `/pack/[requestId]/rfi/new?sheet=` | Stub Generate RFI form |
 | `/pack/[requestId]/materials` | Stub Order materials |
@@ -135,19 +121,15 @@ Defined in `app/globals.css`.
 
 ## Where production packs come from
 
-Live packs come from **Procore’s Room pack webhook**, schema `gcpullog.room_pack.v1`.
+Live packs are written by the **Procore bot** (`969a9d8e-c07f-44c3-ae9d-862704cd60c7`) into Supabase **`public.room_packs.pack_data`** (`gcpullog.room_pack.v1`). Webhook writes are abandoned.
 
-**Website live view:** every open of `/pack/[requestId]` POSTs `{ project, room, request_id, company_id }` to `procore_room_pack_webhook_url` with `Authorization` from `procore_room_pack_webhook_authorization`. Then the app reads the latest pack (optional Supabase `public.room_packs`, else status JSON). Local demo JSON is **not** served as the live source of truth.
+**Website live view:** every open of `/pack/[requestId]` requests a bot refresh, then GETs the latest matching row with `SUPABASE_URL` + `SUPABASE_ANON_KEY` (`cache: "no-store"`). Local demo JSON is **not** the live source of truth.
 
-**Request form:** `POST /api/room-pack` does the same webhook POST, then navigates to the pack page (which pulls again on open).
-
-**Local demo:** webhook keys unset → no webhook → local Maple Point JSON.
-
-Drive folder [GC Field Log room packs](https://drive.google.com/drive/folders/19Ixner0dApGlfpG13M2XOw2rzReQGl3P) remains an ops pointer, not a credential.
+**Local demo:** Supabase unset → Maple Point JSON.
 
 ## Pack JSON contract (`gcpullog.room_pack.v1`)
 
-Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `/pack/<requestId>`. Demo packs are those local files. Production webhook output uses this same shape.
+Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `/pack/<requestId>`. Demo packs are those local files. Production bot output uses this same shape in `room_packs.pack_data`.
 
 ```json
 {
@@ -156,6 +138,11 @@ Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `
   "request_id": "maple-point",
   "pulled_at": "2026-09-18T00:15:17.277Z",
   "revision_stamp": { "drawing": "E-101", "rev": "A" },
+  "company_id": "<job company id>",
+  "project_id": "proj-maple-point",
+  "locator": "Electrical Closet 101",
+  "pack_pdf": "/packs/maple-point-e101.pdf",
+  "flags": ["fictional-project"],
   "project": { "id": "proj-maple-point", "name": "Maple Point Medical Office", "slug": "maple-point" },
   "room": { "id": "room-e101", "name": "Electrical Closet 101", "number": "101" },
   "sheets": [
@@ -184,12 +171,17 @@ Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `
 | Field | Notes |
 | --- | --- |
 | `status` | e.g. `ready` / `pending` — shown in the top bar |
-| `pulled_at` | ISO timestamp of this pull. Shown in the viewer. Not a cache expiry. |
+| `pulled_at` | ISO timestamp of this pull (in `pack_data`). Shown in the viewer. Not a cache expiry. |
 | `revision_stamp` | `{ drawing, rev }` for the primary sheet at pull time |
-| `project` | `{ id, name, slug }` |
-| `room` | `{ id, name, number? }` |
+| `company_id` | That job’s Procore company id — never a single hardcoded value |
+| `project_id` | Procore / pack project id |
+| `project` | Exact job name (string or `{ id, name, slug }`) |
+| `room` | Room number/name (string or `{ id, name, number? }`) |
 | `request_id` | URL key for `/pack/[requestId]` |
 | `sheets[]` | `{ id, rev, pdf, preview?, crop? }` — `id` is the drawing number, `rev` is the revision letter |
+| `locator` | Room locator (also `layout.locator`) |
+| `pack_pdf` | Optional whole-pack PDF |
+| `flags` | Optional string tags |
 | `rfis[]` | `{ id, number, title, status, url? }` |
 | `layout` | Room locator on the sheet |
 | `actions[]` | Dashboard buttons |

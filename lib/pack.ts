@@ -112,16 +112,22 @@ export type RoomPack = {
   schema?: "gcpullog.room_pack.v1";
   status: PackStatus;
   request_id: string;
-  /** ISO timestamp of this pull. Not a cache expiry. */
+  /** ISO timestamp of this pull. Lives in pack_data, not a table column. */
   pulled_at?: string;
   /** Primary sheet drawing + rev at pull time. */
   revision_stamp?: RevisionStamp;
+  /** Dynamic per job — never a single hardcoded company. */
+  company_id?: string;
+  project_id?: string;
   project: Project;
   room: Room;
   sheets: Sheet[];
   rfis: Rfi[];
+  locator?: string;
+  pack_pdf?: string | null;
   layout: Layout;
   actions: PackAction[];
+  flags?: string[];
   takeoff?: Takeoff;
 };
 
@@ -215,14 +221,125 @@ export function stampRoomPack(
   const pulledAt = options?.touch
     ? (options.pulledAt ?? new Date().toISOString())
     : (pack.pulled_at ?? options?.pulledAt);
+  const locator = pack.locator ?? pack.layout?.locator;
   const next: RoomPack = {
     ...pack,
     schema: "gcpullog.room_pack.v1",
     sheets,
     pulled_at: pulledAt,
+    locator,
+    layout: {
+      ...pack.layout,
+      locator: pack.layout?.locator ?? locator,
+    },
   };
   next.revision_stamp = primaryRevisionStamp(next);
   return next;
+}
+
+function asNonEmpty(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function projectFromPackData(
+  rec: Record<string, unknown>,
+): Project | undefined {
+  const projectId = asNonEmpty(rec.project_id);
+  if (typeof rec.project === "string") {
+    const name = rec.project.trim();
+    if (!name) return undefined;
+    return {
+      id: projectId ?? name,
+      name,
+      slug: name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+    };
+  }
+  if (rec.project && typeof rec.project === "object") {
+    const project = rec.project as Record<string, unknown>;
+    const name = asNonEmpty(project.name);
+    if (!name) return undefined;
+    return {
+      id: asNonEmpty(project.id) ?? projectId ?? name,
+      name,
+      slug:
+        asNonEmpty(project.slug) ??
+        name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+    };
+  }
+  return undefined;
+}
+
+function roomFromPackData(rec: Record<string, unknown>): Room | undefined {
+  if (typeof rec.room === "string") {
+    const name = rec.room.trim();
+    if (!name) return undefined;
+    return { id: name, name, number: name };
+  }
+  if (rec.room && typeof rec.room === "object") {
+    const room = rec.room as Record<string, unknown>;
+    const name = asNonEmpty(room.name) ?? asNonEmpty(room.number);
+    if (!name) return undefined;
+    return {
+      id: asNonEmpty(room.id) ?? name,
+      name,
+      number: asNonEmpty(room.number),
+    };
+  }
+  return undefined;
+}
+
+/**
+ * Normalize `public.room_packs.pack_data` (gcpullog.room_pack.v1) into the
+ * viewer shape. Accepts project/room as exact-name strings or objects.
+ */
+export function normalizeRoomPack(value: unknown): RoomPack | null {
+  if (!value || typeof value !== "object") return null;
+  const rec = value as Record<string, unknown>;
+  if (typeof rec.status !== "string") return null;
+  if (!Array.isArray(rec.sheets)) return null;
+  const project = projectFromPackData(rec);
+  const room = roomFromPackData(rec);
+  if (!project || !room) return null;
+
+  const layout =
+    rec.layout && typeof rec.layout === "object"
+      ? (rec.layout as Layout)
+      : {};
+  const locator =
+    asNonEmpty(rec.locator) ?? asNonEmpty(layout.locator);
+
+  const pack: RoomPack = {
+    schema: "gcpullog.room_pack.v1",
+    status: rec.status,
+    request_id: asNonEmpty(rec.request_id) ?? "",
+    pulled_at: asNonEmpty(rec.pulled_at),
+    company_id: asNonEmpty(rec.company_id),
+    project_id: asNonEmpty(rec.project_id) ?? project.id,
+    project,
+    room,
+    sheets: rec.sheets as Sheet[],
+    rfis: Array.isArray(rec.rfis) ? (rec.rfis as RoomPack["rfis"]) : [],
+    locator,
+    pack_pdf: asNonEmpty(rec.pack_pdf) ?? null,
+    layout: { ...layout, locator: layout.locator ?? locator },
+    actions: Array.isArray(rec.actions)
+      ? (rec.actions as RoomPack["actions"])
+      : [],
+    flags: Array.isArray(rec.flags)
+      ? rec.flags.filter((flag): flag is string => typeof flag === "string")
+      : undefined,
+    takeoff:
+      rec.takeoff && typeof rec.takeoff === "object"
+        ? (rec.takeoff as RoomPack["takeoff"])
+        : undefined,
+    revision_stamp:
+      rec.revision_stamp && typeof rec.revision_stamp === "object"
+        ? (rec.revision_stamp as RevisionStamp)
+        : undefined,
+  };
+  return stampRoomPack(pack);
 }
 
 export function formatPulledAt(iso?: string | null): string | null {

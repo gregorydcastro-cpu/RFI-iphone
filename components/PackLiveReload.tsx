@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import type { RoomPack } from "@/lib/pack";
 import { formatPulledAt, sheetRevisionLabel } from "@/lib/pack";
-import { packStatusSessionKey } from "@/lib/packStatus";
 
 type Props = {
   requestId: string;
@@ -25,8 +24,8 @@ type RefreshPayload = {
 };
 
 /**
- * On every website pack open: POST a fresh Procore webhook pull, then show
- * the stamped pack. No expiry poll loop. Local demo when webhook unset.
+ * On every website pack open: ask the Procore bot to refresh, then read the
+ * latest room_packs.pack_data row. Maple Point demo when Supabase is unset.
  */
 export function PackLiveReload({
   requestId,
@@ -39,17 +38,13 @@ export function PackLiveReload({
   const [message, setMessage] = useState(
     liveConfigured
       ? "Pulling latest pack…"
-      : "Demo pack (Maple Point). Webhook env is unset locally.",
+      : "Demo pack (Maple Point). Supabase is unset locally.",
   );
 
   useEffect(() => {
     let cancelled = false;
 
     async function refresh() {
-      const statusUrl =
-        typeof window !== "undefined"
-          ? window.sessionStorage.getItem(packStatusSessionKey(requestId))
-          : null;
       try {
         const response = await fetch("/api/room-pack/refresh", {
           method: "POST",
@@ -59,7 +54,6 @@ export function PackLiveReload({
             projectSlug,
             requestId,
             room: requestedRoom,
-            statusUrl: statusUrl || undefined,
           }),
         });
         const data = (await response.json()) as RefreshPayload;

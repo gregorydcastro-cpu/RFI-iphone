@@ -1,6 +1,12 @@
-import { getJob, jobFromRequestId, makeRequestId } from "@/lib/jobs";
+import {
+  getJob,
+  jobFromRequestId,
+  makeRequestId,
+  roomFromRequestId,
+} from "@/lib/jobs";
 import { refreshLiveRoomPack } from "@/lib/livePack";
 import { requestBelongsToJob } from "@/lib/packStatus";
+import { PROCORE_BOT_ID } from "@/lib/procoreBot";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -24,8 +30,8 @@ function json(data: unknown, status = 200) {
 }
 
 /**
- * Fresh Procore webhook pull for a website pack view, then read the latest
- * pack (Supabase room_packs if configured, else status JSON). No roles.
+ * Fresh pull for a website pack view: coordinate Procore bot, then read the
+ * latest `public.room_packs` row (pack_data jsonb). Webhook writes abandoned.
  */
 export async function POST(request: Request) {
   let body: {
@@ -33,7 +39,6 @@ export async function POST(request: Request) {
     job?: unknown;
     requestId?: unknown;
     room?: unknown;
-    statusUrl?: unknown;
   };
   try {
     body = (await request.json()) as typeof body;
@@ -43,9 +48,18 @@ export async function POST(request: Request) {
 
   const projectSlug =
     asNonEmptyString(body.projectSlug) ?? asNonEmptyString(body.job);
-  const room = asNonEmptyString(body.room) ?? "room";
+  const requestIdHint = asNonEmptyString(body.requestId);
+  const jobHint =
+    (projectSlug ? getJob(projectSlug) : undefined) ??
+    (requestIdHint ? jobFromRequestId(requestIdHint) : undefined);
+  const room =
+    asNonEmptyString(body.room) ??
+    (jobHint && requestIdHint
+      ? roomFromRequestId(requestIdHint, jobHint)
+      : undefined) ??
+    "room";
   const requestId = packId(
-    asNonEmptyString(body.requestId) ??
+    requestIdHint ??
       (projectSlug ? makeRequestId(projectSlug, room) : null),
   );
 
@@ -54,6 +68,7 @@ export async function POST(request: Request) {
   }
 
   const job =
+    jobHint ??
     (projectSlug ? getJob(projectSlug) : undefined) ??
     jobFromRequestId(requestId);
   if (!job || !requestBelongsToJob(job, requestId)) {
@@ -64,7 +79,6 @@ export async function POST(request: Request) {
     requestId,
     job,
     room,
-    statusUrl: asNonEmptyString(body.statusUrl) ?? undefined,
   });
 
   if (!live) {
@@ -74,15 +88,16 @@ export async function POST(request: Request) {
   return json({
     ok: true,
     refresh: true,
-    mode: live.liveConfigured ? "webhook" : "demo",
+    mode: live.liveConfigured ? "live" : "demo",
     source: live.source,
     demoFallback: live.demoFallback,
     requestId,
     job: job.slug,
     room,
-    companyId: job.companyId,
+    company_id: live.pack.company_id ?? job.companyId,
     pulled_at: live.pack.pulled_at,
     revision_stamp: live.pack.revision_stamp,
+    botId: PROCORE_BOT_ID,
     pack: live.pack,
   });
 }

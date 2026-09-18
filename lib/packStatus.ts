@@ -64,16 +64,6 @@ export function resolveStatusUrlTemplate(
     .replaceAll("{path}", path);
 }
 
-export function pickPackFromWebhookBody(body: unknown): RoomPack | null {
-  if (!body || typeof body !== "object") return null;
-  const rec = body as Record<string, unknown>;
-  for (const key of ["pack", "pack_data", "room_pack"] as const) {
-    if (isRoomPackShape(rec[key])) return rec[key];
-  }
-  if (isRoomPackShape(body)) return body;
-  return null;
-}
-
 export function pickStatusUrlFromWebhookBody(body: unknown): string | undefined {
   if (!body || typeof body !== "object") return undefined;
   const rec = body as Record<string, unknown>;
@@ -91,13 +81,15 @@ export function pickStatusUrlFromWebhookBody(body: unknown): string | undefined 
 
 export function isRoomPackShape(value: unknown): value is RoomPack {
   if (!value || typeof value !== "object") return false;
-  const pack = value as Partial<RoomPack>;
+  const pack = value as Record<string, unknown>;
   if (typeof pack.status !== "string") return false;
-  if (!pack.project || typeof pack.project !== "object") return false;
-  if (typeof pack.project.name !== "string") return false;
-  if (!pack.room || typeof pack.room !== "object") return false;
   if (!Array.isArray(pack.sheets)) return false;
-  return true;
+  if (typeof pack.project === "string" && pack.project.trim()) return true;
+  if (pack.project && typeof pack.project === "object") {
+    const name = (pack.project as { name?: unknown }).name;
+    if (typeof name === "string" && name.trim()) return true;
+  }
+  return false;
 }
 
 /**

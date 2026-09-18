@@ -1,13 +1,12 @@
 import { getJob, makeRequestId } from "@/lib/jobs";
-import { drivePackJsonPath } from "@/lib/packStatus";
-import {
-  buildRoomPackWebhookPayload,
-  getProcoreRoomPackWebhookConfig,
-  postRoomPackWebhook,
-} from "@/lib/procoreRoomPack";
+import { refreshLiveRoomPack } from "@/lib/livePack";
+import { PROCORE_BOT_ID } from "@/lib/procoreBot";
+import { getSupabaseConfig } from "@/lib/supabaseRoomPack";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+
+const NO_STORE = { "Cache-Control": "no-store" };
 
 type RoomPackRequestJson = {
   projectSlug?: unknown;
@@ -20,80 +19,67 @@ function asNonEmptyString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function json(data: unknown, status = 200) {
+  return NextResponse.json(data, { status, headers: NO_STORE });
+}
+
 /**
- * Request a room pack from `/jobs/[projectSlug]`.
- *
- * When both lowercase Vercel webhook keys are set, POSTs to Procore and
- * returns as soon as the webhook accepts. The pack page then polls status.
- * Otherwise local demo (no POST, no poll).
+ * Request a room pack. Asks the Procore bot to refresh, then reads
+ * `public.room_packs.pack_data`. Does not write via the abandoned webhook.
  */
 export async function POST(request: Request) {
-  let json: RoomPackRequestJson;
+  let body: RoomPackRequestJson;
   try {
-    json = (await request.json()) as RoomPackRequestJson;
+    body = (await request.json()) as RoomPackRequestJson;
   } catch {
-    return NextResponse.json(
-      { ok: false, error: "Invalid JSON" },
-      { status: 400 },
-    );
+    return json({ ok: false, error: "Invalid JSON" }, 400);
   }
 
-  const projectSlug = asNonEmptyString(json.projectSlug);
-  const room = asNonEmptyString(json.room);
+  const projectSlug = asNonEmptyString(body.projectSlug);
+  const room = asNonEmptyString(body.room);
   if (!projectSlug || !room) {
-    return NextResponse.json(
+    return json(
       { ok: false, error: "projectSlug and room are required" },
-      { status: 400 },
+      400,
     );
   }
 
   const job = getJob(projectSlug);
   if (!job) {
-    return NextResponse.json(
-      { ok: false, error: "Unknown job" },
-      { status: 404 },
-    );
+    return json({ ok: false, error: "Unknown job" }, 404);
   }
 
   const requestId = makeRequestId(job.slug, room);
-  const config = getProcoreRoomPackWebhookConfig();
 
-  if (!config) {
-    return NextResponse.json({
+  if (!getSupabaseConfig()) {
+    return json({
       ok: true,
       mode: "demo" as const,
       requestId,
       job: job.slug,
       room,
-      accepted: false,
-      poll: false,
+      refresh: false,
+      botId: PROCORE_BOT_ID,
     });
   }
 
-  const payload = buildRoomPackWebhookPayload({
-    projectName: job.name,
-    room,
+  const live = await refreshLiveRoomPack({
     requestId,
-    companyId: job.companyId,
+    job,
+    room,
   });
 
-  const result = await postRoomPackWebhook(config, payload);
-  if (!result.ok) {
-    return NextResponse.json(
-      { ok: false, error: "Room pack request was not accepted" },
-      { status: 502 },
-    );
-  }
-
-  return NextResponse.json({
+  return json({
     ok: true,
-    mode: "webhook" as const,
+    mode: "live" as const,
     requestId,
     job: job.slug,
     room,
-    accepted: true,
-    poll: true,
-    drivePath: drivePackJsonPath(job.slug, requestId),
-    statusUrl: result.statusUrl,
+    refresh: true,
+    source: live?.source ?? "none",
+    pulled_at: live?.pack.pulled_at,
+    revision_stamp: live?.pack.revision_stamp,
+    company_id: live?.pack.company_id ?? job.companyId,
+    botId: PROCORE_BOT_ID,
   });
 }

@@ -26,7 +26,7 @@ type Props = {
   projectSlug?: string;
   demoFallback?: boolean;
   liveConfigured?: boolean;
-  source?: "webhook" | "supabase" | "http" | "local";
+  source?: "supabase" | "local";
 };
 
 export function RoomPackViewer({
@@ -153,7 +153,7 @@ function PackContextBar({
   projectSlug?: string;
   demoFallback?: boolean;
   liveConfigured: boolean;
-  source?: "webhook" | "supabase" | "http" | "local";
+  source?: "supabase" | "local";
   onPack: (pack: RoomPack) => void;
 }) {
   const stamp = sheetRevisionLabel(sheet);

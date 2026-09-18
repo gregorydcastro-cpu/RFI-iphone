@@ -21,8 +21,9 @@ type Props = {
 };
 
 /**
- * Website live pack view. Always re-pulls via the Procore webhook when
- * those env keys are set — local JSON is not the live source of truth.
+ * Website live pack view. Coordinates a Procore bot refresh then reads the
+ * latest `public.room_packs.pack_data` row. Local JSON is not the live
+ * source of truth.
  */
 export default async function PackPage({ params, searchParams }: Props) {
   const { requestId } = await params;

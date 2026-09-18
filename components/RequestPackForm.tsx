@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { type DemoJob } from "@/lib/jobs";
-import { packStatusSessionKey } from "@/lib/packStatus";
 
 type Props = {
   job: DemoJob;
@@ -11,13 +10,11 @@ type Props = {
 
 type RoomPackApiOk = {
   ok: true;
-  mode: "demo" | "webhook";
+  mode: "demo" | "live";
   requestId: string;
   job: string;
   room: string;
-  accepted: boolean;
-  poll?: boolean;
-  statusUrl?: string;
+  refresh?: boolean;
 };
 
 type RoomPackApiErr = {
@@ -42,6 +39,7 @@ export function RequestPackForm({ job }: Props) {
     try {
       const response = await fetch("/api/room-pack", {
         method: "POST",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectSlug: job.slug, room: roomValue }),
       });
@@ -60,27 +58,13 @@ export function RequestPackForm({ job }: Props) {
         job: data.job,
         room: data.room,
       });
-      if (data.accepted) params.set("accepted", "1");
-      if (data.poll) params.set("poll", "1");
-
-      if (data.statusUrl) {
-        try {
-          window.sessionStorage.setItem(
-            packStatusSessionKey(data.requestId),
-            data.statusUrl,
-          );
-        } catch {
-          // sessionStorage may be unavailable; env template still polls.
-        }
-      }
 
       console.info("[gcfieldlog] room-pack request", {
         job: data.job,
         room: data.room,
         requestId: data.requestId,
         mode: data.mode,
-        accepted: data.accepted,
-        poll: Boolean(data.poll),
+        refresh: Boolean(data.refresh),
       });
 
       router.push(`/pack/${data.requestId}?${params.toString()}`);
@@ -104,9 +88,10 @@ export function RequestPackForm({ job }: Props) {
           {job.name}
         </h1>
         <p className="mt-2 text-sm text-muted">
-          Local demo loads Maple Point JSON and does not call Procore.
-          Production POSTs this job’s exact name and company id, then opening
-          the pack viewer pulls a fresh pack (drawing + rev + pulled_at).
+          Local demo loads Maple Point JSON when Supabase is unset. Live view
+          asks the Procore bot to refresh, then reads{" "}
+          <code className="font-mono text-metal">public.room_packs</code>{" "}
+          pack_data (drawing + rev + pulled_at).
         </p>
       </div>
       <label className="block text-xs font-semibold tracking-wide text-muted uppercase">

@@ -4,6 +4,11 @@
   "request_id": "maple-point",
   "pulled_at": "2026-09-18T00:15:17.277Z",
   "revision_stamp": { "drawing": "E-101", "rev": "A" },
+  "company_id": "91001",
+  "project_id": "proj-maple-point",
+  "locator": "Electrical Closet 101",
+  "pack_pdf": "/packs/maple-point-e101.pdf",
+  "flags": ["fictional-project", "demo-data"],
   "project": {
     "id": "proj-maple-point",
     "name": "Maple Point Medical Office",
