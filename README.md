@@ -112,7 +112,7 @@ Hands-free field controls on the existing Generate RFI / Order materials / pack 
 
 | Control | Where | Behavior |
 | --- | --- | --- |
-| **Dictate RFI** | `/pack/[requestId]/rfi/new` | Mic → Grok STT → fills subject, question, and location if spoken. Say “send draft” to create the localStorage draft (optional `/api/rfis`). |
+| **Dictate RFI** | `/pack/[requestId]/rfi/new` | Mic → Grok STT → fills subject and location if spoken, and always writes the transcript into Question / description. Say “send draft” to create the localStorage draft (optional `/api/rfis`). |
 | **Read aloud / Speak** | Pack viewer RFI list; new-RFI form; draft confirmation | Grok TTS reads number + title + status. On the new-RFI page it also reads the draft body. |
 | **Dictate items** | `/pack/[requestId]/materials` | Mic adds/adjusts line items or the order note for the foreman draft. |
 | **Voice command** (stub) | `/jobs` and the room-pack request form | “open Maple Point pack” / “pull room 101” uses the existing open/pull path. Viewers open; connected pullers refresh. Does not rebuild Procore. |
@@ -121,7 +121,7 @@ Hands-free field controls on the existing Generate RFI / Order materials / pack 
 
 1. Stub login at `/` (any email; password ignored).
 2. Jobs → **Maple Point Medical Office** → Open pack (room `101` or `733`).
-3. **Generate RFI** → **Dictate RFI** (tap mic, speak, tap stop). Example: *“Subject panel feed. Question is the feeder three phase in closet 101?”* Fields fill. Still **Send draft to Pat Nguyen** — not Procore.
+3. **Generate RFI** → **Dictate RFI** (tap mic, speak, tap stop). Example: *“Subject panel feed. Question is the feeder three phase in closet 101?”* Subject, location, and Question / description fill. Still **Send draft to Pat Nguyen** — not Procore.
 4. On the confirmation card, **Read draft**. On the pack viewer RFI list, **Speak** / **Read all**.
 5. **Order materials** → **Dictate items**. Example: *“add 4 junction boxes”* or *“note need by Friday”*.
 6. Optional: on Jobs, **Voice command** → *“open Maple Point pack”* or *“pull room 101”*.
