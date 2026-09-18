@@ -10,10 +10,12 @@ export const dynamic = "force-dynamic";
 
 type Props = {
   params: Promise<{ projectSlug: string }>;
+  searchParams: Promise<{ room?: string }>;
 };
 
-export default async function JobPage({ params }: Props) {
+export default async function JobPage({ params, searchParams }: Props) {
   const { projectSlug } = await params;
+  const query = await searchParams;
   const job = getJob(projectSlug);
   if (!job) notFound();
   const view = await getProcoreConnectionView(await readStubSession());
@@ -31,7 +33,11 @@ export default async function JobPage({ params }: Props) {
         {view.role === "puller" && !view.connected ? (
           <ProcoreConnectCard view={view} compact />
         ) : null}
-        <RequestPackForm job={job} procoreLinked={canPull} />
+        <RequestPackForm
+          job={job}
+          procoreLinked={canPull}
+          initialRoom={query.room}
+        />
       </main>
     </div>
   );

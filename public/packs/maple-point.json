@@ -86,15 +86,15 @@
       "id": "generate-rfi",
       "label": "Generate RFI",
       "href": "/pack/maple-point/rfi/new?sheet=A-101",
-      "enabled": false,
+      "enabled": true,
       "note": "Draft to foreman — not a Procore submit"
     },
     {
       "id": "order-materials",
       "label": "Order materials",
       "href": "/pack/maple-point/materials",
-      "enabled": false,
-      "note": "Coming soon"
+      "enabled": true,
+      "note": "Draft to foreman — not a Procore PO"
     }
   ],
   "takeoff": {

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { FieldRoleName } from "@/lib/auth";
 
 type Props = {
@@ -16,9 +17,11 @@ export function AppHeader({
   procoreLinked = false,
   procoreConnected = false,
 }: Props) {
+  const pathname = usePathname();
   const resolvedRole: FieldRoleName | null =
     role ?? (signedIn ? (procoreLinked ? "puller" : "viewer") : null);
   const connected = procoreConnected || procoreLinked;
+  const timeActive = pathname === "/time" || pathname.startsWith("/time/");
 
   return (
     <header className="border-b border-line bg-primary">
@@ -42,9 +45,16 @@ export function AppHeader({
               <span className="cursor-default text-tan/50" title="Later">
                 Tools
               </span>
-              <span className="cursor-default text-tan/50" title="Later">
+              <Link
+                className={
+                  timeActive
+                    ? "text-cta"
+                    : "text-secondary hover:text-cta"
+                }
+                href="/time"
+              >
                 Time
-              </span>
+              </Link>
               <Link
                 className="text-secondary hover:text-cta"
                 href="/account"

@@ -145,39 +145,108 @@ export type RoomPack = {
   takeoff?: Takeoff;
 };
 
+export const GENERATE_RFI_ACTION_ID = "generate-rfi";
+export const ORDER_MATERIALS_ACTION_ID = "order-materials";
+
 export const DEFAULT_ACTIONS: PackAction[] = [
   {
-    id: "generate-rfi",
+    id: GENERATE_RFI_ACTION_ID,
     label: "Generate RFI",
-    href: "/pack/maple-point/rfi/new",
-    enabled: false,
+    enabled: true,
     note: "Draft to foreman — not a Procore submit",
   },
   {
-    id: "order-materials",
+    id: ORDER_MATERIALS_ACTION_ID,
     label: "Order materials",
-    href: "/pack/maple-point/materials",
-    enabled: false,
-    note: "Coming soon",
+    enabled: true,
+    note: "Draft to foreman — not a Procore PO",
   },
 ];
 
-export function packActions(pack: RoomPack): PackAction[] {
-  if (pack.actions?.length) {
-    return pack.actions.map((action) => ({
-      ...action,
-      href:
-        action.href ??
-        (action.id === "generate-rfi"
-          ? `/pack/${pack.request_id}/rfi/new`
-          : action.id === "order-materials"
-            ? `/pack/${pack.request_id}/materials`
-            : undefined),
-    }));
+function isComingSoonNote(note: string | undefined): boolean {
+  return (note ?? "").trim().toLowerCase() === "coming soon";
+}
+
+function fieldActionHref(actionId: string, requestId: string): string | undefined {
+  if (actionId === GENERATE_RFI_ACTION_ID) return `/pack/${requestId}/rfi/new`;
+  if (actionId === ORDER_MATERIALS_ACTION_ID) {
+    return `/pack/${requestId}/materials`;
   }
-  return DEFAULT_ACTIONS.map((action) => ({
-    ...action,
-    href: action.href?.replace("maple-point", pack.request_id),
+  return undefined;
+}
+
+function normalizePackAction(action: PackAction, requestId: string): PackAction {
+  const href = fieldActionHref(action.id, requestId) ?? action.href;
+  if (action.id === GENERATE_RFI_ACTION_ID) {
+    return {
+      ...action,
+      enabled: true,
+      href,
+      note: isComingSoonNote(action.note)
+        ? "Draft to foreman — not a Procore submit"
+        : (action.note ?? "Draft to foreman — not a Procore submit"),
+    };
+  }
+  if (action.id === ORDER_MATERIALS_ACTION_ID) {
+    return {
+      ...action,
+      enabled: true,
+      href,
+      note: isComingSoonNote(action.note)
+        ? "Draft to foreman — not a Procore PO"
+        : (action.note ?? "Draft to foreman — not a Procore PO"),
+    };
+  }
+  return { ...action, href };
+}
+
+/**
+ * Viewer action list. Generate RFI and Order materials are always on and
+ * wired — pack JSON `enabled: false` / "Coming soon" must not hide them.
+ */
+export function packActions(pack: RoomPack): PackAction[] {
+  const incoming = pack.actions ?? [];
+  const byId = new Map(incoming.map((action) => [action.id, action]));
+  const ordered: PackAction[] = [];
+
+  for (const def of DEFAULT_ACTIONS) {
+    const fromPack = byId.get(def.id);
+    ordered.push(fromPack ? { ...def, ...fromPack } : def);
+    byId.delete(def.id);
+  }
+  for (const action of incoming) {
+    if (byId.has(action.id)) ordered.push(action);
+  }
+
+  return ordered.map((action) => normalizePackAction(action, pack.request_id));
+}
+
+export type TakeoffLineItem = {
+  id: string;
+  type: string;
+  qty: number;
+  room?: string;
+  sheet?: string;
+};
+
+/** Flatten `takeoff.by_room` fixtures, else `by_type`, for the order list. */
+export function takeoffLineItems(takeoff?: Takeoff | null): TakeoffLineItem[] {
+  if (!takeoff) return [];
+  if (takeoff.by_room?.length) {
+    return takeoff.by_room.flatMap((room, roomIndex) =>
+      room.fixtures.map((fixture, fixtureIndex) => ({
+        id: `${room.room ?? room.name}-${roomIndex}-${fixture.type}-${fixtureIndex}`,
+        type: fixture.type,
+        qty: fixture.qty,
+        room: room.name,
+        sheet: room.sheet,
+      })),
+    );
+  }
+  return (takeoff.by_type ?? []).map((entry, index) => ({
+    id: `type-${entry.type}-${index}`,
+    type: entry.type,
+    qty: entry.qty,
   }));
 }
 

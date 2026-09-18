@@ -1,6 +1,6 @@
 # GC Field Log — crew dashboard (web)
 
-Browser **dashboard for field crews** on **[gcfieldlog.com](https://gcfieldlog.com)**. Foremen and supers sign in (stub), pick a job, request a room pack, then work the sheet: zoomable floor plans, room highlight, linked RFIs, and Generate RFI / Order materials.
+Browser **dashboard for field crews** on **[gcfieldlog.com](https://gcfieldlog.com)**. Foremen and supers sign in (stub), pick a job, request a room pack, then work the sheet: zoomable floor plans, room highlight, linked RFIs, Generate RFI / Order materials, and a **Time** tab (geofenced punch-in + crew week).
 
 This is the product surface. **Native iOS is paused. No Apple.** Real login and **Stripe monthly billing** are later — the login page is a **stub session** (httpOnly cookie with user id + email + role). Wordmark is clean text: **GC Field Log** (no extra logo).
 
@@ -16,9 +16,9 @@ No real crew auth, Stripe, HostGator uploads, or live Procore REST API in this M
 
 Must match this path — nothing else in the primary nav:
 
-**Login (stub) → Jobs → Room pack request → Pack viewer (plan + sheets + RFIs) → Generate RFI / Materials stubs.**
+**Login (stub) → Jobs → Room pack request → Pack viewer (plan + sheets + RFIs) → Generate RFI / Order materials (drafts to foreman). Time is wired (`/time`).**
 
-**Tools** and **Time** appear in the header as later (not wired). No Apple.
+**Tools** stays later (not wired). No Apple.
 
 ## What the dashboard shows (MVP)
 
@@ -29,7 +29,9 @@ Must match this path — nothing else in the primary nav:
 | Account (`/account`) | Stub session + Procore connected / disconnected state. |
 | Room pack request | Room number (e.g. `733`). **Connected puller:** `POST /api/room-pack` asks the Procore bot to refresh, then opens `/pack/[requestId]`. **Viewer / unconnected puller:** **Open pack** only — no pull. Local demo (no `SUPABASE_URL`) loads Maple Point JSON. |
 | Pack viewer | Field stack on `/pack/[requestId]`: **architectural floor plan first** (A-*, architectural, floor plan heuristics; else current primary), oversized crimson SVG box around the room walls, then remaining sheets (power, lighting, …) and linked RFIs. Drawing number + revision letter stamps stay on the top bar and each sheet (`A-101 Rev A`). Website open always re-reads `room_packs` (no-store). Connected pullers also trigger a bot refresh; viewers cannot. |
-| Generate RFI / Materials | Stub pages from the pack action buttons |
+| Generate RFI / Materials | Live pack actions. Drafts go to foreman Pat Nguyen — not a Procore submit. **Dictate** fills the form from the mic; **Read aloud** speaks RFIs. |
+| Voice (Grok) | Server-side `XAI_API_KEY` → `/api/dictation` (STT) and `/api/tts` (TTS). Never `NEXT_PUBLIC_`. |
+| Time (`/time`) | Maple Point **worker punch** (GPS geofence) and **foreman crew week**. Field log only — not payroll/ADP. |
 | Takeoff counts | Optional placeholder panel |
 
 ## Local run
@@ -39,10 +41,13 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Sign in (stub) → pick **Maple Point Medical Office** → request room `733`.
+Open [http://localhost:3000](http://localhost:3000). Sign in (stub) → **Time** in the header, or pick **Maple Point Medical Office** → request room `733`.
+
+Grok Voice (mic / read aloud) needs **`XAI_API_KEY`** on the server. Without it, the buttons still render and `/api/voice/status` reports `configured: false`.
 
 ```bash
 npm run lint
+npm run test
 npm run build
 npm start
 ```
@@ -55,7 +60,7 @@ Production host is **gcfieldlog.com**.
 
 1. Import this GitHub repo in [Vercel](https://vercel.com/new) (framework preset: **Next.js**).
 2. Build command: `npm run build`. `postinstall` copies `pdf.worker.min.mjs`.
-3. **Env:** the Maple Point demo needs **no** secrets. Production reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` for live `room_packs`. Procore **user** OAuth (Connect Procore) uses **`PROCORE_CLIENT_ID` / `PROCORE_CLIENT_SECRET`** and **`SUPABASE_SERVICE_ROLE_KEY`** on Vercel (server-only, never `NEXT_PUBLIC_`). Copy OAuth id/secret from `/home/box/.secrets/procore_client_id` and `procore_client_secret` — do not commit. Do **not** restore `procore_room_pack_webhook_url` / `procore_room_pack_webhook_authorization` for this live path — that routine is deleted.
+3. **Env:** the Maple Point demo needs **no** secrets. Production reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` for live `room_packs`. Procore **user** OAuth (Connect Procore) uses **`PROCORE_CLIENT_ID` / `PROCORE_CLIENT_SECRET`** and **`SUPABASE_SERVICE_ROLE_KEY`** on Vercel (server-only, never `NEXT_PUBLIC_`). **Grok Voice** (RFI/materials dictation + RFI read-aloud) uses **`XAI_API_KEY`** (server-only, never `NEXT_PUBLIC_`). Copy OAuth id/secret from `/home/box/.secrets/procore_client_id` and `procore_client_secret` — do not commit. Do **not** restore `procore_room_pack_webhook_url` / `procore_room_pack_webhook_authorization` for this live path — that routine is deleted.
 4. **DNS (ops, not this repo):** at HostGator, point `gcfieldlog.com` / `www` to Vercel (A / CNAME per Vercel’s domain docs). Do not upload files to HostGator for this app.
 
 ### Procore OAuth (Connect Procore)
@@ -80,6 +85,66 @@ That is the default `redirect_uri`. Preview hosts will not match unless `PROCORE
 | `SUPABASE_URL` | Supabase project URL (same project as `room_packs`) |
 | `SUPABASE_SERVICE_ROLE_KEY` | **Required to write tokens.** Anon key must not read or write `procore_connections`. |
 | `SUPABASE_ANON_KEY` | Live `room_packs` reads (not token storage) |
+| `XAI_API_KEY` | **Grok Voice.** Server-only. Batch STT (`POST https://api.x.ai/v1/stt`) and TTS (`POST https://api.x.ai/v1/tts`). Never `NEXT_PUBLIC_`. Alias `xai_api_key` also read. |
+
+This app does **not** use the Vercel AI SDK / AI Gateway for voice. The key is forwarded only from Next.js API routes. Do not put the key in the client bundle.
+
+#### Grok Voice (dictation + read-aloud)
+
+Hands-free field controls on the existing Generate RFI / Order materials / pack viewer flows. Drafts still go to foreman Pat Nguyen. Never a Procore submit.
+
+| Control | Where | Behavior |
+| --- | --- | --- |
+| **Dictate RFI** | `/pack/[requestId]/rfi/new` | Mic → Grok STT → fills subject, question, and location if spoken. Say “send draft” to create the localStorage draft (optional `/api/rfis`). |
+| **Read aloud / Speak** | Pack viewer RFI list; new-RFI form; draft confirmation | Grok TTS reads number + title + status. On the new-RFI page it also reads the draft body. |
+| **Dictate items** | `/pack/[requestId]/materials` | Mic adds/adjusts line items or the order note for the foreman draft. |
+| **Voice command** (stub) | `/jobs` and the room-pack request form | “open Maple Point pack” / “pull room 101” uses the existing open/pull path. Viewers open; connected pullers refresh. Does not rebuild Procore. |
+
+**How to try (Maple Point demo):**
+
+1. Stub login at `/` (any email; password ignored).
+2. Jobs → **Maple Point Medical Office** → Open pack (room `101` or `733`).
+3. **Generate RFI** → **Dictate RFI** (tap mic, speak, tap stop). Example: *“Subject panel feed. Question is the feeder three phase in closet 101?”* Fields fill. Still **Send draft to Pat Nguyen** — not Procore.
+4. On the confirmation card, **Read draft**. On the pack viewer RFI list, **Speak** / **Read all**.
+5. **Order materials** → **Dictate items**. Example: *“add 4 junction boxes”* or *“note need by Friday”*.
+6. Optional: on Jobs, **Voice command** → *“open Maple Point pack”* or *“pull room 101”*.
+
+**Smoke without a live key** (expected):
+
+```bash
+curl -s http://localhost:3000/api/voice/status
+# {"ok":true,"configured":false,"provider":"xai","stt":"/api/dictation","tts":"/api/tts"}
+
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:3000/api/tts \
+  -H "Content-Type: application/json" \
+  -d '{"text":"RFI-001. Panel feed clarification. Status open."}'
+# 503
+
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:3000/api/dictation
+# 503
+```
+
+**When `XAI_API_KEY` is set** (server / Vercel env):
+
+```bash
+curl -s http://localhost:3000/api/voice/status
+# configured: true
+
+# Optional direct xAI checks (key stays in your shell, not the browser):
+curl -X POST https://api.x.ai/v1/stt \
+  -H "Authorization: Bearer $XAI_API_KEY" \
+  -F language=en -F format=true -F file=@short.wav
+
+curl -X POST https://api.x.ai/v1/tts \
+  -H "Authorization: Bearer $XAI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"RFI-001. Panel feed clarification. Status open.","voice_id":"eve","language":"en"}' \
+  --output /tmp/rfi.mp3
+```
+
+Mic capture happens in the **browser** (this IDE has no mic). Use earbuds on site; large tap targets are for gloves.
+
+Never commit secrets. Search the client bundle for `XAI_API_KEY` — the secret must not appear there.
 
 Never commit secrets. Never log them. Sandbox id/secret live on the shared box at `/home/box/.secrets/procore_client_id` and `/home/box/.secrets/procore_client_secret` — copy those values into Vercel env; do not put them in git. If those files are present at runtime and Vercel env is unset, the server will read them as a fallback.
 
@@ -189,6 +254,7 @@ Local `npm run dev` does not need any of these variables.
 | `/jobs/[projectSlug]` | **Pull / open room pack** (connected puller POSTs `/api/room-pack`; viewer opens `/pack/[requestId]` only) |
 | `/jobs/[projectSlug]/rooms/[room]` | Alias → `/pack/{slug}-{room}` (no pull; use the request form) |
 | `/account` | Stub account + Procore connected state |
+| `/time` | **Time tab** — worker punch + foreman crew week (Maple Point geofence) |
 | `/api/session` | POST stub login |
 | `/api/session/logout` | Clear stub session |
 | `/api/procore/connect` | Redirect to Procore OAuth authorize |
@@ -199,9 +265,42 @@ Local `npm run dev` does not need any of these variables.
 | `/api/room-pack/refresh` | Puller POST. Bot refresh, optional `{ pack }` upsert, then latest `room_packs` row. |
 | `/api/room-pack/live` | Anyone GET/POST. Latest `room_packs` row, `no-store`. Does not pull. |
 | `/api/room-pack/status` | Alias of live read (no Drive poll, no webhook). |
+| `/api/time` | GET Maple Point site, workers, week punches (memory demo or service-role Supabase) |
+| `/api/time/punches` | POST worker punch (GPS + geofence) or `{ foreman: true }` missed-punch override |
+| `/api/voice/status` | GET. `{ configured }` for Grok Voice — never returns the key |
+| `/api/dictation` | POST multipart `file`. Server-side Grok STT (`XAI_API_KEY`) |
+| `/api/tts` | POST `{ text }`. Server-side Grok TTS MP3 (`XAI_API_KEY`) |
 | `/pack/[requestId]` | Live pack viewer. Re-reads on open. Unknown IDs fall back to local Maple Point demo |
-| `/pack/[requestId]/rfi/new?sheet=` | Stub Generate RFI form |
-| `/pack/[requestId]/materials` | Stub Order materials |
+| `/pack/[requestId]/rfi/new?sheet=` | Generate RFI — draft to foreman (not Procore) |
+| `/pack/[requestId]/materials` | Order materials — draft to foreman (not Procore) |
+
+## Time tab (Maple Point geofence)
+
+Field log only. No new env keys for the local demo. If `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` are set **and** `supabase/migrations/20260918093000_time_tracking.sql` is applied, punches persist in Supabase; otherwise the Node process keeps an in-memory copy of the seeded week.
+
+**Demo site fence (Maple Point Medical Office, Cedar Falls):**
+
+| | |
+| --- | --- |
+| Latitude | `42.5349` |
+| Longitude | `-92.4450` |
+| Radius | `300` m |
+| Timezone | `America/Chicago` |
+
+These coords are a public downtown Cedar Falls point so GPS can be tested. The job is fictional. Live jobs must **not** hardcode a name → lat/lng map; they read `job_sites.lat` / `lng` / `radius_m` (config row keyed by slug). Maple Point is the only fictional UI demo. Danoff is live field tests only — never put Danoff, Brown, or Rossi in demo UI or seed copy.
+
+**Worker punch:** phone is punch in/out. Shared iPad: pick a worker, enter PIN to switch, then punch. Punch-in stays **locked** without GPS permission, without the matching PIN, and when the device is outside the site radius. Punch-out may run off-site. The API rejects off-site punch-in (`403`, `code: "off_site"`) unless `{ "foreman": true }`.
+
+**Foreman crew week:** Mon–Sun grid for the Maple Point roster (Pat Nguyen foreman, Alex Rivera, Jordan Hale, Sam Ortiz, Casey Brooks, Riley Chen). Seed week is **Mon 14 Sep 2026**. Daily hours over 8 and week totals over 40 render in racing red (`#e10600`). Click a cell, then save a missed in/out pair or correct a time.
+
+**Manual check (no live GPS needed for the lock + grid):**
+
+1. Sign in (stub) → header **Time**.
+2. Leave PIN blank, or deny location / keep real GPS (not in Cedar Falls): **Punch in** stays disabled.
+3. Enter the Maple Point demo PIN shown on the card. Chrome DevTools → More tools → Sensors → Location override `42.5349`, `-92.4450` → Retry location → Punch in unlocks.
+4. Open **Crew week**: Alex Thursday `10.0` and Riley week `41.5` are red; Jordan Friday is empty on a fresh seed — add a missed punch as foreman.
+
+Paper scan is phase 2 (disabled stub). Not payroll. No Stripe changes.
 
 ## Theme tokens (GlineRacing, adapted)
 
@@ -267,8 +366,8 @@ Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `
     "page_height_pts": 792
   },
   "actions": [
-    { "id": "generate-rfi", "label": "Generate RFI", "href": "/pack/maple-point/rfi/new?sheet=A-101", "enabled": false },
-    { "id": "order-materials", "label": "Order materials", "href": "/pack/maple-point/materials", "enabled": false }
+    { "id": "generate-rfi", "label": "Generate RFI", "href": "/pack/maple-point/rfi/new?sheet=A-101", "enabled": true },
+    { "id": "order-materials", "label": "Order materials", "href": "/pack/maple-point/materials", "enabled": true }
   ]
 }
 ```
@@ -349,7 +448,10 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 - Real crew **login** (replace stub session cookie with Supabase Auth / Auth.js; keep `procore_connections.user_id` = `auth.uid()`)
 - Use stored per-user Procore tokens for live pulls (Connect Procore only **stores** tokens today; pack refresh still goes through the Procore bot)
 - **Stripe** monthly billing
-- **Tools** and **Time** nav
+- **Tools** nav
+- Paper timesheet **photo scan / OCR** (Time tab has a disabled stub)
+- Realtime Grok speech-to-speech on site (this PR is batch STT + TTS)
+- Payroll export / ADP
 - Sent pack **snapshots** (text/email frozen copies — not in this PR)
 - RLS policies on `public.room_packs` (table is currently wide open to the anon key)
 - HostGator DNS cutover to Vercel for gcfieldlog.com
@@ -357,7 +459,7 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 
 ## Demo data
 
-**Maple Point / fictional only.** Do not use Brown, Rossi, ILSB, EL107, Danoff, Suffolk, or any real client names or production sheet IDs.
+**Maple Point / fictional only.** Do not use Brown, Rossi, ILSB, EL107, Danoff, Suffolk, or any real client names or production sheet IDs. Danoff is live field tests only — never in demo UI or seed copy.
 
 Sample files:
 
@@ -365,3 +467,5 @@ Sample files:
 - `public/packs/maple-point-a101.pdf`
 - `public/packs/maple-point-e101.pdf`
 - `public/packs/maple-point-e102.pdf`
+
+Time demo roster + sample week: `lib/timeDemo.ts` and `supabase/migrations/20260918093000_time_tracking.sql`.
