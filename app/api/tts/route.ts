@@ -25,7 +25,9 @@ type TtsBody = {
 };
 
 /**
- * Batch Grok TTS. Returns MP3. XAI_API_KEY never leaves the server.
+ * Batch Grok TTS. Returns MP3. Reads `process.env.XAI_API_KEY`
+ * (Vercel Production, project gc-field-log, server-only, never
+ * NEXT_PUBLIC_). The key never leaves the server.
  */
 export async function POST(request: Request) {
   const key = readXaiApiKey();

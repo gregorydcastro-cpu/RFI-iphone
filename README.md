@@ -60,7 +60,7 @@ Production host is **gcfieldlog.com**.
 
 1. Import this GitHub repo in [Vercel](https://vercel.com/new) (framework preset: **Next.js**).
 2. Build command: `npm run build`. `postinstall` copies `pdf.worker.min.mjs`.
-3. **Env:** the Maple Point demo needs **no** secrets. Production reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` for live `room_packs`. Procore **user** OAuth (Connect Procore) uses **`PROCORE_CLIENT_ID` / `PROCORE_CLIENT_SECRET`** and **`SUPABASE_SERVICE_ROLE_KEY`** on Vercel (server-only, never `NEXT_PUBLIC_`). **Grok Voice** (RFI/materials dictation + RFI read-aloud) uses **`XAI_API_KEY`** (server-only, never `NEXT_PUBLIC_`). Copy OAuth id/secret from `/home/box/.secrets/procore_client_id` and `procore_client_secret` — do not commit. Do **not** restore `procore_room_pack_webhook_url` / `procore_room_pack_webhook_authorization` for this live path — that routine is deleted.
+3. **Env:** the Maple Point demo needs **no** secrets. Production reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` for live `room_packs`. Procore **user** OAuth (Connect Procore) uses **`PROCORE_CLIENT_ID` / `PROCORE_CLIENT_SECRET`** and **`SUPABASE_SERVICE_ROLE_KEY`** on Vercel (server-only, never `NEXT_PUBLIC_`). **Grok Voice (live mic / TTS) requires `XAI_API_KEY` on Vercel Production** for project **gc-field-log** — server-only, never `NEXT_PUBLIC_`. `/api/dictation` and `/api/tts` read `process.env.XAI_API_KEY`. Copy OAuth id/secret from `/home/box/.secrets/procore_client_id` and `procore_client_secret` — do not commit. Do **not** restore `procore_room_pack_webhook_url` / `procore_room_pack_webhook_authorization` for this live path — that routine is deleted.
 4. **DNS (ops, not this repo):** at HostGator, point `gcfieldlog.com` / `www` to Vercel (A / CNAME per Vercel’s domain docs). Do not upload files to HostGator for this app.
 
 ### Procore OAuth (Connect Procore)
@@ -85,9 +85,15 @@ That is the default `redirect_uri`. Preview hosts will not match unless `PROCORE
 | `SUPABASE_URL` | Supabase project URL (same project as `room_packs`) |
 | `SUPABASE_SERVICE_ROLE_KEY` | **Required to write tokens.** Anon key must not read or write `procore_connections`. |
 | `SUPABASE_ANON_KEY` | Live `room_packs` reads (not token storage) |
-| `XAI_API_KEY` | **Grok Voice.** Server-only. Batch STT (`POST https://api.x.ai/v1/stt`) and TTS (`POST https://api.x.ai/v1/tts`). Never `NEXT_PUBLIC_`. Alias `xai_api_key` also read. |
+| `XAI_API_KEY` | **Required for live mic / TTS on Production.** Vercel project **gc-field-log**, Production env, server-only. Routes read `process.env.XAI_API_KEY`. Batch STT (`POST https://api.x.ai/v1/stt`) and TTS (`POST https://api.x.ai/v1/tts`). Never `NEXT_PUBLIC_`. |
 
 This app does **not** use the Vercel AI SDK / AI Gateway for voice. The key is forwarded only from Next.js API routes. Do not put the key in the client bundle.
+
+**Production (gcfieldlog.com / Vercel project `gc-field-log`):** add `XAI_API_KEY` as a **server-only** Production env var. Without it, Dictate / Speak still render but `/api/voice/status` is `configured: false` and STT/TTS return 503. Redeploy after setting the key so the runtime sees it.
+
+```ts
+process.env.XAI_API_KEY
+```
 
 #### Grok Voice (dictation + read-aloud)
 
@@ -124,10 +130,10 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:3000/api/dicta
 # 503
 ```
 
-**When `XAI_API_KEY` is set** (server / Vercel env):
+**When `XAI_API_KEY` is set** (Vercel Production for project **gc-field-log**, or local `.env.local` — never commit):
 
 ```bash
-curl -s http://localhost:3000/api/voice/status
+curl -s https://gcfieldlog.com/api/voice/status
 # configured: true
 
 # Optional direct xAI checks (key stays in your shell, not the browser):
@@ -266,9 +272,9 @@ Local `npm run dev` does not need any of these variables.
 | `/api/room-pack/status` | Alias of live read (no Drive poll, no webhook). |
 | `/api/time` | GET Maple Point site, workers, week punches (memory demo or service-role Supabase) |
 | `/api/time/punches` | POST worker punch (GPS + geofence) or `{ foreman: true }` missed-punch override |
-| `/api/voice/status` | GET. `{ configured }` for Grok Voice — never returns the key |
-| `/api/dictation` | POST multipart `file`. Server-side Grok STT (`XAI_API_KEY`) |
-| `/api/tts` | POST `{ text }`. Server-side Grok TTS MP3 (`XAI_API_KEY`) |
+| `/api/voice/status` | GET. `{ configured }` for Grok Voice — never returns the key. Production needs `process.env.XAI_API_KEY`. |
+| `/api/dictation` | POST multipart `file`. Reads `process.env.XAI_API_KEY`, forwards to xAI STT |
+| `/api/tts` | POST `{ text }`. Reads `process.env.XAI_API_KEY`, returns Grok TTS MP3 |
 | `/pack/[requestId]` | Live pack viewer. Re-reads on open. Unknown IDs fall back to local Maple Point demo |
 | `/pack/[requestId]/rfi/new?sheet=` | Generate RFI — draft to foreman (not Procore) |
 | `/pack/[requestId]/materials` | Order materials — draft to foreman (not Procore) |

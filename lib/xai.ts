@@ -1,4 +1,4 @@
-import { readEnvAlias } from "@/lib/env";
+import { readEnv } from "@/lib/env";
 
 /** Official xAI HTTP endpoints. Key stays on the server. */
 export const XAI_STT_URL = "https://api.x.ai/v1/stt";
@@ -11,11 +11,17 @@ export const XAI_TTS_LANGUAGE = "en";
 const VOICE_ID_RE = /^[a-z0-9-]{1,64}$/i;
 
 /**
- * Server-only xAI key. Prefer `XAI_API_KEY`. Never `NEXT_PUBLIC_`.
- * This app talks to api.x.ai directly (no AI SDK / AI Gateway in-repo).
+ * Server-only xAI key for Grok STT/TTS. Exact Vercel Production key
+ * on project **gc-field-log**:
+ *
+ *   process.env.XAI_API_KEY
+ *
+ * Never `NEXT_PUBLIC_`. Bracket access via `readEnv` so Next.js does not
+ * inline the secret at build time. This app talks to api.x.ai from
+ * `/api/dictation` and `/api/tts` only.
  */
 export function readXaiApiKey(): string | undefined {
-  return readEnvAlias("XAI_API_KEY", "xai_api_key");
+  return readEnv("XAI_API_KEY");
 }
 
 export function isXaiConfigured(): boolean {

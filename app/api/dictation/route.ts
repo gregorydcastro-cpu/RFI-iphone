@@ -34,8 +34,10 @@ function extraKeyterms(form: FormData): string[] {
 }
 
 /**
- * Batch Grok STT. Browser posts MediaRecorder audio; this route holds XAI_API_KEY
- * and forwards multipart to https://api.x.ai/v1/stt. Option fields first, file last.
+ * Batch Grok STT. Browser posts MediaRecorder audio; this route reads
+ * `process.env.XAI_API_KEY` (Vercel Production, project gc-field-log,
+ * server-only, never NEXT_PUBLIC_) and forwards multipart to
+ * https://api.x.ai/v1/stt. Option fields first, file last.
  */
 export async function POST(request: Request) {
   const key = readXaiApiKey();

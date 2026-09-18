@@ -6,8 +6,9 @@ export const dynamic = "force-dynamic";
 const NO_STORE = { "Cache-Control": "no-store" };
 
 /**
- * Whether server-side Grok Voice (STT/TTS) is configured.
- * Never returns the key.
+ * Whether `process.env.XAI_API_KEY` is set for Grok STT/TTS.
+ * Never returns the key. Production (Vercel project gc-field-log)
+ * needs this env for live mic / read-aloud.
  */
 export async function GET() {
   return NextResponse.json(
