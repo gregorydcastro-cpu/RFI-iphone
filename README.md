@@ -53,6 +53,8 @@ npm run build
 npm start
 ```
 
+Production go-live smoke (pricing, Stripe checkout, sheet-pdf, Time): `bash scripts/smoke-go-live.sh` (optional `BASE_URL`, default `https://www.gcfieldlog.com`).
+
 `npm install` copies the pdf.js worker into `public/pdf.worker.min.mjs`.
 
 ## Deploy (Vercel + HostGator DNS)
@@ -326,6 +328,8 @@ Production verification pack: open **`/pack/sample-arch-bounds-733`** when `SUPA
 Local `npm run dev` without Supabase env cannot load that request id — it is not a Maple Point JSON file.
 
 ### Live sheet PDFs (Google Drive proxy)
+
+Go-live operator checklist: **[DRIVE_GO_LIVE.md](DRIVE_GO_LIVE.md)**.
 
 The Procore bot stores drawing files in **Google Drive**. Inspected live `sample-arch-bounds-733` `sheets[]` **as stored in `room_packs`**:
 
