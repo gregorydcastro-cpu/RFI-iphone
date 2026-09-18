@@ -1,4 +1,8 @@
-import { readFieldRoleFromRequest } from "@/lib/auth";
+import { readCookieValue, readFieldRoleFromRequest } from "@/lib/auth";
+import { PROCORE_BOT_ID, requestProcoreBotRefresh } from "@/lib/procoreBot";
+import { MAPLE_POINT_PROJECT_NAME, MAPLE_POINT_REQUEST_ID } from "@/lib/shareCatalog";
+import { refreshAllPinnedSheets } from "@/lib/shareStore";
+import { parseStubSession, STUB_SESSION_COOKIE } from "@/lib/stubSession";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -10,12 +14,16 @@ function json(data: unknown, status = 200) {
 }
 
 /**
- * Puller-only stub for Mike's manual "refresh all pinned sheets".
+ * Puller-only manual "Refresh all" for Mike's pinned sheets.
  *
- * Does not walk `pinned_sheets`, does not read `sheet_revision_cache`,
- * and does not pull Procore. Weekly rev-only re-pull is a later job.
+ * Walks `pinned_sheets` for the stub session owner, compares each sheet's
+ * known pack rev to `sheet_revision_cache`, and updates last_seen_rev when
+ * the rev bumped. Does not call Procore REST. Does not download PDFs.
  *
- * Does not touch pack viewer UI.
+ * TODO(weekly-cron): a scheduled worker should reuse this rev-only compare,
+ * re-download a sheet PDF only when `rev` bumped, then update
+ * sheet_revision_cache + pinned_sheets.last_pulled_at. Unchanged revs stay
+ * metadata-only. Do not notify Mike by text/email yet.
  */
 export async function POST(request: Request) {
   const role = readFieldRoleFromRequest(request);
@@ -30,12 +38,37 @@ export async function POST(request: Request) {
     );
   }
 
+  const session = parseStubSession(
+    readCookieValue(request.headers.get("cookie"), STUB_SESSION_COOKIE),
+  );
+  if (!session) {
+    return json({ ok: false, error: "Sign in first (stub session)." }, 401);
+  }
+
+  await requestProcoreBotRefresh({
+    projectName: MAPLE_POINT_PROJECT_NAME,
+    room: "101",
+    requestId: MAPLE_POINT_REQUEST_ID,
+  });
+
+  const { plan, storage } = await refreshAllPinnedSheets(session.userId);
+
   return json({
     ok: true,
     accepted: true,
-    stub: true,
-    refresh: "queued",
-    implemented: false,
-    note: "Force refresh accepted. Weekly rev-only re-pull will read sheet_revision_cache; not implemented in this PR.",
+    stub: false,
+    implemented: true,
+    refresh: plan.scanned === 0 ? "empty" : "complete",
+    weeklyCron: false,
+    notify: false,
+    storage,
+    scanned: plan.scanned,
+    bumped: plan.bumped,
+    unchanged: plan.unchanged,
+    missing: plan.missing,
+    items: plan.items,
+    botId: PROCORE_BOT_ID,
+    note:
+      "Force refresh compared pinned sheets to known pack revs and updated sheet_revision_cache. TODO: weekly cron for rev-only re-pull (download PDF only when rev bumped). Do not notify Mike by text/email yet.",
   });
 }

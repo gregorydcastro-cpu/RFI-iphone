@@ -22,6 +22,9 @@ export function AppHeader({
     role ?? (signedIn ? (procoreLinked ? "puller" : "viewer") : null);
   const connected = procoreConnected || procoreLinked;
   const timeActive = pathname === "/time" || pathname.startsWith("/time/");
+  const shareActive = pathname === "/share" || pathname.startsWith("/share/");
+  const accountActive =
+    pathname === "/account" || pathname.startsWith("/account/");
 
   return (
     <header className="border-b border-line bg-primary">
@@ -56,7 +59,21 @@ export function AppHeader({
                 Time
               </Link>
               <Link
-                className="text-secondary hover:text-cta"
+                className={
+                  shareActive
+                    ? "text-cta"
+                    : "text-secondary hover:text-cta"
+                }
+                href="/share"
+              >
+                Share
+              </Link>
+              <Link
+                className={
+                  accountActive
+                    ? "text-cta"
+                    : "text-secondary hover:text-cta"
+                }
                 href="/account"
               >
                 Account
