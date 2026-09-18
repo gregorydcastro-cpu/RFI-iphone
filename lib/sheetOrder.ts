@@ -77,6 +77,7 @@ export function sheetKindLabel(sheet: Sheet, isPrimary = false): string {
   if (/\blighting\b/i.test(text)) return "Lighting";
   if (/\bpower\b/i.test(text)) return "Power";
   if (/\belectrical\b/i.test(text)) return "Electrical";
+  if (/\brcp\b|\breflected\b/i.test(text)) return "RCP";
   if (MEP_PLAN.test(text)) return "Detail sheet";
   return sheet.title?.trim() || sheet.name?.trim() || "Sheet";
 }

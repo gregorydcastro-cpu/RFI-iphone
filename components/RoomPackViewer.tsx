@@ -314,7 +314,10 @@ function PackContextBar({
   const pulled = formatPulledAt(pack.pulled_at);
   const primary =
     pack.revision_stamp &&
-    `${pack.revision_stamp.drawing} Rev ${pack.revision_stamp.rev}`;
+    sheetRevisionLabel({
+      id: pack.revision_stamp.drawing,
+      rev: pack.revision_stamp.rev,
+    });
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-primary px-4 py-2 text-secondary">
