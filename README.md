@@ -1,6 +1,6 @@
 # GC Field Log — crew dashboard (web)
 
-Browser **dashboard for field crews** on **[gcfieldlog.com](https://gcfieldlog.com)**. Foremen and supers sign in (stub), pick a job, request a room pack, then work the sheet: zoomable floor plans, room highlight, linked RFIs, and Generate RFI / Order materials.
+Browser **dashboard for field crews** on **[gcfieldlog.com](https://gcfieldlog.com)**. Foremen and supers sign in (stub), pick a job, request a room pack, then work the sheet: zoomable floor plans, room highlight, linked RFIs, Generate RFI / Order materials, and a **Time** tab (geofenced punch-in + crew week).
 
 This is the product surface. **Native iOS is paused. No Apple.** Real login and **Stripe monthly billing** are later — the login page is a **stub session** (httpOnly cookie with user id + email + role). Wordmark is clean text: **GC Field Log** (no extra logo).
 
@@ -16,9 +16,9 @@ No real crew auth, Stripe, HostGator uploads, or live Procore REST API in this M
 
 Must match this path — nothing else in the primary nav:
 
-**Login (stub) → Jobs → Room pack request → Pack viewer (plan + sheets + RFIs) → Generate RFI / Materials stubs.**
+**Login (stub) → Jobs → Room pack request → Pack viewer (plan + sheets + RFIs) → Generate RFI / Order materials (drafts to foreman). Time is wired (`/time`).**
 
-**Tools** and **Time** appear in the header as later (not wired). No Apple.
+**Tools** stays later (not wired). No Apple.
 
 ## What the dashboard shows (MVP)
 
@@ -29,7 +29,8 @@ Must match this path — nothing else in the primary nav:
 | Account (`/account`) | Stub session + Procore connected / disconnected state. |
 | Room pack request | Room number (e.g. `733`). **Connected puller:** `POST /api/room-pack` asks the Procore bot to refresh, then opens `/pack/[requestId]`. **Viewer / unconnected puller:** **Open pack** only — no pull. Local demo (no `SUPABASE_URL`) loads Maple Point JSON. |
 | Pack viewer | Field stack on `/pack/[requestId]`: **architectural floor plan first** (A-*, architectural, floor plan heuristics; else current primary), oversized crimson SVG box around the room walls, then remaining sheets (power, lighting, …) and linked RFIs. Drawing number + revision letter stamps stay on the top bar and each sheet (`A-101 Rev A`). Website open always re-reads `room_packs` (no-store). Connected pullers also trigger a bot refresh; viewers cannot. |
-| Generate RFI / Materials | Stub pages from the pack action buttons |
+| Generate RFI / Materials | Live pack actions. Drafts go to foreman Pat Nguyen — not a Procore submit. |
+| Time (`/time`) | Maple Point **worker punch** (GPS geofence) and **foreman crew week**. Field log only — not payroll/ADP. |
 | Takeoff counts | Optional placeholder panel |
 
 ## Local run
@@ -39,7 +40,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Sign in (stub) → pick **Maple Point Medical Office** → request room `733`.
+Open [http://localhost:3000](http://localhost:3000). Sign in (stub) → **Time** in the header, or pick **Maple Point Medical Office** → request room `733`.
 
 ```bash
 npm run lint
@@ -188,6 +189,7 @@ Local `npm run dev` does not need any of these variables.
 | `/jobs/[projectSlug]` | **Pull / open room pack** (connected puller POSTs `/api/room-pack`; viewer opens `/pack/[requestId]` only) |
 | `/jobs/[projectSlug]/rooms/[room]` | Alias → `/pack/{slug}-{room}` (no pull; use the request form) |
 | `/account` | Stub account + Procore connected state |
+| `/time` | **Time tab** — worker punch + foreman crew week (Maple Point geofence) |
 | `/api/session` | POST stub login |
 | `/api/session/logout` | Clear stub session |
 | `/api/procore/connect` | Redirect to Procore OAuth authorize |
@@ -198,9 +200,39 @@ Local `npm run dev` does not need any of these variables.
 | `/api/room-pack/refresh` | Puller POST. Bot refresh, optional `{ pack }` upsert, then latest `room_packs` row. |
 | `/api/room-pack/live` | Anyone GET/POST. Latest `room_packs` row, `no-store`. Does not pull. |
 | `/api/room-pack/status` | Alias of live read (no Drive poll, no webhook). |
+| `/api/time` | GET Maple Point site, workers, week punches (memory demo or service-role Supabase) |
+| `/api/time/punches` | POST worker punch (GPS + geofence) or `{ foreman: true }` missed-punch override |
 | `/pack/[requestId]` | Live pack viewer. Re-reads on open. Unknown IDs fall back to local Maple Point demo |
-| `/pack/[requestId]/rfi/new?sheet=` | Stub Generate RFI form |
-| `/pack/[requestId]/materials` | Stub Order materials |
+| `/pack/[requestId]/rfi/new?sheet=` | Generate RFI — draft to foreman (not Procore) |
+| `/pack/[requestId]/materials` | Order materials — draft to foreman (not Procore) |
+
+## Time tab (Maple Point geofence)
+
+Field log only. No new env keys for the local demo. If `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` are set **and** `supabase/migrations/20260918093000_time_tracking.sql` is applied, punches persist in Supabase; otherwise the Node process keeps an in-memory copy of the seeded week.
+
+**Demo site fence (Maple Point Medical Office, Cedar Falls):**
+
+| | |
+| --- | --- |
+| Latitude | `42.5349` |
+| Longitude | `-92.4450` |
+| Radius | `300` m |
+| Timezone | `America/Chicago` |
+
+These coords are a public downtown Cedar Falls point so GPS can be tested. The job is fictional. Live jobs must **not** hardcode a name → lat/lng map; they read `job_sites.lat` / `lng` / `radius_m` (config row keyed by slug). Maple Point is the only fictional UI demo. Danoff is live field tests only — never put Danoff, Brown, or Rossi in demo UI or seed copy.
+
+**Worker punch:** phone is punch in/out. Shared iPad: pick a worker, enter PIN to switch, then punch. Punch-in stays **locked** without GPS permission, without the matching PIN, and when the device is outside the site radius. Punch-out may run off-site. The API rejects off-site punch-in (`403`, `code: "off_site"`) unless `{ "foreman": true }`.
+
+**Foreman crew week:** Mon–Sun grid for the Maple Point roster (Pat Nguyen foreman, Alex Rivera, Jordan Hale, Sam Ortiz, Casey Brooks, Riley Chen). Seed week is **Mon 14 Sep 2026**. Daily hours over 8 and week totals over 40 render in racing red (`#e10600`). Click a cell, then save a missed in/out pair or correct a time.
+
+**Manual check (no live GPS needed for the lock + grid):**
+
+1. Sign in (stub) → header **Time**.
+2. Leave PIN blank, or deny location / keep real GPS (not in Cedar Falls): **Punch in** stays disabled.
+3. Enter the Maple Point demo PIN shown on the card. Chrome DevTools → More tools → Sensors → Location override `42.5349`, `-92.4450` → Retry location → Punch in unlocks.
+4. Open **Crew week**: Alex Thursday `10.0` and Riley week `41.5` are red; Jordan Friday is empty on a fresh seed — add a missed punch as foreman.
+
+Paper scan is phase 2 (disabled stub). Not payroll. No Stripe changes.
 
 ## Theme tokens (GlineRacing, adapted)
 
@@ -266,8 +298,8 @@ Coordinate-ready: drop a JSON file at `public/packs/<requestId>.json` and open `
     "page_height_pts": 792
   },
   "actions": [
-    { "id": "generate-rfi", "label": "Generate RFI", "href": "/pack/maple-point/rfi/new?sheet=A-101", "enabled": false },
-    { "id": "order-materials", "label": "Order materials", "href": "/pack/maple-point/materials", "enabled": false }
+    { "id": "generate-rfi", "label": "Generate RFI", "href": "/pack/maple-point/rfi/new?sheet=A-101", "enabled": true },
+    { "id": "order-materials", "label": "Order materials", "href": "/pack/maple-point/materials", "enabled": true }
   ]
 }
 ```
@@ -326,7 +358,9 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 - Real crew **login** (replace stub session cookie with Supabase Auth / Auth.js; keep `procore_connections.user_id` = `auth.uid()`)
 - Use stored per-user Procore tokens for live pulls (Connect Procore only **stores** tokens today; pack refresh still goes through the Procore bot)
 - **Stripe** monthly billing
-- **Tools** and **Time** nav
+- **Tools** nav
+- Paper timesheet **photo scan / OCR** (Time tab has a disabled stub)
+- Payroll export / ADP
 - Sent pack **snapshots** (text/email frozen copies — not in this PR)
 - RLS policies on `public.room_packs` (table is currently wide open to the anon key)
 - HostGator DNS cutover to Vercel for gcfieldlog.com
@@ -334,7 +368,7 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 
 ## Demo data
 
-**Maple Point / fictional only.** Do not use Brown, Rossi, ILSB, EL107, Danoff, Suffolk, or any real client names or production sheet IDs.
+**Maple Point / fictional only.** Do not use Brown, Rossi, ILSB, EL107, Danoff, Suffolk, or any real client names or production sheet IDs. Danoff is live field tests only — never in demo UI or seed copy.
 
 Sample files:
 
@@ -342,3 +376,5 @@ Sample files:
 - `public/packs/maple-point-a101.pdf`
 - `public/packs/maple-point-e101.pdf`
 - `public/packs/maple-point-e102.pdf`
+
+Time demo roster + sample week: `lib/timeDemo.ts` and `supabase/migrations/20260918093000_time_tracking.sql`.
