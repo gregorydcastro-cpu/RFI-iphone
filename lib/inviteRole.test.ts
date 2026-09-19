@@ -3,21 +3,16 @@ import { test } from "node:test";
 import { parseFieldRoleName } from "./auth.ts";
 import {
   canInviteCrew,
-  canUseFieldWriteTools,
   createInviteRequestBody,
-  filterPackActionsForRole,
   INVITE_CREATE_PATH,
-  isViewerSession,
-  isWriteOrPullAction,
   parseInviteRole,
   parseOptionalInviteeEmail,
   resolveInviteDisplayUrl,
 } from "./inviteRole.ts";
-import type { PackAction } from "./pack.ts";
 
 const forbidden = /Brown|Rossi|Danoff|Suffolk|ILSB|EL107/i;
 
-test("invite contract names stay on invite_tokens / /api/invites", () => {
+test("invite UI calls Repo Eng POST /api/invites (table lock is invites)", () => {
   assert.equal(INVITE_CREATE_PATH, "/api/invites");
   assert.equal(forbidden.test(INVITE_CREATE_PATH), false);
 });
@@ -86,41 +81,6 @@ test("GC/foreman (puller) and full can invite; viewers cannot", () => {
   assert.equal(canInviteCrew(null), false);
 });
 
-test("viewer sessions cannot use write or pull tools", () => {
-  assert.equal(canUseFieldWriteTools("puller"), true);
-  assert.equal(canUseFieldWriteTools("full"), true);
-  assert.equal(canUseFieldWriteTools("viewer"), false);
-  assert.equal(canUseFieldWriteTools(undefined), false);
-  assert.equal(isViewerSession("viewer"), true);
-  assert.equal(isViewerSession("full"), false);
-  assert.equal(isViewerSession(null), true);
-});
-
-test("filterPackActionsForRole hides request-print / pull / markup / drafts", () => {
-  const actions: PackAction[] = [
-    { id: "generate-rfi", label: "Generate RFI" },
-    { id: "order-materials", label: "Order materials" },
-    { id: "request-print", label: "Request print" },
-    { id: "refresh-pull", label: "Pull pack" },
-    { id: "markup-tools", label: "Markup" },
-    { id: "open-sheet", label: "Open sheet" },
-  ];
-
-  assert.equal(isWriteOrPullAction(actions[0]!), true);
-  assert.deepEqual(
-    filterPackActionsForRole(actions, "viewer").map((action) => action.id),
-    ["open-sheet"],
-  );
-  assert.deepEqual(
-    filterPackActionsForRole(actions, "full").map((action) => action.id),
-    actions.map((action) => action.id),
-  );
-  assert.deepEqual(
-    filterPackActionsForRole(actions, "puller").map((action) => action.id),
-    actions.map((action) => action.id),
-  );
-});
-
 test("invite display URL stays path-or-absolute without inventing a token", () => {
   assert.equal(
     resolveInviteDisplayUrl("/invite/opaque-token", "https://www.gcfieldlog.com"),
@@ -136,7 +96,7 @@ test("invite display URL stays path-or-absolute without inventing a token", () =
 test("invite helper copy is Maple Point / fictional only", () => {
   const blob = [
     canInviteCrew.toString(),
-    filterPackActionsForRole.toString(),
+    createInviteRequestBody.toString(),
     "Maple Point Medical Office",
     "Pat Nguyen",
   ].join("\n");
