@@ -3,7 +3,7 @@
  *
  * Table: public.invite_tokens (NOT trial_link_tokens, NOT `invites`).
  * Role baked into the token: `viewer` | `full`.
- * Redeem writes that same role onto gcfieldlog_stub_user (`full` stays `full`).
+ * Redeem writes that same role onto profiles + app_metadata (`full` stays `full`).
  * Tokens are single-use: redeem sets used_at.
  */
 
@@ -36,7 +36,7 @@ export function parseInviteRole(value: unknown): InviteRole | null {
   return null;
 }
 
-/** Session role stored on the stub cookie. Invite `full` stays `full`. */
+/** Session role stored on the account. Invite `full` stays `full`. */
 export function fieldRoleFromInviteRole(role: InviteRole): FieldRoleName {
   return role;
 }

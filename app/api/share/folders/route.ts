@@ -1,11 +1,10 @@
-import { readCookieValue } from "@/lib/auth";
 import { SHARE_CATALOG } from "@/lib/shareCatalog";
 import {
   createShareFolder,
   listSharePortal,
   removeShareFolder,
 } from "@/lib/shareStore";
-import { parseStubSession, STUB_SESSION_COOKIE } from "@/lib/stubSession";
+import { readAppSession } from "@/lib/session.server";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -16,10 +15,8 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: NO_STORE });
 }
 
-function sessionFromRequest(request: Request) {
-  return parseStubSession(
-    readCookieValue(request.headers.get("cookie"), STUB_SESSION_COOKIE),
-  );
+async function sessionFromRequest() {
+  return readAppSession();
 }
 
 function asTrimmed(value: unknown): string | null {
@@ -29,13 +26,13 @@ function asTrimmed(value: unknown): string | null {
 }
 
 /**
- * List share folders + pinned sheets for the stub session owner.
+ * List share folders + pinned sheets for the signed-in owner.
  * Service-role writes when configured; otherwise process memory.
  */
-export async function GET(request: Request) {
-  const session = sessionFromRequest(request);
+export async function GET() {
+  const session = await sessionFromRequest();
   if (!session) {
-    return json({ ok: false, error: "Sign in first (stub session)." }, 401);
+    return json({ ok: false, error: "Sign in first." }, 401);
   }
 
   const snapshot = await listSharePortal(session.userId);
@@ -48,12 +45,12 @@ export async function GET(request: Request) {
 }
 
 /**
- * Create a named share folder owned by the stub session user.
+ * Create a named share folder owned by the signed-in user.
  */
 export async function POST(request: Request) {
-  const session = sessionFromRequest(request);
+  const session = await sessionFromRequest();
   if (!session) {
-    return json({ ok: false, error: "Sign in first (stub session)." }, 401);
+    return json({ ok: false, error: "Sign in first." }, 401);
   }
 
   let body: { name?: unknown };
@@ -82,9 +79,9 @@ export async function POST(request: Request) {
  * Delete a folder (pins cascade). Query: `?id=`
  */
 export async function DELETE(request: Request) {
-  const session = sessionFromRequest(request);
+  const session = await sessionFromRequest();
   if (!session) {
-    return json({ ok: false, error: "Sign in first (stub session)." }, 401);
+    return json({ ok: false, error: "Sign in first." }, 401);
   }
 
   const id = asTrimmed(new URL(request.url).searchParams.get("id"));

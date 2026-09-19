@@ -55,7 +55,7 @@ export function parseOptionalInviteeEmail(
   return email;
 }
 
-/** GC / foreman (stub puller) and invited full crew see the Invite button. */
+/** GC / foreman (puller) and invited full crew see the Invite button. */
 export function canInviteCrew(role: string | null | undefined): boolean {
   return role === "puller" || role === "full";
 }

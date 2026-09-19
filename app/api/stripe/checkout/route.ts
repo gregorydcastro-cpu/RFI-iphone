@@ -9,7 +9,7 @@ import {
   getStripe,
   getStripeCheckoutConfig,
 } from "@/lib/stripe";
-import { readStubSession } from "@/lib/stubSession";
+import { readAppSession } from "@/lib/session.server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const session = await readStubSession();
+  const session = await readAppSession();
   const email = asEmail(json.email) ?? session?.email ?? null;
 
   let existingCustomerId: string | null = null;

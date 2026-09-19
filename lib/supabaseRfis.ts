@@ -1,8 +1,8 @@
 /**
  * Server insert for `public.rfis`.
  *
- * Writes use SUPABASE_SERVICE_ROLE_KEY because stub session ids
- * (`stub:` + sha256 email) are not auth.uid(). Anon has no grants.
+ * Writes use SUPABASE_SERVICE_ROLE_KEY. user_id is auth.uid()::text.
+ * Anon has no grants.
  * Optional `markup_id` references `public.markup_overlays`.
  * Never call Procore from here.
  */

@@ -1,9 +1,8 @@
-import { readCookieValue, readFieldRoleFromRequest } from "@/lib/auth";
 import { notifyMikeOnBumps } from "@/lib/notifyMike";
 import { PROCORE_BOT_ID, requestProcoreBotRefresh } from "@/lib/procoreBot";
 import { MAPLE_POINT_PROJECT_NAME, MAPLE_POINT_REQUEST_ID } from "@/lib/shareCatalog";
 import { refreshAllPinnedSheets } from "@/lib/shareStore";
-import { parseStubSession, STUB_SESSION_COOKIE } from "@/lib/stubSession";
+import { fieldRoleForRequest } from "@/lib/session.server";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +16,7 @@ function json(data: unknown, status = 200) {
 /**
  * Puller-only manual "Refresh all" for Mike's pinned sheets.
  *
- * Walks `pinned_sheets` for the stub session owner, compares each sheet's
+ * Walks `pinned_sheets` for the signed-in owner, compares each sheet's
  * known pack rev to `sheet_revision_cache`, and updates last_seen_rev when
  * the rev bumped. Does not call Procore REST. Does not download PDFs.
  * Weekly automation is GET/POST `/api/share/weekly-refresh` (CRON_SECRET).
@@ -25,23 +24,20 @@ function json(data: unknown, status = 200) {
  * notify_email skips (refresh still succeeds).
  */
 export async function POST(request: Request) {
-  const session = parseStubSession(
-    readCookieValue(request.headers.get("cookie"), STUB_SESSION_COOKIE),
-  );
-  const linked = readFieldRoleFromRequest(request);
-  const puller = linked.procoreLinked || session?.role === "puller";
+  const { session, role } = await fieldRoleForRequest(request);
+  if (!session) {
+    return json({ ok: false, error: "Sign in first." }, 401);
+  }
+  const puller = role.procoreLinked || session.role === "puller";
   if (!puller) {
     return json(
       {
         ok: false,
         error:
-          "Puller role required. Sign in as Puller, or Connect Procore (procoreLinked cookie after OAuth, or x-procore-linked header).",
+          "Puller role required. Sign in as a puller, or Connect Procore (procoreLinked cookie after OAuth, or x-procore-linked header).",
       },
       403,
     );
-  }
-  if (!session) {
-    return json({ ok: false, error: "Sign in first (stub session)." }, 401);
   }
 
   const bot = await requestProcoreBotRefresh({

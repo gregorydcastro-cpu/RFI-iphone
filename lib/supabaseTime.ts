@@ -148,6 +148,7 @@ function toRow(punch: TimePunch): Record<string, unknown> {
     geofence_ok: punch.geofence_ok,
     edited_by_foreman: punch.edited_by_foreman,
     edit_note: punch.edit_note,
+    user_id: punch.user_id ?? null,
     created_at: punch.created_at,
     updated_at: punch.updated_at,
   };
@@ -218,6 +219,7 @@ function asPunch(value: unknown): TimePunch | null {
     geofence_ok: row.geofence_ok === true,
     edited_by_foreman: row.edited_by_foreman === true,
     edit_note: typeof row.edit_note === "string" ? row.edit_note : null,
+    user_id: typeof row.user_id === "string" ? row.user_id : null,
     created_at:
       typeof row.created_at === "string" ? row.created_at : new Date().toISOString(),
     updated_at:

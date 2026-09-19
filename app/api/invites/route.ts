@@ -6,7 +6,7 @@ import {
   parseInviteRole,
 } from "@/lib/invites";
 import { mintInvite } from "@/lib/inviteStore";
-import { readStubSession } from "@/lib/stubSession";
+import { readAppSession } from "@/lib/session.server";
 
 export const dynamic = "force-dynamic";
 
@@ -33,14 +33,14 @@ type MintBody = {
 };
 
 /**
- * Mint a single-use invite. Puller / GC / foreman stub session required.
+ * Mint a single-use invite. Puller / GC / foreman session required.
  * Role is baked into the token (`viewer` | `full`). Field Log owns the
  * polished picker; this is the complete mint API.
  */
 export async function POST(request: Request) {
-  const session = await readStubSession();
+  const session = await readAppSession();
   if (!session) {
-    return json({ ok: false, error: "Sign in first (stub session)." }, 401);
+    return json({ ok: false, error: "Sign in first." }, 401);
   }
   if (!canMintInvites(session.role)) {
     return json(

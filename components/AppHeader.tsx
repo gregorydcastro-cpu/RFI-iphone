@@ -113,12 +113,12 @@ export function AppHeader({
                       : "View only"}
                 </span>
               ) : null}
-              <Link
+              <a
                 className="text-accent-2 hover:text-secondary"
                 href="/api/session/logout"
               >
                 Sign out
-              </Link>
+              </a>
             </>
           ) : (
             <>

@@ -5,12 +5,12 @@ import {
   fetchProcoreConnectionSecrets,
 } from "@/lib/procoreConnections";
 import { getProcoreOAuthConfig, revokeAccessToken } from "@/lib/procoreOAuth";
-import { readStubSession } from "@/lib/stubSession";
+import { readAppSession } from "@/lib/session.server";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const session = await readStubSession();
+  const session = await readAppSession();
   if (!session) {
     return NextResponse.redirect(new URL("/", request.url));
   }

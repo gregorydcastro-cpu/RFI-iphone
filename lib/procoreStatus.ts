@@ -5,7 +5,7 @@ import {
   type ProcoreConnectionStatus,
 } from "./procoreConnections";
 import { isProcoreOAuthConfigured } from "./procoreOAuth";
-import type { StubSession } from "./stubSession";
+import type { AppSession } from "./session.server";
 
 export type ProcoreConnectionView = {
   signedIn: boolean;
@@ -21,7 +21,7 @@ export type ProcoreConnectionView = {
 };
 
 export async function getProcoreConnectionView(
-  session: StubSession | null,
+  session: AppSession | null,
 ): Promise<ProcoreConnectionView> {
   const oauthConfigured = isProcoreOAuthConfigured();
   const storageConfigured = isProcoreTokenStorageConfigured();

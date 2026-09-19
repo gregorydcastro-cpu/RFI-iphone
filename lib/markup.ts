@@ -5,7 +5,7 @@
  * (request_id, sheet_id, vectors jsonb, user_id, updated_at).
  * Coordinates are normalized 0–1, origin top-left (same space as pack layout).
  *
- * Persist via service-role `/api/markups` (stub session). localStorage is
+ * Persist via service-role `/api/markups` (auth.uid()). localStorage is
  * only the offline/demo fallback when SUPABASE_SERVICE_ROLE_KEY is missing.
  */
 

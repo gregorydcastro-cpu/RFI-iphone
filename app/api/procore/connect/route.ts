@@ -6,7 +6,7 @@ import {
   getProcoreOAuthConfig,
   oauthStateCookieOptions,
 } from "@/lib/procoreOAuth";
-import { readStubSession } from "@/lib/stubSession";
+import { readAppSession } from "@/lib/session.server";
 
 export const dynamic = "force-dynamic";
 
@@ -18,12 +18,12 @@ function redirectWithError(request: Request, reason: string): NextResponse {
 }
 
 /**
- * Start Procore OAuth. Pullers (and anyone with a stub session) are sent
- * to login.procore.com / login-sandbox.procore.com to sign in with their
- * own Procore credentials. End users do not use the developer portal.
+ * Start Procore OAuth. Signed-in pullers / full crew are sent to
+ * login.procore.com / login-sandbox.procore.com with their own Procore
+ * credentials. End users do not use the developer portal.
  */
 export async function GET(request: Request) {
-  const session = await readStubSession();
+  const session = await readAppSession();
   if (!session) {
     const login = new URL("/", request.url);
     login.searchParams.set("next", "/api/procore/connect");

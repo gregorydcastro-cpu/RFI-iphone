@@ -1,8 +1,7 @@
-import { readCookieValue, readFieldRoleFromRequest } from "@/lib/auth";
 import { DEMO_FOREMAN } from "@/lib/crew";
 import { canWriteFieldLog } from "@/lib/invites";
 import { isRfiDraftStatus } from "@/lib/rfiSchema";
-import { parseStubSession, STUB_SESSION_COOKIE, stubUserIdFromEmail } from "@/lib/stubSession";
+import { fieldRoleForRequest } from "@/lib/session.server";
 import { insertRfiDraftRow, isRfiTableWriteConfigured } from "@/lib/supabaseRfis";
 import { NextResponse } from "next/server";
 
@@ -49,7 +48,10 @@ function newUuid(): string {
  * `markup_id` is the optional overlay FK when Create RFI came from a markup.
  */
 export async function POST(request: Request) {
-  const role = readFieldRoleFromRequest(request);
+  const { session, role } = await fieldRoleForRequest(request);
+  if (!session) {
+    return json({ ok: false, error: "Sign in first." }, 401);
+  }
   if (!canWriteFieldLog(role.role)) {
     return json(
       {
@@ -73,10 +75,7 @@ export async function POST(request: Request) {
     return json({ ok: false, error: "subject and description are required" }, 400);
   }
 
-  const session = parseStubSession(
-    readCookieValue(request.headers.get("cookie"), STUB_SESSION_COOKIE),
-  );
-  const userId = session?.userId ?? stubUserIdFromEmail("alex.rivera@crew.example");
+  const userId = session.userId;
 
   const status = isRfiDraftStatus(body.status) ? body.status : "draft";
   const id = newUuid();

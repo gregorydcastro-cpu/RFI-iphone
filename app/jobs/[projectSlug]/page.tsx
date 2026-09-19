@@ -3,7 +3,7 @@ import { ProcoreConnectCard } from "@/components/ProcoreConnectCard";
 import { RequestPackForm } from "@/components/RequestPackForm";
 import { getJob } from "@/lib/jobs";
 import { getProcoreConnectionView } from "@/lib/procoreStatus";
-import { readStubSession } from "@/lib/stubSession";
+import { requireAppSession } from "@/lib/session.server";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -18,13 +18,14 @@ export default async function JobPage({ params, searchParams }: Props) {
   const query = await searchParams;
   const job = getJob(projectSlug);
   if (!job) notFound();
-  const view = await getProcoreConnectionView(await readStubSession());
+  const session = await requireAppSession(`/jobs/${projectSlug}`);
+  const view = await getProcoreConnectionView(session);
   const canPull = view.role === "puller" && view.connected;
 
   return (
     <div className="flex min-h-dvh flex-col">
       <AppHeader
-        signedIn
+        signedIn={view.signedIn}
         role={view.role}
         procoreConnected={view.connected}
         procoreLinked={canPull}

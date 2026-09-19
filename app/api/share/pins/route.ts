@@ -1,11 +1,10 @@
-import { readCookieValue } from "@/lib/auth";
 import {
   expandDisciplinePins,
   expandRoomPackPins,
   isPinnedSheetDiscipline,
 } from "@/lib/shareCatalog";
 import { pinSheetsToFolder, unpinSheet } from "@/lib/shareStore";
-import { parseStubSession, STUB_SESSION_COOKIE } from "@/lib/stubSession";
+import { readAppSession } from "@/lib/session.server";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -16,10 +15,8 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: NO_STORE });
 }
 
-function sessionFromRequest(request: Request) {
-  return parseStubSession(
-    readCookieValue(request.headers.get("cookie"), STUB_SESSION_COOKIE),
-  );
+async function sessionFromRequest() {
+  return readAppSession();
 }
 
 function asTrimmed(value: unknown): string | null {
@@ -32,12 +29,12 @@ function asTrimmed(value: unknown): string | null {
  * Pin a full discipline or a Maple Point room pack onto a share folder.
  *
  * Body: `{ folder_id, kind: "discipline" | "room_pack", discipline?, pack_id? }`
- * Service-role insert into `pinned_sheets` under the stub session.
+ * Service-role insert into `pinned_sheets` under auth.uid().
  */
 export async function POST(request: Request) {
-  const session = sessionFromRequest(request);
+  const session = await sessionFromRequest();
   if (!session) {
-    return json({ ok: false, error: "Sign in first (stub session)." }, 401);
+    return json({ ok: false, error: "Sign in first." }, 401);
   }
 
   let body: {
@@ -96,9 +93,9 @@ export async function POST(request: Request) {
  * Unpin a sheet. Query: `?id=`
  */
 export async function DELETE(request: Request) {
-  const session = sessionFromRequest(request);
+  const session = await sessionFromRequest();
   if (!session) {
-    return json({ ok: false, error: "Sign in first (stub session)." }, 401);
+    return json({ ok: false, error: "Sign in first." }, 401);
   }
   const id = asTrimmed(new URL(request.url).searchParams.get("id"));
   if (!id) return json({ ok: false, error: "id is required" }, 400);

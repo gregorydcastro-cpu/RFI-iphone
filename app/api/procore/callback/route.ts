@@ -10,7 +10,7 @@ import {
   getProcoreOAuthConfig,
   oauthStateCookieOptions,
 } from "@/lib/procoreOAuth";
-import { STUB_SESSION_COOKIE, parseStubSession } from "@/lib/stubSession";
+import { readAppSession } from "@/lib/session.server";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +27,7 @@ function redirectAccount(
 
 /**
  * Procore OAuth callback. Exchanges `code` for tokens and stores them
- * per stub user. Tokens are never returned to the browser.
+ * per auth.uid(). Tokens are never returned to the browser.
  */
 export async function GET(request: Request) {
   const secure = cookieSecureFromRequest(request);
@@ -58,7 +58,7 @@ export async function GET(request: Request) {
     });
   }
 
-  const session = parseStubSession(jar.get(STUB_SESSION_COOKIE)?.value);
+  const session = await readAppSession();
   if (!session) {
     const login = new URL("/", request.url);
     login.searchParams.set("next", "/account");

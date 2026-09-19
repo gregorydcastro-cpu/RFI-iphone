@@ -1,7 +1,7 @@
 import { AppHeader } from "@/components/AppHeader";
 import { TimeBoard } from "@/components/TimeBoard";
 import { getProcoreConnectionView } from "@/lib/procoreStatus";
-import { readStubSession } from "@/lib/stubSession";
+import { readAppSession } from "@/lib/session.server";
 import { getTimeSnapshot } from "@/lib/timeStore";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 };
 
 export default async function TimePage() {
-  const session = await readStubSession();
+  const session = await readAppSession();
   const view = await getProcoreConnectionView(session);
   const snapshot = await getTimeSnapshot();
   if (!snapshot) notFound();
@@ -23,7 +23,7 @@ export default async function TimePage() {
   return (
     <div className="flex min-h-dvh flex-col">
       <AppHeader
-        signedIn
+        signedIn={Boolean(session)}
         role={view.role}
         procoreConnected={view.connected}
         procoreLinked={view.role === "puller" && view.connected}

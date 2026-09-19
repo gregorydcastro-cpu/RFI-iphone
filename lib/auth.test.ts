@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readFieldRole, STUB_SESSION_COOKIE } from "./auth.ts";
+import { readFieldRole } from "./auth.ts";
 
 test("readFieldRole keeps invited viewer even if Procore is linked", () => {
   const role = readFieldRole({
@@ -30,7 +30,7 @@ test("readFieldRole keeps invited full / puller session", () => {
   assert.deepEqual(invitedFull, { procoreLinked: true, role: "full" });
 });
 
-test("readFieldRole falls back to Procore cookie when no stub role", () => {
+test("readFieldRole falls back to Procore cookie when no account role", () => {
   assert.deepEqual(readFieldRole({ cookieValue: "1" }), {
     procoreLinked: true,
     role: "puller",
@@ -41,7 +41,7 @@ test("readFieldRole falls back to Procore cookie when no stub role", () => {
   });
 });
 
-test("readFieldRoleFrom cookie header prefers stub session role", () => {
+test("readFieldRole does not read leftover stub cookies", () => {
   const session = encodeURIComponent(
     JSON.stringify({
       userId: "stub:abc",
@@ -49,9 +49,16 @@ test("readFieldRoleFrom cookie header prefers stub session role", () => {
       role: "viewer",
     }),
   );
-  const role = readFieldRole({
-    cookieHeader: `${STUB_SESSION_COOKIE}=${session}; gcfieldlog_procore_linked=1`,
+  const withoutExplicitRole = readFieldRole({
+    cookieHeader: `gcfieldlog_stub_user=${session}; gcfieldlog_procore_linked=1`,
   });
-  assert.equal(role.role, "viewer");
-  assert.equal(role.procoreLinked, false);
+  assert.equal(withoutExplicitRole.role, "puller");
+  assert.equal(withoutExplicitRole.procoreLinked, true);
+
+  const withAccountRole = readFieldRole({
+    cookieHeader: `gcfieldlog_stub_user=${session}; gcfieldlog_procore_linked=1`,
+    sessionRole: "viewer",
+  });
+  assert.equal(withAccountRole.role, "viewer");
+  assert.equal(withAccountRole.procoreLinked, false);
 });

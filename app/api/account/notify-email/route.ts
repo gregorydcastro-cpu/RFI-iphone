@@ -4,7 +4,7 @@ import {
   saveAccountNotifyEmail,
 } from "@/lib/accountNotifyEmail";
 import { canManageNotifyEmail } from "@/lib/accountRole";
-import { readStubSession } from "@/lib/stubSession";
+import { readAppSession } from "@/lib/session.server";
 
 export const dynamic = "force-dynamic";
 
@@ -24,9 +24,9 @@ type NotifyEmailBody = {
  * Never returns tokens. Never NEXT_PUBLIC_ a notify address.
  */
 export async function GET() {
-  const session = await readStubSession();
+  const session = await readAppSession();
   if (!session) {
-    return json({ ok: false, error: "Sign in first (stub session)." }, 401);
+    return json({ ok: false, error: "Sign in first." }, 401);
   }
   if (!canManageNotifyEmail(session.role)) {
     return json(
@@ -49,9 +49,9 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const session = await readStubSession();
+  const session = await readAppSession();
   if (!session) {
-    return json({ ok: false, error: "Sign in first (stub session)." }, 401);
+    return json({ ok: false, error: "Sign in first." }, 401);
   }
   if (!canManageNotifyEmail(session.role)) {
     return json(

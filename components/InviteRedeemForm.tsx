@@ -12,6 +12,7 @@ type Props = {
   inviteeEmail: string | null;
   expiresAt: string | null;
   sessionEmail: string | null;
+  signedIn: boolean;
 };
 
 type RedeemResponse = {
@@ -19,6 +20,7 @@ type RedeemResponse = {
   error?: string;
   role?: "puller" | "full" | "viewer";
   invite_role?: InviteRole;
+  needsEmailConfirm?: boolean;
 };
 
 export function InviteRedeemForm({
@@ -28,10 +30,14 @@ export function InviteRedeemForm({
   inviteeEmail,
   expiresAt,
   sessionEmail,
+  signedIn,
 }: Props) {
   const router = useRouter();
   const [email, setEmail] = useState(inviteeEmail ?? sessionEmail ?? "");
+  const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<"signin" | "signup" | "otp">("signin");
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [redeemedRole, setRedeemedRole] = useState<InviteRole | null>(null);
 
@@ -43,17 +49,30 @@ export function InviteRedeemForm({
     if (pending) return;
     setPending(true);
     setError(null);
+    setInfo(null);
 
     try {
       const response = await fetch(`/api/invites/${encodeURIComponent(token)}/redeem`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({
+          email,
+          password: signedIn || mode === "otp" ? undefined : password,
+          mode: signedIn ? undefined : mode,
+        }),
       });
       const data = (await response.json()) as RedeemResponse;
       if (!response.ok || !data.ok) {
         setError(data.error ?? "Could not accept this invite.");
+        return;
+      }
+      if (data.needsEmailConfirm) {
+        setInfo(
+          mode === "otp"
+            ? "Check your email for a sign-in link, then reopen this invite."
+            : "Check your email to confirm this account, then reopen this invite.",
+        );
         return;
       }
       setRedeemedRole(data.invite_role ?? role);
@@ -138,8 +157,10 @@ export function InviteRedeemForm({
           Join as {roleLabel}
         </h1>
         <p className="mt-2 text-sm text-muted">
-          Sign in with your own email, then{" "}
-          {role === "full" ? "connect your own Procore" : "open packs read-only"}.
+          {signedIn
+            ? "This accepts the invite on your signed-in account."
+            : "Sign in or create an account with this email, then the invite role is stored on that account."}{" "}
+          {role === "full" ? "Then connect your own Procore." : "Open packs read-only."}{" "}
           Role is baked into this link and cannot be changed here.
         </p>
         {expiresAt ? (
@@ -161,9 +182,66 @@ export function InviteRedeemForm({
           placeholder="alex.rivera@crew.example"
         />
       </label>
+      {!signedIn && mode !== "otp" ? (
+        <label className="block text-xs font-semibold tracking-wide text-muted uppercase">
+          Password
+          <input
+            required
+            type="password"
+            autoComplete={mode === "signup" ? "new-password" : "current-password"}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="mt-1 w-full border border-line bg-ink px-3 py-2 text-sm text-paper outline-none focus:border-cta"
+            placeholder="••••••••"
+            minLength={6}
+          />
+        </label>
+      ) : null}
+      {!signedIn ? (
+        <div className="flex flex-wrap gap-2 text-xs">
+          <button
+            type="button"
+            className={
+              mode === "signin"
+                ? "border border-cta px-2 py-1 text-paper"
+                : "border border-line px-2 py-1 text-muted"
+            }
+            onClick={() => setMode("signin")}
+          >
+            Sign in
+          </button>
+          <button
+            type="button"
+            className={
+              mode === "signup"
+                ? "border border-cta px-2 py-1 text-paper"
+                : "border border-line px-2 py-1 text-muted"
+            }
+            onClick={() => setMode("signup")}
+          >
+            Create account
+          </button>
+          <button
+            type="button"
+            className={
+              mode === "otp"
+                ? "border border-cta px-2 py-1 text-paper"
+                : "border border-line px-2 py-1 text-muted"
+            }
+            onClick={() => setMode("otp")}
+          >
+            Magic link
+          </button>
+        </div>
+      ) : null}
       {error ? (
         <p role="alert" className="text-sm text-cta">
           {error}
+        </p>
+      ) : null}
+      {info ? (
+        <p role="status" className="text-sm text-accent-2">
+          {info}
         </p>
       ) : null}
       <button

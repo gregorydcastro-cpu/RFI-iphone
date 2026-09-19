@@ -3,7 +3,7 @@
  *
  * Local / unset service role: in-memory folders + pins (process lifetime).
  * Service role configured: persist to share_folders / pinned_sheets /
- * sheet_revision_cache under the stub session owner_user_id.
+ * sheet_revision_cache under the signed-in owner_user_id (auth.uid()).
  *
  * Manual Refresh all walks one owner's pins. Weekly cron walks every pin
  * (service role) and reuses the same compare + cache write. Notify looks

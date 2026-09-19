@@ -124,7 +124,7 @@ export function TimeBoard({ initial, sessionEmail, signedIn }: Props) {
           <Link href="/?next=/time" className="text-accent underline">
             Sign in
           </Link>{" "}
-          (stub) to punch or edit.
+          to punch or edit.
         </p>
       ) : null}
 

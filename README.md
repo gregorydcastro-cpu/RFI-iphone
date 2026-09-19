@@ -1,14 +1,14 @@
 # GC Field Log — crew dashboard (web)
 
-Browser **dashboard for field crews** on **[gcfieldlog.com](https://gcfieldlog.com)**. Foremen and supers sign in (stub), pick a job, request a room pack, then work the sheet: zoomable floor plans, room highlight, linked RFIs, Generate RFI / Order materials, and a **Time** tab (geofenced punch-in + crew week).
+Browser **dashboard for field crews** on **[gcfieldlog.com](https://gcfieldlog.com)**. Foremen and supers sign in with **Supabase Auth**, pick a job, request a room pack, then work the sheet: zoomable floor plans, room highlight, linked RFIs, Generate RFI / Order materials, and a **Time** tab (geofenced punch-in + crew week).
 
-This is the product surface. **Native iOS is paused. No Apple.** Real login is later — the login page is a **stub session** (httpOnly cookie with user id + email + role). **Stripe Checkout** (60-day trial → monthly) is scaffolded at `/pricing`. Wordmark is clean text: **GC Field Log** (no extra logo).
+This is the product surface. **Native iOS is paused. No Apple.** Login at `/` is real email/password or magic link (`auth.uid()`). The abandoned stub cookie (`gcfieldlog_stub_user`) is expired and is not a login path. **Stripe Checkout** (60-day trial → monthly) is scaffolded at `/pricing`. Wordmark is clean text: **GC Field Log** (no extra logo).
 
 Host: **Vercel (primary)** with **HostGator DNS** for `gcfieldlog.com` (document only; this PR does not change DNS). Cloudflare Pages is a possible later target.
 
-No real crew auth or HostGator uploads in this MVP. Stripe Checkout + webhook are scaffolded (secrets stay in Vercel; Maple Point demos do not need them). The **Room pack webhook routine is deleted** — this app does **not** call `procore_room_pack_webhook_url` / webhook Authorization.
+Stripe Checkout + webhook are scaffolded (secrets stay in Vercel). The **Room pack webhook routine is deleted** — this app does **not** call `procore_room_pack_webhook_url` / webhook Authorization.
 
-**Pullers** can **Connect Procore** with their own Procore login (OAuth authorization code). Tokens are stored per stub user in Supabase `procore_connections`. Viewers do not need to connect and cannot trigger a pull.
+**Pullers** can **Connect Procore** with their own Procore login (OAuth authorization code). Tokens are stored per `auth.uid()` in Supabase `procore_connections`. Viewers do not need to connect and cannot trigger a pull.
 
 **Live path:** a **connected puller** with tokens in `procore_connections` can request a fresh room pack from the site via **Procore REST** (current drawing revisions + RFIs). Company id is resolved per **exact Procore project name** (`resolveCompanyIdForProject` / `resolveProjectForName`) — never hardcoded, and **not** limited to `DEMO_JOBS`. Optional **`PROCORE_PROJECT_ALLOWLIST`** restricts which names may resolve. Access tokens last ~1.5 hours and refresh automatically via `refresh_token`. If tokens are missing, refresh fails, or no project matches, the website **wakes** the Procore bot (`969a9d8e-c07f-44c3-ae9d-862704cd60c7`) via `public.procore_bot_requests` and/or **`PROCORE_BOT_WAKE_URL`**, then reads cached `public.room_packs`. The bot remains the bulk/scheduled path. Viewers only read. Local demo leaves Supabase unset: Maple Point JSON unless a live REST pull succeeds. Tokens stay server-side (never `NEXT_PUBLIC_`). Jobs-list copy stays Maple Point / fictional.
 
@@ -16,7 +16,7 @@ No real crew auth or HostGator uploads in this MVP. Stripe Checkout + webhook ar
 
 Must match this path — nothing else in the primary nav:
 
-**Login (stub) → Jobs → Room pack request → Pack viewer (plan + sheets + RFIs) → Generate RFI / Order materials (drafts to foreman). Time is wired (`/time`). Share folders are wired (`/share`).**
+**Login (Supabase Auth) → Jobs → Room pack request → Pack viewer (plan + sheets + RFIs) → Generate RFI / Order materials (drafts to foreman). Time is wired (`/time`). Share folders are wired (`/share`).**
 
 **Tools** stays later (not wired). No Apple.
 
@@ -24,9 +24,9 @@ Must match this path — nothing else in the primary nav:
 
 | Area | Behavior |
 | --- | --- |
-| Login (`/`) | Email/password form UI. Submit creates a stub session cookie (`gcfieldlog_stub_user`) with `userId` + email + role (`viewer` default, or `puller`). Password is not checked. |
-| Jobs (`/jobs`) | Fictional jobs only (Maple Point and similar). Header shows **Puller** / **Procore connected** / **View only**. Pullers get **Connect Procore**. |
-| Account (`/account`) | Stub session + Procore connected / disconnected state + link to pricing + share folders. |
+| Login (`/`) | Email/password or magic link via Supabase Auth. `userId` is `auth.uid()`. Role comes from `public.profiles` / `app_metadata` (new GC accounts default to **puller**; invites set **viewer** or **full**). Password is checked. |
+| Jobs (`/jobs`) | Fictional jobs only (Maple Point and similar). Header shows **Puller** / **Procore connected** / **View only**. Pullers get **Connect Procore**. Requires sign-in. |
+| Account (`/account`) | Signed-in session + Procore connected / disconnected state + link to pricing + share folders. |
 | Share (`/share`) | Create folders, pin full disciplines (electrical / lighting / architectural) or Maple Point room packs, puller-gated **Refresh all**. |
 | Pricing (`/pricing`) | Subscribe CTA → Stripe-hosted Checkout (60-day trial, payment method collected). |
 | Room pack request | Room number (e.g. `733`). **Connected puller:** `POST /api/room-pack` tries Procore REST with stored tokens (demo slug, exact `projectName`, or allowlist), then opens `/pack/[requestId]`. Bot wake + cached `room_packs` if REST cannot run. **Viewer / unconnected puller:** **Open pack** only — no pull. Local demo (no `SUPABASE_URL`) loads Maple Point JSON unless REST succeeds. |
@@ -43,7 +43,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Sign in (stub) → **Time** or **Share** in the header, or pick **Maple Point Medical Office** → request room `733`.
+Open [http://localhost:3000](http://localhost:3000). Sign in (Supabase Auth — set `SUPABASE_URL` + `SUPABASE_ANON_KEY`) → **Time** or **Share** in the header, or pick **Maple Point Medical Office** → request room `733`.
 
 Grok Voice (mic / read aloud) needs **`XAI_API_KEY`** on the server. Without it, the buttons still render and `/api/voice/status` reports `configured: false`.
 
@@ -64,7 +64,7 @@ Production host is **gcfieldlog.com**.
 
 1. Import this GitHub repo in [Vercel](https://vercel.com/new) (framework preset: **Next.js**).
 2. Build command: `npm run build`. `postinstall` copies `pdf.worker.min.mjs`.
-3. **Env:** the Maple Point demo needs **no** secrets. Production reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` for live `room_packs`. Live sheet PDFs (Google Drive links in `sheets[].pdf`) need **`GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`** (or **`GOOGLE_CLIENT_EMAIL` + `GOOGLE_PRIVATE_KEY`**) so `/api/sheet-pdf` can stream files the browser cannot fetch. Procore **user** OAuth (Connect Procore) uses **`PROCORE_CLIENT_ID` / `PROCORE_CLIENT_SECRET`** and **`SUPABASE_SERVICE_ROLE_KEY`** on Vercel (server-only, never `NEXT_PUBLIC_`). **Weekly share refresh** uses **`CRON_SECRET`** (server-only, never `NEXT_PUBLIC_`) — Vercel Cron hits `GET /api/share/weekly-refresh` Mondays 12:00 UTC per `vercel.json`. **Pinned-sheet bump email** uses each owner's **`procore_connections.notify_email`** plus the shared **`RESEND_API_KEY`** sender (server-only, never `NEXT_PUBLIC_`). **`NOTIFY_MIKE_EMAIL`** is a temporary fallback only. **Grok Voice** (RFI/materials dictation + RFI read-aloud) uses **`XAI_API_KEY`** (server-only, never `NEXT_PUBLIC_`). Copy OAuth id/secret from `/home/box/.secrets/procore_client_id` and `procore_client_secret` — do not commit. Do **not** restore `procore_room_pack_webhook_url` / `procore_room_pack_webhook_authorization` for this live path — that routine is deleted. Stripe Checkout (optional until you sell) uses the keys in **Stripe Checkout (Vercel + Dashboard)** below.
+3. **Env:** Maple Point pack JSON still loads without secrets, but **login requires Supabase Auth**. Production reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` for live `room_packs` **and** Auth (publishable; optional `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` aliases). Never put `SUPABASE_SERVICE_ROLE_KEY` on `NEXT_PUBLIC_`. Live sheet PDFs (Google Drive links in `sheets[].pdf`) need **`GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`** (or **`GOOGLE_CLIENT_EMAIL` + `GOOGLE_PRIVATE_KEY`**) so `/api/sheet-pdf` can stream files the browser cannot fetch. Procore **user** OAuth (Connect Procore) uses **`PROCORE_CLIENT_ID` / `PROCORE_CLIENT_SECRET`** and **`SUPABASE_SERVICE_ROLE_KEY`** on Vercel (server-only, never `NEXT_PUBLIC_`). **Weekly share refresh** uses **`CRON_SECRET`** (server-only, never `NEXT_PUBLIC_`) — Vercel Cron hits `GET /api/share/weekly-refresh` Mondays 12:00 UTC per `vercel.json`. **Pinned-sheet bump email** uses each owner's **`procore_connections.notify_email`** plus the shared **`RESEND_API_KEY`** sender (server-only, never `NEXT_PUBLIC_`). **`NOTIFY_MIKE_EMAIL`** is a temporary fallback only. **Grok Voice** (RFI/materials dictation + RFI read-aloud) uses **`XAI_API_KEY`** (server-only, never `NEXT_PUBLIC_`). Copy OAuth id/secret from `/home/box/.secrets/procore_client_id` and `procore_client_secret` — do not commit. Do **not** restore `procore_room_pack_webhook_url` / `procore_room_pack_webhook_authorization` for this live path — that routine is deleted. Stripe Checkout (optional until you sell) uses the keys in **Stripe Checkout (Vercel + Dashboard)** below.
 4. **DNS (ops, not this repo):** at HostGator, point `gcfieldlog.com` / `www` to Vercel (A / CNAME per Vercel’s domain docs). Do not upload files to HostGator for this app.
 
 ### Procore OAuth (Connect Procore)
@@ -130,7 +130,7 @@ Hands-free field controls on the existing Generate RFI / Order materials / pack 
 
 **How to try (Maple Point demo):**
 
-1. Stub login at `/` (any email; password ignored).
+1. Sign in at `/` with a real Supabase account.
 2. Jobs → **Maple Point Medical Office** → Open pack (room `101` or `733`).
 3. **Generate RFI** → **Dictate RFI** (tap mic, speak, tap stop). Example: *“Subject panel feed. Question is the feeder three phase in closet 101?”* Subject, location, and Question / description fill. Still **Send draft to Pat Nguyen** — not Procore.
 4. On the confirmation card, **Read draft**. On the pack viewer RFI list, **Speak** / **Read all**.
@@ -176,7 +176,7 @@ Mic capture happens in the **browser** (this IDE has no mic). Use earbuds on sit
 
 Hands-in-gloves markup on the pack viewer. Vectors stay as SVG/JSON — **not** a flattened raster bake. Drafts still go to foreman Pat Nguyen. Never a Procore submit.
 
-1. Stub login at `/` (any email; password ignored).
+1. Sign in at `/` with a real Supabase account.
 2. Jobs → **Maple Point Medical Office** → Open pack (room `101` or `733`).
 3. On the floor plan (or any sheet), tap **Box**, **Circle**, **Arrow**, or **Note**. Pan stays for zooming.
 4. Drag on the sheet (or tap to place a text note). The new markup stays selected.
@@ -184,7 +184,7 @@ Hands-in-gloves markup on the pack viewer. Vectors stay as SVG/JSON — **not** 
 6. Optional: **Take photo** (camera) or **Choose photo**. The image is stored as a data URL on the draft — not uploaded to Procore.
 7. **Send draft to Pat Nguyen**.
 
-Markups persist to Supabase `public.markup_overlays` (`request_id`, `sheet_id`, `vectors` jsonb, `user_id`, `updated_at`) via service-role `/api/markups` under the stub session — same write path as `rfis` / `procore_connections`. Schema is on main ([PR #9](https://github.com/gregorydcastro-cpu/RFI-iphone/pull/9)): `supabase/migrations/20260918020000_share_markup_rfi_trial.sql` plus `20260918130000_rfis_markup_overlay_fk.sql`. Types: `lib/schema.ts`. **localStorage** (`gcfieldlog.markup:request_id:sheet_id`) is only the offline/demo fallback when `SUPABASE_SERVICE_ROLE_KEY` is missing.
+Markups persist to Supabase `public.markup_overlays` (`request_id`, `sheet_id`, `vectors` jsonb, `user_id` = `auth.uid()`, `updated_at`) via service-role `/api/markups` — same write path as `rfis` / `procore_connections`. Schema is on main ([PR #9](https://github.com/gregorydcastro-cpu/RFI-iphone/pull/9)): `supabase/migrations/20260918020000_share_markup_rfi_trial.sql` plus `20260918130000_rfis_markup_overlay_fk.sql`. Auth overlay: `20260919220000_supabase_auth_profiles.sql`. Types: `lib/schema.ts`. **localStorage** (`gcfieldlog.markup:request_id:sheet_id`) is only the offline/demo fallback when `SUPABASE_SERVICE_ROLE_KEY` is missing.
 
 The RFI row’s optional `markup_id` points at the overlay. The draft packet also keeps a vector snapshot + sheet id/rev. Trial-link gating stays later. Weekly rev-only re-pull is `GET`/`POST /api/share/weekly-refresh`. A persisted bump emails the folder owner's `notify_email` when set.
 
@@ -243,8 +243,8 @@ Applied on the gc-field-log Supabase project. SQL: `supabase/migrations/20260918
 
 | Column | Notes |
 | --- | --- |
-| `user_id` | Primary key. Stub: `stub:` + sha256(email). Replace with `auth.uid()` when real auth lands. |
-| `email` | OAuth / stub session email (Procore account). **Not** the bump-alert destination. |
+| `user_id` | Primary key. `auth.uid()::text` (uuid). Leftover `stub:` + sha256(email) rows are not used (start-fresh MVP). |
+| `email` | OAuth / session email (Procore account). **Not** the bump-alert destination. |
 | `notify_email` | Per-user revision-bump destination (nullable). Trim + lowercase on write. Distinct from `email`. Account settings writes this; cron reads it. SQL: `supabase/migrations/20260918230000_procore_connections_notify_email.sql`. |
 | `access_token` | Never returned to the browser |
 | `refresh_token` | Never returned to the browser |
@@ -323,27 +323,40 @@ SQL: `supabase/migrations/20260918120000_billing_customers.sql`.
 
 RLS is on. `anon` has no grants. `authenticated` may **SELECT own row** by JWT email. Service role upserts.
 
-#### Stub user until real auth
+#### Supabase Auth (issue #23)
 
-1. Login POSTs `/api/session` with email + role. Password is ignored.
-2. Server sets httpOnly `gcfieldlog_stub_user` = `{ userId, email, role }`. Same email → same `userId`.
-3. Pullers see Connect Procore on `/jobs`, the job request page, and `/account`. Viewers do not need it.
-4. After OAuth, `gcfieldlog_procore_linked=1` is set (puller linked). Sign out (`/api/session/logout`) clears the stub cookie; tokens stay in Supabase until Disconnect.
-5. Upgrade path: replace the stub cookie with real Supabase/Auth.js session and store `auth.uid()` as `user_id`. Keep RLS as written.
+1. Login POSTs `/api/session` with `{ email, password, mode: "signin" | "signup" | "otp" }`. Password is checked. Magic link uses `signInWithOtp`.
+2. Session is the Supabase Auth cookie (`sb-<ref>-auth-token`). `userId` is `auth.uid()`. Leftover `gcfieldlog_stub_user` cookies are expired in `proxy.ts` / logout — they are not a login path.
+3. Role is **not** chosen on the login form. New self-serve accounts default to **puller**. Invite redeem writes **viewer** or **full** onto `public.profiles` and `raw_app_meta_data.role` (never `user_metadata`).
+4. Pullers see Connect Procore on `/jobs`, the job request page, and `/account`. Viewers do not need it.
+5. After OAuth, `gcfieldlog_procore_linked=1` is set. Sign out (`GET /api/session/logout`) calls `supabase.auth.signOut()`. Tokens stay in Supabase until Disconnect.
+6. Apply `supabase/migrations/20260919220000_supabase_auth_profiles.sql` on the gc-field-log project so `profiles` and tightened time/billing RLS exist.
 
-### Roles (stub MVP)
+**Ops — Supabase Dashboard (Greg):**
 
-Auth is still stubby. Default is **read-only viewer**. Only a **connected Procore account** (the puller after OAuth) can trigger pulls.
+| Setting | Value |
+| --- | --- |
+| Auth → Providers → Email | Enable **Email** (password) and **Magic link** |
+| Confirm email | Recommended on in production. Signup then returns `needsEmailConfirm` until the user clicks the mail. |
+| Site URL | `https://www.gcfieldlog.com` |
+| Redirect URLs | `https://www.gcfieldlog.com/auth/callback`, `https://www.gcfieldlog.com/**`, `https://gcfieldlog.com/auth/callback`, `http://localhost:3000/auth/callback` |
+| Vercel | `SUPABASE_URL`, `SUPABASE_ANON_KEY` (publishable). Optional aliases `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (same publishable values). **`SUPABASE_SERVICE_ROLE_KEY` is server-only — never `NEXT_PUBLIC_`.** |
+
+Do not put the service role key in the client bundle. Search `.next` for `service_role` if you need to confirm.
+
+### Roles
+
+Default for a **new self-serve account** is **puller** (GC / foreman). Crew **viewer** / **full** come from invite redeem. Only a **connected Procore account** (the puller after OAuth) can trigger pulls.
 
 | Mark a puller | How |
 | --- | --- |
-| Login role | Choose **Puller**, then **Connect Procore** |
+| Account role | `public.profiles.role` / `app_metadata.role` = `puller` |
 | Cookie | `gcfieldlog_procore_linked=1` (httpOnly; set by `/api/procore/callback`) |
 | Header (API) | `x-procore-linked: true` (also `1` / `yes` / `puller`) |
 
 Viewers can open `/pack/[requestId]` and see sheets, RFIs, and revision stamps. Pull / file-pull controls are hidden. `POST /api/room-pack` and `POST /api/room-pack/refresh` return **403** for viewers and unconnected pullers.
 
-This is not real auth. Anyone who can set the cookie or header is a puller. Replace with a real Procore-linked session later.
+Invite role wins over the Procore-linked cookie: a viewer who later connects Procore stays a viewer.
 
 ### Supabase + Procore bot (Vercel)
 
@@ -472,11 +485,11 @@ These tables do **not** replace `procore_connections`, `room_packs`, `rfis`, or 
 
 **How to try (Maple Point demo):**
 
-1. Stub login at `/` as **Puller** (any email; password ignored).
+1. Sign in at `/` as a **puller** (Supabase Auth).
 2. Header **Share**, or Account → **Open share folders**.
 3. Create a folder (e.g. `Electrical set`).
 4. Pin a full discipline (**electrical** / **lighting** / **architectural**) or a room pack (Electrical Closet 101 or Room 733). Lighting is its own pin group even though Maple Point JSON stores `E-102` as electrical.
-5. **Refresh all** is puller-gated (stub **Puller** login, Procore-linked cookie after OAuth, or API header `x-procore-linked: true`). Status shows scanned / bumped / unchanged / missing. Pack **pulls** still need Connect Procore.
+5. **Refresh all** is puller-gated (signed-in **puller**, Procore-linked cookie after OAuth, or API header `x-procore-linked: true`). Status shows scanned / bumped / unchanged / missing. Pack **pulls** still need Connect Procore.
 6. **Open pack** on a pin still uses the existing Maple Point viewer. Time, Voice, markup → RFI, and the Drive PDF proxy are unchanged.
 
 Without `SUPABASE_SERVICE_ROLE_KEY`, folders live in process memory (same pattern as Time). With the service role and the #9 migration applied, writes go to `share_folders` / `pinned_sheets` / `sheet_revision_cache`.
@@ -486,12 +499,12 @@ Without `SUPABASE_SERVICE_ROLE_KEY`, folders live in process memory (same patter
 curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:3000/api/share/refresh-all
 # 403
 
-# Folders require a stub session cookie
+# Folders require a signed-in session
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/share/folders
 # 401
 ```
 
-**Manual force refresh:** `POST /api/share/refresh-all` is puller-gated (**stub Puller** session, or Procore-linked cookie / `x-procore-linked` header) **and** requires the stub session. It walks that owner's `pinned_sheets`, compares known pack revs (Maple Point catalog, plus live `room_packs` when Supabase anon is set) to `sheet_revision_cache`, and updates last_seen_rev / last_pulled_at on a bump. Bulk/scheduled refresh still asks the Procore bot (no per-user token on that path) and does **not** re-download PDFs. Live REST is the connected pack-request path. A persisted bump emails that folder owner's `procore_connections.notify_email` (`notifyMikeOnBumps`). Response: `{ accepted: true, stub: false, implemented: true, weeklyCron: false, notify, scanned, bumped, unchanged, missing, bumps }`.
+**Manual force refresh:** `POST /api/share/refresh-all` is puller-gated (signed-in **puller**, or Procore-linked cookie / `x-procore-linked` header) **and** requires a real session. It walks that owner's `pinned_sheets`, compares known pack revs (Maple Point catalog, plus live `room_packs` when Supabase anon is set) to `sheet_revision_cache`, and updates last_seen_rev / last_pulled_at on a bump. Bulk/scheduled refresh still asks the Procore bot (no per-user token on that path) and does **not** re-download PDFs. Live REST is the connected pack-request path. A persisted bump emails that folder owner's `procore_connections.notify_email` (`notifyMikeOnBumps`). Response: `{ accepted: true, stub: false, implemented: true, weeklyCron: false, notify, scanned, bumped, unchanged, missing, bumps }`.
 
 **Weekly rev-only re-pull:** `GET`/`POST /api/share/weekly-refresh` is the automated path. Vercel Cron (`vercel.json`, Mondays 12:00 UTC) sends `Authorization: Bearer $CRON_SECRET`. The worker reads **all** `pinned_sheets` + `sheet_revision_cache` with the service role (process memory when the service role is unset), reuses `planShareRefresh` (same catalog + `room_packs` compare as Refresh all), and on a bump updates `last_seen_rev` / `last_pulled_at` / cache `rev` + `checked_at`. Unchanged revs are metadata-only.
 
@@ -510,9 +523,9 @@ curl -s -X POST http://localhost:3000/api/share/weekly-refresh \
 
 **RLS (restrictive defaults):** enabled on the new share/markup/trial tables. `anon` has no grants (no public share-folder read until a later PR adds an explicit public flag). `authenticated` may CRUD **own** folders, pins, markups, and trial tokens (`user_id` / folder owner = `auth.uid()::text`). `sheet_revision_cache` has no anon/authenticated policies. `rfis` RLS stays the PR #12 owner policies.
 
-**`SUPABASE_SERVICE_ROLE_KEY` is required for writes** that must succeed under the stub session (`stub:` + sha256 email does not match `auth.uid()`). Same rule as `procore_connections`. Never `NEXT_PUBLIC_` the service role key. Token lookup for expired trial links should also use the service role, not the anon key.
+**`SUPABASE_SERVICE_ROLE_KEY` is required** for privileged writes (Procore tokens, webhooks, cron, invite mint). Authenticated RLS matches `auth.uid()::text`. Never `NEXT_PUBLIC_` the service role key. Token lookup for expired trial links should also use the service role, not the anon key.
 
-`user_id` / `owner_user_id` are `text` so stub ids and later `auth.uid()::text` both fit. Maple Point demos only in the app; these tables are job-name strings, not a hardcoded company id.
+`user_id` / `owner_user_id` / `created_by` are `text` holding `auth.uid()::text`. Maple Point demos only in the app; these tables are job-name strings, not a hardcoded company id.
 
 **Cloudflare Pages** can host Next.js later. Keep Vercel as the primary.
 
@@ -520,16 +533,17 @@ curl -s -X POST http://localhost:3000/api/share/weekly-refresh \
 
 | Path | Purpose |
 | --- | --- |
-| `/` | Stub **login** (creates session cookie) |
+| `/` | **Login** (Supabase Auth email/password or magic link) |
 | `/jobs` | Fictional **job selection** + Connect Procore (puller) |
 | `/jobs/[projectSlug]` | **Pull / open room pack** (connected puller POSTs `/api/room-pack`; viewer opens `/pack/[requestId]` only) |
 | `/jobs/[projectSlug]/rooms/[room]` | Alias → `/pack/{slug}-{room}` (no pull; use the request form) |
-| `/account` | Stub account + Procore connected state + per-user **revision bump email** + billing link + share folders |
+| `/account` | Account + Procore connected state + per-user **revision bump email** + billing link + share folders |
+| `/auth/callback` | Magic-link / confirm-email PKCE exchange |
 | `/pricing` | Subscribe CTA → Stripe-hosted Checkout (60-day trial) |
 | `/time` | **Time tab** — worker punch + foreman crew week (Maple Point geofence) |
 | `/share` | **Share folders** — create folders, pin disciplines / room packs, Refresh all |
-| `/api/session` | POST stub login |
-| `/api/session/logout` | Clear stub session |
+| `/api/session` | GET current session; POST sign-in / sign-up / magic link |
+| `/api/session/logout` | Sign out (clears Auth + leftover stub cookie) |
 | `/api/procore/connect` | Redirect to Procore OAuth authorize |
 | `/api/procore/callback` | Exchange code, store per-user tokens |
 | `/api/procore/status` | Connected state (no tokens) |
@@ -540,7 +554,7 @@ curl -s -X POST http://localhost:3000/api/share/weekly-refresh \
 | `/api/room-pack/live` | Anyone GET/POST. Latest `room_packs` row, `no-store`. Does not pull. |
 | `/api/room-pack/status` | Alias of live read (no Drive poll, no webhook). |
 | `/api/sheet-pdf` | GET `?requestId=&sheetId=`. Streams a sheet PDF (Drive proxy or local `/packs`). Secrets stay on the server. |
-| `/api/share/folders` | GET/POST/DELETE stub-session share folders (service role or memory) |
+| `/api/share/folders` | GET/POST/DELETE signed-in share folders (service role or memory) |
 | `/api/share/pins` | POST pin discipline or room pack; DELETE `?id=` unpin |
 | `/api/share/refresh-all` | Puller POST. Walks this owner's pins + updates `sheet_revision_cache`. Emails that owner's `notify_email` on a persisted bump. |
 | `/api/share/weekly-refresh` | Cron GET/POST. `CRON_SECRET` required. All pins, catalog + `room_packs` + bot. Live REST stays on pack routes. Emails each pin owner's `notify_email` on a persisted bump. |
@@ -577,7 +591,7 @@ These coords are a public downtown Cedar Falls point so GPS can be tested. The j
 
 **Manual check (no live GPS needed for the lock + grid):**
 
-1. Sign in (stub) → header **Time**.
+1. Sign in → header **Time**.
 2. Leave PIN blank, or deny location / keep real GPS (not in Cedar Falls): **Punch in** stays disabled.
 3. Enter the Maple Point demo PIN shown on the card. Chrome DevTools → More tools → Sensors → Location override `42.5349`, `-92.4450` → Retry location → Punch in unlocks.
 4. Open **Crew week**: Alex Thursday `10.0` and Riley week `41.5` are red; Jordan Friday is empty on a fresh seed — add a missed punch as foreman.
@@ -727,7 +741,6 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 
 ## Later (not implemented)
 
-- Real crew **login** (replace stub session cookie with Supabase Auth / Auth.js; keep `procore_connections.user_id` = `auth.uid()`)
 - Production Procore app / per-user tokens so sandbox-empty company lists can resolve a real project (REST accepts exact names; fallback wakes the bot)
 - Stripe **Customer Portal**, entitlement gating, and receipt / trial emails (Checkout + webhook scaffold is in this PR; no email send yet)
 - Stripe **crypto / stablecoin** payment methods (Dashboard-only later — no app code)

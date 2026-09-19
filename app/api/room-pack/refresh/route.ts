@@ -1,10 +1,9 @@
-import { readFieldRoleFromRequest } from "@/lib/auth";
 import { makeRequestId, resolvePullJob } from "@/lib/jobs";
 import { loadLiveRoomPack, refreshLiveRoomPack } from "@/lib/livePack";
 import { stampRoomPack, type RoomPack } from "@/lib/pack";
 import { isRoomPackShape, requestBelongsToJob } from "@/lib/packStatus";
 import { PROCORE_BOT_ID } from "@/lib/procoreBot";
-import { stubSessionFromRequest } from "@/lib/stubSession";
+import { fieldRoleForRequest } from "@/lib/session.server";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +34,7 @@ function json(data: unknown, status = 200) {
  * — DEMO_JOBS is not required.
  */
 export async function POST(request: Request) {
-  const role = readFieldRoleFromRequest(request);
+  const { session, role } = await fieldRoleForRequest(request);
   if (!role.procoreLinked) {
     return json(
       {
@@ -114,7 +113,6 @@ export async function POST(request: Request) {
     return json({ ok: false, error: "Unknown job" }, 404);
   }
 
-  const session = stubSessionFromRequest(request);
   const live = await refreshLiveRoomPack({
     requestId: resolvedRequestId,
     job,

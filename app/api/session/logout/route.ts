@@ -1,17 +1,26 @@
 import { NextResponse } from "next/server";
 import { cookieSecureFromRequest, procoreLinkedCookieOptions } from "@/lib/auth";
 import { oauthStateCookieOptions } from "@/lib/procoreOAuth";
-import { stubSessionCookieOptions } from "@/lib/stubSession";
+import { expireStubSessionCookie } from "@/lib/stubSession";
+import { createSupabaseRouteClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+function clearAuthCookies(request: Request, response: NextResponse) {
   const secure = cookieSecureFromRequest(request);
-  const url = new URL("/", request.url);
-  const response = NextResponse.redirect(url);
-  response.cookies.set(stubSessionCookieOptions(null, secure));
+  response.cookies.set(expireStubSessionCookie(secure));
   response.cookies.set(procoreLinkedCookieOptions(false, secure));
   response.cookies.set(oauthStateCookieOptions(null, secure));
+}
+
+export async function GET(request: Request) {
+  const url = new URL("/", request.url);
+  const response = NextResponse.redirect(url);
+  const supabase = createSupabaseRouteClient(request, response);
+  if (supabase) {
+    await supabase.auth.signOut();
+  }
+  clearAuthCookies(request, response);
   return response;
 }
 

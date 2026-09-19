@@ -131,6 +131,7 @@ export type WorkerPunchInput = {
   lat: unknown;
   lng: unknown;
   accuracy_m?: unknown;
+  userId?: string;
 };
 
 export type PunchWriteResult =
@@ -229,6 +230,7 @@ export async function createWorkerPunch(
     geofence_ok,
     edited_by_foreman: false,
     edit_note: null,
+    user_id: input.userId ?? null,
     created_at: now,
     updated_at: now,
   };
@@ -243,6 +245,7 @@ export type ForemanPunchInput = {
   pairOutAt?: string | null;
   note?: string | null;
   punchId?: string | null;
+  userId?: string;
 };
 
 export async function saveForemanPunch(
@@ -277,6 +280,7 @@ export async function saveForemanPunch(
       edited_by_foreman: true,
       edit_note: input.note?.trim() || existing.edit_note,
       geofence_ok: true,
+      user_id: input.userId ?? existing.user_id,
       updated_at: now,
     };
     const saved = await persistUpdated(patch, snapshot.storage);
@@ -293,7 +297,14 @@ export async function saveForemanPunch(
 
   const firstType: PunchType = wantsPair ? "in" : (input.punchType ?? "in");
   const first = await persistPunch(
-    makeForemanPunch(snapshot.site, worker, firstType, punchedAt, input.note),
+    makeForemanPunch(
+      snapshot.site,
+      worker,
+      firstType,
+      punchedAt,
+      input.note,
+      input.userId,
+    ),
     snapshot.storage,
   );
   if (!first.ok) return first;
@@ -301,7 +312,14 @@ export async function saveForemanPunch(
 
   if (wantsPair) {
     const out = await persistPunch(
-      makeForemanPunch(snapshot.site, worker, "out", pairOutAt, input.note),
+      makeForemanPunch(
+        snapshot.site,
+        worker,
+        "out",
+        pairOutAt,
+        input.note,
+        input.userId,
+      ),
       snapshot.storage,
     );
     if (!out.ok) return out;
@@ -317,6 +335,7 @@ function makeForemanPunch(
   punchType: PunchType,
   atMs: number,
   note?: string | null,
+  userId?: string,
 ): TimePunch {
   const now = new Date().toISOString();
   return {
@@ -332,6 +351,7 @@ function makeForemanPunch(
     geofence_ok: true,
     edited_by_foreman: true,
     edit_note: note?.trim() || "Foreman correction",
+    user_id: userId ?? null,
     created_at: now,
     updated_at: now,
   };

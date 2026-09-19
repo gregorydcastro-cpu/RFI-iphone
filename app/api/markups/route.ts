@@ -1,7 +1,6 @@
-import { readCookieValue, readFieldRoleFromRequest } from "@/lib/auth";
 import { canWriteFieldLog } from "@/lib/invites";
 import { isMarkupUuid, parseVectors } from "@/lib/markup";
-import { parseStubSession, STUB_SESSION_COOKIE, stubUserIdFromEmail } from "@/lib/stubSession";
+import { fieldRoleForRequest } from "@/lib/session.server";
 import {
   isMarkupTableWriteConfigured,
   selectMarkupOverlay,
@@ -30,13 +29,6 @@ function asTrimmed(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function sessionUserId(request: Request): string {
-  const session = parseStubSession(
-    readCookieValue(request.headers.get("cookie"), STUB_SESSION_COOKIE),
-  );
-  return session?.userId ?? stubUserIdFromEmail("alex.rivera@crew.example");
-}
-
 /**
  * Load a vector overlay for a pack sheet. Never a raster bake.
  * Service-role read of `markup_overlays` when configured; otherwise
@@ -50,7 +42,11 @@ export async function GET(request: Request) {
     return json({ ok: false, error: "request_id and sheet_id are required" }, 400);
   }
 
-  const userId = sessionUserId(request);
+  const { session } = await fieldRoleForRequest(request);
+  if (!session) {
+    return json({ ok: false, error: "Sign in first." }, 401);
+  }
+  const userId = session.userId;
   const configured = isMarkupTableWriteConfigured();
   const row = configured
     ? await selectMarkupOverlay({ userId, requestId, sheetId })
@@ -66,11 +62,14 @@ export async function GET(request: Request) {
 
 /**
  * Upsert vector overlay JSON for a pack sheet. Not a flattened image.
- * Service-role write under the stub session (`user_id`). localStorage is
+ * Service-role write under auth.uid() (`user_id`). localStorage is
  * only the client fallback when this returns storage: unconfigured.
  */
 export async function PUT(request: Request) {
-  const role = readFieldRoleFromRequest(request);
+  const { session, role } = await fieldRoleForRequest(request);
+  if (!session) {
+    return json({ ok: false, error: "Sign in first." }, 401);
+  }
   if (!canWriteFieldLog(role.role)) {
     return json(
       {
@@ -95,7 +94,7 @@ export async function PUT(request: Request) {
   }
 
   const overlayId = asTrimmed(body.id);
-  const userId = sessionUserId(request);
+  const userId = session.userId;
   const vectors = parseVectors(body.vectors);
   const configured = isMarkupTableWriteConfigured();
   const row = configured
