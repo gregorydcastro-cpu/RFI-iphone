@@ -29,7 +29,8 @@ function json(data: unknown, status = 200) {
  * Request a room pack from `/jobs/[projectSlug]`.
  *
  * Puller only. Tries Procore REST with stored OAuth tokens, then
- * wakes the Procore bot + reads `public.room_packs`. Does not call
+ * wakes the Procore bot + reads `public.room_packs` for non-demo jobs.
+ * Fictional DEMO_JOBS / Maple Point never wake. Does not call
  * the deleted webhook. Local demo when Supabase env is unset.
  * Job identity: demo slug, exact projectName, or allowlist — not
  * DEMO_JOBS-only.

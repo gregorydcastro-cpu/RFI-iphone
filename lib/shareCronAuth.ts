@@ -80,7 +80,7 @@ export function procoreRestSummary(): {
     flag: SHARE_WEEKLY_PROCORE_REST_FLAG,
     issue: 25,
     note: enabled
-      ? "SHARE_WEEKLY_PROCORE_REST=1 is on, but weekly cron has no per-user token. Connected pullers use live REST on /api/room-pack; this scheduled run compared catalog + room_packs and asked the bot (bulk fallback)."
-      : "Weekly/scheduled refresh stays on the Maple Point catalog + room_packs + bot path. Connected pullers request a fresh pack via Procore REST on POST /api/room-pack when tokens are valid.",
+      ? "SHARE_WEEKLY_PROCORE_REST=1 is on, but weekly cron has no per-user token. Connected pullers use live REST on /api/room-pack; this scheduled run compared catalog + room_packs. Fictional demo jobs do not wake the Procore bot."
+      : "Weekly/scheduled refresh stays on the Maple Point catalog + room_packs path (no fictional demo bot wake). Connected pullers request a fresh pack via Procore REST on POST /api/room-pack when tokens are valid.",
   };
 }

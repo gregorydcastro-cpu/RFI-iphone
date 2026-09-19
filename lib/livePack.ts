@@ -1,4 +1,4 @@
-import type { DemoJob } from "./jobs";
+import { isDemoOrFictionalJob, type DemoJob } from "./jobs";
 import {
   stampRoomPack,
   type RoomPack,
@@ -7,6 +7,7 @@ import { loadPack } from "./loadPack";
 import { packMatchesJob } from "./packStatus";
 import {
   requestProcoreBotRefresh,
+  skippedDemoProcoreBotRefresh,
   type ProcoreBotRefreshResult,
 } from "./procoreBot";
 import { pullProcoreRoomPack } from "./procoreRest";
@@ -104,7 +105,8 @@ export async function loadLiveRoomPack(input: {
  * Puller refresh: try Procore REST with the session's stored tokens.
  * Bot + cached `room_packs` is the fallback when tokens are missing,
  * refresh fails, or the exact project name cannot be resolved.
- * Bot fallback enqueues / HTTP-wakes the fleet — not log-only.
+ * Bot fallback enqueues / HTTP-wakes the fleet — not log-only —
+ * except fictional DEMO_JOBS / Maple Point, which never wake.
  */
 export async function refreshLiveRoomPack(input: {
   requestId: string;
@@ -154,12 +156,19 @@ export async function refreshLiveRoomPack(input: {
     });
   }
 
-  const bot = await requestProcoreBotRefresh({
-    projectName: input.job.name,
-    room: input.room,
+  const skipDemoWake = isDemoOrFictionalJob({
+    slug: input.job.slug,
+    name: input.job.name,
     requestId: input.requestId,
-    reason: restReason ?? "refresh",
   });
+  const bot = skipDemoWake
+    ? skippedDemoProcoreBotRefresh()
+    : await requestProcoreBotRefresh({
+        projectName: input.job.name,
+        room: input.room,
+        requestId: input.requestId,
+        reason: restReason ?? "refresh",
+      });
 
   if (input.pack && getSupabaseConfig()) {
     await insertRoomPackRow({
@@ -175,14 +184,15 @@ export async function refreshLiveRoomPack(input: {
     job: input.job,
     room: input.room,
   });
+  const pull: LivePackPull = skipDemoWake ? "none" : "bot";
   if (!live) {
     return cached
-      ? { ...cached, pull: "bot", restReason, bot }
+      ? { ...cached, pull, restReason, bot }
       : null;
   }
   return {
     ...live,
-    pull: "bot",
+    pull,
     restReason,
     bot,
   };

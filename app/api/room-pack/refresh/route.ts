@@ -30,7 +30,8 @@ function json(data: unknown, status = 200) {
  * Puller-only. Try Procore REST with stored tokens, optionally persist
  * pack JSON (bot/ops callback), then read the latest `public.room_packs`
  * row. Bot/catalog is the fallback when tokens or the demo project are
- * missing. Live requestIds resolve from cached room_packs / projectName
+ * missing. Fictional DEMO_JOBS / Maple Point never enqueue a bot wake.
+ * Live requestIds resolve from cached room_packs / projectName
  * — DEMO_JOBS is not required.
  */
 export async function POST(request: Request) {

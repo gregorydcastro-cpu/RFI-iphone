@@ -1,5 +1,10 @@
+import { isDemoOrFictionalJob } from "@/lib/jobs";
 import { notifyMikeOnBumps } from "@/lib/notifyMike";
-import { PROCORE_BOT_ID, requestProcoreBotRefresh } from "@/lib/procoreBot";
+import {
+  PROCORE_BOT_ID,
+  requestProcoreBotRefresh,
+  skippedDemoProcoreBotRefresh,
+} from "@/lib/procoreBot";
 import { MAPLE_POINT_PROJECT_NAME, MAPLE_POINT_REQUEST_ID } from "@/lib/shareCatalog";
 import { refreshAllPinnedSheets } from "@/lib/shareStore";
 import { fieldRoleForRequest } from "@/lib/session.server";
@@ -20,6 +25,7 @@ function json(data: unknown, status = 200) {
  * known pack rev to `sheet_revision_cache`, and updates last_seen_rev when
  * the rev bumped. Does not call Procore REST. Does not download PDFs.
  * Weekly automation is GET/POST `/api/share/weekly-refresh` (CRON_SECRET).
+ * Maple Point / DEMO_JOBS never enqueue a bot wake (catalog compare only).
  * Emails this owner's notify_email after a persisted bump. Missing
  * notify_email skips (refresh still succeeds).
  */
@@ -40,12 +46,18 @@ export async function POST(request: Request) {
     );
   }
 
-  const bot = await requestProcoreBotRefresh({
+  const botInput = {
     projectName: MAPLE_POINT_PROJECT_NAME,
     room: "101",
     requestId: MAPLE_POINT_REQUEST_ID,
     reason: "refresh-all",
-  });
+  };
+  const bot = isDemoOrFictionalJob({
+    name: botInput.projectName,
+    requestId: botInput.requestId,
+  })
+    ? skippedDemoProcoreBotRefresh()
+    : await requestProcoreBotRefresh(botInput);
 
   const { plan, storage, bumps, errors } = await refreshAllPinnedSheets(session.userId);
   const notify = await notifyMikeOnBumps(bumps, errors);

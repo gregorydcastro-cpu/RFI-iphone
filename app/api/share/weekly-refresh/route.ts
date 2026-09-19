@@ -1,4 +1,9 @@
-import { PROCORE_BOT_ID, requestProcoreBotRefresh } from "@/lib/procoreBot";
+import { isDemoOrFictionalJob } from "@/lib/jobs";
+import {
+  PROCORE_BOT_ID,
+  requestProcoreBotRefresh,
+  skippedDemoProcoreBotRefresh,
+} from "@/lib/procoreBot";
 import { MAPLE_POINT_PROJECT_NAME, MAPLE_POINT_REQUEST_ID } from "@/lib/shareCatalog";
 import {
   authorizeCronHeaders,
@@ -22,8 +27,9 @@ function json(data: unknown, status = 200) {
  *
  * Vercel Cron sends GET with `Authorization: Bearer $CRON_SECRET`.
  * Manual ops can POST the same path with that header or `x-cron-secret`.
- * Never NEXT_PUBLIC_ the secret. Weekly path stays catalog + bot
- * (no per-user token). Live REST is on connected puller pack routes.
+ * Never NEXT_PUBLIC_ the secret. Weekly path stays catalog + room_packs
+ * (no per-user token). Maple Point / DEMO_JOBS never enqueue a bot wake.
+ * Live REST is on connected puller pack routes.
  * Emails each pin owner's notify_email after a persisted bump. Missing
  * notify_email skips (refresh still succeeds).
  */
@@ -42,12 +48,18 @@ async function handle(request: Request) {
     return json({ ok: false, error: "Unauthorized." }, 401);
   }
 
-  const bot = await requestProcoreBotRefresh({
+  const botInput = {
     projectName: MAPLE_POINT_PROJECT_NAME,
     room: "101",
     requestId: MAPLE_POINT_REQUEST_ID,
     reason: "weekly",
-  });
+  };
+  const bot = isDemoOrFictionalJob({
+    name: botInput.projectName,
+    requestId: botInput.requestId,
+  })
+    ? skippedDemoProcoreBotRefresh()
+    : await requestProcoreBotRefresh(botInput);
 
   const summary = await runWeeklyShareRefresh();
   return json(

@@ -15,6 +15,7 @@
  */
 
 import { readEnvAlias } from "./env.ts";
+import { isDemoOrFictionalJob } from "./jobs.ts";
 import { enqueueProcoreBotRequest } from "./procoreBotQueue.ts";
 
 export const PROCORE_BOT_ID = "969a9d8e-c07f-44c3-ae9d-862704cd60c7";
@@ -45,12 +46,18 @@ export type ProcoreBotHook = "queue" | "http" | "queue+http" | "none";
 
 export type ProcoreBotRefreshResult = {
   ok: boolean;
-  requested: true;
+  requested: boolean;
+  skipped?: boolean;
   botId: typeof PROCORE_BOT_ID;
   queued: boolean;
   delivered: boolean;
   hook: ProcoreBotHook;
-  reason: "ok" | "hook_unconfigured" | "queue_failed" | "http_failed";
+  reason:
+    | "ok"
+    | "hook_unconfigured"
+    | "queue_failed"
+    | "http_failed"
+    | "demo_skipped";
 };
 
 export type ProcoreBotDeps = {
@@ -88,16 +95,60 @@ function hookKind(queued: boolean, delivered: boolean): ProcoreBotHook {
   return "none";
 }
 
+export function skippedDemoProcoreBotRefresh(): ProcoreBotRefreshResult {
+  return {
+    ok: false,
+    requested: false,
+    skipped: true,
+    botId: PROCORE_BOT_ID,
+    queued: false,
+    delivered: false,
+    hook: "none",
+    reason: "demo_skipped",
+  };
+}
+
+/**
+ * Fictional DEMO_JOBS / Maple Point never wake the fleet. Callers still
+ * use this before enqueue so weekly-refresh, Refresh all, and livePack
+ * fallback skip the same way. `requestProcoreBotRefresh` also hard-blocks.
+ */
+export function shouldWakeProcoreBot(input: {
+  slug?: string | null;
+  name?: string | null;
+  projectName?: string | null;
+  requestId?: string | null;
+}): boolean {
+  return !isDemoOrFictionalJob(input);
+}
+
 /**
  * Ask the Procore bot to pull a fresh pack. Website callers then read
  * `public.room_packs` — they do not wait on a webhook.
  *
  * A wake is a queue insert and/or HTTP POST. Logging alone is not a wake.
+ * DEMO_JOBS / Maple Point never enqueue or HTTP-wake (invents-nothing on
+ * claim would no-op those). Cached pack / REST for demos is unchanged.
  */
 export async function requestProcoreBotRefresh(
   input: ProcoreBotRefreshRequest,
   deps: ProcoreBotDeps = {},
 ): Promise<ProcoreBotRefreshResult> {
+  if (
+    !shouldWakeProcoreBot({
+      name: input.projectName,
+      projectName: input.projectName,
+      requestId: input.requestId,
+    })
+  ) {
+    console.info("[gcfieldlog] procore bot wake skipped — fictional demo job", {
+      request_id: input.requestId,
+      project_name: input.projectName,
+      reason: "demo_skipped",
+    });
+    return skippedDemoProcoreBotRefresh();
+  }
+
   const requestedAt = deps.now?.() ?? new Date().toISOString();
   const payload = buildProcoreBotRefreshPayload(input, requestedAt);
   const wakeUrl = readProcoreBotWakeUrl();
