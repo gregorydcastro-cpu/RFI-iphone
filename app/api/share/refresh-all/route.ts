@@ -44,10 +44,11 @@ export async function POST(request: Request) {
     return json({ ok: false, error: "Sign in first (stub session)." }, 401);
   }
 
-  await requestProcoreBotRefresh({
+  const bot = await requestProcoreBotRefresh({
     projectName: MAPLE_POINT_PROJECT_NAME,
     room: "101",
     requestId: MAPLE_POINT_REQUEST_ID,
+    reason: "refresh-all",
   });
 
   const { plan, storage, bumps, errors } = await refreshAllPinnedSheets(session.userId);
@@ -69,6 +70,7 @@ export async function POST(request: Request) {
     bumps,
     items: plan.items,
     botId: PROCORE_BOT_ID,
+    bot,
     note:
       "Force refresh compared this owner's pinned sheets to known pack revs and updated sheet_revision_cache. Weekly cron is GET/POST /api/share/weekly-refresh. The folder owner is emailed only when a bump persists and notify_email is set.",
   });

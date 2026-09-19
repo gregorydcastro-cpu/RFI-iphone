@@ -23,6 +23,9 @@
  * notify_email: supabase/migrations/20260918230000_procore_connections_notify_email.sql
  * adds nullable procore_connections.notify_email (per-user bump alerts).
  *
+ * Bot wake queue: supabase/migrations/20260919120000_procore_bot_requests.sql
+ *   public.procore_bot_requests — website enqueue; fleet polls / claims.
+ *
  * Writes that must succeed under the stub session (`stub:` + sha256 email)
  * require SUPABASE_SERVICE_ROLE_KEY. Authenticated RLS matches auth.uid()
  * once real auth lands. Anon has no grants on the new tables.
@@ -39,6 +42,21 @@ export const TRIAL_LINK_TOKENS_TABLE = "trial_link_tokens";
 export const INVITE_TOKENS_TABLE = "invite_tokens";
 export const PROCORE_CONNECTIONS_TABLE_NAME = "procore_connections";
 export const ROOM_PACKS_TABLE = "room_packs";
+export const PROCORE_BOT_REQUESTS_TABLE = "procore_bot_requests";
+
+export type ProcoreBotRequestStatus = "queued" | "claimed" | "done" | "error";
+
+export type ProcoreBotRequestRow = {
+  id: string;
+  bot_id: string;
+  project_name: string;
+  room: string;
+  request_id: string;
+  reason: string | null;
+  status: ProcoreBotRequestStatus;
+  payload: Record<string, unknown>;
+  created_at: string;
+};
 
 /** Already present. Service role writes; never expose tokens via the anon key. */
 export type ProcoreConnectionRow = {

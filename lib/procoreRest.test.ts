@@ -9,6 +9,7 @@ import {
 } from "./procorePackMap.ts";
 import {
   isDemoProjectName,
+  isResolvableProjectName,
   matchProjectName,
   pickResolvedProject,
 } from "./procoreProjectMatch.ts";
@@ -58,6 +59,46 @@ test("company id is resolved per demo project name — never hardcoded", () => {
   );
 });
 
+test("REST name resolution is exact Procore match — DEMO_JOBS is not the gate", () => {
+  assert.equal(isResolvableProjectName("Danoff High School", []), true);
+  assert.equal(isResolvableProjectName("Suffolk — Site 12", []), true);
+  assert.equal(isResolvableProjectName("", []), false);
+  assert.equal(
+    isResolvableProjectName("Danoff High School", ["Maple Point Medical Office"]),
+    false,
+  );
+  assert.equal(
+    isResolvableProjectName("Danoff High School", ["Danoff High School"]),
+    true,
+  );
+
+  const resolved = pickResolvedProject(
+    [{ id: 12, name: "GC Co" }],
+    [
+      {
+        companyId: "12",
+        projects: [{ id: 4401, name: "Danoff High School" }],
+      },
+    ],
+    "Danoff High School",
+  );
+  assert.deepEqual(resolved, {
+    companyId: "12",
+    projectId: "4401",
+    projectName: "Danoff High School",
+  });
+
+  assert.equal(
+    pickResolvedProject(
+      [{ id: 12 }],
+      [{ companyId: "12", projects: [{ id: 4401, name: "Danoff High School" }] }],
+      "Danoff High School",
+      ["Maple Point Medical Office"],
+    ),
+    null,
+  );
+});
+
 test("drawing revisions map to pack sheets; obsolete and non-current are skipped", () => {
   const sheet = mapDrawingRevisionToSheet({
     drawing_number: "A-101",
@@ -90,6 +131,14 @@ test("drawing revisions map to pack sheets; obsolete and non-current are skipped
     mapDrawingRevisionToSheet({ drawing_number: "A-101", current: false }),
     null,
   );
+
+  const withStamp = mapDrawingRevisionToSheet({
+    drawing_number: "A-101",
+    revision_number: "C",
+    current: true,
+    updated_at: "2026-09-18T15:00:00Z",
+  });
+  assert.equal(withStamp?.last_modified, "2026-09-18T15:00:00Z");
 });
 
 test("Procore RFIs map for the viewer; drafts and recycled are omitted", () => {
@@ -183,6 +232,17 @@ test("cached bot layout and Drive PDFs are kept when REST has metadata only", ()
         [0.2, 0.5],
       ],
       locator: "Electrical Closet 101",
+      wall_bounds: {
+        sheet_id: "A-101",
+        units: "pdf_pts",
+        origin: "bottom-left",
+        polygon: [
+          [72, 72],
+          [220, 72],
+          [220, 180],
+          [72, 180],
+        ],
+      },
     },
     sheets: [
       {
@@ -198,5 +258,6 @@ test("cached bot layout and Drive PDFs are kept when REST has metadata only", ()
   assert.equal(merged.sheets[0]?.rev, "C");
   assert.equal(merged.sheets[0]?.pdf, "/packs/maple-point-a101.pdf");
   assert.deepEqual(merged.layout.points, cached.layout.points);
+  assert.deepEqual(merged.layout.wall_bounds, cached.layout.wall_bounds);
   assert.equal(forbidden.test(JSON.stringify(merged)), false);
 });

@@ -1,18 +1,20 @@
 /**
  * Company ID is dynamic per Procore project. Never hardcode a company.
- * This app only looks up Maple Point / other DEMO_JOBS names.
  *
- * Live pack pulls use resolveProjectForName so REST calls send
- * Procore-Company-Id for the company that actually owns the demo job.
+ * Live pack pulls walk GET /companies then GET /projects?company_id=
+ * until the requested name matches a Procore project exactly.
+ * Optional PROCORE_PROJECT_ALLOWLIST restricts which names may resolve.
+ * DEMO_JOBS is not the REST gate — real job names the puller's token
+ * can see (exact match) resolve the same way.
  */
 
-import { DEMO_JOBS } from "./jobs";
+import { readProjectAllowlist } from "./procoreAllowlist.ts";
 import {
   procoreApiGet,
   type ProcoreOAuthConfig,
 } from "./procoreOAuth";
 import {
-  isDemoProjectName as nameIsDemo,
+  isResolvableProjectName,
   pickResolvedProject,
   readProcoreId,
   type ResolvedProcoreProject,
@@ -21,22 +23,18 @@ import {
 export type { ResolvedProcoreProject };
 
 export {
+  isResolvableProjectName,
   matchProjectName,
   pickResolvedProject,
   readProcoreId,
 } from "./procoreProjectMatch";
 
-function demoNames(): string[] {
-  return DEMO_JOBS.map((job) => job.name);
-}
-
-export function isDemoProjectName(projectName: string): boolean {
-  return nameIsDemo(projectName, demoNames());
-}
+export { projectNameIsAllowed, readProjectAllowlist } from "./procoreAllowlist";
 
 /**
- * Find the Procore company that owns this demo project name.
- * Returns null for non-demo names (never search real job titles).
+ * Find the Procore company that owns this project name.
+ * Returns null when the name is not allowlisted (if an allowlist is set)
+ * or no exact project match exists.
  */
 export async function resolveCompanyIdForProject(
   config: ProcoreOAuthConfig,
@@ -48,14 +46,16 @@ export async function resolveCompanyIdForProject(
 }
 
 /**
- * Company + project ids for a demo job name. No hardcoded company id.
+ * Company + project ids for an exact Procore project name.
+ * No hardcoded company id.
  */
 export async function resolveProjectForName(
   config: ProcoreOAuthConfig,
   accessToken: string,
   projectName: string,
 ): Promise<ResolvedProcoreProject | null> {
-  if (!isDemoProjectName(projectName)) return null;
+  const allowlist = readProjectAllowlist();
+  if (!isResolvableProjectName(projectName, allowlist)) return null;
 
   const companies = await procoreApiGet(
     config,
@@ -77,5 +77,5 @@ export async function resolveProjectForName(
     projectsByCompany.push({ companyId, projects });
   }
 
-  return pickResolvedProject(companies, projectsByCompany, projectName, demoNames());
+  return pickResolvedProject(companies, projectsByCompany, projectName, allowlist);
 }
