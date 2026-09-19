@@ -21,9 +21,9 @@ type RedeemBody = {
 };
 
 /**
- * Single-use redeem. Creates the stub session with the baked invite role
- * (`full` → puller, `viewer` → viewer). Does not mark Procore linked —
- * full crew still Connect Procore with their own login after this.
+ * Single-use redeem. Writes the baked invite role onto the stub session
+ * (`viewer` | `full` — `full` is not rewritten to puller). Does not mark
+ * Procore linked — full crew still Connect Procore with their own login.
  */
 export async function POST(request: Request, { params }: Props) {
   const { token } = await params;

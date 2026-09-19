@@ -1,7 +1,7 @@
--- Crew invite links. NEW table — do not extend trial_link_tokens.
--- Role is baked into the token at mint time: viewer | full.
--- `full` maps to the existing stub session role `puller` (normal dashboard).
--- Single-use: used_at is set on redeem. Expired or used tokens are rejected.
+-- Crew invite links. NEW table `invite_tokens` — not `invites`, not
+-- trial_link_tokens. Role is baked into the token: viewer | full.
+-- Redeem writes that same role onto gcfieldlog_stub_user (`full` stays
+-- `full`). Single-use: used_at is set on redeem.
 --
 -- Does NOT create or alter:
 --   public.trial_link_tokens

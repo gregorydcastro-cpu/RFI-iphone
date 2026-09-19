@@ -22,6 +22,12 @@ test("readFieldRole keeps invited full / puller session", () => {
     sessionRole: "puller",
   });
   assert.deepEqual(unlinked, { procoreLinked: false, role: "puller" });
+
+  const invitedFull = readFieldRole({
+    cookieValue: "1",
+    sessionRole: "full",
+  });
+  assert.deepEqual(invitedFull, { procoreLinked: true, role: "full" });
 });
 
 test("readFieldRole falls back to Procore cookie when no stub role", () => {

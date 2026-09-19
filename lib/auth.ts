@@ -12,7 +12,13 @@ export const PROCORE_LINKED_COOKIE = "gcfieldlog_procore_linked";
 export const PROCORE_LINKED_HEADER = "x-procore-linked";
 export const STUB_SESSION_COOKIE = "gcfieldlog_stub_user";
 
-export type FieldRoleName = "puller" | "viewer";
+/** Stub / invite session role. `full` is invite-minted crew (kept on the cookie). */
+export type FieldRoleName = "puller" | "full" | "viewer";
+
+export function parseFieldRoleName(value: unknown): FieldRoleName {
+  if (value === "puller" || value === "full" || value === "viewer") return value;
+  return "viewer";
+}
 
 export type FieldRole = {
   /** True when this session is the Procore-linked puller. */
@@ -21,7 +27,7 @@ export type FieldRole = {
 };
 
 export function isPullerRole(role: string | null | undefined): boolean {
-  return role === "puller";
+  return role === "puller" || role === "full";
 }
 
 export function cookieSecureFromRequest(request: Request): boolean {
@@ -96,8 +102,9 @@ function sessionRoleFromCookieHeader(
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as { role?: unknown };
-    if (parsed.role === "puller") return "puller";
-    if (parsed.role === "viewer") return "viewer";
+    if (parsed.role === "puller" || parsed.role === "full" || parsed.role === "viewer") {
+      return parsed.role;
+    }
     return null;
   } catch {
     return null;
@@ -117,14 +124,20 @@ export function readFieldRole(input: {
   );
   const linkedFlag = fromHeader || fromCookie;
   const sessionRole =
-    input.sessionRole === "puller" || input.sessionRole === "viewer"
+    input.sessionRole === "puller" ||
+    input.sessionRole === "full" ||
+    input.sessionRole === "viewer"
       ? input.sessionRole
       : sessionRoleFromCookieHeader(input.cookieHeader);
 
   // Invite / stub session role wins. A viewer who later connects Procore
   // stays a viewer — the linked cookie must not upgrade them to puller.
+  // `full` stays `full` after Connect Procore (not rewritten to puller).
   if (sessionRole === "viewer") {
     return { procoreLinked: false, role: "viewer" };
+  }
+  if (sessionRole === "full") {
+    return { procoreLinked: linkedFlag, role: "full" };
   }
   if (sessionRole === "puller") {
     return { procoreLinked: linkedFlag, role: "puller" };

@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     login.searchParams.set("next", "/api/procore/connect");
     return NextResponse.redirect(login);
   }
-  if (session.role !== "puller") {
+  if (session.role !== "puller" && session.role !== "full") {
     return redirectWithError(request, "viewer_only");
   }
 

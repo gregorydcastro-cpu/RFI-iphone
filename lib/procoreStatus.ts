@@ -1,3 +1,4 @@
+import type { FieldRoleName } from "./auth";
 import {
   fetchProcoreConnectionStatus,
   isProcoreTokenStorageConfigured,
@@ -8,7 +9,7 @@ import type { StubSession } from "./stubSession";
 
 export type ProcoreConnectionView = {
   signedIn: boolean;
-  role: "puller" | "viewer" | null;
+  role: FieldRoleName | null;
   email: string | null;
   userId: string | null;
   connected: boolean;

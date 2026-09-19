@@ -14,6 +14,7 @@ import {
 } from "@/lib/pack";
 import { layoutSheetId, resolveSheetPdf } from "@/lib/packNormalize";
 import { sheetKindLabel, splitPackSheets } from "@/lib/sheetOrder";
+import type { FieldRoleName } from "@/lib/auth";
 import { viewerSheetPdfSrc } from "@/lib/sheetPdfUrl";
 import { ActionPanel } from "./ActionPanel";
 import { AppHeader } from "./AppHeader";
@@ -34,6 +35,7 @@ type Props = {
   pull?: "procore" | "bot" | "none";
   procoreLinked?: boolean;
   readOnly?: boolean;
+  role?: FieldRoleName | null;
 };
 
 export function RoomPackViewer({
@@ -48,6 +50,7 @@ export function RoomPackViewer({
   pull,
   procoreLinked = false,
   readOnly = false,
+  role = null,
 }: Props) {
   const router = useRouter();
   const [livePack, setLivePack] = useState<RoomPack | null>(null);
@@ -115,7 +118,7 @@ export function RoomPackViewer({
     <div className="flex min-h-dvh flex-col bg-ink text-paper">
       <AppHeader
         signedIn
-        role={readOnly ? "viewer" : "puller"}
+        role={role ?? (readOnly ? "viewer" : "puller")}
         procoreLinked={procoreLinked}
       />
       <PackContextBar

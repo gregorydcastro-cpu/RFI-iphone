@@ -17,7 +17,7 @@ type Props = {
 type RedeemResponse = {
   ok?: boolean;
   error?: string;
-  role?: "puller" | "viewer";
+  role?: "puller" | "full" | "viewer";
   invite_role?: InviteRole;
 };
 

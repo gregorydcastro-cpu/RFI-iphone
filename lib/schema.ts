@@ -13,8 +13,8 @@
  *   markup_overlays, trial_link_tokens
  *
  * Crew invites: supabase/migrations/20260919010000_invite_tokens.sql
- *   public.invite_tokens — NEW table, do not extend trial_link_tokens.
- *   role is viewer | full (full → stub session puller).
+ *   public.invite_tokens — NEW table (not `invites`, not trial_link_tokens).
+ *   role is viewer | full. Redeem writes that role onto the stub session.
  *
  * Overlay FK: supabase/migrations/20260918130000_rfis_markup_overlay_fk.sql
  * attaches rfis.markup_id → markup_overlays. Row shape stays RfiDraftRow

@@ -1,9 +1,9 @@
 /**
  * In-app crew invite links.
  *
- * Table: public.invite_tokens (NOT trial_link_tokens).
+ * Table: public.invite_tokens (NOT trial_link_tokens, NOT `invites`).
  * Role baked into the token: `viewer` | `full`.
- * `full` maps to the existing stub session role `puller`.
+ * Redeem writes that same role onto gcfieldlog_stub_user (`full` stays `full`).
  * Tokens are single-use: redeem sets used_at.
  */
 
@@ -36,15 +36,15 @@ export function parseInviteRole(value: unknown): InviteRole | null {
   return null;
 }
 
-/** Session role stored on the stub cookie. `full` invite → `puller`. */
+/** Session role stored on the stub cookie. Invite `full` stays `full`. */
 export function fieldRoleFromInviteRole(role: InviteRole): FieldRoleName {
-  return role === "full" ? "puller" : "viewer";
+  return role;
 }
 
 export function inviteRoleFromFieldRole(
   role: FieldRoleName | null | undefined,
 ): InviteRole {
-  return role === "puller" ? "full" : "viewer";
+  return role === "viewer" ? "viewer" : "full";
 }
 
 export function generateInviteToken(): string {
@@ -79,15 +79,15 @@ export function inviteStatus(
 }
 
 export function canMintInvites(role: string | null | undefined): boolean {
-  return role === "puller";
+  return role === "puller" || role === "full";
 }
 
 export function canWriteFieldLog(role: string | null | undefined): boolean {
-  return role === "puller";
+  return role === "puller" || role === "full";
 }
 
 export function isViewerReadOnly(role: string | null | undefined): boolean {
-  return role !== "puller";
+  return !canWriteFieldLog(role);
 }
 
 export function isWritePackAction(actionId: string, label = ""): boolean {

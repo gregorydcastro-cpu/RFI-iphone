@@ -32,7 +32,7 @@ test("invite helpers stay Maple Point / fictional only", () => {
   assert.equal(forbidden.test(blob), false);
 });
 
-test("invite role lock is viewer | full and maps to stub puller", () => {
+test("invite role lock is viewer | full and stays on the stub session", () => {
   assert.equal(isInviteRole("viewer"), true);
   assert.equal(isInviteRole("full"), true);
   assert.equal(isInviteRole("puller"), false);
@@ -40,14 +40,18 @@ test("invite role lock is viewer | full and maps to stub puller", () => {
   assert.equal(parseInviteRole("puller"), "full");
   assert.equal(parseInviteRole("viewer"), "viewer");
   assert.equal(parseInviteRole("nope"), null);
-  assert.equal(fieldRoleFromInviteRole("full"), "puller");
+  assert.equal(fieldRoleFromInviteRole("full"), "full");
   assert.equal(fieldRoleFromInviteRole("viewer"), "viewer");
   assert.equal(inviteRoleFromFieldRole("puller"), "full");
+  assert.equal(inviteRoleFromFieldRole("full"), "full");
   assert.equal(canMintInvites("puller"), true);
+  assert.equal(canMintInvites("full"), true);
   assert.equal(canMintInvites("viewer"), false);
   assert.equal(canWriteFieldLog("puller"), true);
+  assert.equal(canWriteFieldLog("full"), true);
   assert.equal(isViewerReadOnly("viewer"), true);
   assert.equal(isViewerReadOnly("puller"), false);
+  assert.equal(isViewerReadOnly("full"), false);
 });
 
 test("normalizeInviteeEmail trims and lowercases", () => {
@@ -142,7 +146,7 @@ test("memory mint + redeem is single-use and binds invitee email", () => {
   }
 });
 
-test("full invite redeems to puller session role", () => {
+test("full invite stays full on the stub session", () => {
   const minted = mintInviteRecord({
     role: "full",
     createdBy: "stub:foreman",
@@ -157,7 +161,7 @@ test("full invite redeems to puller session role", () => {
   assert.equal(redeemed.ok, true);
   if (redeemed.ok) {
     assert.equal(redeemed.row.invitee_email, "jordan.hale@crew.example");
-    assert.equal(fieldRoleFromInviteRole(redeemed.row.role), "puller");
+    assert.equal(fieldRoleFromInviteRole(redeemed.row.role), "full");
   }
 });
 
