@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
+import { VoiceFeedback } from "@/components/VoiceFeedback";
 import {
   getReadAloudServerSnapshot,
   getReadAloudSnapshot,
@@ -8,7 +9,15 @@ import {
   stopAloud,
   subscribeReadAloud,
 } from "@/lib/readAloudStore";
-import { loadVoiceStatus } from "@/lib/voiceStatus";
+import { voiceErrorMessage } from "@/lib/voiceErrors";
+import {
+  getVoiceStatusServerSnapshot,
+  getVoiceStatusSnapshot,
+  loadVoiceStatus,
+  refreshVoiceStatus,
+  subscribeVoiceStatus,
+  voiceStatusBlocksMic,
+} from "@/lib/voiceStatus";
 
 type Props = {
   id: string;
@@ -59,6 +68,11 @@ export function ReadAloudButton({
     getReadAloudSnapshot,
     getReadAloudServerSnapshot,
   );
+  const voice = useSyncExternalStore(
+    subscribeVoiceStatus,
+    getVoiceStatusSnapshot,
+    getVoiceStatusServerSnapshot,
+  );
 
   useEffect(() => {
     void loadVoiceStatus();
@@ -66,12 +80,15 @@ export function ReadAloudButton({
 
   const active = player.id === id;
   const mode = active ? player.status : "idle";
-  const busy = Boolean(text.trim()) && !disabled;
+  const blocked = voiceStatusBlocksMic(voice);
+  const busy = Boolean(text.trim()) && !disabled && !blocked;
   const buttonLabel =
     mode === "loading" ? "Loading…" : mode === "playing" ? "Stop" : label;
+  const error = active ? player.error : null;
 
   async function onClick() {
-    if (!busy) return;
+    if (blocked) return;
+    if (!busy && mode === "idle") return;
     if (mode === "playing" || mode === "loading") {
       stopAloud();
       return;
@@ -84,10 +101,10 @@ export function ReadAloudButton({
       <button
         type="button"
         onClick={() => void onClick()}
-        disabled={!busy}
+        disabled={!busy && mode === "idle"}
         aria-pressed={mode === "playing"}
         aria-label={buttonLabel}
-        className={`inline-flex min-h-12 min-w-12 items-center justify-center gap-2 border px-4 text-sm font-semibold tracking-wide uppercase ${
+        className={`inline-flex min-h-14 min-w-14 items-center justify-center gap-2 border px-4 text-sm font-semibold tracking-wide uppercase ${
           mode === "playing"
             ? "border-cta bg-cta text-secondary"
             : "border-line bg-ink text-secondary hover:border-cta hover:bg-panel-2"
@@ -96,10 +113,22 @@ export function ReadAloudButton({
         <SpeakerIcon mode={mode} />
         <span>{buttonLabel}</span>
       </button>
-      {active && player.error ? (
-        <p role="alert" className="mt-2 text-sm text-cta">
-          {player.error}
-        </p>
+      {error ? (
+        <VoiceFeedback
+          className="mt-3"
+          title={player.errorCode === "unconfigured" ? "Voice is off" : "Read-aloud failed"}
+          message={error || voiceErrorMessage(player.errorCode ?? undefined)}
+          onRetry={() => {
+            void (async () => {
+              if (player.errorCode === "unconfigured") {
+                const next = await refreshVoiceStatus();
+                if (voiceStatusBlocksMic(next)) return;
+              }
+              await speakAloud(id, text);
+            })();
+          }}
+          retryLabel="Retry"
+        />
       ) : null}
     </div>
   );

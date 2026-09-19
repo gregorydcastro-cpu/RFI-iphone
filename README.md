@@ -114,6 +114,13 @@ That is the default `redirect_uri`. Preview hosts will not match unless `PROCORE
 
 This app does **not** use the Vercel AI SDK / AI Gateway for voice. The key is forwarded only from Next.js API routes. Do not put the key in the client bundle.
 
+#### Ops: Grok Voice key (issue #28)
+
+1. In Vercel → project **gc-field-log** → Settings → Environment Variables, confirm **`XAI_API_KEY`** exists on **Production** (and Preview if you test there). Server-only. Never `NEXT_PUBLIC_XAI_API_KEY`.
+2. Redeploy after adding or rotating the key so the runtime sees it.
+3. Confirm with `GET /api/voice/status` → `configured: true`. The JSON must not contain the key.
+4. Do **not** paste the key into git, chat, or client env files. This repo never invents or commits a value.
+
 #### Grok Voice (dictation + read-aloud)
 
 Hands-free field controls on the existing Generate RFI / Order materials / pack viewer flows. Drafts still go to foreman Pat Nguyen. Never a Procore submit.
@@ -134,25 +141,38 @@ Hands-free field controls on the existing Generate RFI / Order materials / pack 
 5. **Order materials** → **Dictate items**. Example: *“add 4 junction boxes”* or *“note need by Friday”*.
 6. Optional: on Jobs, **Voice command** → *“open Maple Point pack”* or *“pull room 101”*.
 
-**Smoke without a live key** (expected):
+**Production smoke** (`BASE_URL` defaults to production in `scripts/smoke-go-live.sh`):
 
 ```bash
-curl -s http://localhost:3000/api/voice/status
-# {"ok":true,"configured":false,"provider":"xai","stt":"/api/dictation","tts":"/api/tts"}
+BASE_URL="${BASE_URL:-https://www.gcfieldlog.com}"
 
-curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:3000/api/tts \
+curl -s "$BASE_URL/api/voice/status"
+# 200 JSON: { ok, configured, provider, stt, tts } — never a key field
+
+# Unconfigured (no server key): 503 + code unconfigured
+curl -s -D - -o /tmp/voice-tts.json -X POST "$BASE_URL/api/tts" \
   -H "Content-Type: application/json" \
-  -d '{"text":"RFI-001. Panel feed clarification. Status open."}'
+  -d '{"text":"Read-aloud smoke."}'
+# HTTP/… 503
+# {"ok":false,"code":"unconfigured","configured":false,…}
+
+curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE_URL/api/dictation"
 # 503
 
-curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:3000/api/dictation
-# 503
+# Configured: status configured:true; TTS 200 audio/mpeg; dictation without a file is 400 + code bad_input
+# Transient xAI 429/5xx are retried once in the route (max ~2s wait). Client shows a gloves-sized Retry.
+
+# Bundle leak check (after npm run build) — must print nothing:
+grep -R "XAI_API_KEY" .next/static || true
+grep -R "NEXT_PUBLIC_XAI" .next/static || true
 ```
 
-**When `XAI_API_KEY` is set** (server / Vercel env):
+`bash scripts/smoke-go-live.sh` also hits `/api/voice/status`, `/api/tts`, and `/api/dictation` and fails if the status body looks like it leaked a key.
+
+**When `XAI_API_KEY` is set** (server / Vercel env only):
 
 ```bash
-curl -s http://localhost:3000/api/voice/status
+curl -s "$BASE_URL/api/voice/status"
 # configured: true
 
 # Optional direct xAI checks (key stays in your shell, not the browser):
@@ -163,11 +183,11 @@ curl -X POST https://api.x.ai/v1/stt \
 curl -X POST https://api.x.ai/v1/tts \
   -H "Authorization: Bearer $XAI_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"text":"RFI-001. Panel feed clarification. Status open.","voice_id":"eve","language":"en"}' \
+  -d '{"text":"Read-aloud smoke.","voice_id":"eve","language":"en"}' \
   --output /tmp/rfi.mp3
 ```
 
-Mic capture happens in the **browser** (this IDE has no mic). Use earbuds on site; large tap targets are for gloves.
+Mic capture happens in the **browser** (this IDE has no mic). Use earbuds on site. Voice off / failures use a large high-contrast banner and a 48px **Retry** / **Check again** target — not a one-line footnote.
 
 ### Markup → Create RFI (vector overlay)
 
@@ -519,9 +539,9 @@ curl -s -X POST http://localhost:3000/api/share/weekly-refresh \
 | `/api/share/weekly-refresh` | Cron GET/POST. `CRON_SECRET` required. All pins, catalog + `room_packs` + bot. Live REST stays on pack routes. Emails each pin owner's `notify_email` on a persisted bump. |
 | `/api/time` | GET Maple Point site, workers, week punches (memory demo or service-role Supabase) |
 | `/api/time/punches` | POST worker punch (GPS + geofence) or `{ foreman: true }` missed-punch override |
-| `/api/voice/status` | GET. `{ configured }` for Grok Voice — never returns the key |
-| `/api/dictation` | POST multipart `file`. Server-side Grok STT (`XAI_API_KEY`) |
-| `/api/tts` | POST `{ text }`. Server-side Grok TTS MP3 (`XAI_API_KEY`) |
+| `/api/voice/status` | GET. `{ ok, configured, provider, stt, tts }` for Grok Voice — never returns the key. `ok: false` + `code` if the check itself fails. |
+| `/api/dictation` | POST multipart `file`. Server-side Grok STT (`XAI_API_KEY`). Errors: `{ ok:false, code, error }` (`unconfigured` 503, `bad_input` 400, `too_large` 413, `no_speech` 422, `busy` 429, `timeout` 504, `unreachable`/`rejected`/`failed` 502). Safe retry on 429/5xx. |
+| `/api/tts` | POST `{ text }`. Server-side Grok TTS MP3 (`XAI_API_KEY`). Same `code` shape. Unknown custom `voice_id` falls back to `eve`. |
 | `/api/markups` | GET/PUT vector overlay for a pack sheet (`request_id` + `sheet_id`). Service-role upsert into `markup_overlays`. localStorage only if service role is missing. |
 | `/api/stripe/checkout` | POST. Creates a subscription Checkout Session (60-day trial). |
 | `/api/stripe/webhook` | POST. Stripe signature + `billing_customers` upsert. |
