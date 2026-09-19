@@ -8,6 +8,7 @@ import {
   getSupabaseServiceConfig,
   type SupabaseServiceConfig,
 } from "./procoreConnections";
+import { mergeAppMetadataRole } from "./session";
 
 export const PROFILES_TABLE = "profiles";
 
@@ -171,12 +172,28 @@ async function updateAuthAppMetadataRole(
   const config =
     deps.supabase === undefined ? getSupabaseServiceConfig() : deps.supabase;
   if (!config) return;
+  const current = await authAdminFetch(
+    config,
+    `admin/users/${encodeURIComponent(userId)}`,
+    { method: "GET" },
+    deps.fetch,
+  );
+  let existing: Record<string, unknown> | null = null;
+  if (current?.ok) {
+    const json: unknown = await current.json().catch(() => null);
+    if (json && typeof json === "object") {
+      const meta = (json as { app_metadata?: unknown }).app_metadata;
+      if (meta && typeof meta === "object" && !Array.isArray(meta)) {
+        existing = meta as Record<string, unknown>;
+      }
+    }
+  }
   const response = await authAdminFetch(
     config,
     `admin/users/${encodeURIComponent(userId)}`,
     {
       method: "PUT",
-      body: JSON.stringify({ app_metadata: { role } }),
+      body: JSON.stringify({ app_metadata: mergeAppMetadataRole(existing, role) }),
     },
     deps.fetch,
   );

@@ -207,3 +207,146 @@ create policy rfis_owner_delete
   for delete
   to authenticated
   using (user_id = (select auth.uid())::text);
+
+-- Share / invite / trial already used auth.uid()::text. Re-assert so leftover
+-- stub: owner_user_id / created_by / user_id rows do not match a real session.
+
+drop policy if exists share_folders_owner_select on public.share_folders;
+drop policy if exists share_folders_owner_insert on public.share_folders;
+drop policy if exists share_folders_owner_update on public.share_folders;
+drop policy if exists share_folders_owner_delete on public.share_folders;
+
+create policy share_folders_owner_select
+  on public.share_folders
+  for select
+  to authenticated
+  using (owner_user_id = (select auth.uid())::text);
+
+create policy share_folders_owner_insert
+  on public.share_folders
+  for insert
+  to authenticated
+  with check (owner_user_id = (select auth.uid())::text);
+
+create policy share_folders_owner_update
+  on public.share_folders
+  for update
+  to authenticated
+  using (owner_user_id = (select auth.uid())::text)
+  with check (owner_user_id = (select auth.uid())::text);
+
+create policy share_folders_owner_delete
+  on public.share_folders
+  for delete
+  to authenticated
+  using (owner_user_id = (select auth.uid())::text);
+
+drop policy if exists pinned_sheets_owner_select on public.pinned_sheets;
+drop policy if exists pinned_sheets_owner_insert on public.pinned_sheets;
+drop policy if exists pinned_sheets_owner_update on public.pinned_sheets;
+drop policy if exists pinned_sheets_owner_delete on public.pinned_sheets;
+
+create policy pinned_sheets_owner_select
+  on public.pinned_sheets
+  for select
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.share_folders f
+      where f.id = pinned_sheets.folder_id
+        and f.owner_user_id = (select auth.uid())::text
+    )
+  );
+
+create policy pinned_sheets_owner_insert
+  on public.pinned_sheets
+  for insert
+  to authenticated
+  with check (
+    exists (
+      select 1
+      from public.share_folders f
+      where f.id = pinned_sheets.folder_id
+        and f.owner_user_id = (select auth.uid())::text
+    )
+  );
+
+create policy pinned_sheets_owner_update
+  on public.pinned_sheets
+  for update
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.share_folders f
+      where f.id = pinned_sheets.folder_id
+        and f.owner_user_id = (select auth.uid())::text
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.share_folders f
+      where f.id = pinned_sheets.folder_id
+        and f.owner_user_id = (select auth.uid())::text
+    )
+  );
+
+create policy pinned_sheets_owner_delete
+  on public.pinned_sheets
+  for delete
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.share_folders f
+      where f.id = pinned_sheets.folder_id
+        and f.owner_user_id = (select auth.uid())::text
+    )
+  );
+
+drop policy if exists invite_tokens_creator_select on public.invite_tokens;
+drop policy if exists invite_tokens_creator_insert on public.invite_tokens;
+
+create policy invite_tokens_creator_select
+  on public.invite_tokens
+  for select
+  to authenticated
+  using (created_by = (select auth.uid())::text);
+
+create policy invite_tokens_creator_insert
+  on public.invite_tokens
+  for insert
+  to authenticated
+  with check (created_by = (select auth.uid())::text);
+
+drop policy if exists trial_link_tokens_owner_select on public.trial_link_tokens;
+drop policy if exists trial_link_tokens_owner_insert on public.trial_link_tokens;
+drop policy if exists trial_link_tokens_owner_update on public.trial_link_tokens;
+drop policy if exists trial_link_tokens_owner_delete on public.trial_link_tokens;
+
+create policy trial_link_tokens_owner_select
+  on public.trial_link_tokens
+  for select
+  to authenticated
+  using (user_id = (select auth.uid())::text);
+
+create policy trial_link_tokens_owner_insert
+  on public.trial_link_tokens
+  for insert
+  to authenticated
+  with check (user_id = (select auth.uid())::text);
+
+create policy trial_link_tokens_owner_update
+  on public.trial_link_tokens
+  for update
+  to authenticated
+  using (user_id = (select auth.uid())::text)
+  with check (user_id = (select auth.uid())::text);
+
+create policy trial_link_tokens_owner_delete
+  on public.trial_link_tokens
+  for delete
+  to authenticated
+  using (user_id = (select auth.uid())::text);

@@ -30,6 +30,14 @@ export function roleFromAppMetadata(
   return optionalFieldRole(metadata?.role);
 }
 
+/** Merge role into app_metadata. Never replace other keys (provider, etc.). */
+export function mergeAppMetadataRole(
+  existing: Record<string, unknown> | null | undefined,
+  role: FieldRoleName,
+): Record<string, unknown> {
+  return { ...(existing ?? {}), role };
+}
+
 export function isAuthUserId(userId: string | null | undefined): boolean {
   if (!userId) return false;
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(

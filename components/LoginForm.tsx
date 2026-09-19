@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * Working Auth form only. Field Log owns login chrome / session-route polish.
+ * Do not add product copy or role pickers here.
+ */
+
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, useState } from "react";
 
@@ -86,15 +91,7 @@ export function LoginForm() {
           GC Field Log
         </h1>
         <p className="mt-2 text-sm text-accent-2">
-          Sign in with Supabase Auth (email and password, or a magic link).
-          Role comes from your account — puller for a new GC, viewer or full
-          from an invite. Viewers open packs without Procore. Pullers connect
-          their own Procore account. Monthly billing is a 60-day Stripe
-          Checkout trial on{" "}
-          <a href="/pricing" className="text-accent underline">
-            /pricing
-          </a>
-          .
+          Email and password, or a magic link.
         </p>
       </div>
       {authFlag === "error" ? (

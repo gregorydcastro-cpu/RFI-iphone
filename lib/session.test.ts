@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   isAuthUserId,
   isStubUserId,
+  mergeAppMetadataRole,
   optionalFieldRole,
   resolveSessionRole,
   roleFromAppMetadata,
@@ -49,6 +50,16 @@ test("resolveSessionRole prefers profiles, then app_metadata, then invite, else 
     await resolveSessionRole({ ...user, app_metadata: {} }),
     "puller",
   );
+});
+
+test("invite role merge keeps existing app_metadata keys", () => {
+  const merged = mergeAppMetadataRole(
+    { provider: "email", providers: ["email"] },
+    "viewer",
+  );
+  assert.equal(merged.role, "viewer");
+  assert.equal(merged.provider, "email");
+  assert.deepEqual(merged.providers, ["email"]);
 });
 
 test("session helpers stay Maple Point / fictional only", () => {
