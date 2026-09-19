@@ -181,9 +181,13 @@ export function LoginForm({ authConfigured = true }: Props) {
       <button
         type="submit"
         disabled={pending || !authConfigured}
-        className="mt-6 min-h-14 w-full bg-cta px-5 text-base font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
+        className="mt-6 min-h-14 w-full bg-cta px-5 text-base font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:cursor-not-allowed disabled:bg-cta/45 disabled:opacity-80"
       >
-        {pending ? copy.pending : copy.submit}
+        {!authConfigured
+          ? "Auth not configured"
+          : pending
+            ? copy.pending
+            : copy.submit}
       </button>
     </form>
   );
