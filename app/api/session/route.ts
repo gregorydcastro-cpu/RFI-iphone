@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { cookieSecureFromRequest, procoreLinkedCookieOptions } from "@/lib/auth";
+import {
+  authUnconfiguredMessage,
+  friendlyAuthError,
+  parseFieldAuthMode,
+} from "@/lib/authMessages";
 import { applyProfileRole } from "@/lib/profiles";
 import {
   publicSessionJson,
@@ -39,11 +44,6 @@ function asEmail(value: unknown): string | null {
 function asPassword(value: unknown): string | null {
   if (typeof value !== "string") return null;
   return value.length > 0 ? value : null;
-}
-
-function parseMode(value: unknown): "signin" | "signup" | "otp" {
-  if (value === "signup" || value === "otp") return value;
-  return "signin";
 }
 
 function json(data: unknown, status = 200) {
@@ -106,8 +106,7 @@ export async function POST(request: Request) {
     return json(
       {
         ok: false,
-        error:
-          "Supabase Auth is not configured. Set SUPABASE_URL and SUPABASE_ANON_KEY (server-only).",
+        error: authUnconfiguredMessage(),
         stub: false,
       },
       503,
@@ -126,7 +125,7 @@ export async function POST(request: Request) {
     return json({ ok: false, error: "email is required", stub: false }, 400);
   }
 
-  const mode = parseMode(body.mode);
+  const mode = parseFieldAuthMode(body.mode);
   const scratch = NextResponse.next();
   const supabase = createSupabaseRouteClient(request, scratch);
   if (!supabase) {
@@ -146,7 +145,7 @@ export async function POST(request: Request) {
       return json(
         {
           ok: false,
-          error: error.message || "Could not send a magic link.",
+          error: friendlyAuthError(error.message, "Could not send a magic link."),
           stub: false,
         },
         400,
@@ -181,7 +180,7 @@ export async function POST(request: Request) {
       return json(
         {
           ok: false,
-          error: error.message || "Could not create an account.",
+          error: friendlyAuthError(error.message, "Could not create an account."),
           stub: false,
         },
         400,
@@ -209,7 +208,7 @@ export async function POST(request: Request) {
     return json(
       {
         ok: false,
-        error: error?.message || "Email or password is incorrect.",
+        error: friendlyAuthError(error?.message, "Email or password is incorrect."),
         stub: false,
       },
       401,

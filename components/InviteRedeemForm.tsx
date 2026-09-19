@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
+import {
+  FieldAuthModeSwitch,
+  FIELD_AUTH_INPUT_CLASS,
+} from "@/components/FieldAuthModeSwitch";
+import { friendlyAuthError, type FieldAuthMode } from "@/lib/authMessages";
 import type { InviteRole, InviteStatus } from "@/lib/invites";
 
 type Props = {
@@ -35,7 +40,7 @@ export function InviteRedeemForm({
   const router = useRouter();
   const [email, setEmail] = useState(inviteeEmail ?? sessionEmail ?? "");
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"signin" | "signup" | "otp">("signin");
+  const [mode, setMode] = useState<FieldAuthMode>("signin");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -64,7 +69,7 @@ export function InviteRedeemForm({
       });
       const data = (await response.json()) as RedeemResponse;
       if (!response.ok || !data.ok) {
-        setError(data.error ?? "Could not accept this invite.");
+        setError(friendlyAuthError(data.error, "Could not accept this invite."));
         return;
       }
       if (data.needsEmailConfirm) {
@@ -169,21 +174,28 @@ export function InviteRedeemForm({
           </p>
         ) : null}
       </div>
-      <label className="block text-xs font-semibold tracking-wide text-muted uppercase">
+      {!signedIn ? (
+        <FieldAuthModeSwitch mode={mode} onChange={setMode} disabled={pending} />
+      ) : null}
+      <label className="block text-sm font-semibold tracking-wide text-muted uppercase">
         Email
         <input
           required
           type="email"
+          inputMode="email"
           autoComplete="username"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           value={email}
           readOnly={lockedEmail}
           onChange={(event) => setEmail(event.target.value)}
-          className="mt-1 w-full border border-line bg-ink px-3 py-2 text-sm text-paper outline-none focus:border-cta"
+          className={`mt-1 ${FIELD_AUTH_INPUT_CLASS}`}
           placeholder="alex.rivera@crew.example"
         />
       </label>
       {!signedIn && mode !== "otp" ? (
-        <label className="block text-xs font-semibold tracking-wide text-muted uppercase">
+        <label className="block text-sm font-semibold tracking-wide text-muted uppercase">
           Password
           <input
             required
@@ -191,63 +203,26 @@ export function InviteRedeemForm({
             autoComplete={mode === "signup" ? "new-password" : "current-password"}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            className="mt-1 w-full border border-line bg-ink px-3 py-2 text-sm text-paper outline-none focus:border-cta"
+            className={`mt-1 ${FIELD_AUTH_INPUT_CLASS}`}
             placeholder="••••••••"
             minLength={6}
           />
         </label>
       ) : null}
-      {!signedIn ? (
-        <div className="flex flex-wrap gap-2 text-xs">
-          <button
-            type="button"
-            className={
-              mode === "signin"
-                ? "border border-cta px-2 py-1 text-paper"
-                : "border border-line px-2 py-1 text-muted"
-            }
-            onClick={() => setMode("signin")}
-          >
-            Sign in
-          </button>
-          <button
-            type="button"
-            className={
-              mode === "signup"
-                ? "border border-cta px-2 py-1 text-paper"
-                : "border border-line px-2 py-1 text-muted"
-            }
-            onClick={() => setMode("signup")}
-          >
-            Create account
-          </button>
-          <button
-            type="button"
-            className={
-              mode === "otp"
-                ? "border border-cta px-2 py-1 text-paper"
-                : "border border-line px-2 py-1 text-muted"
-            }
-            onClick={() => setMode("otp")}
-          >
-            Magic link
-          </button>
-        </div>
-      ) : null}
       {error ? (
-        <p role="alert" className="text-sm text-cta">
+        <p role="alert" className="border border-cta/50 bg-cta/10 px-4 py-3 text-base text-cta">
           {error}
         </p>
       ) : null}
       {info ? (
-        <p role="status" className="text-sm text-accent-2">
+        <p role="status" className="border border-accent-2/40 bg-panel-2 px-4 py-3 text-base text-accent-2">
           {info}
         </p>
       ) : null}
       <button
         type="submit"
         disabled={pending}
-        className="min-h-12 w-full bg-cta px-5 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
+        className="min-h-14 w-full bg-cta px-5 text-base font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
       >
         {pending ? "Joining…" : `Accept ${roleLabel} invite`}
       </button>

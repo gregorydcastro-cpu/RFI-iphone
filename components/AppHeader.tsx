@@ -122,10 +122,15 @@ export function AppHeader({
             </>
           ) : (
             <>
-              <Link className="text-secondary hover:text-cta" href="/pricing">
+              <Link
+                className="inline-flex min-h-11 items-center text-secondary hover:text-cta"
+                href="/pricing"
+              >
                 Pricing
               </Link>
-              <span className="text-accent-2">Login</span>
+              <span className="inline-flex min-h-11 items-center text-cta">
+                Login
+              </span>
             </>
           )}
         </nav>
