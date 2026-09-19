@@ -1,8 +1,8 @@
 /**
  * Service-role CRUD for share_folders, pinned_sheets, sheet_revision_cache.
  *
- * Stub session ids (`stub:` + sha256 email) are not auth.uid(), so writes
- * require SUPABASE_SERVICE_ROLE_KEY. Anon has no grants on these tables.
+ * owner_user_id is auth.uid()::text. Writes still use
+ * SUPABASE_SERVICE_ROLE_KEY for the privileged path. Anon has no grants.
  * Never call Procore from here. Never NEXT_PUBLIC_ the service role key.
  */
 

@@ -1,8 +1,8 @@
 /**
  * Service-role CRUD for public.invite_tokens.
  *
- * Stub session ids (`stub:` + sha256 email) are not auth.uid(), so mint
- * and redeem use SUPABASE_SERVICE_ROLE_KEY. Anon has no grants.
+ * created_by is auth.uid()::text. Mint/redeem use SUPABASE_SERVICE_ROLE_KEY.
+ * Anon has no grants.
  * Local / unset service role: process-memory fallback (same pattern as
  * share folders / Time). Never NEXT_PUBLIC_ the service role key.
  */

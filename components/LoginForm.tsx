@@ -1,48 +1,85 @@
 "use client";
 
+/**
+ * Working Auth form only. Field Log owns login chrome / session-route polish.
+ * Do not add product copy or role pickers here.
+ */
+
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, useState } from "react";
-import type { FieldRoleName } from "@/lib/auth";
+
+type Mode = "signin" | "signup" | "otp";
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<FieldRoleName>("viewer");
+  const [mode, setMode] = useState<Mode>("signin");
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
+  const authReason = searchParams.get("reason");
+  const authFlag = searchParams.get("auth");
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
     setPending(true);
     setError(null);
+    setInfo(null);
 
     try {
       const response = await fetch("/api/session", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, role }),
+        body: JSON.stringify({
+          email,
+          password: mode === "otp" ? undefined : password,
+          mode,
+        }),
       });
-      const data = (await response.json()) as { ok?: boolean; error?: string };
+      const data = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        needsEmailConfirm?: boolean;
+      };
       if (!response.ok || !data.ok) {
-        setError(data.error ?? "Could not start a session");
+        setError(data.error ?? "Could not sign in");
         return;
       }
-      console.info("[gcfieldlog] stub login — no real auth yet", {
-        email,
-        role,
-      });
+      if (data.needsEmailConfirm) {
+        setInfo(
+          mode === "otp"
+            ? "Check your email for a sign-in link."
+            : "Check your email to confirm this account, then sign in.",
+        );
+        return;
+      }
       const next = searchParams.get("next");
       router.push(next && next.startsWith("/") ? next : "/jobs");
       router.refresh();
     } catch {
-      setError("Could not reach the session service. Try again.");
+      setError("Could not reach auth. Try again.");
     } finally {
       setPending(false);
     }
   }
+
+  const submitLabel =
+    mode === "otp"
+      ? pending
+        ? "Sending…"
+        : "Email me a link"
+      : mode === "signup"
+        ? pending
+          ? "Creating…"
+          : "Create account"
+        : pending
+          ? "Signing in…"
+          : "Sign in";
 
   return (
     <form
@@ -54,15 +91,16 @@ export function LoginForm() {
           GC Field Log
         </h1>
         <p className="mt-2 text-sm text-accent-2">
-          Stub login. No real auth or Apple sign-in. Viewers open packs
-          without Procore. Pullers connect their own Procore account to
-          pull. Monthly billing is a 60-day Stripe Checkout trial on{" "}
-          <a href="/pricing" className="text-accent underline">
-            /pricing
-          </a>
-          .
+          Email and password, or a magic link.
         </p>
       </div>
+      {authFlag === "error" ? (
+        <p role="alert" className="text-sm text-cta">
+          {authReason === "auth_unconfigured"
+            ? "Supabase Auth is not configured on this host."
+            : "Sign-in link expired or failed. Try again."}
+        </p>
+      ) : null}
       <label className="block text-xs font-semibold tracking-wide text-muted uppercase">
         Email
         <input
@@ -75,59 +113,64 @@ export function LoginForm() {
           placeholder="foreman@crew.example"
         />
       </label>
-      <label className="block text-xs font-semibold tracking-wide text-muted uppercase">
-        Password
-        <input
-          required
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          className="mt-1 w-full border border-line bg-ink px-3 py-2 text-sm text-paper outline-none focus:border-cta"
-          placeholder="••••••••"
-        />
-      </label>
-      <fieldset className="space-y-2">
-        <legend className="text-xs font-semibold tracking-wide text-muted uppercase">
-          Role
-        </legend>
-        <label className="flex items-start gap-2 text-sm text-paper">
+      {mode !== "otp" ? (
+        <label className="block text-xs font-semibold tracking-wide text-muted uppercase">
+          Password
           <input
-            type="radio"
-            name="role"
-            value="viewer"
-            checked={role === "viewer"}
-            onChange={() => setRole("viewer")}
-            className="mt-1"
+            required
+            type="password"
+            autoComplete={mode === "signup" ? "new-password" : "current-password"}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="mt-1 w-full border border-line bg-ink px-3 py-2 text-sm text-paper outline-none focus:border-cta"
+            placeholder="••••••••"
+            minLength={6}
           />
-          <span>
-            <span className="font-medium">View only</span>
-            <span className="mt-0.5 block text-xs text-muted">
-              Open packs. No Procore connect required. Cannot trigger a pull.
-            </span>
-          </span>
         </label>
-        <label className="flex items-start gap-2 text-sm text-paper">
-          <input
-            type="radio"
-            name="role"
-            value="puller"
-            checked={role === "puller"}
-            onChange={() => setRole("puller")}
-            className="mt-1"
-          />
-          <span>
-            <span className="font-medium">Puller</span>
-            <span className="mt-0.5 block text-xs text-muted">
-              Must Connect Procore with your own credentials. No developer
-              portal signup.
-            </span>
-          </span>
-        </label>
-      </fieldset>
+      ) : null}
+      <div className="flex flex-wrap gap-2 text-xs">
+        <button
+          type="button"
+          className={
+            mode === "signin"
+              ? "border border-cta px-2 py-1 text-paper"
+              : "border border-line px-2 py-1 text-muted"
+          }
+          onClick={() => setMode("signin")}
+        >
+          Sign in
+        </button>
+        <button
+          type="button"
+          className={
+            mode === "signup"
+              ? "border border-cta px-2 py-1 text-paper"
+              : "border border-line px-2 py-1 text-muted"
+          }
+          onClick={() => setMode("signup")}
+        >
+          Create account
+        </button>
+        <button
+          type="button"
+          className={
+            mode === "otp"
+              ? "border border-cta px-2 py-1 text-paper"
+              : "border border-line px-2 py-1 text-muted"
+          }
+          onClick={() => setMode("otp")}
+        >
+          Magic link
+        </button>
+      </div>
       {error ? (
         <p role="alert" className="text-sm text-cta">
           {error}
+        </p>
+      ) : null}
+      {info ? (
+        <p role="status" className="text-sm text-accent-2">
+          {info}
         </p>
       ) : null}
       <button
@@ -135,7 +178,7 @@ export function LoginForm() {
         disabled={pending}
         className="w-full bg-cta px-4 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
       >
-        {pending ? "Entering…" : "Enter dashboard"}
+        {submitLabel}
       </button>
     </form>
   );

@@ -1,8 +1,7 @@
-import { readFieldRoleFromRequest } from "@/lib/auth";
 import { makeRequestId, resolvePullJob } from "@/lib/jobs";
 import { refreshLiveRoomPack } from "@/lib/livePack";
 import { PROCORE_BOT_ID } from "@/lib/procoreBot";
-import { stubSessionFromRequest } from "@/lib/stubSession";
+import { fieldRoleForRequest } from "@/lib/session.server";
 import { getSupabaseConfig } from "@/lib/supabaseRoomPack";
 import { NextResponse } from "next/server";
 
@@ -36,7 +35,7 @@ function json(data: unknown, status = 200) {
  * DEMO_JOBS-only.
  */
 export async function POST(request: Request) {
-  const role = readFieldRoleFromRequest(request);
+  const { session, role } = await fieldRoleForRequest(request);
   if (!role.procoreLinked) {
     return json(
       {
@@ -72,8 +71,6 @@ export async function POST(request: Request) {
 
   const requestId = makeRequestId(job.slug, room);
   const supabaseConfigured = Boolean(getSupabaseConfig());
-  const session = stubSessionFromRequest(request);
-
   const live = await refreshLiveRoomPack({
     requestId,
     job,

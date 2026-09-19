@@ -4,7 +4,7 @@ import { ProcoreConnectCard } from "@/components/ProcoreConnectCard";
 import { VoiceCommandBar } from "@/components/VoiceCommandBar";
 import { DEMO_JOBS } from "@/lib/jobs";
 import { getProcoreConnectionView, procoreErrorMessage } from "@/lib/procoreStatus";
-import { readStubSession } from "@/lib/stubSession";
+import { requireAppSession } from "@/lib/session.server";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,7 @@ type Props = {
 
 export default async function JobsPage({ searchParams }: Props) {
   const query = await searchParams;
-  const session = await readStubSession();
+  const session = await requireAppSession("/jobs");
   const view = await getProcoreConnectionView(session);
   const error = query.procore === "error" ? procoreErrorMessage(query.reason) : null;
   const canPull = view.role === "puller" && view.connected;
@@ -22,7 +22,7 @@ export default async function JobsPage({ searchParams }: Props) {
   return (
     <div className="flex min-h-dvh flex-col">
       <AppHeader
-        signedIn
+        signedIn={view.signedIn}
         role={view.role}
         procoreConnected={view.connected}
         procoreLinked={canPull}

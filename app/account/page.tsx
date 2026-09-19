@@ -7,7 +7,7 @@ import { loadAccountNotifyEmail } from "@/lib/accountNotifyEmail";
 import { canManageNotifyEmail } from "@/lib/accountRole";
 import { canInviteCrew, fieldRoleLabel } from "@/lib/inviteRole";
 import { getProcoreConnectionView, procoreErrorMessage } from "@/lib/procoreStatus";
-import { readStubSession } from "@/lib/stubSession";
+import { readAppSession } from "@/lib/session.server";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ type Props = {
 
 export default async function AccountPage({ searchParams }: Props) {
   const query = await searchParams;
-  const session = await readStubSession();
+  const session = await readAppSession();
   const view = await getProcoreConnectionView(session);
   const notify = session && canManageNotifyEmail(session.role)
     ? await loadAccountNotifyEmail(session.userId)
@@ -44,7 +44,7 @@ export default async function AccountPage({ searchParams }: Props) {
             <Link href="/" className="text-accent underline">
               Sign in
             </Link>{" "}
-            first (stub session), then connect Procore if you pull packs.
+            first, then connect Procore if you pull packs.
           </p>
         ) : (
           <dl className="mt-4 space-y-1 text-sm text-muted">

@@ -1,18 +1,19 @@
 /**
- * Stub role gate for GC Field Log.
+ * Field role gate for GC Field Log.
  *
- * Auth is not real yet. Default is read-only viewer. A linked Procore
- * account (the puller) is marked after OAuth connect (cookie) or via
- * header `x-procore-linked`. Connect Procore stores tokens per stub user.
- * Invite redeem writes the stub session role; that role wins so a viewer
- * who later connects Procore stays a viewer.
+ * Session is Supabase Auth (auth.uid()). Role comes from profiles /
+ * app_metadata / invite redeem — never from a stub cookie.
+ * A linked Procore account is marked after OAuth (cookie) or via
+ * header `x-procore-linked`. Invite role wins so a viewer who later
+ * connects Procore stays a viewer.
  */
 
+/** Leftover cookie name only — expired in proxy / logout. Not a login. */
+export const STUB_SESSION_COOKIE = "gcfieldlog_stub_user";
 export const PROCORE_LINKED_COOKIE = "gcfieldlog_procore_linked";
 export const PROCORE_LINKED_HEADER = "x-procore-linked";
-export const STUB_SESSION_COOKIE = "gcfieldlog_stub_user";
 
-/** Stub / invite session role. `full` is invite-minted crew (kept on the cookie). */
+/** Invite / account role. `full` is invite-minted crew (stays `full`). */
 export type FieldRoleName = "puller" | "full" | "viewer";
 
 export function parseFieldRoleName(value: unknown): FieldRoleName {
@@ -95,22 +96,6 @@ export function readCookieValue(
   return undefined;
 }
 
-function sessionRoleFromCookieHeader(
-  cookieHeader: string | null | undefined,
-): FieldRoleName | null {
-  const raw = readCookieValue(cookieHeader, STUB_SESSION_COOKIE);
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as { role?: unknown };
-    if (parsed.role === "puller" || parsed.role === "full" || parsed.role === "viewer") {
-      return parsed.role;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 export function readFieldRole(input: {
   cookieHeader?: string | null;
   cookieValue?: string | null;
@@ -128,9 +113,9 @@ export function readFieldRole(input: {
     input.sessionRole === "full" ||
     input.sessionRole === "viewer"
       ? input.sessionRole
-      : sessionRoleFromCookieHeader(input.cookieHeader);
+      : null;
 
-  // Invite / stub session role wins. A viewer who later connects Procore
+  // Invite / account role wins. A viewer who later connects Procore
   // stays a viewer — the linked cookie must not upgrade them to puller.
   // `full` stays `full` after Connect Procore (not rewritten to puller).
   if (sessionRole === "viewer") {

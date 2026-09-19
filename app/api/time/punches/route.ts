@@ -1,7 +1,6 @@
-import { readCookieValue } from "@/lib/auth";
 import { isPunchType } from "@/lib/time";
 import { createWorkerPunch, saveForemanPunch } from "@/lib/timeStore";
-import { parseStubSession, STUB_SESSION_COOKIE } from "@/lib/stubSession";
+import { readAppSession } from "@/lib/session.server";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -12,10 +11,8 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: NO_STORE });
 }
 
-function sessionFrom(request: Request) {
-  return parseStubSession(
-    readCookieValue(request.headers.get("cookie"), STUB_SESSION_COOKIE),
-  );
+async function sessionFrom() {
+  return readAppSession();
 }
 
 type PunchBody = {
@@ -37,9 +34,9 @@ type PunchBody = {
  * or foreman override (`foreman: true`) to add/correct a missed punch.
  */
 export async function POST(request: Request) {
-  const session = sessionFrom(request);
+  const session = await sessionFrom();
   if (!session) {
-    return json({ ok: false, error: "Sign in first (stub session)" }, 401);
+    return json({ ok: false, error: "Sign in first." }, 401);
   }
 
   let body: PunchBody;
@@ -65,6 +62,7 @@ export async function POST(request: Request) {
       pairOutAt: typeof body.pairOutAt === "string" ? body.pairOutAt : null,
       note: typeof body.note === "string" ? body.note : null,
       punchId: typeof body.punchId === "string" ? body.punchId : null,
+      userId: session.userId,
     });
     if (!result.ok) {
       return json(result, result.status);
@@ -83,6 +81,7 @@ export async function POST(request: Request) {
     lat: body.lat,
     lng: body.lng,
     accuracy_m: body.accuracy_m,
+    userId: session.userId,
   });
   if (!result.ok) return json(result, result.status);
   return json(result);

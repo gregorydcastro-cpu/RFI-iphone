@@ -4,7 +4,7 @@ import { GenerateRfiForm } from "@/components/GenerateRfiForm";
 import { getFieldRole } from "@/lib/auth.server";
 import { authorFromSessionEmail } from "@/lib/crew";
 import { loadLiveRoomPack } from "@/lib/livePack";
-import { readStubSession } from "@/lib/stubSession";
+import { readAppSession } from "@/lib/session.server";
 import { notFound, redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +32,7 @@ export default async function NewRfiPage({ params, searchParams }: Props) {
   const { requestId } = await params;
   const query = await searchParams;
   const role = await getFieldRole();
-  const session = await readStubSession();
+  const session = await readAppSession();
   if (role.role === "viewer") {
     redirect(`/pack/${requestId}`);
   }

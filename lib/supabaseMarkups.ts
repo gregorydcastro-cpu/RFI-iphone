@@ -4,9 +4,9 @@
  * Columns: request_id, sheet_id, vectors jsonb (circle/box/arrow/text),
  * user_id, updated_at. Unique on (request_id, sheet_id, user_id).
  *
- * Writes use SUPABASE_SERVICE_ROLE_KEY because stub session ids
- * (`stub:` + sha256 email) are not auth.uid(). Anon has no grants.
- * Same pattern as `procore_connections` / `rfis`. Never call Procore.
+ * Writes use SUPABASE_SERVICE_ROLE_KEY (tokens / privileged path).
+ * user_id is auth.uid()::text so authenticated RLS matches. Anon has no
+ * grants. Same pattern as `procore_connections` / `rfis`. Never call Procore.
  */
 
 import { asOverlayRecord, parseVectors, type MarkupOverlayRecord, type MarkupVectorsJson } from "./markup";

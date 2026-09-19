@@ -32,7 +32,7 @@ test("invite helpers stay Maple Point / fictional only", () => {
   assert.equal(forbidden.test(blob), false);
 });
 
-test("invite role lock is viewer | full and stays on the stub session", () => {
+test("invite role lock is viewer | full and stays on the account", () => {
   assert.equal(isInviteRole("viewer"), true);
   assert.equal(isInviteRole("full"), true);
   assert.equal(isInviteRole("puller"), false);
@@ -146,7 +146,7 @@ test("memory mint + redeem is single-use and binds invitee email", () => {
   }
 });
 
-test("full invite stays full on the stub session", () => {
+test("full invite stays full on the account", () => {
   const minted = mintInviteRecord({
     role: "full",
     createdBy: "stub:foreman",

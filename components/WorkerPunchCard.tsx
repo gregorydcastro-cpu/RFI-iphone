@@ -136,7 +136,7 @@ export function WorkerPunchCard({
 
       {!signedIn ? (
         <p className="mt-3 text-sm text-cta" role="status">
-          Sign in (stub) before punching.
+          Sign in before punching.
         </p>
       ) : null}
       {signedIn && worker && !pinOk ? (

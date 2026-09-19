@@ -52,6 +52,8 @@ export type TimePunch = {
   geofence_ok: boolean;
   edited_by_foreman: boolean;
   edit_note: string | null;
+  /** auth.uid() of the signed-in recorder. Used by RLS. */
+  user_id?: string | null;
   created_at: string;
   updated_at: string;
 };

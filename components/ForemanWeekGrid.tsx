@@ -237,7 +237,7 @@ export function ForemanWeekGrid({
             />
           </label>
           {!signedIn ? (
-            <p className="mt-3 text-sm text-cta">Sign in (stub) to save edits.</p>
+            <p className="mt-3 text-sm text-cta">Sign in to save edits.</p>
           ) : null}
           {error ? (
             <p className="mt-3 text-sm text-cta" role="alert">

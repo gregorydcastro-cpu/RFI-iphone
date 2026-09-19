@@ -5,7 +5,7 @@ import { getFieldRole } from "@/lib/auth.server";
 import { authorFromSessionEmail } from "@/lib/crew";
 import { loadPack } from "@/lib/loadPack";
 import { loadLiveRoomPack } from "@/lib/livePack";
-import { readStubSession } from "@/lib/stubSession";
+import { readAppSession } from "@/lib/session.server";
 import { notFound, redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ type Props = {
 export default async function MaterialsPage({ params }: Props) {
   const { requestId } = await params;
   const role = await getFieldRole();
-  const session = await readStubSession();
+  const session = await readAppSession();
   if (role.role === "viewer") {
     redirect(`/pack/${requestId}`);
   }

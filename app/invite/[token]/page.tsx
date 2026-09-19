@@ -2,7 +2,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { InviteRedeemForm } from "@/components/InviteRedeemForm";
 import { previewInvite } from "@/lib/inviteStore";
 import { getProcoreConnectionView } from "@/lib/procoreStatus";
-import { readStubSession } from "@/lib/stubSession";
+import { readAppSession } from "@/lib/session.server";
 
 export const dynamic = "force-dynamic";
 
@@ -11,12 +11,12 @@ type Props = {
 };
 
 /**
- * Invite landing. Validates the token, then redeem sets the stub session
- * to the baked role. Single-use (`used_at`).
+ * Invite landing. Validates the token, then redeem writes the baked role
+ * onto the signed-in Supabase user. Single-use (`used_at`).
  */
 export default async function InviteLandingPage({ params }: Props) {
   const { token } = await params;
-  const session = await readStubSession();
+  const session = await readAppSession();
   const view = await getProcoreConnectionView(session);
   const preview = await previewInvite(token);
 
@@ -35,6 +35,7 @@ export default async function InviteLandingPage({ params }: Props) {
           inviteeEmail={preview.inviteeEmail}
           expiresAt={preview.expiresAt}
           sessionEmail={session?.email ?? null}
+          signedIn={Boolean(session)}
         />
       </main>
     </div>

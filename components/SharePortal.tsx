@@ -214,7 +214,7 @@ export function SharePortal({
           <Link href="/?next=/share" className="text-accent underline">
             Sign in
           </Link>{" "}
-          (stub session) to create share folders and pin Maple Point sheets.
+          to create share folders and pin Maple Point sheets.
         </p>
       </section>
     );

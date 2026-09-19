@@ -21,7 +21,7 @@ test("parseNotifyEmailInput trims and lowercases for Account save", () => {
   assert.equal(parseNotifyEmailInput("not-an-email").ok, false);
 });
 
-test("canManageNotifyEmail is puller / GC / foreman stub role", () => {
+test("canManageNotifyEmail is puller / GC / foreman role", () => {
   assert.equal(canManageNotifyEmail("puller"), true);
   assert.equal(canManageNotifyEmail("viewer"), false);
   assert.equal(canManageNotifyEmail(null), false);

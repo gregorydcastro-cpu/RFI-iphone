@@ -13,8 +13,9 @@
  *   markup_overlays, trial_link_tokens
  *
  * Crew invites: supabase/migrations/20260919010000_invite_tokens.sql
+ * Auth profiles: supabase/migrations/20260919220000_supabase_auth_profiles.sql
  *   public.invite_tokens — NEW table (not `invites`, not trial_link_tokens).
- *   role is viewer | full. Redeem writes that role onto the stub session.
+ *   role is viewer | full. Redeem writes that role onto profiles / app_metadata.
  *
  * Overlay FK: supabase/migrations/20260918130000_rfis_markup_overlay_fk.sql
  * attaches rfis.markup_id → markup_overlays. Row shape stays RfiDraftRow
@@ -26,9 +27,8 @@
  * Bot wake queue: supabase/migrations/20260919120000_procore_bot_requests.sql
  *   public.procore_bot_requests — website enqueue; fleet polls / claims.
  *
- * Writes that must succeed under the stub session (`stub:` + sha256 email)
- * require SUPABASE_SERVICE_ROLE_KEY. Authenticated RLS matches auth.uid()
- * once real auth lands. Anon has no grants on the new tables.
+ * Authenticated RLS matches auth.uid()::text. Service role still writes
+ * tokens, webhooks, cron, and bot-wake rows. Anon has no grants on the new tables.
  */
 
 export type { RoomPackRow } from "./supabaseRoomPack";
@@ -40,6 +40,7 @@ export const MARKUP_OVERLAYS_TABLE = "markup_overlays";
 export const RFIS_TABLE = "rfis";
 export const TRIAL_LINK_TOKENS_TABLE = "trial_link_tokens";
 export const INVITE_TOKENS_TABLE = "invite_tokens";
+export const PROFILES_TABLE = "profiles";
 export const PROCORE_CONNECTIONS_TABLE_NAME = "procore_connections";
 export const ROOM_PACKS_TABLE = "room_packs";
 export const PROCORE_BOT_REQUESTS_TABLE = "procore_bot_requests";
