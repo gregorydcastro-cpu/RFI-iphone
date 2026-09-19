@@ -71,6 +71,12 @@ test("createInviteRequestBody matches POST /api/invites", () => {
   assert.deepEqual(createInviteRequestBody({ role: "puller" }), {
     error: "role must be viewer or full",
   });
+  const minted = createInviteRequestBody({
+    role: "viewer",
+    invitee_email: "  ",
+  });
+  assert.ok(!("error" in minted));
+  assert.deepEqual(Object.keys(minted), ["role"]);
 });
 
 test("GC/foreman (puller) and full can invite; viewers cannot", () => {

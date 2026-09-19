@@ -25,12 +25,14 @@ export type CreateInviteBody = {
   invitee_email?: string;
 };
 
+/** Locked mint response. Extra #43 fields (storage, single_use, …) are ignored. */
 export type CreateInviteSuccess = {
   ok: true;
   url: string;
   token: string;
   expires_at: string;
   role: InviteRole;
+  invitee_email?: string | null;
 };
 
 export type CreateInviteFailure = {
@@ -44,6 +46,7 @@ export function parseInviteRole(value: unknown): InviteRole | null {
   return value === "viewer" || value === "full" ? value : null;
 }
 
+/** Same rule as Repo Eng `normalizeInviteeEmail`: trim, lower, must include @. */
 export function parseOptionalInviteeEmail(
   value: unknown,
 ): string | null | { error: string } {
@@ -53,7 +56,7 @@ export function parseOptionalInviteeEmail(
   }
   const email = value.trim().toLowerCase();
   if (!email) return null;
-  if (!email.includes("@") || email.startsWith("@") || email.endsWith("@")) {
+  if (!email.includes("@")) {
     return { error: "invitee_email must be a valid email" };
   }
   return email;

@@ -48,19 +48,17 @@ export function InviteCrewCard({ canInvite }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = (await response.json()) as
-        | CreateInviteSuccess
-        | CreateInviteFailure;
-
-      if (response.status === 404) {
-        setError(
-          "Invite links are not live yet. Try again after minting is on.",
-        );
-        return;
+      let data: CreateInviteSuccess | CreateInviteFailure | null = null;
+      try {
+        data = (await response.json()) as
+          | CreateInviteSuccess
+          | CreateInviteFailure;
+      } catch {
+        data = null;
       }
-      if (!response.ok || !data.ok || !("url" in data) || !data.url) {
+      if (!response.ok || !data || !data.ok || !data.url) {
         setError(
-          (!data.ok && data.error) ||
+          (data && !data.ok && data.error) ||
             "Could not generate an invite link. Try again.",
         );
         return;
