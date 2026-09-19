@@ -9,6 +9,9 @@ export type DemoJob = {
   roomsHint: string;
 };
 
+/** Short Maple Point labels used by share/Time/voice — still fictional demo. */
+const MAPLE_POINT_DEMO_ALIASES = ["maple point"] as const;
+
 /** Fictional jobs only. Never Brown, Rossi, ILSB, EL107, Danoff, Suffolk. */
 export const DEMO_JOBS: DemoJob[] = [
   {
@@ -136,4 +139,53 @@ export function resolvePullJob(input: {
 export function makeRequestId(projectSlug: string, room: string): string {
   const safeRoom = room.trim().replace(/[^a-zA-Z0-9._-]+/g, "-") || "room";
   return `${projectSlug}-${safeRoom}`.toLowerCase();
+}
+
+export type DemoJobRef = {
+  slug?: string | null;
+  name?: string | null;
+  projectName?: string | null;
+  requestId?: string | null;
+};
+
+function normalizeJobKey(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function isDemoSlugOrRequestId(value: string): boolean {
+  if (!value) return false;
+  return DEMO_JOBS.some(
+    (job) => value === job.slug || value.startsWith(`${job.slug}-`),
+  );
+}
+
+function isDemoProjectLabel(value: string): boolean {
+  if (!value) return false;
+  if (DEMO_JOBS.some((job) => job.name.toLowerCase() === value)) return true;
+  return (MAPLE_POINT_DEMO_ALIASES as readonly string[]).includes(value);
+}
+
+/**
+ * Fictional DEMO_JOBS / Maple Point (and any other demo slug or name
+ * in DEMO_JOBS) must never enqueue a Procore bot wake or HTTP wake.
+ * Cached pack / REST for these jobs is unchanged.
+ */
+export function isDemoOrFictionalJob(
+  input?: DemoJobRef | DemoJob | string | null,
+): boolean {
+  if (input == null) return false;
+  const ref: DemoJobRef =
+    typeof input === "string"
+      ? { slug: input, name: input, requestId: input }
+      : input;
+  const slug = normalizeJobKey(ref.slug);
+  const name = normalizeJobKey(ref.name ?? ref.projectName);
+  const requestId = normalizeJobKey(ref.requestId);
+
+  if (isDemoSlugOrRequestId(slug) || isDemoProjectLabel(slug)) return true;
+  if (isDemoProjectLabel(name) || isDemoSlugOrRequestId(name)) return true;
+  if (isDemoSlugOrRequestId(requestId) || isDemoProjectLabel(requestId)) {
+    return true;
+  }
+  return false;
 }

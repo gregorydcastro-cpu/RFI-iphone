@@ -3,6 +3,7 @@ import { afterEach, test } from "node:test";
 import {
   DEMO_JOBS,
   getJob,
+  isDemoOrFictionalJob,
   jobFromPack,
   jobFromProjectName,
   resolvePullJob,
@@ -62,6 +63,28 @@ test("resolvePullJob uses exact name, cached pack, or demo slug", () => {
     "Suffolk Campus",
   );
   assert.equal(jobFromProjectName("  Danoff High School  ").name, "Danoff High School");
+});
+
+test("isDemoOrFictionalJob covers DEMO_JOBS slugs, names, and Maple Point aliases", () => {
+  assert.equal(isDemoOrFictionalJob({ slug: "maple-point" }), true);
+  assert.equal(isDemoOrFictionalJob({ name: "Maple Point Medical Office" }), true);
+  assert.equal(isDemoOrFictionalJob({ projectName: "Maple Point" }), true);
+  assert.equal(isDemoOrFictionalJob({ requestId: "maple-point-733" }), true);
+  assert.equal(isDemoOrFictionalJob({ requestId: "maple-point" }), true);
+  assert.equal(isDemoOrFictionalJob("cedar-ridge"), true);
+  assert.equal(isDemoOrFictionalJob({ slug: "harbor-view", name: "Harbor View Tenant Fit-Out" }), true);
+  assert.equal(isDemoOrFictionalJob({ requestId: "pine-hollow-gear" }), true);
+  assert.equal(isDemoOrFictionalJob({ name: "Some Real Client Job" }), false);
+  assert.equal(isDemoOrFictionalJob({ slug: "danoff-high-school" }), false);
+  assert.equal(
+    isDemoOrFictionalJob({
+      name: "Danoff High School",
+      requestId: "sample-arch-bounds-733",
+    }),
+    false,
+  );
+  assert.equal(isDemoOrFictionalJob(""), false);
+  assert.equal(isDemoOrFictionalJob(null), false);
 });
 
 test("allowlist parser splits comma / newline / pipe", () => {

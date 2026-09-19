@@ -68,7 +68,7 @@ test("weekly cron does not call Procore REST (bot/catalog fallback)", () => {
   assert.equal(off.called, false);
   assert.equal(off.todo, false);
   assert.equal(off.issue, 25);
-  assert.match(off.note, /catalog|bot|REST/);
+  assert.match(off.note, /catalog|room_packs|REST/);
 
   process.env.SHARE_WEEKLY_PROCORE_REST = "1";
   assert.equal(weeklyProcoreRestEnabled(), true);

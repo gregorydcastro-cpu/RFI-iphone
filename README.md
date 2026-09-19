@@ -10,7 +10,7 @@ Stripe Checkout + webhook are scaffolded (secrets stay in Vercel). The **Room pa
 
 **Pullers** can **Connect Procore** with their own Procore login (OAuth authorization code). Tokens are stored per `auth.uid()` in Supabase `procore_connections`. Viewers do not need to connect and cannot trigger a pull.
 
-**Live path:** a **connected puller** with tokens in `procore_connections` can request a fresh room pack from the site via **Procore REST** (current drawing revisions + RFIs). Company id is resolved per **exact Procore project name** (`resolveCompanyIdForProject` / `resolveProjectForName`) — never hardcoded, and **not** limited to `DEMO_JOBS`. Optional **`PROCORE_PROJECT_ALLOWLIST`** restricts which names may resolve. Access tokens last ~1.5 hours and refresh automatically via `refresh_token`. If tokens are missing, refresh fails, or no project matches, the website **wakes** the Procore bot (`969a9d8e-c07f-44c3-ae9d-862704cd60c7`) via `public.procore_bot_requests` and/or **`PROCORE_BOT_WAKE_URL`**, then reads cached `public.room_packs`. The bot remains the bulk/scheduled path. Viewers only read. Local demo leaves Supabase unset: Maple Point JSON unless a live REST pull succeeds. Tokens stay server-side (never `NEXT_PUBLIC_`). Jobs-list copy stays Maple Point / fictional.
+**Live path:** a **connected puller** with tokens in `procore_connections` can request a fresh room pack from the site via **Procore REST** (current drawing revisions + RFIs). Company id is resolved per **exact Procore project name** (`resolveCompanyIdForProject` / `resolveProjectForName`) — never hardcoded, and **not** limited to `DEMO_JOBS`. Optional **`PROCORE_PROJECT_ALLOWLIST`** restricts which names may resolve. Access tokens last ~1.5 hours and refresh automatically via `refresh_token`. If tokens are missing, refresh fails, or no project matches, the website **wakes** the Procore bot (`969a9d8e-c07f-44c3-ae9d-862704cd60c7`) via `public.procore_bot_requests` and/or **`PROCORE_BOT_WAKE_URL`**, then reads cached `public.room_packs` — **except** fictional `DEMO_JOBS` / Maple Point, which never enqueue or HTTP-wake (`isDemoOrFictionalJob`). The bot remains the bulk/scheduled path for real jobs. Viewers only read. Local demo leaves Supabase unset: Maple Point JSON unless a live REST pull succeeds. Tokens stay server-side (never `NEXT_PUBLIC_`). Jobs-list copy stays Maple Point / fictional.
 
 ## Locked nav (MVP)
 
@@ -29,7 +29,7 @@ Must match this path — nothing else in the primary nav:
 | Account (`/account`) | Signed-in session + Procore connected / disconnected state + link to pricing + share folders. |
 | Share (`/share`) | Create folders, pin full disciplines (electrical / lighting / architectural) or Maple Point room packs, puller-gated **Refresh all**. |
 | Pricing (`/pricing`) | Subscribe CTA → Stripe-hosted Checkout (60-day trial, payment method collected). |
-| Room pack request | Room number (e.g. `733`). **Connected puller:** `POST /api/room-pack` tries Procore REST with stored tokens (demo slug, exact `projectName`, or allowlist), then opens `/pack/[requestId]`. Bot wake + cached `room_packs` if REST cannot run. **Viewer / unconnected puller:** **Open pack** only — no pull. Local demo (no `SUPABASE_URL`) loads Maple Point JSON unless REST succeeds. |
+| Room pack request | Room number (e.g. `733`). **Connected puller:** `POST /api/room-pack` tries Procore REST with stored tokens (demo slug, exact `projectName`, or allowlist), then opens `/pack/[requestId]`. Bot wake + cached `room_packs` if REST cannot run **and** the job is not a fictional demo. **Viewer / unconnected puller:** **Open pack** only — no pull. Local demo (no `SUPABASE_URL`) loads Maple Point JSON unless REST succeeds. |
 | Pack viewer | Field stack on `/pack/[requestId]`: **architectural floor plan first** (A-*, architectural, floor plan heuristics; else current primary), oversized crimson SVG box around the room walls, **vector markup tools** (circle, box, arrow, text note) with one-tap **Create RFI**, then remaining sheets (power, lighting, …) and linked RFIs. Drawing number + revision letter stamps stay on the top bar and each sheet (`A-101 Rev A`). Website open always re-reads `room_packs` (no-store). Status shows **live** (Procore REST this pull), **cached** (`room_packs` / bot fallback), or **demo**. Viewers cannot pull. |
 | Generate RFI / Materials | Live pack actions. Drafts go to foreman Pat Nguyen — not a Procore submit. **Dictate** fills the form from the mic; **Read aloud** speaks RFIs. **Create RFI** from a selected sheet markup prefills the same draft. Phone photo attaches as a data URL on the draft. |
 | Voice (Grok) | Server-side `XAI_API_KEY` → `/api/dictation` (STT) and `/api/tts` (TTS). Never `NEXT_PUBLIC_`. |
@@ -98,7 +98,7 @@ That is the default `redirect_uri`. Preview hosts will not match unless `PROCORE
 | `CRON_SECRET` | **Weekly share refresh.** Server-only. Vercel Cron sends `Authorization: Bearer $CRON_SECRET` to `GET /api/share/weekly-refresh`. Also accepted as `x-cron-secret`. Never `NEXT_PUBLIC_`. |
 | `SHARE_WEEKLY_PDF_REDOWNLOAD` | Optional. `1` forces Drive/proxy PDF fetch on a rev bump; `0` forces metadata-only. Unset: fetch when Google Drive auth is configured. |
 | `SHARE_WEEKLY_PROCORE_REST` | Weekly/scheduled flag only. Even if `1`, cron has no per-user token — it still compares catalog + `room_packs` and wakes the bot. Live REST is the connected puller pack path (`POST /api/room-pack`). |
-| `PROCORE_PROJECT_ALLOWLIST` | Optional. Comma / newline / pipe-separated **exact** Procore project names that may resolve via REST. Unset = any exact name the token can see (Maple Point demos and real jobs). Never a company id. Never `NEXT_PUBLIC_`. |
+| `PROCORE_PROJECT_ALLOWLIST` | Optional. Comma / newline / pipe-separated **exact** Procore project names that may resolve via REST. Unset = any exact name the token can see (Maple Point demos and real jobs). **Wake enqueue is separate:** `DEMO_JOBS` / Maple Point never wake, even when this list is empty. Never a company id. Never `NEXT_PUBLIC_`. |
 | `PROCORE_BOT_WAKE_URL` | Optional HTTP hook. Bot fallback **POST**s `gcfieldlog.procore_bot_refresh.v1` here. Not the deleted `procore_room_pack_webhook_url`. Server-only. |
 | `PROCORE_BOT_WAKE_SECRET` | Optional `Authorization: Bearer` for the wake URL. Server-only. Never `NEXT_PUBLIC_`. |
 | `RESEND_API_KEY` | **Shared bump-email sender.** Server-only. Weekly cron / Refresh all send through [Resend](https://resend.com) to each owner's `procore_connections.notify_email`. Never `NEXT_PUBLIC_`. |
@@ -211,19 +211,19 @@ Connected pullers with tokens in `procore_connections` can request a fresh pack 
 | 2. Refresh | If `expires_at` is within ~2 minutes (access lasts ~1.5h), `POST {login}/oauth/token` with `grant_type=refresh_token` and the new tokens are stored. A 401 on REST retries once after refresh. |
 | 3. Company / project | `GET /rest/v1.0/companies` then `GET /rest/v1.0/projects?company_id=` until the **exact project name** matches (optional `PROCORE_PROJECT_ALLOWLIST`). `Procore-Company-Id` is that resolved id — never hardcoded. |
 | 4. Pack | `GET .../drawing_revisions?drawing_set_id=current_set` and `GET .../rfis`. Mapped to `gcpullog.room_pack.v1` and inserted into `room_packs` when Supabase is set. REST metadata merges cached bot `layout.wall_bounds` + Drive PDFs. Optional `sheets[].last_modified` from the revision `updated_at`. **GET only** — this app never POSTs RFIs or POs to Procore. |
-| 5. Fallback | Missing OAuth env, missing/expired refresh, empty companies, or API errors → **wake** the Procore bot (queue + optional HTTP) then latest `room_packs` / Maple Point JSON. Weekly cron and Refresh all stay on this bulk path. |
+| 5. Fallback | Missing OAuth env, missing/expired refresh, empty companies, or API errors → **wake** the Procore bot (queue + optional HTTP) then latest `room_packs` — **skipped** for fictional `DEMO_JOBS` / Maple Point (`isDemoOrFictionalJob`; cached pack / REST still run). Weekly cron and Refresh all stay catalog + `room_packs` and do not wake Maple Point. |
 
 #### Bot wake (not log-only)
 
-`requestProcoreBotRefresh` sends `gcfieldlog.procore_bot_refresh.v1`:
+`requestProcoreBotRefresh` sends `gcfieldlog.procore_bot_refresh.v1` for **non-demo** jobs only. `isDemoOrFictionalJob` (DEMO_JOBS slug/name, Maple Point aliases, or a demo request id) skips queue insert and HTTP POST — the Procore bot invents-nothing on claim and would no-op those wakes. Cached pack / REST for demos is unchanged. Allowlist is **not** required for this skip (safer than production default-deny): tokens + exact name match still resolve real jobs; only the wake is gated.
 
 ```json
 {
   "schema": "gcfieldlog.procore_bot_refresh.v1",
   "botId": "969a9d8e-c07f-44c3-ae9d-862704cd60c7",
-  "projectName": "Maple Point Medical Office",
+  "projectName": "<exact Procore project name>",
   "room": "733",
-  "requestId": "maple-point-733",
+  "requestId": "job-slug-733",
   "reason": "missing_tokens",
   "requestedAt": "2026-09-19T12:00:00.000Z"
 }
@@ -231,7 +231,7 @@ Connected pullers with tokens in `procore_connections` can request a fresh pack 
 
 1. **Queue:** service-role insert into `public.procore_bot_requests` (`status=queued`). Greg’s fleet polls / claims. SQL: `supabase/migrations/20260919120000_procore_bot_requests.sql`.
 2. **HTTP:** if `PROCORE_BOT_WAKE_URL` is set, POST the same JSON (`Authorization: Bearer $PROCORE_BOT_WAKE_SECRET` when set, `X-GCFieldLog-Bot-Id` always).
-3. Console logs are diagnostics only. A wake is `queued` and/or HTTP 2xx. If neither hook is configured, the API reports `hook_unconfigured` and still returns cached `room_packs`.
+3. Console logs are diagnostics only. A wake is `queued` and/or HTTP 2xx. If neither hook is configured, the API reports `hook_unconfigured` and still returns cached `room_packs`. Fictional demo wakes report `demo_skipped` with no insert and no POST.
 
 Do **not** use the deleted `procore_room_pack_webhook_url` / webhook Authorization keys.
 
@@ -372,7 +372,7 @@ process.env.SUPABASE_URL
 process.env.SUPABASE_ANON_KEY
 ```
 
-- **Both set (Production):** website live view GETs the latest `public.room_packs` row with `cache: "no-store"`. Connected pullers POST a refresh that **calls Procore REST** with their stored tokens when valid, persists the pack, and otherwise **wakes** the **Procore bot** (`969a9d8e-c07f-44c3-ae9d-862704cd60c7`) via `procore_bot_requests` / `PROCORE_BOT_WAKE_URL`. The bot remains the bulk/scheduled upsert path. No expiry timers.
+- **Both set (Production):** website live view GETs the latest `public.room_packs` row with `cache: "no-store"`. Connected pullers POST a refresh that **calls Procore REST** with their stored tokens when valid, persists the pack, and otherwise **wakes** the **Procore bot** (`969a9d8e-c07f-44c3-ae9d-862704cd60c7`) via `procore_bot_requests` / `PROCORE_BOT_WAKE_URL` for **non-demo** jobs only. Fictional `DEMO_JOBS` / Maple Point never enqueue or HTTP-wake. The bot remains the bulk/scheduled upsert path. No expiry timers.
 - **Missing / local:** Maple Point JSON, **no** Supabase call, **no** bot pull.
 - **Hard rule:** never display another job’s pack. Match project slug or exact job name.
 
@@ -504,7 +504,7 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/share/folders
 # 401
 ```
 
-**Manual force refresh:** `POST /api/share/refresh-all` is puller-gated (signed-in **puller**, or Procore-linked cookie / `x-procore-linked` header) **and** requires a real session. It walks that owner's `pinned_sheets`, compares known pack revs (Maple Point catalog, plus live `room_packs` when Supabase anon is set) to `sheet_revision_cache`, and updates last_seen_rev / last_pulled_at on a bump. Bulk/scheduled refresh still asks the Procore bot (no per-user token on that path) and does **not** re-download PDFs. Live REST is the connected pack-request path. A persisted bump emails that folder owner's `procore_connections.notify_email` (`notifyMikeOnBumps`). Response: `{ accepted: true, stub: false, implemented: true, weeklyCron: false, notify, scanned, bumped, unchanged, missing, bumps }`.
+**Manual force refresh:** `POST /api/share/refresh-all` is puller-gated (signed-in **puller**, or Procore-linked cookie / `x-procore-linked` header) **and** requires a real session. It walks that owner's `pinned_sheets`, compares known pack revs (Maple Point catalog, plus live `room_packs` when Supabase anon is set) to `sheet_revision_cache`, and updates last_seen_rev / last_pulled_at on a bump. Maple Point / `DEMO_JOBS` do **not** enqueue a Procore bot wake. Live REST is the connected pack-request path. A persisted bump emails that folder owner's `procore_connections.notify_email` (`notifyMikeOnBumps`). Response: `{ accepted: true, stub: false, implemented: true, weeklyCron: false, notify, scanned, bumped, unchanged, missing, bumps }`.
 
 **Weekly rev-only re-pull:** `GET`/`POST /api/share/weekly-refresh` is the automated path. Vercel Cron (`vercel.json`, Mondays 12:00 UTC) sends `Authorization: Bearer $CRON_SECRET`. The worker reads **all** `pinned_sheets` + `sheet_revision_cache` with the service role (process memory when the service role is unset), reuses `planShareRefresh` (same catalog + `room_packs` compare as Refresh all), and on a bump updates `last_seen_rev` / `last_pulled_at` / cache `rev` + `checked_at`. Unchanged revs are metadata-only.
 
@@ -549,7 +549,7 @@ curl -s -X POST http://localhost:3000/api/share/weekly-refresh \
 | `/api/procore/status` | Connected state (no tokens) |
 | `/api/procore/disconnect` | Revoke + delete this user’s tokens |
 | `/api/account/notify-email` | GET/PATCH puller notify email → `procore_connections.notify_email` via `upsertNotifyEmail`. Distinct from OAuth `email`. |
-| `/api/room-pack` | Puller POST. Procore REST when tokens are valid (exact project name / allowlist); bot wake + `room_packs` fallback. Demo when Supabase unset and REST cannot run. |
+| `/api/room-pack` | Puller POST. Procore REST when tokens are valid (exact project name / allowlist); bot wake + `room_packs` fallback for **non-demo** jobs. Demo when Supabase unset and REST cannot run. |
 | `/api/room-pack/refresh` | Puller POST. Same REST-then-bot refresh (live requestIds resolve from cached packs), optional `{ pack }` upsert, then latest `room_packs` row. |
 | `/api/room-pack/live` | Anyone GET/POST. Latest `room_packs` row, `no-store`. Does not pull. |
 | `/api/room-pack/status` | Alias of live read (no Drive poll, no webhook). |
@@ -557,7 +557,7 @@ curl -s -X POST http://localhost:3000/api/share/weekly-refresh \
 | `/api/share/folders` | GET/POST/DELETE signed-in share folders (service role or memory) |
 | `/api/share/pins` | POST pin discipline or room pack; DELETE `?id=` unpin |
 | `/api/share/refresh-all` | Puller POST. Walks this owner's pins + updates `sheet_revision_cache`. Emails that owner's `notify_email` on a persisted bump. |
-| `/api/share/weekly-refresh` | Cron GET/POST. `CRON_SECRET` required. All pins, catalog + `room_packs` + bot. Live REST stays on pack routes. Emails each pin owner's `notify_email` on a persisted bump. |
+| `/api/share/weekly-refresh` | Cron GET/POST. `CRON_SECRET` required. All pins, catalog + `room_packs`. Maple Point / `DEMO_JOBS` do not wake the bot. Live REST stays on pack routes. Emails each pin owner's `notify_email` on a persisted bump. |
 | `/api/time` | GET Maple Point site, workers, week punches (memory demo or service-role Supabase) |
 | `/api/time/punches` | POST worker punch (GPS + geofence) or `{ foreman: true }` missed-punch override |
 | `/api/voice/status` | GET. `{ configured }` for Grok Voice — never returns the key |
