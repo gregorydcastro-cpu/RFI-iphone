@@ -46,6 +46,8 @@ export default async function PackPage({ params, searchParams }: Props) {
       source={live.source}
       pull={live.pull}
       procoreLinked={role.procoreLinked}
+      role={role.role}
+      readOnly={role.role === "viewer"}
     />
   );
 }

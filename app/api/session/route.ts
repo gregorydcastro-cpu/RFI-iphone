@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookieSecureFromRequest, procoreLinkedCookieOptions } from "@/lib/auth";
+import { fieldRoleFromInviteRole } from "@/lib/invites";
+import { fieldRoleFromRedeemedEmail } from "@/lib/inviteStore";
 import { createStubSession, stubSessionCookieOptions } from "@/lib/stubSession";
 
 export const dynamic = "force-dynamic";
@@ -38,9 +40,14 @@ export async function POST(request: Request) {
     );
   }
 
+  const invited = await fieldRoleFromRedeemedEmail(email);
   const session = createStubSession({
     email,
-    role: typeof json.role === "string" ? json.role : "viewer",
+    role: invited
+      ? fieldRoleFromInviteRole(invited)
+      : typeof json.role === "string"
+        ? json.role
+        : "viewer",
   });
   const response = NextResponse.json({
     ok: true,

@@ -14,6 +14,7 @@ import {
 } from "@/lib/pack";
 import { layoutSheetId, resolveSheetPdf } from "@/lib/packNormalize";
 import { sheetKindLabel, splitPackSheets } from "@/lib/sheetOrder";
+import type { FieldRoleName } from "@/lib/auth";
 import { viewerSheetPdfSrc } from "@/lib/sheetPdfUrl";
 import { ActionPanel } from "./ActionPanel";
 import { AppHeader } from "./AppHeader";
@@ -33,6 +34,8 @@ type Props = {
   source?: "procore" | "supabase" | "local" | "none";
   pull?: "procore" | "bot" | "none";
   procoreLinked?: boolean;
+  readOnly?: boolean;
+  role?: FieldRoleName | null;
 };
 
 export function RoomPackViewer({
@@ -46,6 +49,8 @@ export function RoomPackViewer({
   source,
   pull,
   procoreLinked = false,
+  readOnly = false,
+  role = null,
 }: Props) {
   const router = useRouter();
   const [livePack, setLivePack] = useState<RoomPack | null>(null);
@@ -83,6 +88,7 @@ export function RoomPackViewer({
   );
 
   function handleAction(action: PackAction) {
+    if (readOnly) return;
     if (action.id === "generate-rfi") {
       const sheetQuery = primary
         ? `?sheet=${encodeURIComponent(primary.id)}`
@@ -110,7 +116,11 @@ export function RoomPackViewer({
 
   return (
     <div className="flex min-h-dvh flex-col bg-ink text-paper">
-      <AppHeader signedIn procoreLinked={procoreLinked} />
+      <AppHeader
+        signedIn
+        role={role ?? (readOnly ? "viewer" : "puller")}
+        procoreLinked={procoreLinked}
+      />
       <PackContextBar
         pack={displayedPack}
         sheet={primary}
@@ -148,6 +158,7 @@ export function RoomPackViewer({
               requestId={displayedRequest}
               roomName={displayedPack.room.name}
               roomNumber={displayedPack.room.number}
+              readOnly={readOnly}
             />
           </div>
         </section>
@@ -184,6 +195,7 @@ export function RoomPackViewer({
                     requestId={displayedRequest}
                     roomName={displayedPack.room.name}
                     roomNumber={displayedPack.room.number}
+                    readOnly={readOnly}
                   />
                 </div>
               </article>
@@ -201,6 +213,7 @@ export function RoomPackViewer({
               actions={actions}
               onAction={handleAction}
               procoreLinked={procoreLinked}
+              readOnly={readOnly}
             />
             <TakeoffCounts
               takeoff={displayedPack.takeoff}

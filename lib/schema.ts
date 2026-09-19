@@ -12,6 +12,10 @@
  *   share_folders, pinned_sheets, sheet_revision_cache,
  *   markup_overlays, trial_link_tokens
  *
+ * Crew invites: supabase/migrations/20260919010000_invite_tokens.sql
+ *   public.invite_tokens — NEW table (not `invites`, not trial_link_tokens).
+ *   role is viewer | full. Redeem writes that role onto the stub session.
+ *
  * Overlay FK: supabase/migrations/20260918130000_rfis_markup_overlay_fk.sql
  * attaches rfis.markup_id → markup_overlays. Row shape stays RfiDraftRow
  * (same columns as lib/rfiSchema.ts / Generate RFI).
@@ -32,6 +36,7 @@ export const SHEET_REVISION_CACHE_TABLE = "sheet_revision_cache";
 export const MARKUP_OVERLAYS_TABLE = "markup_overlays";
 export const RFIS_TABLE = "rfis";
 export const TRIAL_LINK_TOKENS_TABLE = "trial_link_tokens";
+export const INVITE_TOKENS_TABLE = "invite_tokens";
 export const PROCORE_CONNECTIONS_TABLE_NAME = "procore_connections";
 export const ROOM_PACKS_TABLE = "room_packs";
 
@@ -182,5 +187,21 @@ export type TrialLinkTokenRow = {
   token: string;
   expires_at: string;
   plan: TrialLinkPlan;
+  created_at: string;
+};
+
+/** Baked into `invite_tokens.role`. `full` is the normal crew dashboard. */
+export type InviteRole = "viewer" | "full";
+
+export const INVITE_ROLES: readonly InviteRole[] = ["viewer", "full"];
+
+export type InviteTokenRow = {
+  id: string;
+  token: string;
+  role: InviteRole;
+  created_by: string;
+  invitee_email: string | null;
+  expires_at: string;
+  used_at: string | null;
   created_at: string;
 };

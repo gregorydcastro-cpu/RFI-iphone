@@ -1,8 +1,13 @@
 import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
-import { readCookieValue, type FieldRoleName } from "./auth";
+import {
+  parseFieldRoleName,
+  readCookieValue,
+  STUB_SESSION_COOKIE,
+  type FieldRoleName,
+} from "./auth";
 
-export const STUB_SESSION_COOKIE = "gcfieldlog_stub_user";
+export { STUB_SESSION_COOKIE };
 
 export type StubSession = {
   userId: string;
@@ -31,7 +36,7 @@ export function parseStubSession(raw: string | undefined | null): StubSession | 
     const email =
       typeof parsed.email === "string" ? parsed.email.trim().toLowerCase() : "";
     if (!email || !email.includes("@")) return null;
-    const role: FieldRoleName = parsed.role === "puller" ? "puller" : "viewer";
+    const role: FieldRoleName = parseFieldRoleName(parsed.role);
     const userId =
       typeof parsed.userId === "string" && parsed.userId.startsWith("stub:")
         ? parsed.userId
@@ -86,6 +91,6 @@ export function createStubSession(input: {
   return {
     userId: stubUserIdFromEmail(email),
     email,
-    role: input.role === "puller" ? "puller" : "viewer",
+    role: parseFieldRoleName(input.role),
   };
 }

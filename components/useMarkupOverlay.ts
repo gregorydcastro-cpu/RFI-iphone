@@ -47,7 +47,12 @@ function applyRow(
   };
 }
 
-export function useMarkupOverlay(requestId: string, sheetId: string) {
+export function useMarkupOverlay(
+  requestId: string,
+  sheetId: string,
+  options: { readOnly?: boolean } = {},
+) {
+  const readOnly = Boolean(options.readOnly);
   const [record, setRecord] = useState<MarkupOverlayRecord>(() =>
     emptyRecord(requestId, sheetId),
   );
@@ -56,6 +61,7 @@ export function useMarkupOverlay(requestId: string, sheetId: string) {
   const recordRef = useRef<MarkupOverlayRecord>(emptyRecord(requestId, sheetId));
 
   const persist = useCallback(async (next: MarkupOverlayRecord) => {
+    if (readOnly) return next;
     try {
       const response = await fetch("/api/markups", {
         method: "PUT",
@@ -84,7 +90,7 @@ export function useMarkupOverlay(requestId: string, sheetId: string) {
     saveLocalOverlay(next);
     setStorage("local");
     return next;
-  }, []);
+  }, [readOnly]);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,6 +140,7 @@ export function useMarkupOverlay(requestId: string, sheetId: string) {
         setReady(true);
 
         if (
+          !readOnly &&
           data.storage !== "unconfigured" &&
           initial.vectors.items.length > 0
         ) {
@@ -154,10 +161,11 @@ export function useMarkupOverlay(requestId: string, sheetId: string) {
     return () => {
       cancelled = true;
     };
-  }, [persist, requestId, sheetId]);
+  }, [persist, readOnly, requestId, sheetId]);
 
   const setItems = useCallback(
     (items: MarkupVector[] | ((current: MarkupVector[]) => MarkupVector[])) => {
+      if (readOnly) return;
       const current = recordRef.current;
       const nextItems =
         typeof items === "function" ? items(current.vectors.items) : items;
@@ -171,7 +179,7 @@ export function useMarkupOverlay(requestId: string, sheetId: string) {
       setRecord(next);
       void persist(next);
     },
-    [persist],
+    [persist, readOnly],
   );
 
   const flush = useCallback(async () => {
