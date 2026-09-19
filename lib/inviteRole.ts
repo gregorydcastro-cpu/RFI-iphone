@@ -1,12 +1,12 @@
 /**
  * Invite UI contract helpers.
  *
- * Repo Eng owns table `invites` (not invite_tokens, not trial_link_tokens),
- * mint/redeem APIs, landing-page redeem, and server viewer enforcement.
+ * Repo Eng owns persistence (`invite_tokens` on Supabase via #43), mint/redeem
+ * APIs, landing-page redeem, and server viewer enforcement.
  *
  * This package only builds the Account Invite picker and POSTs to their
- * mint route. Live #43 exposes POST /api/invites — call that; do not
- * invent a second API or guess role from the URL path.
+ * mint route: POST /api/invites. Do not invent a second API or guess role
+ * from the URL path.
  */
 
 export const INVITE_ROLES = ["viewer", "full"] as const;

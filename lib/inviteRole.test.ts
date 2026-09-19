@@ -12,7 +12,7 @@ import {
 
 const forbidden = /Brown|Rossi|Danoff|Suffolk|ILSB|EL107/i;
 
-test("invite UI calls Repo Eng POST /api/invites (table lock is invites)", () => {
+test("invite UI calls Repo Eng POST /api/invites", () => {
   assert.equal(INVITE_CREATE_PATH, "/api/invites");
   assert.equal(forbidden.test(INVITE_CREATE_PATH), false);
 });
