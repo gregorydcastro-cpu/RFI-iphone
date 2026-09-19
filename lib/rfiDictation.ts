@@ -6,9 +6,17 @@
 export type RfiSpeechFields = {
   subject: string;
   question: string;
+  /** Body for the Question / description textarea (STT always lands here). */
+  description: string;
   location: string;
   send: boolean;
   transcript: string;
+};
+
+export type RfiFormSpeechFields = {
+  subject: string;
+  question: string;
+  location: string;
 };
 
 const SEND_PHRASE_RE =
@@ -16,6 +24,8 @@ const SEND_PHRASE_RE =
 
 const LOCATION_RE =
   /\b(?:in\s+|at\s+)?(?:location\s+(?:is\s+)?)?((?:electrical\s+)?closet\s+\d{2,4}[a-z]?|room\s+\d{2,4}[a-z]?)\b/i;
+
+const FIELD_LABELS = ["subject", "title", "question", "description", "location"];
 
 function labeledBlock(
   text: string,
@@ -25,15 +35,57 @@ function labeledBlock(
   const label = labels.map(escapeRe).join("|");
   const stop = stopLabels.map(escapeRe).join("|");
   const re = new RegExp(
-    `\\b(?:${label})\\s*(?:[:\\-–]|is)?\\s+(.+?)(?=\\b(?:${stop})\\s*(?:[:\\-–]|is)?\\b|$)`,
+    `\\b(?:${label})\\s*(?:[:\\-–.]|is)?\\s+(.+?)(?=\\b(?:${stop})\\s*(?:[:\\-–.]|is)?\\b|$)`,
     "i",
   );
   const match = text.match(re);
   return match?.[1]?.trim().replace(/[.,;]+$/, "") ?? "";
 }
 
+function removeLabeledBlock(
+  text: string,
+  labels: string[],
+  stopLabels: string[],
+): string {
+  const label = labels.map(escapeRe).join("|");
+  const stop = stopLabels.map(escapeRe).join("|");
+  const re = new RegExp(
+    `\\b(?:${label})\\s*(?:[:\\-–.]|is)?\\s+.+?(?=\\b(?:${stop})\\s*(?:[:\\-–.]|is)?\\b|$)`,
+    "i",
+  );
+  return text.replace(re, " ").replace(/\s+/g, " ").trim();
+}
+
+function leftoverBody(text: string): string {
+  let leftover = removeLabeledBlock(text, ["subject", "title"], FIELD_LABELS);
+  leftover = removeLabeledBlock(leftover, ["location"], FIELD_LABELS);
+  leftover = leftover.replace(LOCATION_RE, " ").replace(/\s+/g, " ").trim();
+  return leftover.replace(/[.,;]+$/, "").trim();
+}
+
 function escapeRe(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Spoken body for the Question / description field. Never drops the transcript. */
+export function rfiDescriptionFromSpeech(parsed: RfiSpeechFields): string {
+  return (
+    parsed.description.trim() ||
+    parsed.question.trim() ||
+    parsed.transcript.trim()
+  );
+}
+
+/** Map STT parse → Generate RFI inputs. Description/question always take the transcript. */
+export function applyRfiSpeechToFields(
+  parsed: RfiSpeechFields,
+  current: RfiFormSpeechFields,
+): RfiFormSpeechFields {
+  return {
+    subject: parsed.subject || current.subject,
+    question: rfiDescriptionFromSpeech(parsed) || current.question,
+    location: parsed.location || current.location,
+  };
 }
 
 function firstSentence(text: string): { head: string; rest: string } {
@@ -60,13 +112,7 @@ export function parseRfiDictation(raw: string): RfiSpeechFields {
   SEND_PHRASE_RE.lastIndex = 0;
   let text = transcript.replace(SEND_PHRASE_RE, " ").replace(/\s+/g, " ").trim();
 
-  let location = labeledBlock(text, ["location"], [
-    "subject",
-    "title",
-    "question",
-    "description",
-    "location",
-  ]);
+  let location = labeledBlock(text, ["location"], FIELD_LABELS);
   if (!location) {
     const locMatch = text.match(LOCATION_RE);
     location = locMatch?.[1]?.trim() ?? "";
@@ -77,39 +123,48 @@ export function parseRfiDictation(raw: string): RfiSpeechFields {
     }
   }
 
-  let subject = labeledBlock(
-    text,
-    ["subject", "title"],
-    ["subject", "title", "question", "description", "location"],
-  );
-  let question = labeledBlock(
-    text,
-    ["question", "description"],
-    ["subject", "title", "question", "description", "location"],
-  );
+  let subject = labeledBlock(text, ["subject", "title"], FIELD_LABELS);
+  let question = labeledBlock(text, ["question"], FIELD_LABELS);
+  let description = labeledBlock(text, ["description"], FIELD_LABELS);
 
-  if (!subject && !question) {
+  if (!subject && !question && !description) {
     const cleaned = stripLeadIn(text);
     const split = firstSentence(cleaned);
     if (split.rest) {
       subject = split.head.replace(/[.!?]+$/, "");
       question = split.rest;
+      description = split.rest;
     } else if (cleaned.length <= 80) {
       subject = cleaned.replace(/[.!?]+$/, "");
       question = cleaned;
+      description = cleaned;
     } else {
       subject = cleaned.slice(0, 80).replace(/[,;:\s]+$/, "");
       question = cleaned;
+      description = cleaned;
     }
-  } else if (!question) {
-    question = stripLeadIn(text);
-  } else if (!subject) {
-    subject = stripLeadIn(question).slice(0, 80);
+  } else {
+    if (!description && question) description = question;
+    if (!question && description) question = description;
+    if (!question && !description) {
+      const leftover = leftoverBody(text);
+      question = leftover || stripLeadIn(text);
+      description = question;
+    }
+    if (!subject && (question || description)) {
+      subject = stripLeadIn(description || question).slice(0, 80);
+    }
+  }
+
+  if (!description && text) {
+    description = leftoverBody(text) || stripLeadIn(text);
+    if (!question) question = description;
   }
 
   return {
     subject: subject.trim(),
     question: question.trim(),
+    description: description.trim(),
     location: location.trim(),
     send,
     transcript,
