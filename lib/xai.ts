@@ -1,4 +1,4 @@
-import { readEnvAlias } from "@/lib/env";
+import { readEnvAlias } from "./env";
 
 /** Official xAI HTTP endpoints. Key stays on the server. */
 export const XAI_STT_URL = "https://api.x.ai/v1/stt";

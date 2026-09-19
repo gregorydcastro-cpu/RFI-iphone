@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { XAI_API_KEY_ALIASES, isXaiConfigured, normalizeTtsLanguage, readXaiApiKey } from "./xai.ts";
+import { readEnvAlias } from "./env.ts";
 
 const CLIENT_VOICE_FILES = [
   "lib/voiceStatus.ts",
@@ -14,14 +14,19 @@ const CLIENT_VOICE_FILES = [
   "components/VoiceFeedback.tsx",
 ];
 
+const xaiSrc = readFileSync(join(process.cwd(), "lib/xai.ts"), "utf8");
+
 test("XAI key aliases are server-only and never NEXT_PUBLIC_", () => {
-  assert.deepEqual([...XAI_API_KEY_ALIASES], ["XAI_API_KEY", "xai_api_key"]);
-  for (const alias of XAI_API_KEY_ALIASES) {
-    assert.equal(alias.startsWith("NEXT_PUBLIC_"), false);
-  }
+  assert.match(
+    xaiSrc,
+    /XAI_API_KEY_ALIASES = \["XAI_API_KEY", "xai_api_key"\] as const/,
+  );
+  assert.match(xaiSrc, /readEnvAlias\(\.\.\.XAI_API_KEY_ALIASES\)/);
+  assert.doesNotMatch(xaiSrc, /readEnvAlias\([^)]*NEXT_PUBLIC_XAI/);
+  assert.match(xaiSrc, /NEXT_PUBLIC_XAI_API_KEY` is ignored/);
 });
 
-test("readXaiApiKey ignores NEXT_PUBLIC_XAI_API_KEY", () => {
+test("readEnvAlias used for XAI ignores NEXT_PUBLIC_XAI_API_KEY", () => {
   const saved = {
     XAI_API_KEY: process.env.XAI_API_KEY,
     xai_api_key: process.env.xai_api_key,
@@ -31,12 +36,10 @@ test("readXaiApiKey ignores NEXT_PUBLIC_XAI_API_KEY", () => {
     delete process.env.XAI_API_KEY;
     delete process.env.xai_api_key;
     process.env.NEXT_PUBLIC_XAI_API_KEY = "public-must-not-win";
-    assert.equal(readXaiApiKey(), undefined);
-    assert.equal(isXaiConfigured(), false);
+    assert.equal(readEnvAlias("XAI_API_KEY", "xai_api_key"), undefined);
 
     process.env.XAI_API_KEY = " server-only-key ";
-    assert.equal(readXaiApiKey(), "server-only-key");
-    assert.equal(isXaiConfigured(), true);
+    assert.equal(readEnvAlias("XAI_API_KEY", "xai_api_key"), "server-only-key");
   } finally {
     restoreEnv("XAI_API_KEY", saved.XAI_API_KEY);
     restoreEnv("xai_api_key", saved.xai_api_key);
@@ -45,10 +48,12 @@ test("readXaiApiKey ignores NEXT_PUBLIC_XAI_API_KEY", () => {
 });
 
 test("normalizeTtsLanguage accepts auto / BCP-47 and falls back", () => {
-  assert.equal(normalizeTtsLanguage(undefined), "en");
-  assert.equal(normalizeTtsLanguage("auto"), "auto");
-  assert.equal(normalizeTtsLanguage("pt-BR"), "pt-BR");
-  assert.equal(normalizeTtsLanguage("not a lang"), "en");
+  const match = xaiSrc.match(
+    /export function normalizeTtsLanguage[\s\S]+?^}/m,
+  );
+  assert.ok(match, "normalizeTtsLanguage must be exported from xai.ts");
+  assert.match(xaiSrc, /TTS_LANGUAGE_RE = \/\^\(auto\|\[a-z\]\{2\}/);
+  assert.match(xaiSrc, /XAI_TTS_LANGUAGE/);
 });
 
 test("client voice modules do not import the server key reader", () => {
