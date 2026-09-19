@@ -122,14 +122,14 @@ export async function POST(request: Request) {
 
   const email = asEmail(body.email);
   if (!email) {
-    return json({ ok: false, error: "email is required", stub: false }, 400);
+    return json({ ok: false, error: friendlyAuthError("email is required"), stub: false }, 400);
   }
 
   const mode = parseFieldAuthMode(body.mode);
   const scratch = NextResponse.next();
   const supabase = createSupabaseRouteClient(request, scratch);
   if (!supabase) {
-    return json({ ok: false, error: "auth_unconfigured", stub: false }, 503);
+    return json({ ok: false, error: authUnconfiguredMessage(), stub: false }, 503);
   }
 
   if (mode === "otp") {
@@ -164,7 +164,7 @@ export async function POST(request: Request) {
 
   const password = asPassword(body.password);
   if (!password) {
-    return json({ ok: false, error: "password is required", stub: false }, 400);
+    return json({ ok: false, error: friendlyAuthError("password is required"), stub: false }, 400);
   }
 
   if (mode === "signup") {
