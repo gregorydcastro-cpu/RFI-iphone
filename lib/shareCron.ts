@@ -7,9 +7,9 @@
  * Weekly/scheduled refresh stays catalog + room_packs + bot (no per-user
  * token in cron). PDF re-download uses the existing Drive/proxy path
  * only when that path is configured; otherwise metadata-only.
- * After a persisted bump, notifyMikeOnBumps emails Mike (issue #31).
- * Unchanged sheets do not notify. Missing mail env skips (503 code) and
- * does not fail the refresh.
+ * After a persisted bump, notifyMikeOnBumps emails each folder owner's
+ * procore_connections.notify_email. Unchanged sheets do not notify.
+ * Missing notify_email is a structured skip and does not fail the refresh.
  */
 
 import { readGoogleDriveAuth } from "./driveAuth";
@@ -175,7 +175,7 @@ export async function runWeeklyShareRefresh(): Promise<WeeklyShareRefreshSummary
     procore_rest: procoreRestSummary(),
     storage: applied.storage,
     note:
-      "Weekly rev-only refresh compared pinned sheets to known pack revs (same as Refresh all) and updated last_seen_rev / last_pulled_at / sheet_revision_cache on a bump. Mike is emailed only when a bump persists (NOTIFY_MIKE_EMAIL + Resend or Gmail). Unchanged sheets do not notify.",
+      "Weekly rev-only refresh compared pinned sheets to known pack revs (same as Refresh all) and updated last_seen_rev / last_pulled_at / sheet_revision_cache on a bump. Each folder owner is emailed on a persisted bump when procore_connections.notify_email is set. Unchanged sheets do not notify.",
   };
 }
 

@@ -16,6 +16,9 @@
  * attaches rfis.markup_id → markup_overlays. Row shape stays RfiDraftRow
  * (same columns as lib/rfiSchema.ts / Generate RFI).
  *
+ * notify_email: supabase/migrations/20260918230000_procore_connections_notify_email.sql
+ * adds nullable procore_connections.notify_email (per-user bump alerts).
+ *
  * Writes that must succeed under the stub session (`stub:` + sha256 email)
  * require SUPABASE_SERVICE_ROLE_KEY. Authenticated RLS matches auth.uid()
  * once real auth lands. Anon has no grants on the new tables.
@@ -42,6 +45,11 @@ export type ProcoreConnectionRow = {
   /** Last-known from GET /me only. Resolve company id per project. */
   company_id: string | null;
   procore_user_id: string | null;
+  /**
+   * Per-user bump-alert destination (issue #37). Null/empty skips notify
+   * for this owner's persisted pin/sheet bumps. Not the login email.
+   */
+  notify_email: string | null;
   created_at: string;
   updated_at: string;
 };

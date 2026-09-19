@@ -152,6 +152,16 @@ test("planShareRefresh marks bumped unchanged and missing", () => {
       old_rev: "A",
       new_rev: "B",
       project_name: "Maple Point Medical Office",
+      owner_user_id: null,
+    },
+  ]);
+  assert.deepEqual(bumpsFromPlan(plan, new Map([["folder-1", "stub:maple-puller"]])), [
+    {
+      sheet_id: "E-101",
+      old_rev: "A",
+      new_rev: "B",
+      project_name: "Maple Point Medical Office",
+      owner_user_id: "stub:maple-puller",
     },
   ]);
 });

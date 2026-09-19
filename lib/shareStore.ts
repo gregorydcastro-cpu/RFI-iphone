@@ -6,8 +6,9 @@
  * sheet_revision_cache under the stub session owner_user_id.
  *
  * Manual Refresh all walks one owner's pins. Weekly cron walks every pin
- * (service role) and reuses the same compare + cache write. Notify Mike
- * after persist (issue #31) — not from this store.
+ * (service role) and reuses the same compare + cache write. Notify looks
+ * up procore_connections.notify_email for each pin folder's owner_user_id
+ * after persist — not from this store.
  */
 
 import {
@@ -34,6 +35,7 @@ import {
   isShareTableWriteConfigured,
   selectAllPinnedSheets,
   selectAllRevisionCache,
+  selectAllShareFolders,
   selectPinnedSheets,
   selectRevisionCache,
   selectShareFolders,
@@ -374,7 +376,7 @@ export async function refreshAllPinnedSheets(
   return {
     plan,
     storage: snapshot.storage,
-    bumps: bumpsFromPlan(plan),
+    bumps: bumpsFromPlan(plan, ownerByFolderId(snapshot.folders)),
     errors,
   };
 }
@@ -385,6 +387,7 @@ export async function weeklyRefreshPinnedSheets(): Promise<
   const configured = isShareTableWriteConfigured();
   let pins: PinnedSheetRow[] = [];
   let cache: SheetRevisionCacheRow[] = [];
+  let folders: ShareFolderRow[] = [];
   let storage: ShareStorage = "memory";
 
   if (configured) {
@@ -407,11 +410,13 @@ export async function weeklyRefreshPinnedSheets(): Promise<
     }
     pins = allPins;
     cache = allCache;
+    folders = (await selectAllShareFolders()) ?? [];
     storage = "supabase";
   } else {
     const store = memory();
     pins = store.pins;
     cache = store.cache;
+    folders = store.folders;
   }
 
   const currentRevs = await currentShareRevMap();
@@ -424,8 +429,14 @@ export async function weeklyRefreshPinnedSheets(): Promise<
   return {
     plan,
     storage,
-    bumps: bumpsFromPlan(plan),
+    bumps: bumpsFromPlan(plan, ownerByFolderId(folders)),
     errors,
   };
+}
+
+function ownerByFolderId(
+  folders: Array<{ id: string; owner_user_id: string }>,
+): Map<string, string> {
+  return new Map(folders.map((folder) => [folder.id, folder.owner_user_id]));
 }
 

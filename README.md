@@ -64,7 +64,7 @@ Production host is **gcfieldlog.com**.
 
 1. Import this GitHub repo in [Vercel](https://vercel.com/new) (framework preset: **Next.js**).
 2. Build command: `npm run build`. `postinstall` copies `pdf.worker.min.mjs`.
-3. **Env:** the Maple Point demo needs **no** secrets. Production reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` for live `room_packs`. Live sheet PDFs (Google Drive links in `sheets[].pdf`) need **`GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`** (or **`GOOGLE_CLIENT_EMAIL` + `GOOGLE_PRIVATE_KEY`**) so `/api/sheet-pdf` can stream files the browser cannot fetch. Procore **user** OAuth (Connect Procore) uses **`PROCORE_CLIENT_ID` / `PROCORE_CLIENT_SECRET`** and **`SUPABASE_SERVICE_ROLE_KEY`** on Vercel (server-only, never `NEXT_PUBLIC_`). **Weekly share refresh** uses **`CRON_SECRET`** (server-only, never `NEXT_PUBLIC_`) — Vercel Cron hits `GET /api/share/weekly-refresh` Mondays 12:00 UTC per `vercel.json`. **Notify Mike** on a persisted pinned-sheet bump uses **`NOTIFY_MIKE_EMAIL`** plus **`RESEND_API_KEY`** or **`GMAIL_APP_PASSWORD`** (server-only, never `NEXT_PUBLIC_`). **Grok Voice** (RFI/materials dictation + RFI read-aloud) uses **`XAI_API_KEY`** (server-only, never `NEXT_PUBLIC_`). Copy OAuth id/secret from `/home/box/.secrets/procore_client_id` and `procore_client_secret` — do not commit. Do **not** restore `procore_room_pack_webhook_url` / `procore_room_pack_webhook_authorization` for this live path — that routine is deleted. Stripe Checkout (optional until you sell) uses the keys in **Stripe Checkout (Vercel + Dashboard)** below.
+3. **Env:** the Maple Point demo needs **no** secrets. Production reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` for live `room_packs`. Live sheet PDFs (Google Drive links in `sheets[].pdf`) need **`GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`** (or **`GOOGLE_CLIENT_EMAIL` + `GOOGLE_PRIVATE_KEY`**) so `/api/sheet-pdf` can stream files the browser cannot fetch. Procore **user** OAuth (Connect Procore) uses **`PROCORE_CLIENT_ID` / `PROCORE_CLIENT_SECRET`** and **`SUPABASE_SERVICE_ROLE_KEY`** on Vercel (server-only, never `NEXT_PUBLIC_`). **Weekly share refresh** uses **`CRON_SECRET`** (server-only, never `NEXT_PUBLIC_`) — Vercel Cron hits `GET /api/share/weekly-refresh` Mondays 12:00 UTC per `vercel.json`. **Pinned-sheet bump email** uses each owner's **`procore_connections.notify_email`** plus the shared **`RESEND_API_KEY`** sender (server-only, never `NEXT_PUBLIC_`). **`NOTIFY_MIKE_EMAIL`** is a temporary fallback only. **Grok Voice** (RFI/materials dictation + RFI read-aloud) uses **`XAI_API_KEY`** (server-only, never `NEXT_PUBLIC_`). Copy OAuth id/secret from `/home/box/.secrets/procore_client_id` and `procore_client_secret` — do not commit. Do **not** restore `procore_room_pack_webhook_url` / `procore_room_pack_webhook_authorization` for this live path — that routine is deleted. Stripe Checkout (optional until you sell) uses the keys in **Stripe Checkout (Vercel + Dashboard)** below.
 4. **DNS (ops, not this repo):** at HostGator, point `gcfieldlog.com` / `www` to Vercel (A / CNAME per Vercel’s domain docs). Do not upload files to HostGator for this app.
 
 ### Procore OAuth (Connect Procore)
@@ -98,11 +98,19 @@ That is the default `redirect_uri`. Preview hosts will not match unless `PROCORE
 | `CRON_SECRET` | **Weekly share refresh.** Server-only. Vercel Cron sends `Authorization: Bearer $CRON_SECRET` to `GET /api/share/weekly-refresh`. Also accepted as `x-cron-secret`. Never `NEXT_PUBLIC_`. |
 | `SHARE_WEEKLY_PDF_REDOWNLOAD` | Optional. `1` forces Drive/proxy PDF fetch on a rev bump; `0` forces metadata-only. Unset: fetch when Google Drive auth is configured. |
 | `SHARE_WEEKLY_PROCORE_REST` | Weekly/scheduled flag only. Even if `1`, cron has no per-user token — it still compares catalog + `room_packs` and asks the bot. Live REST is the connected puller pack path (`POST /api/room-pack`). |
-| `NOTIFY_MIKE_EMAIL` | **Notify Mike on a pinned rev bump.** Server-only destination (demo/config, e.g. `mike@crew.example`). Never a personal address in client code. Never `NEXT_PUBLIC_`. Alias: `GMAIL_USER` if this key is unset. |
+| `RESEND_API_KEY` | **Shared bump-email sender.** Server-only. Weekly cron / Refresh all send through [Resend](https://resend.com) to each owner's `procore_connections.notify_email`. Never `NEXT_PUBLIC_`. |
 | `NOTIFY_FROM_EMAIL` | Optional From address. Aliases: `RESEND_FROM`, then `GMAIL_USER`. Default From: `GC Field Log <notify@gcfieldlog.com>`. |
-| `RESEND_API_KEY` | Optional. Send the bump email through [Resend](https://resend.com). Server-only. Never `NEXT_PUBLIC_`. |
-| `GMAIL_USER` / `GMAIL_APP_PASSWORD` | Optional alternate send path (smtp.gmail.com). App password is server-only. Never `NEXT_PUBLIC_`. |
+| `NOTIFY_MIKE_EMAIL` | **Temporary fallback only.** Used only when the folder owner has no `notify_email` yet. Prefer the per-user column. Server-only. Never `NEXT_PUBLIC_`. |
+| `GMAIL_USER` / `GMAIL_APP_PASSWORD` | Optional alternate send path (smtp.gmail.com). App password is server-only. Never `NEXT_PUBLIC_`. Destination is still per-user `notify_email`. |
 | `NOTIFY_MIKE_SMS` | Reserved. SMS is **not** sent. |
+
+#### Ops: per-user bump notify (issue #37)
+
+1. Set **`RESEND_API_KEY`** once on Vercel (shared sender). Optional **`NOTIFY_FROM_EMAIL`** / **`RESEND_FROM`**. Never `NEXT_PUBLIC_`.
+2. Apply `supabase/migrations/20260918230000_procore_connections_notify_email.sql` so `procore_connections.notify_email` exists.
+3. Each GC / foreman / puller sets their own notify address in **Account / settings** (GC Field Log agent **bc-1b9bb48c** owns that UI + save API — not this notify PR). Persist trims + lowercases via `parseNotifyEmailInput` / `upsertNotifyEmail`. A `procore_connections` row must already exist (Connect Procore).
+4. Weekly cron and Refresh all email **that owner's** `notify_email` after a real persisted bump. Unchanged sheets do not notify. Null/empty `notify_email` is a structured skip (`notify_email_unset`) and does **not** fail the refresh.
+5. **`NOTIFY_MIKE_EMAIL` is a legacy fallback only.** Prefer `procore_connections.notify_email`. Remove the env once every owner has a row.
 
 This app does **not** use the Vercel AI SDK / AI Gateway for voice. The key is forwarded only from Next.js API routes. Do not put the key in the client bundle.
 
@@ -175,7 +183,7 @@ Hands-in-gloves markup on the pack viewer. Vectors stay as SVG/JSON — **not** 
 
 Markups persist to Supabase `public.markup_overlays` (`request_id`, `sheet_id`, `vectors` jsonb, `user_id`, `updated_at`) via service-role `/api/markups` under the stub session — same write path as `rfis` / `procore_connections`. Schema is on main ([PR #9](https://github.com/gregorydcastro-cpu/RFI-iphone/pull/9)): `supabase/migrations/20260918020000_share_markup_rfi_trial.sql` plus `20260918130000_rfis_markup_overlay_fk.sql`. Types: `lib/schema.ts`. **localStorage** (`gcfieldlog.markup:request_id:sheet_id`) is only the offline/demo fallback when `SUPABASE_SERVICE_ROLE_KEY` is missing.
 
-The RFI row’s optional `markup_id` points at the overlay. The draft packet also keeps a vector snapshot + sheet id/rev. Trial-link gating stays later. Weekly rev-only re-pull is `GET`/`POST /api/share/weekly-refresh`. A persisted bump emails Mike when notify env is set.
+The RFI row’s optional `markup_id` points at the overlay. The draft packet also keeps a vector snapshot + sheet id/rev. Trial-link gating stays later. Weekly rev-only re-pull is `GET`/`POST /api/share/weekly-refresh`. A persisted bump emails the folder owner's `notify_email` when set.
 
 ```bash
 curl -s "http://localhost:3000/api/markups?request_id=maple-point&sheet_id=A-101"
@@ -212,6 +220,7 @@ Applied on the gc-field-log Supabase project. SQL: `supabase/migrations/20260918
 | --- | --- |
 | `user_id` | Primary key. Stub: `stub:` + sha256(email). Replace with `auth.uid()` when real auth lands. |
 | `email` | Stub session email |
+| `notify_email` | Per-user bump-alert destination (nullable). Null/empty skips notify for that owner. SQL: `supabase/migrations/20260918230000_procore_connections_notify_email.sql`. Settings UI is owned by GC Field Log. |
 | `access_token` | Never returned to the browser |
 | `refresh_token` | Never returned to the browser |
 | `expires_at` | Access token expiry |
@@ -419,7 +428,7 @@ SQL: `supabase/migrations/20260918020000_share_markup_rfi_trial.sql` plus overla
 | `20260918021000_rfis.sql` (PR #12) | `public.rfis` | Left as-is. `create table` is **not** repeated here. Additive FK `rfis.markup_id` → `markup_overlays` only (`on delete set null`). Generate RFI types stay in `lib/rfiSchema.ts` (re-exports `lib/schema.ts`). |
 | `20260918120000_billing_customers.sql` (Stripe) | `public.billing_customers` | Untouched. `trial_link_tokens` is a separate share-portal token table, not Stripe billing. |
 | `20260918093000_time_tracking.sql` | `job_sites` / `workers` / `time_punches` | Untouched. |
-| `20260918010000_procore_connections.sql` | `procore_connections` | Untouched. `room_packs` RLS stays off. |
+| `20260918010000_procore_connections.sql` | `procore_connections` | Tokens untouched. Additive `notify_email` only (`20260918230000_procore_connections_notify_email.sql`). `room_packs` RLS stays off. |
 
 **Pack viewer markup** (this app) writes `markup_overlays` through `/api/markups` and links drafts with `rfis.markup_id`. Architectural floor plan first and the oversized red room highlight are already on the Field Log viewer. Trial-link redeem stays later.
 
@@ -455,11 +464,11 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/share/folders
 # 401
 ```
 
-**Manual force refresh:** `POST /api/share/refresh-all` is puller-gated (**stub Puller** session, or Procore-linked cookie / `x-procore-linked` header) **and** requires the stub session. It walks that owner's `pinned_sheets`, compares known pack revs (Maple Point catalog, plus live `room_packs` when Supabase anon is set) to `sheet_revision_cache`, and updates last_seen_rev / last_pulled_at on a bump. Bulk/scheduled refresh still asks the Procore bot (no per-user token on that path) and does **not** re-download PDFs. Live REST is the connected pack-request path. A persisted bump emails Mike (`notifyMikeOnBumps`). Response: `{ accepted: true, stub: false, implemented: true, weeklyCron: false, notify, scanned, bumped, unchanged, missing, bumps }`.
+**Manual force refresh:** `POST /api/share/refresh-all` is puller-gated (**stub Puller** session, or Procore-linked cookie / `x-procore-linked` header) **and** requires the stub session. It walks that owner's `pinned_sheets`, compares known pack revs (Maple Point catalog, plus live `room_packs` when Supabase anon is set) to `sheet_revision_cache`, and updates last_seen_rev / last_pulled_at on a bump. Bulk/scheduled refresh still asks the Procore bot (no per-user token on that path) and does **not** re-download PDFs. Live REST is the connected pack-request path. A persisted bump emails that folder owner's `procore_connections.notify_email` (`notifyMikeOnBumps`). Response: `{ accepted: true, stub: false, implemented: true, weeklyCron: false, notify, scanned, bumped, unchanged, missing, bumps }`.
 
 **Weekly rev-only re-pull:** `GET`/`POST /api/share/weekly-refresh` is the automated path. Vercel Cron (`vercel.json`, Mondays 12:00 UTC) sends `Authorization: Bearer $CRON_SECRET`. The worker reads **all** `pinned_sheets` + `sheet_revision_cache` with the service role (process memory when the service role is unset), reuses `planShareRefresh` (same catalog + `room_packs` compare as Refresh all), and on a bump updates `last_seen_rev` / `last_pulled_at` / cache `rev` + `checked_at`. Unchanged revs are metadata-only.
 
-**Procore REST** on weekly cron is still a no-call: cron has no per-user OAuth token. `SHARE_WEEKLY_PROCORE_REST=1` does not change that. Connected pullers use REST on `POST /api/room-pack` ([issue #25](https://github.com/gregorydcastro-cpu/RFI-iphone/issues/25)). **PDF re-download** uses the existing Drive / `/api/sheet-pdf` proxy only when Drive auth is set or `SHARE_WEEKLY_PDF_REDOWNLOAD=1`; otherwise metadata-only. There is no separate PDF store — the pack viewer already streams that proxy. Response: `{ scanned, bumped, unchanged, missing, errors, bumps, error_items, pdf, procore_rest, notify }`. `bumps: [{ sheet_id, old_rev, new_rev, project_name }]` feeds [issue #31](https://github.com/gregorydcastro-cpu/RFI-iphone/issues/31) (Notify Mike). Mike is the share-portal puller mentioned in crew comments — the address is **`NOTIFY_MIKE_EMAIL`** (demo: `mike@crew.example`), never hardcoded in the client. Unchanged sheets do not email. Missing Resend/Gmail env returns `notify.code: "notify_unconfigured"` (status 503 on the notify object only) and does **not** fail the refresh. SMS (`NOTIFY_MIKE_SMS`) is reserved and not sent. Trial-link redeem stays later.
+**Procore REST** on weekly cron is still a no-call: cron has no per-user OAuth token. `SHARE_WEEKLY_PROCORE_REST=1` does not change that. Connected pullers use REST on `POST /api/room-pack` ([issue #25](https://github.com/gregorydcastro-cpu/RFI-iphone/issues/25)). **PDF re-download** uses the existing Drive / `/api/sheet-pdf` proxy only when Drive auth is set or `SHARE_WEEKLY_PDF_REDOWNLOAD=1`; otherwise metadata-only. There is no separate PDF store — the pack viewer already streams that proxy. Response: `{ scanned, bumped, unchanged, missing, errors, bumps, error_items, pdf, procore_rest, notify }`. `bumps: [{ sheet_id, old_rev, new_rev, project_name, owner_user_id }]` feed notify. **Recipient resolution:** bumped pin → `pinned_sheets.folder_id` → `share_folders.owner_user_id` → `procore_connections.user_id` → `notify_email`. Unchanged sheets do not email. Missing `notify_email` (and no temporary `NOTIFY_MIKE_EMAIL` fallback) returns `notify.code: "notify_email_unset"` (status 200 on the notify object) and does **not** fail the refresh. Missing `RESEND_API_KEY` returns `notify.code: "notify_unconfigured"` (status 503 on the notify object only). SMS (`NOTIFY_MIKE_SMS`) is reserved and not sent. Trial-link redeem stays later. Account/settings UI to set `notify_email` is owned by **GC Field Log**, not this notify path.
 
 ```bash
 # Missing secret
@@ -469,7 +478,7 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:3000/api/share
 # Authorized (local): export CRON_SECRET first, never NEXT_PUBLIC_
 curl -s -X POST http://localhost:3000/api/share/weekly-refresh \
   -H "Authorization: Bearer $CRON_SECRET"
-# notify.code is "no_bumps" or "notify_unconfigured" unless mail env is set
+# notify.code is "no_bumps", "notify_email_unset", or "notify_unconfigured" unless a recipient + Resend key are set
 ```
 
 **RLS (restrictive defaults):** enabled on the new share/markup/trial tables. `anon` has no grants (no public share-folder read until a later PR adds an explicit public flag). `authenticated` may CRUD **own** folders, pins, markups, and trial tokens (`user_id` / folder owner = `auth.uid()::text`). `sheet_revision_cache` has no anon/authenticated policies. `rfis` RLS stays the PR #12 owner policies.
@@ -505,8 +514,8 @@ curl -s -X POST http://localhost:3000/api/share/weekly-refresh \
 | `/api/sheet-pdf` | GET `?requestId=&sheetId=`. Streams a sheet PDF (Drive proxy or local `/packs`). Secrets stay on the server. |
 | `/api/share/folders` | GET/POST/DELETE stub-session share folders (service role or memory) |
 | `/api/share/pins` | POST pin discipline or room pack; DELETE `?id=` unpin |
-| `/api/share/refresh-all` | Puller POST. Walks this owner's pins + updates `sheet_revision_cache`. Emails Mike on a persisted bump. |
-| `/api/share/weekly-refresh` | Cron GET/POST. `CRON_SECRET` required. All pins, catalog + `room_packs` + bot. Live REST stays on pack routes. Emails Mike on a persisted bump. |
+| `/api/share/refresh-all` | Puller POST. Walks this owner's pins + updates `sheet_revision_cache`. Emails that owner's `notify_email` on a persisted bump. |
+| `/api/share/weekly-refresh` | Cron GET/POST. `CRON_SECRET` required. All pins, catalog + `room_packs` + bot. Live REST stays on pack routes. Emails each pin owner's `notify_email` on a persisted bump. |
 | `/api/time` | GET Maple Point site, workers, week punches (memory demo or service-role Supabase) |
 | `/api/time/punches` | POST worker punch (GPS + geofence) or `{ foreman: true }` missed-punch override |
 | `/api/voice/status` | GET. `{ configured }` for Grok Voice — never returns the key |
@@ -702,7 +711,8 @@ Always shown. Empty without `takeoff`. When present, renders `by_room`:
 - Trial-link redeem / public share-folder read
 - Weekly cron Procore REST compare (cron still has no per-user token; `SHARE_WEEKLY_PROCORE_REST` stays a scheduled-only flag)
 - Persist a new PDF copy on bump beyond the existing Drive / `/api/sheet-pdf` proxy
-- SMS Mike when a pinned rev bumps (`NOTIFY_MIKE_SMS` reserved; email is wired)
+- SMS when a pinned rev bumps (`NOTIFY_MIKE_SMS` reserved; per-user email is wired)
+- Account/settings UI to edit `procore_connections.notify_email` (GC Field Log owns that)
 - RLS policies on `public.room_packs` (table is currently wide open to the anon key)
 - HostGator DNS cutover to Vercel for gcfieldlog.com
 - No Apple / native iOS
