@@ -1,6 +1,6 @@
 import { readFieldRoleFromRequest } from "@/lib/auth";
-import { getJob, jobFromRequestId, makeRequestId } from "@/lib/jobs";
-import { refreshLiveRoomPack } from "@/lib/livePack";
+import { makeRequestId, resolvePullJob } from "@/lib/jobs";
+import { loadLiveRoomPack, refreshLiveRoomPack } from "@/lib/livePack";
 import { stampRoomPack, type RoomPack } from "@/lib/pack";
 import { isRoomPackShape, requestBelongsToJob } from "@/lib/packStatus";
 import { PROCORE_BOT_ID } from "@/lib/procoreBot";
@@ -31,7 +31,8 @@ function json(data: unknown, status = 200) {
  * Puller-only. Try Procore REST with stored tokens, optionally persist
  * pack JSON (bot/ops callback), then read the latest `public.room_packs`
  * row. Bot/catalog is the fallback when tokens or the demo project are
- * missing.
+ * missing. Live requestIds resolve from cached room_packs / projectName
+ * — DEMO_JOBS is not required.
  */
 export async function POST(request: Request) {
   const role = readFieldRoleFromRequest(request);
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
   let body: {
     projectSlug?: unknown;
     job?: unknown;
+    projectName?: unknown;
     requestId?: unknown;
     room?: unknown;
     pack?: unknown;
@@ -61,11 +63,22 @@ export async function POST(request: Request) {
 
   const projectSlug =
     asNonEmptyString(body.projectSlug) ?? asNonEmptyString(body.job);
+  const projectName = asNonEmptyString(body.projectName);
   const requestId = packId(asNonEmptyString(body.requestId));
   const room = asNonEmptyString(body.room) ?? "room";
 
+  let incoming: RoomPack | undefined;
+  if (body.pack !== undefined) {
+    if (!isRoomPackShape(body.pack)) {
+      return json({ ok: false, error: "Invalid pack JSON" }, 400);
+    }
+    incoming = stampRoomPack(body.pack, { touch: true });
+  }
+
+  const named = resolvePullJob({ projectSlug, projectName });
   const resolvedRequestId =
     requestId ??
+    (named ? packId(makeRequestId(named.slug, room)) : null) ??
     (projectSlug ? packId(makeRequestId(projectSlug, room)) : null);
 
   if (!resolvedRequestId) {
@@ -75,19 +88,30 @@ export async function POST(request: Request) {
     );
   }
 
-  const job =
-    (projectSlug ? getJob(projectSlug) : undefined) ??
-    jobFromRequestId(resolvedRequestId);
-  if (!job || !requestBelongsToJob(job, resolvedRequestId)) {
+  if (named && !requestBelongsToJob(named, resolvedRequestId)) {
     return json({ ok: false, error: "Unknown job" }, 404);
   }
 
-  let incoming: RoomPack | undefined;
-  if (body.pack !== undefined) {
-    if (!isRoomPackShape(body.pack)) {
-      return json({ ok: false, error: "Invalid pack JSON" }, 400);
-    }
-    incoming = stampRoomPack(body.pack, { touch: true });
+  const cached = await loadLiveRoomPack({
+    requestId: resolvedRequestId,
+    job: named,
+    room,
+  });
+  const job = resolvePullJob({
+    projectSlug,
+    projectName,
+    requestId: resolvedRequestId,
+    pack: incoming ?? cached?.pack ?? null,
+  });
+  if (!job) {
+    return json({ ok: false, error: "Unknown job" }, 404);
+  }
+  const packRequestId = incoming?.request_id ?? cached?.pack.request_id;
+  if (
+    !requestBelongsToJob(job, resolvedRequestId) &&
+    packRequestId !== resolvedRequestId
+  ) {
+    return json({ ok: false, error: "Unknown job" }, 404);
   }
 
   const session = stubSessionFromRequest(request);
@@ -117,6 +141,7 @@ export async function POST(request: Request) {
     pulled_at: live.pack.pulled_at,
     revision_stamp: live.pack.revision_stamp,
     botId: PROCORE_BOT_ID,
+    bot: live.bot,
     pack: live.pack,
   });
 }

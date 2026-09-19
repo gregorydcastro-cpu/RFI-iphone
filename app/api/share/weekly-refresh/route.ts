@@ -42,10 +42,11 @@ async function handle(request: Request) {
     return json({ ok: false, error: "Unauthorized." }, 401);
   }
 
-  await requestProcoreBotRefresh({
+  const bot = await requestProcoreBotRefresh({
     projectName: MAPLE_POINT_PROJECT_NAME,
     room: "101",
     requestId: MAPLE_POINT_REQUEST_ID,
+    reason: "weekly",
   });
 
   const summary = await runWeeklyShareRefresh();
@@ -53,6 +54,7 @@ async function handle(request: Request) {
     {
       ...summary,
       botId: PROCORE_BOT_ID,
+      bot,
     },
     summary.ok ? 200 : 503,
   );

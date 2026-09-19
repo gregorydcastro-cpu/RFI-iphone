@@ -39,6 +39,12 @@ export function mapDrawingRevisionToSheet(raw: unknown): Sheet | null {
     asText(rec.url) ??
     asText(asRecord(rec.pdf)?.url) ??
     "";
+  const lastModified =
+    asText(rec.last_modified) ??
+    asText(rec.updated_at) ??
+    asText(rec.updated_at_iso) ??
+    asText(rec.modified_at) ??
+    asText(rec.created_at);
 
   return {
     id,
@@ -49,6 +55,7 @@ export function mapDrawingRevisionToSheet(raw: unknown): Sheet | null {
     title,
     name: title,
     discipline,
+    ...(lastModified ? { last_modified: lastModified } : {}),
   };
 }
 
@@ -161,14 +168,14 @@ export function mergeCachedLayout(
 
   const cacheById = new Map(cached.sheets.map((sheet) => [sheet.id, sheet]));
   const sheets = restPack.sheets.map((sheet) => {
-    if (sheet.pdf) return sheet;
     const prev = cacheById.get(sheet.id);
     if (!prev) return sheet;
     return {
       ...sheet,
-      pdf: prev.pdf,
-      preview: prev.preview ?? sheet.preview,
-      crop: prev.crop ?? sheet.crop,
+      pdf: sheet.pdf || prev.pdf,
+      preview: sheet.preview ?? prev.preview,
+      crop: sheet.crop ?? prev.crop,
+      last_modified: sheet.last_modified ?? prev.last_modified,
     };
   });
 

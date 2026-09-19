@@ -1,5 +1,5 @@
 import { readFieldRoleFromRequest } from "@/lib/auth";
-import { getJob, makeRequestId } from "@/lib/jobs";
+import { makeRequestId, resolvePullJob } from "@/lib/jobs";
 import { refreshLiveRoomPack } from "@/lib/livePack";
 import { PROCORE_BOT_ID } from "@/lib/procoreBot";
 import { stubSessionFromRequest } from "@/lib/stubSession";
@@ -12,6 +12,7 @@ const NO_STORE = { "Cache-Control": "no-store" };
 
 type RoomPackRequestJson = {
   projectSlug?: unknown;
+  projectName?: unknown;
   room?: unknown;
 };
 
@@ -29,8 +30,10 @@ function json(data: unknown, status = 200) {
  * Request a room pack from `/jobs/[projectSlug]`.
  *
  * Puller only. Tries Procore REST with stored OAuth tokens, then
- * falls back to the Procore bot + `public.room_packs`. Does not call
+ * wakes the Procore bot + reads `public.room_packs`. Does not call
  * the deleted webhook. Local demo when Supabase env is unset.
+ * Job identity: demo slug, exact projectName, or allowlist — not
+ * DEMO_JOBS-only.
  */
 export async function POST(request: Request) {
   const role = readFieldRoleFromRequest(request);
@@ -53,15 +56,16 @@ export async function POST(request: Request) {
   }
 
   const projectSlug = asNonEmptyString(body.projectSlug);
+  const projectName = asNonEmptyString(body.projectName);
   const room = asNonEmptyString(body.room);
-  if (!projectSlug || !room) {
+  if ((!projectSlug && !projectName) || !room) {
     return json(
-      { ok: false, error: "projectSlug and room are required" },
+      { ok: false, error: "projectSlug or projectName, and room, are required" },
       400,
     );
   }
 
-  const job = getJob(projectSlug);
+  const job = resolvePullJob({ projectSlug, projectName });
   if (!job) {
     return json({ ok: false, error: "Unknown job" }, 404);
   }
@@ -91,6 +95,7 @@ export async function POST(request: Request) {
     pulled_at: live?.pack.pulled_at,
     revision_stamp: live?.pack.revision_stamp,
     botId: PROCORE_BOT_ID,
+    bot: live?.bot,
     procoreLinked: true,
   });
 }

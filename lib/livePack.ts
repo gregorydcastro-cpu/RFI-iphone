@@ -5,7 +5,10 @@ import {
 } from "./pack";
 import { loadPack } from "./loadPack";
 import { packMatchesJob } from "./packStatus";
-import { requestProcoreBotRefresh } from "./procoreBot";
+import {
+  requestProcoreBotRefresh,
+  type ProcoreBotRefreshResult,
+} from "./procoreBot";
 import { pullProcoreRoomPack } from "./procoreRest";
 import {
   fetchLatestRoomPackRow,
@@ -25,6 +28,7 @@ export type LivePackLoad = {
   supabaseConfigured: boolean;
   requestId: string;
   restReason?: string;
+  bot?: ProcoreBotRefreshResult;
 };
 
 async function maplePointFallback(
@@ -99,7 +103,8 @@ export async function loadLiveRoomPack(input: {
 /**
  * Puller refresh: try Procore REST with the session's stored tokens.
  * Bot + cached `room_packs` is the fallback when tokens are missing,
- * refresh fails, or sandbox/production cannot see the demo project.
+ * refresh fails, or the exact project name cannot be resolved.
+ * Bot fallback enqueues / HTTP-wakes the fleet — not log-only.
  */
 export async function refreshLiveRoomPack(input: {
   requestId: string;
@@ -149,10 +154,11 @@ export async function refreshLiveRoomPack(input: {
     });
   }
 
-  await requestProcoreBotRefresh({
+  const bot = await requestProcoreBotRefresh({
     projectName: input.job.name,
     room: input.room,
     requestId: input.requestId,
+    reason: restReason ?? "refresh",
   });
 
   if (input.pack && getSupabaseConfig()) {
@@ -171,12 +177,13 @@ export async function refreshLiveRoomPack(input: {
   });
   if (!live) {
     return cached
-      ? { ...cached, pull: "bot", restReason }
+      ? { ...cached, pull: "bot", restReason, bot }
       : null;
   }
   return {
     ...live,
     pull: "bot",
     restReason,
+    bot,
   };
 }

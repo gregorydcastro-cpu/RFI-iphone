@@ -33,6 +33,8 @@ export type Sheet = {
   title?: string | null;
   name?: string | null;
   discipline?: string | null;
+  /** ISO last_modified from Procore drawing revision when present (weekly rev-skip). */
+  last_modified?: string | null;
 };
 
 /** Drawing number + revision letter stamped when the pack was pulled. */

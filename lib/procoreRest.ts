@@ -3,7 +3,8 @@
  *
  * GET-only: companies, projects, current drawing revisions, RFIs.
  * Never POST RFIs, POs, or drawing uploads. Drafts stay in this app
- * (foreman only). Demo job names only — Maple Point / other DEMO_JOBS.
+ * (foreman only). Exact Procore project name, or optional
+ * PROCORE_PROJECT_ALLOWLIST. DEMO_JOBS is not the REST gate.
  *
  * On missing tokens, expired refresh, empty sandbox companies, or API
  * errors, callers fall back to the Procore bot + cached room_packs.

@@ -1,3 +1,6 @@
+import type { RoomPack } from "./pack";
+import { readProjectAllowlist } from "./procoreAllowlist.ts";
+
 export type DemoJob = {
   slug: string;
   name: string;
@@ -38,14 +41,96 @@ export const DEMO_JOBS: DemoJob[] = [
   },
 ];
 
+export function slugFromProjectName(name: string): string {
+  return (
+    name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "job"
+  );
+}
+
+/** Live / allowlisted job identity. Not shown on the Maple Point jobs list. */
+export function jobFromProjectName(name: string): DemoJob {
+  const trimmed = name.trim();
+  return {
+    slug: slugFromProjectName(trimmed),
+    name: trimmed,
+    city: "",
+    phase: "Live",
+    roomsHint: "",
+  };
+}
+
+export function jobFromPack(pack: RoomPack | null | undefined): DemoJob | undefined {
+  if (!pack) return undefined;
+  const name = pack.project?.name?.trim();
+  if (!name) return undefined;
+  const slug = pack.project.slug?.trim() || slugFromProjectName(name);
+  return {
+    slug,
+    name,
+    city: "",
+    phase: "Live",
+    roomsHint: "",
+  };
+}
+
+function allowlistedJobBySlug(slug: string): DemoJob | undefined {
+  const want = slug.trim().toLowerCase();
+  if (!want) return undefined;
+  for (const name of readProjectAllowlist()) {
+    if (slugFromProjectName(name) === want) return jobFromProjectName(name);
+  }
+  return undefined;
+}
+
 export function getJob(slug: string): DemoJob | undefined {
-  return DEMO_JOBS.find((job) => job.slug === slug);
+  const demo = DEMO_JOBS.find((job) => job.slug === slug);
+  if (demo) return demo;
+  return allowlistedJobBySlug(slug);
 }
 
 export function jobFromRequestId(requestId: string): DemoJob | undefined {
-  const exact = DEMO_JOBS.find((job) => job.slug === requestId);
+  const exact = getJob(requestId);
   if (exact) return exact;
-  return DEMO_JOBS.find((job) => requestId.startsWith(`${job.slug}-`));
+  const demo = DEMO_JOBS.find((job) => requestId.startsWith(`${job.slug}-`));
+  if (demo) return demo;
+  for (const name of readProjectAllowlist()) {
+    const slug = slugFromProjectName(name);
+    if (requestId === slug || requestId.startsWith(`${slug}-`)) {
+      return jobFromProjectName(name);
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Resolve a pull target: demo catalog, optional allowlist, exact
+ * projectName, or a cached room_packs row. DEMO_JOBS is not required.
+ */
+export function resolvePullJob(input: {
+  projectSlug?: string | null;
+  projectName?: string | null;
+  requestId?: string | null;
+  pack?: RoomPack | null;
+}): DemoJob | undefined {
+  const slug = input.projectSlug?.trim() || null;
+  const name = input.projectName?.trim() || null;
+  if (slug) {
+    const bySlug = getJob(slug);
+    if (bySlug) return bySlug;
+  }
+  if (input.requestId) {
+    const byRequest = jobFromRequestId(input.requestId);
+    if (byRequest) return byRequest;
+  }
+  const fromPack = jobFromPack(input.pack ?? null);
+  if (fromPack) return fromPack;
+  if (name) return jobFromProjectName(name);
+  return undefined;
 }
 
 export function makeRequestId(projectSlug: string, room: string): string {

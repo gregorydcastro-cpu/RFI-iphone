@@ -1,6 +1,10 @@
 /**
- * Pure helpers for demo-project company/project resolution.
+ * Pure helpers for company/project resolution.
  * No I/O — callers pass company/project lists from Procore GET.
+ *
+ * REST gate is an exact Procore project name match. An optional
+ * allowlist (from env) can restrict names; an empty allowlist means
+ * any exact name is eligible. DEMO_JOBS is not required.
  */
 
 export type ResolvedProcoreProject = {
@@ -14,7 +18,22 @@ export function isDemoProjectName(
   demoNames: readonly string[],
 ): boolean {
   const want = projectName.trim().toLowerCase();
+  if (!want) return false;
   return demoNames.some((name) => name.toLowerCase() === want);
+}
+
+/**
+ * Empty allowlist → any non-empty name may resolve (exact match later).
+ * Non-empty allowlist → name must appear on it (case-insensitive).
+ */
+export function isResolvableProjectName(
+  projectName: string,
+  allowlist: readonly string[] = [],
+): boolean {
+  const want = projectName.trim();
+  if (!want) return false;
+  if (allowlist.length === 0) return true;
+  return allowlist.some((name) => name.trim().toLowerCase() === want.toLowerCase());
 }
 
 export function matchProjectName(
@@ -41,9 +60,9 @@ export function pickResolvedProject(
   companies: unknown,
   projectsByCompany: ReadonlyArray<{ companyId: string; projects: unknown }>,
   projectName: string,
-  demoNames: readonly string[],
+  allowlist: readonly string[] = [],
 ): ResolvedProcoreProject | null {
-  if (!isDemoProjectName(projectName, demoNames) || !Array.isArray(companies)) {
+  if (!isResolvableProjectName(projectName, allowlist) || !Array.isArray(companies)) {
     return null;
   }
   const want = projectName.trim();
