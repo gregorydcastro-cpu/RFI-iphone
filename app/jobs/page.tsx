@@ -41,7 +41,9 @@ export default async function JobsPage({ searchParams }: Props) {
             ? view.connected
               ? " Procore is connected for this puller."
               : " Pullers must Connect Procore to pull with their own account."
-            : " This session is view only — it cannot trigger a Procore pull."}
+            : view.role === "full"
+              ? " Full crew can open packs. Pull stays with a connected puller."
+              : " This session is view only — it cannot trigger a Procore pull."}
         </p>
         {query.procore === "connected" ? (
           <p className="mt-4 text-sm text-accent-2" role="status">

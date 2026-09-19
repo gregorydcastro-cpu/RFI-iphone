@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
+import { InviteCrewCard } from "@/components/InviteCrewCard";
 import { ProcoreConnectCard } from "@/components/ProcoreConnectCard";
+import { canInviteCrew, fieldRoleLabel } from "@/lib/inviteRole";
 import { getProcoreConnectionView, procoreErrorMessage } from "@/lib/procoreStatus";
 import { readStubSession } from "@/lib/stubSession";
 
@@ -46,9 +48,7 @@ export default async function AccountPage({ searchParams }: Props) {
             </div>
             <div>
               Role{" "}
-              <span className="text-paper">
-                {view.role === "puller" ? "puller" : "view only"}
-              </span>
+              <span className="text-paper">{fieldRoleLabel(view.role)}</span>
             </div>
             <div className="font-mono text-xs text-metal">{view.userId}</div>
           </dl>
@@ -72,6 +72,11 @@ export default async function AccountPage({ searchParams }: Props) {
         <div className="mt-6 max-w-lg">
           <ProcoreConnectCard view={view} />
         </div>
+        {canInviteCrew(view.role) ? (
+          <div className="mt-8">
+            <InviteCrewCard canInvite />
+          </div>
+        ) : null}
         <section className="mt-8 max-w-lg border border-line bg-panel p-4">
           <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
             Share

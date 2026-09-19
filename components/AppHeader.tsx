@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { FieldRoleName } from "@/lib/auth";
+import { canInviteCrew } from "@/lib/inviteRole";
 
 type Props = {
   signedIn?: boolean;
@@ -78,6 +79,14 @@ export function AppHeader({
               >
                 Account
               </Link>
+              {canInviteCrew(resolvedRole) ? (
+                <Link
+                  className="text-secondary hover:text-cta"
+                  href="/account#invite"
+                >
+                  Invite
+                </Link>
+              ) : null}
               {resolvedRole ? (
                 <span
                   className={
@@ -90,14 +99,18 @@ export function AppHeader({
                       ? connected
                         ? "Procore connected — can pull"
                         : "Puller — connect Procore to pull"
-                      : "Read-only viewer — cannot pull packs"
+                      : resolvedRole === "full"
+                        ? "Full crew — markup and drafts, no Procore pull"
+                        : "Read-only viewer — sheets and red room box only"
                   }
                 >
                   {resolvedRole === "puller"
                     ? connected
                       ? "Procore connected"
                       : "Puller"
-                    : "View only"}
+                    : resolvedRole === "full"
+                      ? "Full"
+                      : "View only"}
                 </span>
               ) : null}
               <Link
