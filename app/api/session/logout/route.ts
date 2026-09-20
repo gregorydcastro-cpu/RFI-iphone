@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookieSecureFromRequest, procoreLinkedCookieOptions } from "@/lib/auth";
-import { oauthStateCookieOptions } from "@/lib/procoreOAuth";
+import { procoreOAuthCookies } from "@/lib/procoreOAuth";
 import { expireStubSessionCookie } from "@/lib/stubSession";
 import { createSupabaseRouteClient } from "@/lib/supabase/server";
 
@@ -10,7 +10,9 @@ function clearAuthCookies(request: Request, response: NextResponse) {
   const secure = cookieSecureFromRequest(request);
   response.cookies.set(expireStubSessionCookie(secure));
   response.cookies.set(procoreLinkedCookieOptions(false, secure));
-  response.cookies.set(oauthStateCookieOptions(null, secure));
+  for (const cookie of procoreOAuthCookies(null, secure)) {
+    response.cookies.set(cookie);
+  }
 }
 
 export async function GET(request: Request) {

@@ -4,7 +4,7 @@ import { cookieSecureFromRequest } from "@/lib/auth";
 import {
   buildAuthorizeUrl,
   getProcoreOAuthConfig,
-  oauthStateCookieOptions,
+  procoreOAuthCookies,
 } from "@/lib/procoreOAuth";
 import { readAppSession } from "@/lib/session.server";
 
@@ -21,6 +21,9 @@ function redirectWithError(request: Request, reason: string): NextResponse {
  * Start Procore OAuth. Signed-in pullers / full crew are sent to
  * login.procore.com / login-sandbox.procore.com with their own Procore
  * credentials. End users do not use the developer portal.
+ *
+ * `redirect_uri` follows this request's origin when the host is
+ * allowlisted so the state cookie and Procore callback share a host.
  */
 export async function GET(request: Request) {
   const session = await readAppSession();
@@ -33,15 +36,18 @@ export async function GET(request: Request) {
     return redirectWithError(request, "viewer_only");
   }
 
-  const config = getProcoreOAuthConfig();
+  const config = getProcoreOAuthConfig({ request });
   if (!config) {
     return redirectWithError(request, "missing_oauth_config");
   }
 
   const state = randomBytes(24).toString("hex");
   const response = NextResponse.redirect(buildAuthorizeUrl(config, state));
-  response.cookies.set(
-    oauthStateCookieOptions(state, cookieSecureFromRequest(request)),
-  );
+  for (const cookie of procoreOAuthCookies(
+    { state, redirectUri: config.redirectUri },
+    cookieSecureFromRequest(request),
+  )) {
+    response.cookies.set(cookie);
+  }
   return response;
 }
