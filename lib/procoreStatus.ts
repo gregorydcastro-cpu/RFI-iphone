@@ -2,6 +2,7 @@ import type { FieldRoleName } from "./auth";
 import {
   fetchProcoreConnectionStatus,
   isProcoreTokenStorageConfigured,
+  isSupabaseServiceRoleKeyValid,
   type ProcoreConnectionStatus,
 } from "./procoreConnections";
 import { isProcoreOAuthConfigured } from "./procoreOAuth";
@@ -17,6 +18,7 @@ export type ProcoreConnectionView = {
   expiresAt: string | null;
   oauthConfigured: boolean;
   storageConfigured: boolean;
+  storageKeyValid: boolean;
   connection: ProcoreConnectionStatus | null;
 };
 
@@ -25,6 +27,7 @@ export async function getProcoreConnectionView(
 ): Promise<ProcoreConnectionView> {
   const oauthConfigured = isProcoreOAuthConfigured();
   const storageConfigured = isProcoreTokenStorageConfigured();
+  const storageKeyValid = isSupabaseServiceRoleKeyValid();
   if (!session) {
     return {
       signedIn: false,
@@ -36,13 +39,15 @@ export async function getProcoreConnectionView(
       expiresAt: null,
       oauthConfigured,
       storageConfigured,
+      storageKeyValid,
       connection: null,
     };
   }
 
-  const connection = storageConfigured
-    ? await fetchProcoreConnectionStatus(session.userId)
-    : null;
+  const connection =
+    storageConfigured && storageKeyValid
+      ? await fetchProcoreConnectionStatus(session.userId)
+      : null;
 
   return {
     signedIn: true,
@@ -54,6 +59,7 @@ export async function getProcoreConnectionView(
     expiresAt: connection?.expiresAt ?? null,
     oauthConfigured,
     storageConfigured,
+    storageKeyValid,
     connection,
   };
 }
@@ -73,7 +79,11 @@ export function procoreErrorMessage(reason: string | undefined): string | null {
     case "token_exchange_failed":
       return "Procore did not accept the authorization code (token service). Try Connect Procore again from this same site.";
     case "storage_unconfigured":
-      return "Tokens could not be stored. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (anon key cannot write tokens).";
+      return "Tokens could not be stored. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on Vercel (anon key cannot write tokens).";
+    case "storage_key_invalid":
+      return "The Vercel SUPABASE_SERVICE_ROLE_KEY is not the service_role secret (anon or publishable keys cannot write tokens). Paste the service_role key from Supabase → Project Settings → API for project aejevzkqvlwbmjbqdxuu (gc-field-log).";
+    case "storage_write_failed":
+      return "Procore token exchange succeeded, but the Supabase write failed. Check Vercel function logs and confirm SUPABASE_URL is https://aejevzkqvlwbmjbqdxuu.supabase.co.";
     case "denied":
       return "Procore access was not approved.";
     default:

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { isProcoreTokenStorageConfigured } from "@/lib/procoreConnections";
+import {
+  isProcoreTokenStorageConfigured,
+  isSupabaseServiceRoleKeyValid,
+} from "@/lib/procoreConnections";
 import { isProcoreOAuthConfigured } from "@/lib/procoreOAuth";
 import { getProcoreConnectionView } from "@/lib/procoreStatus";
 import { readAppSession } from "@/lib/session.server";
@@ -17,5 +20,6 @@ export async function GET() {
     ...view,
     oauthConfigured: isProcoreOAuthConfigured(),
     storageConfigured: isProcoreTokenStorageConfigured(),
+    storageKeyValid: isSupabaseServiceRoleKeyValid(),
   });
 }
