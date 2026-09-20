@@ -27,8 +27,12 @@ function redirectAccount(
   return NextResponse.redirect(url);
 }
 
-function clearOAuthCookies(response: NextResponse, secure: boolean) {
-  for (const cookie of procoreOAuthCookies(null, secure)) {
+function clearOAuthCookies(
+  response: NextResponse,
+  secure: boolean,
+  request: Request,
+) {
+  for (const cookie of procoreOAuthCookies(null, secure, request)) {
     response.cookies.set(cookie);
   }
 }
@@ -36,8 +40,7 @@ function clearOAuthCookies(response: NextResponse, secure: boolean) {
 /**
  * Procore OAuth callback. Exchanges `code` for tokens and stores them
  * per auth.uid(). Tokens are never returned to the browser.
- * Token `redirect_uri` is the same value sent to authorize (cookie, or
- * rebuilt from this request with the same allowlist).
+ * Token `redirect_uri` is the portal www callback (same string as authorize).
  */
 export async function GET(request: Request) {
   const secure = cookieSecureFromRequest(request);
@@ -75,7 +78,7 @@ export async function GET(request: Request) {
     login.searchParams.set("procore", "error");
     login.searchParams.set("reason", "missing_session");
     const response = NextResponse.redirect(login);
-    clearOAuthCookies(response, secure);
+    clearOAuthCookies(response, secure, request);
     return response;
   }
 
@@ -89,7 +92,7 @@ export async function GET(request: Request) {
       procore: "error",
       reason: "missing_oauth_config",
     });
-    clearOAuthCookies(response, secure);
+    clearOAuthCookies(response, secure, request);
     return response;
   }
 
@@ -99,7 +102,7 @@ export async function GET(request: Request) {
       procore: "error",
       reason: "token_exchange_failed",
     });
-    clearOAuthCookies(response, secure);
+    clearOAuthCookies(response, secure, request);
     return response;
   }
 
@@ -119,12 +122,12 @@ export async function GET(request: Request) {
       procore: "error",
       reason: "storage_unconfigured",
     });
-    clearOAuthCookies(response, secure);
+    clearOAuthCookies(response, secure, request);
     return response;
   }
 
   const response = redirectAccount(request, { procore: "connected" });
-  clearOAuthCookies(response, secure);
+  clearOAuthCookies(response, secure, request);
   response.cookies.set(procoreLinkedCookieOptions(true, secure));
   return response;
 }

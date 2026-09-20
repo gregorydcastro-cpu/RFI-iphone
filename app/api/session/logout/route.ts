@@ -10,7 +10,7 @@ function clearAuthCookies(request: Request, response: NextResponse) {
   const secure = cookieSecureFromRequest(request);
   response.cookies.set(expireStubSessionCookie(secure));
   response.cookies.set(procoreLinkedCookieOptions(false, secure));
-  for (const cookie of procoreOAuthCookies(null, secure)) {
+  for (const cookie of procoreOAuthCookies(null, secure, request)) {
     response.cookies.set(cookie);
   }
 }

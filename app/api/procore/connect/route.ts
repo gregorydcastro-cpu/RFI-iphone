@@ -4,7 +4,9 @@ import { cookieSecureFromRequest } from "@/lib/auth";
 import {
   buildAuthorizeUrl,
   getProcoreOAuthConfig,
+  procoreConnectBounceUrl,
   procoreOAuthCookies,
+  resolveProcoreRedirectUriFromRequest,
 } from "@/lib/procoreOAuth";
 import { readAppSession } from "@/lib/session.server";
 
@@ -22,10 +24,17 @@ function redirectWithError(request: Request, reason: string): NextResponse {
  * login.procore.com / login-sandbox.procore.com with their own Procore
  * credentials. End users do not use the developer portal.
  *
- * `redirect_uri` follows this request's origin when the host is
- * allowlisted so the state cookie and Procore callback share a host.
+ * `redirect_uri` is always the portal www callback. If this request is on
+ * another host (vercel.app / apex), 302 to www `/api/procore/connect` first
+ * so the state cookie is set on www before Procore authorize.
  */
 export async function GET(request: Request) {
+  const redirectUri = resolveProcoreRedirectUriFromRequest(request);
+  const bounce = procoreConnectBounceUrl(request, redirectUri);
+  if (bounce) {
+    return NextResponse.redirect(bounce);
+  }
+
   const session = await readAppSession();
   if (!session) {
     const login = new URL("/", request.url);
@@ -36,7 +45,7 @@ export async function GET(request: Request) {
     return redirectWithError(request, "viewer_only");
   }
 
-  const config = getProcoreOAuthConfig({ request });
+  const config = getProcoreOAuthConfig({ request, redirectUri });
   if (!config) {
     return redirectWithError(request, "missing_oauth_config");
   }
@@ -46,6 +55,7 @@ export async function GET(request: Request) {
   for (const cookie of procoreOAuthCookies(
     { state, redirectUri: config.redirectUri },
     cookieSecureFromRequest(request),
+    request,
   )) {
     response.cookies.set(cookie);
   }
