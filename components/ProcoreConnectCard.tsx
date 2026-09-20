@@ -1,4 +1,7 @@
-import type { ProcoreConnectionView } from "@/lib/procoreStatus";
+import {
+  procoreErrorMessage,
+  type ProcoreConnectionView,
+} from "@/lib/procoreStatus";
 
 type Props = {
   view: ProcoreConnectionView;
@@ -91,7 +94,11 @@ export function ProcoreConnectCard({ view, compact = false }: Props) {
           (server-only, not NEXT_PUBLIC) before connecting.
         </p>
       ) : null}
-      {!view.storageConfigured ? (
+      {view.storageConfigured && !view.storageKeyValid ? (
+        <p className="mt-2 text-sm text-cta">
+          {procoreErrorMessage("storage_key_invalid")}
+        </p>
+      ) : !view.storageConfigured ? (
         <p className="mt-2 text-sm text-cta">
           Token writes need{" "}
           <code className="font-mono">SUPABASE_SERVICE_ROLE_KEY</code>. The

@@ -1,7 +1,11 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { cookieSecureFromRequest, procoreLinkedCookieOptions } from "@/lib/auth";
-import { upsertProcoreConnection } from "@/lib/procoreConnections";
+import {
+  getSupabaseServiceConfig,
+  jwtRoleClaim,
+  upsertProcoreConnection,
+} from "@/lib/procoreConnections";
 import {
   PROCORE_OAUTH_REDIRECT_COOKIE,
   PROCORE_OAUTH_STATE_COOKIE,
@@ -96,6 +100,29 @@ export async function GET(request: Request) {
     return response;
   }
 
+  const service = getSupabaseServiceConfig();
+  if (!service) {
+    const response = redirectAccount(request, {
+      procore: "error",
+      reason: "storage_unconfigured",
+    });
+    clearOAuthCookies(response, secure, request);
+    return response;
+  }
+  const jwtRole = jwtRoleClaim(service.serviceRoleKey);
+  if (jwtRole !== "service_role") {
+    console.error(
+      "[gcfieldlog] SUPABASE_SERVICE_ROLE_KEY JWT is not service_role",
+      { jwtRole },
+    );
+    const response = redirectAccount(request, {
+      procore: "error",
+      reason: "storage_key_invalid",
+    });
+    clearOAuthCookies(response, secure, request);
+    return response;
+  }
+
   const tokens = await exchangeAuthorizationCode(config, code);
   if (!tokens) {
     const response = redirectAccount(request, {
@@ -120,7 +147,7 @@ export async function GET(request: Request) {
   if (!stored) {
     const response = redirectAccount(request, {
       procore: "error",
-      reason: "storage_unconfigured",
+      reason: "storage_write_failed",
     });
     clearOAuthCookies(response, secure, request);
     return response;

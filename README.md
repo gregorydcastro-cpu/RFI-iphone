@@ -277,7 +277,7 @@ Applied on the gc-field-log Supabase project. SQL: `supabase/migrations/20260918
 
 RLS is on. `anon` has no grants. `authenticated` may **SELECT own row** only (`auth.uid()` or JWT email). Service role upserts. Status API selects non-secret columns only.
 
-If `SUPABASE_SERVICE_ROLE_KEY` is missing, Connect still redirects through Procore but the callback cannot persist tokens (`storage_unconfigured`). Do not use `SUPABASE_ANON_KEY` for this table.
+If `SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` is missing, Connect still redirects through Procore but the callback cannot persist tokens (`storage_unconfigured`). If the key is present but is not a JWT with `"role":"service_role"` (for example the anon key), Account shows `storage_key_invalid`. Other REST write failures are `storage_write_failed`. Do not use `SUPABASE_ANON_KEY` for this table. `/api/procore/status` reports `storageConfigured` (url+key present) and `storageKeyValid` (JWT role is service_role) separately — never log the key.
 
 ### Stripe Checkout (Vercel + Dashboard)
 

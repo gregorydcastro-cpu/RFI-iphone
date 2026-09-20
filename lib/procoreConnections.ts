@@ -9,7 +9,7 @@
  * company id per project (see resolveCompanyIdForProject).
  */
 
-import { readEnvAlias } from "./env";
+import { readEnvAlias } from "./env.ts";
 
 export const PROCORE_CONNECTIONS_TABLE = "procore_connections";
 
@@ -38,6 +38,12 @@ export type SupabaseServiceConfig = {
 };
 
 const FETCH_TIMEOUT_MS = 8_000;
+const REST_ERROR_BODY_MAX = 240;
+
+export type ProcoreStorageFailureReason =
+  | "storage_unconfigured"
+  | "storage_key_invalid"
+  | "storage_write_failed";
 
 export function getSupabaseServiceConfig(): SupabaseServiceConfig | null {
   const url = readEnvAlias("SUPABASE_URL", "supabase_url");
@@ -51,6 +57,34 @@ export function getSupabaseServiceConfig(): SupabaseServiceConfig | null {
 
 export function isProcoreTokenStorageConfigured(): boolean {
   return getSupabaseServiceConfig() !== null;
+}
+
+/**
+ * True when SUPABASE_SERVICE_ROLE_KEY is a compact JWT whose payload
+ * `role` is `service_role`. False if missing, malformed, truncated, or
+ * any other role (anon / authenticated / publishable). Never logs the key.
+ */
+export function isSupabaseServiceRoleKeyValid(): boolean {
+  const config = getSupabaseServiceConfig();
+  if (!config) return false;
+  return jwtRoleClaim(config.serviceRoleKey) === "service_role";
+}
+
+/** JWT `role` claim from a compact JWT. Never logs the token. */
+export function jwtRoleClaim(token: string): string | null {
+  const payload = decodeJwtPayload(token);
+  return typeof payload?.role === "string" ? payload.role : null;
+}
+
+/**
+ * Classify a failed token upsert. `storage_unconfigured` only when URL or
+ * key is missing; `storage_key_invalid` when a key is present but is not a
+ * service_role JWT; otherwise `storage_write_failed`.
+ */
+export function procoreStorageFailureReason(): ProcoreStorageFailureReason {
+  if (!getSupabaseServiceConfig()) return "storage_unconfigured";
+  if (!isSupabaseServiceRoleKeyValid()) return "storage_key_invalid";
+  return "storage_write_failed";
 }
 
 export async function upsertProcoreConnection(input: {
@@ -92,6 +126,7 @@ export async function upsertProcoreConnection(input: {
   if (!response.ok) {
     console.error("[gcfieldlog] procore_connections upsert was not ok", {
       status: response.status,
+      body: await restErrorSnippet(response),
     });
     return false;
   }
@@ -238,4 +273,26 @@ async function restFetch(
 
 function asStringOrNull(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
+}
+
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  const parts = token.split(".");
+  if (parts.length !== 3 || !parts[1]) return null;
+  try {
+    const json = Buffer.from(parts[1], "base64url").toString("utf8");
+    const parsed: unknown = JSON.parse(json);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+async function restErrorSnippet(response: Response): Promise<string> {
+  const raw = await response.text().catch(() => "");
+  const trimmed = raw.replace(/\s+/g, " ").trim();
+  if (trimmed.length <= REST_ERROR_BODY_MAX) return trimmed;
+  return `${trimmed.slice(0, REST_ERROR_BODY_MAX)}…`;
 }
