@@ -3,12 +3,14 @@ import { NextResponse } from "next/server";
 import { cookieSecureFromRequest, procoreLinkedCookieOptions } from "@/lib/auth";
 import { upsertProcoreConnection } from "@/lib/procoreConnections";
 import {
+  PROCORE_OAUTH_REDIRECT_COOKIE,
   PROCORE_OAUTH_STATE_COOKIE,
   exchangeAuthorizationCode,
   expiresAtFromToken,
   fetchProcoreAccount,
   getProcoreOAuthConfig,
-  oauthStateCookieOptions,
+  procoreOAuthCookies,
+  redirectUriForTokenExchange,
 } from "@/lib/procoreOAuth";
 import { readAppSession } from "@/lib/session.server";
 
@@ -25,9 +27,17 @@ function redirectAccount(
   return NextResponse.redirect(url);
 }
 
+function clearOAuthCookies(response: NextResponse, secure: boolean) {
+  for (const cookie of procoreOAuthCookies(null, secure)) {
+    response.cookies.set(cookie);
+  }
+}
+
 /**
  * Procore OAuth callback. Exchanges `code` for tokens and stores them
  * per auth.uid(). Tokens are never returned to the browser.
+ * Token `redirect_uri` is the same value sent to authorize (cookie, or
+ * rebuilt from this request with the same allowlist).
  */
 export async function GET(request: Request) {
   const secure = cookieSecureFromRequest(request);
@@ -65,17 +75,21 @@ export async function GET(request: Request) {
     login.searchParams.set("procore", "error");
     login.searchParams.set("reason", "missing_session");
     const response = NextResponse.redirect(login);
-    response.cookies.set(oauthStateCookieOptions(null, secure));
+    clearOAuthCookies(response, secure);
     return response;
   }
 
-  const config = getProcoreOAuthConfig();
+  const storedRedirect = jar.get(PROCORE_OAUTH_REDIRECT_COOKIE)?.value;
+  const config = getProcoreOAuthConfig({
+    request,
+    redirectUri: redirectUriForTokenExchange(storedRedirect, request),
+  });
   if (!config) {
     const response = redirectAccount(request, {
       procore: "error",
       reason: "missing_oauth_config",
     });
-    response.cookies.set(oauthStateCookieOptions(null, secure));
+    clearOAuthCookies(response, secure);
     return response;
   }
 
@@ -85,7 +99,7 @@ export async function GET(request: Request) {
       procore: "error",
       reason: "token_exchange_failed",
     });
-    response.cookies.set(oauthStateCookieOptions(null, secure));
+    clearOAuthCookies(response, secure);
     return response;
   }
 
@@ -105,12 +119,12 @@ export async function GET(request: Request) {
       procore: "error",
       reason: "storage_unconfigured",
     });
-    response.cookies.set(oauthStateCookieOptions(null, secure));
+    clearOAuthCookies(response, secure);
     return response;
   }
 
   const response = redirectAccount(request, { procore: "connected" });
-  response.cookies.set(oauthStateCookieOptions(null, secure));
+  clearOAuthCookies(response, secure);
   response.cookies.set(procoreLinkedCookieOptions(true, secure));
   return response;
 }

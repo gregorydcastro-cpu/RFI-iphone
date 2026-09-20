@@ -10,14 +10,35 @@
 import { readEnvAlias } from "./env";
 import { readProcoreId } from "./procoreProjectMatch";
 import {
+  isTrustedProcoreRedirectUri,
   readProcoreClientId,
   readProcoreClientSecret,
   readProcoreRedirectUri,
+  resolveProcoreRedirectUriFromRequest,
 } from "./procoreSecrets";
 
 export { readProcoreId };
+export {
+  DEFAULT_PROCORE_REDIRECT_URI,
+  PROCORE_CALLBACK_PATH,
+  PROCORE_REDIRECT_HOST_ALLOWLIST,
+  isAllowlistedProcoreRedirectHost,
+  isTrustedProcoreRedirectUri,
+  procoreRedirectUrisToRegister,
+  redirectUriForTokenExchange,
+  requestOriginForProcore,
+  resolveProcoreRedirectUri,
+  resolveProcoreRedirectUriFromRequest,
+} from "./procoreSecrets";
 
 export const PROCORE_OAUTH_STATE_COOKIE = "gcfieldlog_procore_oauth_state";
+export const PROCORE_OAUTH_REDIRECT_COOKIE = "gcfieldlog_procore_oauth_redirect";
+
+export type ProcoreOAuthConfigOptions = {
+  request?: Request;
+  /** Exact redirect_uri from the authorize step (cookie) when exchanging. */
+  redirectUri?: string;
+};
 
 export type ProcoreOAuthConfig = {
   clientId: string;
@@ -37,7 +58,9 @@ export type ProcoreTokenResponse = {
 
 const TOKEN_TIMEOUT_MS = 12_000;
 
-export function getProcoreOAuthConfig(): ProcoreOAuthConfig | null {
+export function getProcoreOAuthConfig(
+  options?: ProcoreOAuthConfigOptions,
+): ProcoreOAuthConfig | null {
   const clientId = readProcoreClientId();
   const clientSecret = readProcoreClientSecret();
   if (!clientId || !clientSecret) return null;
@@ -60,8 +83,18 @@ export function getProcoreOAuthConfig(): ProcoreOAuthConfig | null {
     clientSecret,
     loginBase,
     apiBase,
-    redirectUri: readProcoreRedirectUri(),
+    redirectUri: resolveOAuthRedirectUri(options),
   };
+}
+
+function resolveOAuthRedirectUri(options?: ProcoreOAuthConfigOptions): string {
+  if (options?.redirectUri && isTrustedProcoreRedirectUri(options.redirectUri)) {
+    return options.redirectUri;
+  }
+  if (options?.request) {
+    return resolveProcoreRedirectUriFromRequest(options.request);
+  }
+  return readProcoreRedirectUri();
 }
 
 export function isProcoreOAuthConfigured(): boolean {
@@ -80,10 +113,7 @@ export function buildAuthorizeUrl(
   return url.toString();
 }
 
-export function oauthStateCookieOptions(
-  state: string | null,
-  secure: boolean,
-): {
+type ProcoreOAuthCookie = {
   name: string;
   value: string;
   httpOnly: boolean;
@@ -91,7 +121,12 @@ export function oauthStateCookieOptions(
   sameSite: "lax";
   maxAge: number;
   secure: boolean;
-} {
+};
+
+export function oauthStateCookieOptions(
+  state: string | null,
+  secure: boolean,
+): ProcoreOAuthCookie {
   return {
     name: PROCORE_OAUTH_STATE_COOKIE,
     value: state ?? "",
@@ -101,6 +136,32 @@ export function oauthStateCookieOptions(
     maxAge: state ? 60 * 10 : 0,
     secure,
   };
+}
+
+export function oauthRedirectCookieOptions(
+  redirectUri: string | null,
+  secure: boolean,
+): ProcoreOAuthCookie {
+  return {
+    name: PROCORE_OAUTH_REDIRECT_COOKIE,
+    value: redirectUri ?? "",
+    httpOnly: true,
+    path: "/",
+    sameSite: "lax",
+    maxAge: redirectUri ? 60 * 10 : 0,
+    secure,
+  };
+}
+
+/** State + the exact redirect_uri sent to /oauth/authorize. Clear with null. */
+export function procoreOAuthCookies(
+  payload: { state: string; redirectUri: string } | null,
+  secure: boolean,
+): readonly [ProcoreOAuthCookie, ProcoreOAuthCookie] {
+  return [
+    oauthStateCookieOptions(payload?.state ?? null, secure),
+    oauthRedirectCookieOptions(payload?.redirectUri ?? null, secure),
+  ];
 }
 
 export async function exchangeAuthorizationCode(

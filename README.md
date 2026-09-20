@@ -71,11 +71,16 @@ Production host is **gcfieldlog.com**.
 
 Pullers click **Connect Procore** → Procore authorize → they sign in with **their own** Procore credentials and approve → callback exchanges the code for tokens → tokens are stored **per user** in Supabase (service role writes). End users do **not** create a Developer Portal app. After a successful callback the server also sets `gcfieldlog_procore_linked=1` so pack pull routes treat the session as a puller.
 
-**Redirect URI** allowlisted on Greg’s Procore developer app (exact):
+**Redirect URIs** Greg must register on the Procore developer app (exact, all of them):
 
-`https://www.gcfieldlog.com/api/procore/callback`
+- `https://www.gcfieldlog.com/api/procore/callback`
+- `https://gcfieldlog.com/api/procore/callback` (if apex is used)
+- `https://gc-field-log.vercel.app/api/procore/callback`
+- `http://localhost:3000/api/procore/callback`
 
-That is the default `redirect_uri`. Preview hosts will not match unless `PROCORE_REDIRECT_URI` is set **and** that URI is added in the developer app.
+Connect uses `${request origin}/api/procore/callback` when the Host is on that list so the OAuth `state` cookie stays on the same host Procore redirects back to. That is what prevents `invalid_state` when Connect starts on `gc-field-log.vercel.app` instead of www. Other hosts (including preview `*.vercel.app` URLs) still fall back to the www callback.
+
+`PROCORE_REDIRECT_URI` is an optional override. When set, it wins over the origin allowlist — register that exact URI too, and start Connect from that host. Leave it unset so www / apex / vercel.app / localhost each use their own callback.
 
 **Vercel (server-only, never `NEXT_PUBLIC_`):**
 
@@ -83,7 +88,7 @@ That is the default `redirect_uri`. Preview hosts will not match unless `PROCORE
 | --- | --- |
 | `PROCORE_CLIENT_ID` | OAuth client id (`procore_client_id` alias also read) |
 | `PROCORE_CLIENT_SECRET` | OAuth client secret (`procore_client_secret` alias also read) |
-| `PROCORE_REDIRECT_URI` | Optional. Default: `https://www.gcfieldlog.com/api/procore/callback` |
+| `PROCORE_REDIRECT_URI` | Optional override. Unset: allowlisted request origin (`www.gcfieldlog.com`, `gcfieldlog.com`, `gc-field-log.vercel.app`, `localhost:3000`) builds `/api/procore/callback`. Unknown hosts: `https://www.gcfieldlog.com/api/procore/callback`. |
 | `PROCORE_OAUTH_BASE` | Optional login host. Default **`https://login-sandbox.procore.com`** (Developer Sandbox). Production / on-demand: `https://login.procore.com`. |
 | `PROCORE_API_BASE` | Optional API host. Default follows the login host. |
 | `SUPABASE_URL` | Supabase project URL (same project as `room_packs`) |
