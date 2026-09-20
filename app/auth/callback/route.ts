@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookieSecureFromRequest } from "@/lib/auth";
+import { authAppOrigin } from "@/lib/authHosts";
 import { safeNextPath } from "@/lib/authMessages";
 import { expireStubSessionCookie } from "@/lib/stubSession";
 import { createSupabaseRouteClient } from "@/lib/supabase/server";
@@ -12,9 +13,10 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  const origin = authAppOrigin(request);
   const code = url.searchParams.get("code");
   const next = safeNextPath(url.searchParams.get("next"));
-  const dest = new URL(next, url.origin);
+  const dest = new URL(next, origin);
   const response = NextResponse.redirect(dest);
   const secure = cookieSecureFromRequest(request);
   response.cookies.set(expireStubSessionCookie(secure));
@@ -35,7 +37,7 @@ export async function GET(request: Request) {
 
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) {
-    const login = new URL("/", url.origin);
+    const login = new URL("/", origin);
     login.searchParams.set("auth", "error");
     login.searchParams.set("reason", "exchange_failed");
     login.searchParams.set("next", next);

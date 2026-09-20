@@ -359,8 +359,12 @@ RLS is on. `anon` has no grants. `authenticated` may **SELECT own row** by JWT e
 | Auth → Providers → Email | Enable **Email** (password) and **Magic link** |
 | Confirm email | Recommended on in production. Signup then returns `needsEmailConfirm` until the user clicks the mail. |
 | Site URL | `https://www.gcfieldlog.com` |
-| Redirect URLs | `https://www.gcfieldlog.com/auth/callback`, `https://www.gcfieldlog.com/**`, `https://gcfieldlog.com/auth/callback`, `http://localhost:3000/auth/callback` |
+| Redirect URLs | `https://www.gcfieldlog.com/auth/callback`, `https://www.gcfieldlog.com/**`, `https://gcfieldlog.com/auth/callback`, `https://gcfieldlog.com/**`, `https://gcfieldlog.vercel.app/auth/callback`, `https://gcfieldlog.vercel.app/**`, `https://gc-field-log.vercel.app/auth/callback`, `https://gc-field-log.vercel.app/**`, `http://localhost:3000/auth/callback` |
 | Vercel | `SUPABASE_URL`, `SUPABASE_ANON_KEY` (publishable). Optional aliases `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (same publishable values). **`SUPABASE_SERVICE_ROLE_KEY` is server-only — never `NEXT_PUBLIC_`.** |
+
+Sign-in starts when those publishable keys are set. Host is **not** a gate: `www.gcfieldlog.com`, `gcfieldlog.com`, `gcfieldlog.vercel.app`, and `gc-field-log.vercel.app` share the same check. Magic-link `emailRedirectTo` uses the incoming host when it is one of those (or another `*.vercel.app` / localhost).
+
+**Ops — `gcfieldlog.vercel.app`:** the current Vercel production alias is **`gc-field-log.vercel.app`**. Add **`gcfieldlog.vercel.app`** under Vercel → Project → Domains (Production) if that hostname should serve the app; then paste the Redirect URLs above into Supabase. Never put secrets in git.
 
 Do not put the service role key in the client bundle. Search `.next` for `service_role` if you need to confirm.
 

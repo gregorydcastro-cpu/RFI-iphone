@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { authAppOrigin } from "@/lib/authHosts";
 import {
   canMintInvites,
   invitePublicUrl,
@@ -14,16 +15,6 @@ const NO_STORE = { "Cache-Control": "no-store" };
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: NO_STORE });
-}
-
-function appOrigin(request: Request): string {
-  const url = new URL(request.url);
-  const forwarded = request.headers.get("x-forwarded-host");
-  const proto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
-  if (forwarded) {
-    return `${proto || url.protocol.replace(":", "")}://${forwarded.split(",")[0]?.trim()}`;
-  }
-  return url.origin;
 }
 
 type MintBody = {
@@ -98,7 +89,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const origin = appOrigin(request);
+  const origin = authAppOrigin(request);
   return json({
     ok: true,
     token: minted.row.token,
