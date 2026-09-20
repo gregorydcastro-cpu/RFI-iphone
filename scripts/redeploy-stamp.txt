@@ -1,0 +1,2 @@
+# Production redeploy stamp
+# 2026-09-19T21:01 America/New_York — force Vercel Production onto latest main (auth #46+)
