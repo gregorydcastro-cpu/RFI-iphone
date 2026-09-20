@@ -1,10 +1,12 @@
 import { randomBytes } from "node:crypto";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { cookieSecureFromRequest } from "@/lib/auth";
 import {
+  appendProcoreOAuthSetCookies,
+  attachProcoreOAuthCookies,
   buildAuthorizeUrl,
   getProcoreOAuthConfig,
-  procoreOAuthCookies,
+  oauthCookieSecureFromRequest,
 } from "@/lib/procoreOAuth";
 import { readAppSession } from "@/lib/session.server";
 
@@ -23,7 +25,8 @@ function redirectWithError(request: Request, reason: string): NextResponse {
  * credentials. End users do not use the developer portal.
  *
  * `redirect_uri` follows this request's origin when the host is
- * allowlisted so the state cookie and Procore callback share a host.
+ * allowlisted so the state cookie and Procore callback share a host
+ * (apex, www, and vercel.app are different cookie hosts).
  */
 export async function GET(request: Request) {
   const session = await readAppSession();
@@ -42,12 +45,12 @@ export async function GET(request: Request) {
   }
 
   const state = randomBytes(24).toString("hex");
+  const payload = { state, redirectUri: config.redirectUri };
+  const secure = oauthCookieSecureFromRequest(request);
   const response = NextResponse.redirect(buildAuthorizeUrl(config, state));
-  for (const cookie of procoreOAuthCookies(
-    { state, redirectUri: config.redirectUri },
-    cookieSecureFromRequest(request),
-  )) {
-    response.cookies.set(cookie);
-  }
+  attachProcoreOAuthCookies(response.cookies, payload, secure);
+  appendProcoreOAuthSetCookies(response.headers, payload, secure);
+  const jar = await cookies();
+  attachProcoreOAuthCookies(jar, payload, secure);
   return response;
 }

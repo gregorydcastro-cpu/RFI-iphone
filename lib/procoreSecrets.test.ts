@@ -12,6 +12,7 @@ import {
   requestOriginForProcore,
   resolveProcoreRedirectUri,
   resolveProcoreRedirectUriFromRequest,
+  normalizeProcoreRedirectHost,
 } from "./procoreSecrets.ts";
 
 const forbidden = /Brown|Rossi|Danoff|Suffolk|ILSB|EL107/i;
@@ -79,6 +80,22 @@ test("allowlisted origins build same-host Procore callback URIs", () => {
     isAllowlistedProcoreRedirectHost("WWW.GCFIELDLOG.COM"),
     true,
   );
+  assert.notEqual(
+    resolveProcoreRedirectUri("https://gcfieldlog.com"),
+    resolveProcoreRedirectUri("https://www.gcfieldlog.com"),
+  );
+});
+
+test("apex vs www stay different cookie hosts after default-port strip", () => {
+  assert.equal(normalizeProcoreRedirectHost("www.gcfieldlog.com:443"), "www.gcfieldlog.com");
+  assert.equal(normalizeProcoreRedirectHost("gcfieldlog.com:443"), "gcfieldlog.com");
+  assert.equal(normalizeProcoreRedirectHost("localhost:3000"), "localhost:3000");
+  assert.equal(isAllowlistedProcoreRedirectHost("www.gcfieldlog.com:443"), true);
+  assert.equal(isAllowlistedProcoreRedirectHost("gcfieldlog.com:443"), true);
+  assert.notEqual(
+    normalizeProcoreRedirectHost("www.gcfieldlog.com"),
+    normalizeProcoreRedirectHost("gcfieldlog.com"),
+  );
 });
 
 test("unknown origins keep the www.gcfieldlog.com default callback", () => {
@@ -132,6 +149,23 @@ test("request origin prefers x-forwarded-host so Vercel matches the browser", ()
   assert.equal(
     resolveProcoreRedirectUriFromRequest(local),
     "http://localhost:3000/api/procore/callback",
+  );
+
+  const apex = requestAt("https://internal.example/api/procore/connect", {
+    "x-forwarded-host": "gcfieldlog.com",
+    "x-forwarded-proto": "https",
+  });
+  const www = requestAt("https://internal.example/api/procore/connect", {
+    "x-forwarded-host": "www.gcfieldlog.com",
+    "x-forwarded-proto": "https",
+  });
+  assert.equal(
+    resolveProcoreRedirectUriFromRequest(apex),
+    "https://gcfieldlog.com/api/procore/callback",
+  );
+  assert.equal(
+    resolveProcoreRedirectUriFromRequest(www),
+    "https://www.gcfieldlog.com/api/procore/callback",
   );
 });
 
@@ -212,7 +246,7 @@ test("connect and callback routes share origin-aware redirect_uri", () => {
     "utf8",
   );
   assert.match(connect, /getProcoreOAuthConfig\(\{ request \}\)/);
-  assert.match(connect, /procoreOAuthCookies/);
+  assert.match(connect, /attachProcoreOAuthCookies/);
   assert.match(callback, /redirectUriForTokenExchange/);
   assert.match(callback, /PROCORE_OAUTH_REDIRECT_COOKIE/);
   assert.equal(forbidden.test(`${connect}\n${callback}`), false);

@@ -5,11 +5,12 @@ import { upsertProcoreConnection } from "@/lib/procoreConnections";
 import {
   PROCORE_OAUTH_REDIRECT_COOKIE,
   PROCORE_OAUTH_STATE_COOKIE,
+  attachProcoreOAuthCookies,
   exchangeAuthorizationCode,
   expiresAtFromToken,
   fetchProcoreAccount,
   getProcoreOAuthConfig,
-  procoreOAuthCookies,
+  oauthCookieSecureFromRequest,
   redirectUriForTokenExchange,
 } from "@/lib/procoreOAuth";
 import { readAppSession } from "@/lib/session.server";
@@ -27,10 +28,12 @@ function redirectAccount(
   return NextResponse.redirect(url);
 }
 
-function clearOAuthCookies(response: NextResponse, secure: boolean) {
-  for (const cookie of procoreOAuthCookies(null, secure)) {
-    response.cookies.set(cookie);
-  }
+function clearOAuthCookies(response: NextResponse, request: Request) {
+  attachProcoreOAuthCookies(
+    response.cookies,
+    null,
+    oauthCookieSecureFromRequest(request),
+  );
 }
 
 /**
@@ -75,7 +78,7 @@ export async function GET(request: Request) {
     login.searchParams.set("procore", "error");
     login.searchParams.set("reason", "missing_session");
     const response = NextResponse.redirect(login);
-    clearOAuthCookies(response, secure);
+    clearOAuthCookies(response, request);
     return response;
   }
 
@@ -89,7 +92,7 @@ export async function GET(request: Request) {
       procore: "error",
       reason: "missing_oauth_config",
     });
-    clearOAuthCookies(response, secure);
+    clearOAuthCookies(response, request);
     return response;
   }
 
@@ -99,7 +102,7 @@ export async function GET(request: Request) {
       procore: "error",
       reason: "token_exchange_failed",
     });
-    clearOAuthCookies(response, secure);
+    clearOAuthCookies(response, request);
     return response;
   }
 
@@ -119,12 +122,12 @@ export async function GET(request: Request) {
       procore: "error",
       reason: "storage_unconfigured",
     });
-    clearOAuthCookies(response, secure);
+    clearOAuthCookies(response, request);
     return response;
   }
 
   const response = redirectAccount(request, { procore: "connected" });
-  clearOAuthCookies(response, secure);
+  clearOAuthCookies(response, request);
   response.cookies.set(procoreLinkedCookieOptions(true, secure));
   return response;
 }

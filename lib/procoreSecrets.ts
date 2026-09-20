@@ -36,6 +36,34 @@ function firstForwarded(value: string | null | undefined): string {
   return value?.split(",")[0]?.trim() ?? "";
 }
 
+/**
+ * Hostname used for the Procore redirect allowlist.
+ * Strips default :80/:443 so proxies do not miss www/apex, but keeps
+ * `localhost:3000`. Apex and www stay different hosts.
+ */
+export function normalizeProcoreRedirectHost(
+  host: string | null | undefined,
+): string {
+  const raw = firstForwarded(host).toLowerCase().replace(/\.$/, "");
+  if (!raw) return "";
+  if (raw.startsWith("[")) {
+    const end = raw.indexOf("]");
+    const hostname = end > 0 ? raw.slice(1, end).toLowerCase() : raw;
+    const port = end > 0 && raw[end + 1] === ":" ? raw.slice(end + 2) : "";
+    if (port && port !== "80" && port !== "443") return `[${hostname}]:${port}`;
+    return hostname;
+  }
+  const colon = raw.lastIndexOf(":");
+  const hostname = colon === -1 ? raw : raw.slice(0, colon);
+  const port = colon === -1 ? "" : raw.slice(colon + 1);
+  if (!hostname) return "";
+  if (hostname === "localhost") {
+    return port ? `${hostname}:${port}` : hostname;
+  }
+  if (!port || port === "80" || port === "443") return hostname;
+  return `${hostname}:${port}`;
+}
+
 export function readProcoreClientId(): string | undefined {
   return (
     readEnvAlias("PROCORE_CLIENT_ID", "procore_client_id") ??
@@ -63,7 +91,7 @@ export function readProcoreRedirectUri(): string {
 export function isAllowlistedProcoreRedirectHost(
   host: string | null | undefined,
 ): boolean {
-  const normalized = host?.trim().toLowerCase().replace(/\.$/, "") ?? "";
+  const normalized = normalizeProcoreRedirectHost(host);
   if (!normalized) return false;
   return (PROCORE_REDIRECT_HOST_ALLOWLIST as readonly string[]).includes(
     normalized,
@@ -81,8 +109,9 @@ export function requestOriginForProcore(request: Request): string | null {
     const proto =
       firstForwarded(request.headers.get("x-forwarded-proto")) ||
       url.protocol.replace(/:$/, "");
-    if (!host || !proto) return url.origin || null;
-    return `${proto}://${host}`;
+    const normalized = normalizeProcoreRedirectHost(host);
+    if (!normalized || !proto) return url.origin || null;
+    return `${proto}://${normalized}`;
   } catch {
     return null;
   }
@@ -103,7 +132,8 @@ export function resolveProcoreRedirectUri(
   try {
     const url = new URL(requestOrigin);
     if (isAllowlistedProcoreRedirectHost(url.host)) {
-      return `${url.origin}${PROCORE_CALLBACK_PATH}`;
+      const origin = `${url.protocol}//${normalizeProcoreRedirectHost(url.host)}`;
+      return `${origin}${PROCORE_CALLBACK_PATH}`;
     }
   } catch {
     /* fall through */

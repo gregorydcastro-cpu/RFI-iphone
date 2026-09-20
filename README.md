@@ -78,7 +78,9 @@ Pullers click **Connect Procore** → Procore authorize → they sign in with **
 - `https://gc-field-log.vercel.app/api/procore/callback`
 - `http://localhost:3000/api/procore/callback`
 
-Connect uses `${request origin}/api/procore/callback` when the Host is on that list so the OAuth `state` cookie stays on the same host Procore redirects back to. That is what prevents `invalid_state` when Connect starts on `gc-field-log.vercel.app` instead of www. Other hosts (including preview `*.vercel.app` URLs) still fall back to the www callback.
+Connect uses `${request origin}/api/procore/callback` when the Host is on that list so the OAuth `state` cookie stays on the same host Procore redirects back to. **`gcfieldlog.com` and `www.gcfieldlog.com` are different cookie hosts** — same mismatch as vercel.app vs www. Other hosts (including preview `*.vercel.app` URLs) still fall back to the www callback.
+
+OAuth `state` + `redirect_uri` cookies are set on the Connect **302 to Procore** (httpOnly, host-only, 10 minutes). HTTPS uses `SameSite=None; Secure` so the callback GET from Procore still sends them. Do not set a `Domain=` attribute (that would mix apex/www). Do **not** set `PROCORE_REDIRECT_URI` to a vercel.app-only value.
 
 `PROCORE_REDIRECT_URI` is an optional override. When set, it wins over the origin allowlist — register that exact URI too, and start Connect from that host. Leave it unset so www / apex / vercel.app / localhost each use their own callback.
 

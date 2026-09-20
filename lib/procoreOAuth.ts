@@ -30,9 +30,17 @@ export {
   resolveProcoreRedirectUri,
   resolveProcoreRedirectUriFromRequest,
 } from "./procoreSecrets";
-
-export const PROCORE_OAUTH_STATE_COOKIE = "gcfieldlog_procore_oauth_state";
-export const PROCORE_OAUTH_REDIRECT_COOKIE = "gcfieldlog_procore_oauth_redirect";
+export {
+  PROCORE_OAUTH_REDIRECT_COOKIE,
+  PROCORE_OAUTH_STATE_COOKIE,
+  appendProcoreOAuthSetCookies,
+  attachProcoreOAuthCookies,
+  formatProcoreOAuthSetCookie,
+  oauthCookieSecureFromRequest,
+  oauthRedirectCookieOptions,
+  oauthStateCookieOptions,
+  procoreOAuthCookies,
+} from "./procoreOAuthCookies";
 
 export type ProcoreOAuthConfigOptions = {
   request?: Request;
@@ -111,57 +119,6 @@ export function buildAuthorizeUrl(
   url.searchParams.set("redirect_uri", config.redirectUri);
   url.searchParams.set("state", state);
   return url.toString();
-}
-
-type ProcoreOAuthCookie = {
-  name: string;
-  value: string;
-  httpOnly: boolean;
-  path: string;
-  sameSite: "lax";
-  maxAge: number;
-  secure: boolean;
-};
-
-export function oauthStateCookieOptions(
-  state: string | null,
-  secure: boolean,
-): ProcoreOAuthCookie {
-  return {
-    name: PROCORE_OAUTH_STATE_COOKIE,
-    value: state ?? "",
-    httpOnly: true,
-    path: "/",
-    sameSite: "lax",
-    maxAge: state ? 60 * 10 : 0,
-    secure,
-  };
-}
-
-export function oauthRedirectCookieOptions(
-  redirectUri: string | null,
-  secure: boolean,
-): ProcoreOAuthCookie {
-  return {
-    name: PROCORE_OAUTH_REDIRECT_COOKIE,
-    value: redirectUri ?? "",
-    httpOnly: true,
-    path: "/",
-    sameSite: "lax",
-    maxAge: redirectUri ? 60 * 10 : 0,
-    secure,
-  };
-}
-
-/** State + the exact redirect_uri sent to /oauth/authorize. Clear with null. */
-export function procoreOAuthCookies(
-  payload: { state: string; redirectUri: string } | null,
-  secure: boolean,
-): readonly [ProcoreOAuthCookie, ProcoreOAuthCookie] {
-  return [
-    oauthStateCookieOptions(payload?.state ?? null, secure),
-    oauthRedirectCookieOptions(payload?.redirectUri ?? null, secure),
-  ];
 }
 
 export async function exchangeAuthorizationCode(
