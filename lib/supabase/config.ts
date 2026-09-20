@@ -6,7 +6,7 @@
  * vercel.app aliases all start Auth when these publishable values exist.
  */
 
-import { readEnvAlias } from "../env";
+import { readEnvAlias } from "../env.ts";
 
 export type SupabaseAuthConfig = {
   url: string;
