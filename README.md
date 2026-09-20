@@ -71,20 +71,13 @@ Production host is **gcfieldlog.com**.
 
 Pullers click **Connect Procore** → Procore authorize → they sign in with **their own** Procore credentials and approve → callback exchanges the code for tokens → tokens are stored **per user** in Supabase (service role writes). End users do **not** create a Developer Portal app. After a successful callback the server also sets `gcfieldlog_procore_linked=1` so pack pull routes treat the session as a puller.
 
-**Redirect URIs** Greg must register on the Procore developer app (exact, all of them):
+**Redirect URI** registered in the Procore Developer Portal (exact, do not change):
 
-```
-https://www.gcfieldlog.com/api/procore/callback
-https://gcfieldlog.com/api/procore/callback
-https://gcfieldlog.vercel.app/api/procore/callback
-https://gc-field-log.vercel.app/api/procore/callback
-```
+`https://www.gcfieldlog.com/api/procore/callback`
 
-Optional local: `http://localhost:3000/api/procore/callback`.
+Connect always sends that string (https, no trailing slash) on authorize and token exchange. Starting Connect on `gc-field-log.vercel.app`, `gcfieldlog.vercel.app`, or apex `gcfieldlog.com` **302s to** `https://www.gcfieldlog.com/api/procore/connect` first so `gcfieldlog_procore_oauth_state` is set on www before Procore. www + apex also set `Domain=gcfieldlog.com` (SameSite=Lax, Secure, Path=/). vercel.app hosts never get a Domain attribute.
 
-Connect sends `${request origin}/api/procore/callback` when the Host is on that list so the OAuth state cookie (host-only, SameSite=Lax, Secure on https, **no Domain**) stays on the same host Procore redirects back to. Authorize and the token POST use that **same exact string**. That is what prevents `invalid_state` / token-service errors when Connect starts on `gc-field-log.vercel.app` or `gcfieldlog.vercel.app` instead of www.
-
-`PROCORE_REDIRECT_URI` (`procore_redirect_uri` alias) is optional. If it matches the current request host, that exact string is sent. It does **not** pin every host to www: allowlisted production / Vercel hosts still derive their own callback. Unset → same derivation, with www as the unknown-host fallback. Never `NEXT_PUBLIC_`.
+`PROCORE_REDIRECT_URI` (`procore_redirect_uri` alias) is optional and must equal the portal string above if set. Never `NEXT_PUBLIC_`.
 
 **Vercel (server-only, never `NEXT_PUBLIC_`):**
 
@@ -92,7 +85,7 @@ Connect sends `${request origin}/api/procore/callback` when the Host is on that 
 | --- | --- |
 | `PROCORE_CLIENT_ID` | OAuth client id (`procore_client_id` alias also read) |
 | `PROCORE_CLIENT_SECRET` | OAuth client secret (`procore_client_secret` alias also read) |
-| `PROCORE_REDIRECT_URI` | Optional same-host pin (`procore_redirect_uri` alias). Does **not** override other allowlisted hosts. Unset: request origin builds `/api/procore/callback`. Unknown hosts: `https://www.gcfieldlog.com/api/procore/callback`. Never `NEXT_PUBLIC_`. |
+| `PROCORE_REDIRECT_URI` | Optional. Must be `https://www.gcfieldlog.com/api/procore/callback` if set (`procore_redirect_uri` alias). Authorize always sends that portal string. Never `NEXT_PUBLIC_`. |
 | `PROCORE_OAUTH_BASE` | Optional login host. Default **`https://login-sandbox.procore.com`** (Developer Sandbox). Production / on-demand: `https://login.procore.com`. |
 | `PROCORE_API_BASE` | Optional API host. Default follows the login host. |
 | `SUPABASE_URL` | Supabase project URL (same project as `room_packs`) |

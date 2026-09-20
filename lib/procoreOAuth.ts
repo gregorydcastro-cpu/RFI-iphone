@@ -11,6 +11,7 @@ import { readEnvAlias } from "./env";
 import { readProcoreId } from "./procoreProjectMatch";
 import {
   isTrustedProcoreRedirectUri,
+  oauthCookieDomainFromRequest,
   readProcoreClientId,
   readProcoreClientSecret,
   readProcoreRedirectUri,
@@ -21,11 +22,17 @@ export { readProcoreId };
 export {
   DEFAULT_PROCORE_REDIRECT_URI,
   PROCORE_CALLBACK_PATH,
+  PROCORE_CONNECT_PATH,
+  PROCORE_COOKIE_DOMAIN,
   PROCORE_REDIRECT_HOST_ALLOWLIST,
   isAllowlistedProcoreRedirectHost,
   isTrustedProcoreRedirectUri,
+  oauthCookieDomainForHost,
+  oauthCookieDomainFromRequest,
+  procoreConnectBounceUrl,
   procoreRedirectUrisToRegister,
   redirectUriForTokenExchange,
+  requestHostForProcore,
   requestOriginForProcore,
   resolveProcoreRedirectUri,
   resolveProcoreRedirectUriFromRequest,
@@ -121,18 +128,18 @@ type ProcoreOAuthCookie = {
   sameSite: "lax";
   maxAge: number;
   secure: boolean;
+  domain?: string;
 };
 
 /**
- * Host-only OAuth cookies (no Domain). SameSite=Lax so the top-level GET
- * back from Procore includes them. Secure on https (Vercel). Do not set
- * Domain=.gcfieldlog.com — that cannot cover vercel.app, and a www Domain
- * would still miss gc-field-log.vercel.app. redirect_uri must stay on the
- * same host as Connect so these cookies are sent on callback.
+ * SameSite=Lax so the top-level GET from Procore includes the cookie.
+ * Secure on https. Domain=gcfieldlog.com only on www/apex so apex and www
+ * share the cookie. vercel.app stays host-only (bounce to www first).
  */
 export function oauthStateCookieOptions(
   state: string | null,
   secure: boolean,
+  domain?: string,
 ): ProcoreOAuthCookie {
   return {
     name: PROCORE_OAUTH_STATE_COOKIE,
@@ -142,12 +149,14 @@ export function oauthStateCookieOptions(
     sameSite: "lax",
     maxAge: state ? 60 * 10 : 0,
     secure,
+    ...(domain ? { domain } : {}),
   };
 }
 
 export function oauthRedirectCookieOptions(
   redirectUri: string | null,
   secure: boolean,
+  domain?: string,
 ): ProcoreOAuthCookie {
   return {
     name: PROCORE_OAUTH_REDIRECT_COOKIE,
@@ -157,6 +166,7 @@ export function oauthRedirectCookieOptions(
     sameSite: "lax",
     maxAge: redirectUri ? 60 * 10 : 0,
     secure,
+    ...(domain ? { domain } : {}),
   };
 }
 
@@ -164,10 +174,12 @@ export function oauthRedirectCookieOptions(
 export function procoreOAuthCookies(
   payload: { state: string; redirectUri: string } | null,
   secure: boolean,
+  request?: Request,
 ): readonly [ProcoreOAuthCookie, ProcoreOAuthCookie] {
+  const domain = request ? oauthCookieDomainFromRequest(request) : undefined;
   return [
-    oauthStateCookieOptions(payload?.state ?? null, secure),
-    oauthRedirectCookieOptions(payload?.redirectUri ?? null, secure),
+    oauthStateCookieOptions(payload?.state ?? null, secure, domain),
+    oauthRedirectCookieOptions(payload?.redirectUri ?? null, secure, domain),
   ];
 }
 

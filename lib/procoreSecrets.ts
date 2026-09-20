@@ -4,24 +4,28 @@
  * Vercel: PROCORE_CLIENT_ID / PROCORE_CLIENT_SECRET (never NEXT_PUBLIC_).
  * Ops copy from the shared box files — never commit those values.
  *
- * Redirect URI is origin-aware so Connect on vercel.app / localhost does
- * not send Procore back to www (state cookie would not follow). This
- * allowlist is Procore-only — do not reuse Stripe or Auth host lists.
+ * Portal redirect_uri is fixed (Greg already registered it):
+ *   https://www.gcfieldlog.com/api/procore/callback
+ * Connect on vercel.app / apex 302s to that www origin first so the
+ * httpOnly state cookie is set on www before Procore authorize. www+apex
+ * also set Domain=gcfieldlog.com. Never Domain on vercel.app hosts.
  */
 
 import { readFileSync } from "node:fs";
 import { readEnvAlias } from "./env.ts";
 
-/** Greg’s Procore developer app allowlist (exact default). */
+/** Exact string registered in the Procore Developer Portal. No trailing slash. */
 export const DEFAULT_PROCORE_REDIRECT_URI =
   "https://www.gcfieldlog.com/api/procore/callback";
 
 export const PROCORE_CALLBACK_PATH = "/api/procore/callback";
+export const PROCORE_CONNECT_PATH = "/api/procore/connect";
+
+export const PROCORE_COOKIE_DOMAIN = "gcfieldlog.com";
 
 /**
- * Hosts that may build `${origin}/api/procore/callback` from the request.
- * Exact hosts only — not every `*.vercel.app` preview.
- * `gcfieldlog.vercel.app` is included when that production alias is attached.
+ * Live hosts that may start Connect. Other hosts still bounce to www
+ * because the portal URI is fixed.
  */
 export const PROCORE_REDIRECT_HOST_ALLOWLIST = [
   "www.gcfieldlog.com",
@@ -52,20 +56,21 @@ export function readProcoreClientSecret(): string | undefined {
   );
 }
 
-/** Explicit env override, or undefined so origin allowlist / default can run. */
+/** Optional env pin. Authorize still sends the portal www URI unless env equals it. */
 export function readProcoreRedirectUriOverride(): string | undefined {
   return readEnvAlias("PROCORE_REDIRECT_URI", "procore_redirect_uri");
 }
 
-/** Env override or the www default. Used when no request origin is available. */
+/** Always the portal URI (env only if it is that exact string). */
 export function readProcoreRedirectUri(): string {
-  return readProcoreRedirectUriOverride() ?? DEFAULT_PROCORE_REDIRECT_URI;
+  const override = canonicalizePortalRedirectUri(readProcoreRedirectUriOverride());
+  return override ?? DEFAULT_PROCORE_REDIRECT_URI;
 }
 
 export function isAllowlistedProcoreRedirectHost(
   host: string | null | undefined,
 ): boolean {
-  const normalized = host?.trim().toLowerCase().replace(/\.$/, "") ?? "";
+  const normalized = normalizeHost(host);
   if (!normalized) return false;
   return (PROCORE_REDIRECT_HOST_ALLOWLIST as readonly string[]).includes(
     normalized,
@@ -73,7 +78,7 @@ export function isAllowlistedProcoreRedirectHost(
 }
 
 /**
- * Origin for Procore `redirect_uri` (scheme + host[:port]).
+ * Origin for comparing Connect host vs redirect_uri host.
  * Uses x-forwarded-* when present so Vercel matches the browser host.
  */
 export function requestOriginForProcore(request: Request): string | null {
@@ -90,94 +95,117 @@ export function requestOriginForProcore(request: Request): string | null {
   }
 }
 
+export function requestHostForProcore(request: Request): string {
+  const origin = requestOriginForProcore(request);
+  if (!origin) return "";
+  try {
+    return new URL(origin).host;
+  } catch {
+    return "";
+  }
+}
+
 /**
- * Authorize + token exchange must share this URI byte-for-byte.
- *
- * 1. If `PROCORE_REDIRECT_URI` is set and its host matches this request,
- *    send that exact env string (same-host pin / tunnel).
- * 2. Else `${requestOrigin}/api/procore/callback` when the host is allowlisted.
- *    A www-only env value must not override vercel.app / apex — that is the
- *    live Vercel failure (state cookie on one host, Procore returns to another,
- *    then token exchange rejects the mismatched redirect_uri).
- * 3. Else env when there is no request origin, else www default.
+ * Domain attribute for OAuth state cookies.
+ * www + apex share Domain=gcfieldlog.com (no leading dot).
+ * vercel.app must stay host-only — browsers reject Domain=gcfieldlog.com there.
+ */
+export function oauthCookieDomainForHost(
+  host: string | null | undefined,
+): string | undefined {
+  const hostname = normalizeHost(host).split(":")[0] ?? "";
+  if (hostname === "www.gcfieldlog.com" || hostname === "gcfieldlog.com") {
+    return PROCORE_COOKIE_DOMAIN;
+  }
+  return undefined;
+}
+
+export function oauthCookieDomainFromRequest(request: Request): string | undefined {
+  return oauthCookieDomainForHost(requestHostForProcore(request));
+}
+
+/**
+ * Authorize + token exchange always send this exact portal string.
+ * Request origin is ignored so vercel.app Connect cannot advertise a
+ * callback that Procore has not registered.
  */
 export function resolveProcoreRedirectUri(
   requestOrigin?: string | null,
 ): string {
-  const override = readProcoreRedirectUriOverride();
-  const requestHost = hostKey(requestOrigin);
-  const overrideHost = hostKey(override);
-
-  if (override && requestHost && overrideHost === requestHost) {
-    return override;
-  }
-
-  if (requestOrigin) {
-    try {
-      const url = new URL(requestOrigin);
-      if (isAllowlistedProcoreRedirectHost(url.host)) {
-        return `${url.origin}${PROCORE_CALLBACK_PATH}`;
-      }
-    } catch {
-      /* fall through */
-    }
-  }
-
-  if (override && !requestHost) return override;
-  return DEFAULT_PROCORE_REDIRECT_URI;
+  void requestOrigin;
+  return readProcoreRedirectUri();
 }
 
 export function resolveProcoreRedirectUriFromRequest(request: Request): string {
-  return resolveProcoreRedirectUri(requestOriginForProcore(request));
+  void request;
+  return readProcoreRedirectUri();
 }
 
-/** Cookie / stored URI must be the env override, default, or an allowlisted callback. */
-export function isTrustedProcoreRedirectUri(uri: string | null | undefined): boolean {
-  if (!uri) return false;
-  const override = readProcoreRedirectUriOverride();
-  if (override && uri === override) return true;
-  try {
-    const url = new URL(uri);
-    if (url.pathname !== PROCORE_CALLBACK_PATH) return false;
-    if (url.search || url.hash) return false;
-    if (`${url.origin}${url.pathname}` === DEFAULT_PROCORE_REDIRECT_URI) {
-      return true;
-    }
-    return isAllowlistedProcoreRedirectHost(url.host);
-  } catch {
-    return false;
-  }
-}
-
-/** Prefer the cookie from authorize; otherwise rebuild from this request. */
-export function redirectUriForTokenExchange(
-  storedRedirectUri: string | null | undefined,
+/**
+ * If Connect started on a host other than the portal callback host, 302
+ * to www `/api/procore/connect` first so the state cookie is set there.
+ * Destination is always the portal origin — never a reflected Host header.
+ */
+export function procoreConnectBounceUrl(
   request: Request,
-): string {
-  if (storedRedirectUri && isTrustedProcoreRedirectUri(storedRedirectUri)) {
-    return storedRedirectUri;
-  }
-  return resolveProcoreRedirectUriFromRequest(request);
-}
-
-/** Exact URIs Greg must register on the Procore developer app. */
-export function procoreRedirectUrisToRegister(): string[] {
-  return [
-    "https://www.gcfieldlog.com/api/procore/callback",
-    "https://gcfieldlog.com/api/procore/callback",
-    "https://gcfieldlog.vercel.app/api/procore/callback",
-    "https://gc-field-log.vercel.app/api/procore/callback",
-    "http://localhost:3000/api/procore/callback",
-  ];
-}
-
-function hostKey(originOrUri: string | null | undefined): string | null {
-  if (!originOrUri) return null;
+  redirectUri: string = readProcoreRedirectUri(),
+): string | null {
+  const portal = canonicalizePortalRedirectUri(redirectUri) ?? readProcoreRedirectUri();
+  let portalHost = "";
+  let portalOrigin = "";
   try {
-    return new URL(originOrUri).host.toLowerCase().replace(/\.$/, "") || null;
+    const url = new URL(portal);
+    portalHost = normalizeHost(url.host);
+    portalOrigin = url.origin;
   } catch {
     return null;
   }
+  const currentHost = normalizeHost(requestHostForProcore(request));
+  if (!currentHost || currentHost === portalHost) return null;
+  return `${portalOrigin}${PROCORE_CONNECT_PATH}`;
+}
+
+export function isTrustedProcoreRedirectUri(uri: string | null | undefined): boolean {
+  return canonicalizePortalRedirectUri(uri) === DEFAULT_PROCORE_REDIRECT_URI;
+}
+
+/** Prefer the cookie from authorize when it is the portal URI. */
+export function redirectUriForTokenExchange(
+  storedRedirectUri: string | null | undefined,
+  request?: Request,
+): string {
+  void request;
+  if (storedRedirectUri && isTrustedProcoreRedirectUri(storedRedirectUri)) {
+    return storedRedirectUri;
+  }
+  return readProcoreRedirectUri();
+}
+
+/** Exact URI Greg registered — do not add hosts. */
+export function procoreRedirectUrisToRegister(): string[] {
+  return [DEFAULT_PROCORE_REDIRECT_URI];
+}
+
+function canonicalizePortalRedirectUri(
+  value: string | null | undefined,
+): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== "https:") return null;
+    if (url.search || url.hash) return null;
+    const path = url.pathname.replace(/\/$/, "") || "/";
+    if (path !== PROCORE_CALLBACK_PATH) return null;
+    const host = normalizeHost(url.host).split(":")[0] ?? "";
+    if (host !== "www.gcfieldlog.com") return null;
+    return DEFAULT_PROCORE_REDIRECT_URI;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeHost(host: string | null | undefined): string {
+  return host?.trim().toLowerCase().replace(/\.$/, "") ?? "";
 }
 
 function readSecretFile(path: string): string | undefined {
