@@ -1,14 +1,10 @@
 import { NextResponse } from "next/server";
 import { cookieSecureFromRequest } from "@/lib/auth";
+import { safeNextPath } from "@/lib/authMessages";
 import { expireStubSessionCookie } from "@/lib/stubSession";
 import { createSupabaseRouteClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-
-function safeNext(value: string | null): string {
-  if (value && value.startsWith("/") && !value.startsWith("//")) return value;
-  return "/jobs";
-}
 
 /**
  * PKCE / magic-link / confirm-email callback.
@@ -17,7 +13,7 @@ function safeNext(value: string | null): string {
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const next = safeNext(url.searchParams.get("next"));
+  const next = safeNextPath(url.searchParams.get("next"));
   const dest = new URL(next, url.origin);
   const response = NextResponse.redirect(dest);
   const secure = cookieSecureFromRequest(request);
