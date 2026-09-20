@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { LoginForm } from "@/components/LoginForm";
@@ -13,6 +14,9 @@ type Props = {
 };
 
 export default async function LoginPage({ searchParams }: Props) {
+  // Request-time headers so Auth env is not snapshotted at build.
+  // Host is not a gate — vercel.app and custom domains share keys-only.
+  await headers();
   const query = await searchParams;
   const session = await readAppSession();
   if (session) {

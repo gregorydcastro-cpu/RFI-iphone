@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookieSecureFromRequest, procoreLinkedCookieOptions } from "@/lib/auth";
+import { authAppOrigin, authCallbackUrl } from "@/lib/authHosts";
 import {
   authUnconfiguredMessage,
   friendlyAuthError,
@@ -48,16 +49,6 @@ function asPassword(value: unknown): string | null {
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: NO_STORE });
-}
-
-function appOrigin(request: Request): string {
-  const url = new URL(request.url);
-  const forwarded = request.headers.get("x-forwarded-host");
-  const proto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
-  if (forwarded) {
-    return `${proto || url.protocol.replace(":", "")}://${forwarded.split(",")[0]?.trim()}`;
-  }
-  return url.origin;
 }
 
 function attachLegacyClears(request: Request, response: NextResponse) {
@@ -133,11 +124,10 @@ export async function POST(request: Request) {
   }
 
   if (mode === "otp") {
-    const origin = appOrigin(request);
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${origin}/auth/callback?next=/jobs`,
+        emailRedirectTo: authCallbackUrl(authAppOrigin(request)),
         shouldCreateUser: true,
       },
     });
@@ -168,12 +158,11 @@ export async function POST(request: Request) {
   }
 
   if (mode === "signup") {
-    const origin = appOrigin(request);
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${origin}/auth/callback?next=/jobs`,
+        emailRedirectTo: authCallbackUrl(authAppOrigin(request)),
       },
     });
     if (error) {

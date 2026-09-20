@@ -82,6 +82,12 @@ test("login form keeps real /api/session Auth and no role picker", () => {
   );
 });
 
+test("login page starts Auth from keys, not a Host allowlist", () => {
+  const src = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(src, /isSupabaseAuthConfigured/);
+  assert.equal(/isAllowedAuthHost|PRODUCTION_AUTH_HOSTS/.test(src), false);
+});
+
 test("login copy stays Maple Point / fictional and has no fake auth path", () => {
   const blob = [
     loginModeCopy("signin").helper,

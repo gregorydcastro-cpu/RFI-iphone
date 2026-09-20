@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookieSecureFromRequest, procoreLinkedCookieOptions } from "@/lib/auth";
+import { authAppOrigin, authCallbackUrl } from "@/lib/authHosts";
 import { fieldRoleFromInviteRole, normalizeInviteeEmail } from "@/lib/invites";
 import { redeemInvite } from "@/lib/inviteStore";
 import { applyProfileRole } from "@/lib/profiles";
@@ -28,16 +29,6 @@ type RedeemBody = {
 function asPassword(value: unknown): string | null {
   if (typeof value !== "string") return null;
   return value.length > 0 ? value : null;
-}
-
-function appOrigin(request: Request): string {
-  const url = new URL(request.url);
-  const forwarded = request.headers.get("x-forwarded-host");
-  const proto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
-  if (forwarded) {
-    return `${proto || url.protocol.replace(":", "")}://${forwarded.split(",")[0]?.trim()}`;
-  }
-  return url.origin;
 }
 
 /**
@@ -72,11 +63,13 @@ export async function POST(request: Request, { params }: Props) {
   let tokens: { access_token: string; refresh_token: string } | null = null;
 
   if (!user && routeClient && body.mode === "otp") {
-    const origin = appOrigin(request);
     const { error } = await routeClient.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${origin}/auth/callback?next=/invite/${encodeURIComponent(trimmed)}`,
+        emailRedirectTo: authCallbackUrl(
+          authAppOrigin(request),
+          `/invite/${trimmed}`,
+        ),
         shouldCreateUser: true,
       },
     });
@@ -104,12 +97,14 @@ export async function POST(request: Request, { params }: Props) {
     }
     const mode = body.mode === "signup" ? "signup" : "signin";
     if (mode === "signup") {
-      const origin = appOrigin(request);
       const { data, error } = await routeClient.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${origin}/auth/callback?next=/invite/${encodeURIComponent(trimmed)}`,
+          emailRedirectTo: authCallbackUrl(
+            authAppOrigin(request),
+            `/invite/${trimmed}`,
+          ),
         },
       });
       if (error) {
