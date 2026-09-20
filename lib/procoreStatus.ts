@@ -67,11 +67,11 @@ export function procoreErrorMessage(reason: string | undefined): string | null {
     case "missing_code":
       return "Procore did not return an authorization code.";
     case "invalid_state":
-      return "Procore sign-in could not be verified. Try Connect Procore again.";
+      return "OAuth sign-in cannot be verified. Try Connect Procore again from this same site.";
     case "missing_session":
       return "Sign in to GC Field Log first, then connect Procore.";
     case "token_exchange_failed":
-      return "Procore did not accept the authorization code. Try connecting again.";
+      return "Procore did not accept the authorization code (token service). Try Connect Procore again from this same site.";
     case "storage_unconfigured":
       return "Tokens could not be stored. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (anon key cannot write tokens).";
     case "denied":

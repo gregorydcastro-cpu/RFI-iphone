@@ -123,6 +123,13 @@ type ProcoreOAuthCookie = {
   secure: boolean;
 };
 
+/**
+ * Host-only OAuth cookies (no Domain). SameSite=Lax so the top-level GET
+ * back from Procore includes them. Secure on https (Vercel). Do not set
+ * Domain=.gcfieldlog.com — that cannot cover vercel.app, and a www Domain
+ * would still miss gc-field-log.vercel.app. redirect_uri must stay on the
+ * same host as Connect so these cookies are sent on callback.
+ */
 export function oauthStateCookieOptions(
   state: string | null,
   secure: boolean,
@@ -186,7 +193,6 @@ export async function refreshAccessToken(
     client_id: config.clientId,
     client_secret: config.clientSecret,
     refresh_token: refreshToken,
-    redirect_uri: config.redirectUri,
   });
 }
 

@@ -21,10 +21,12 @@ export const PROCORE_CALLBACK_PATH = "/api/procore/callback";
 /**
  * Hosts that may build `${origin}/api/procore/callback` from the request.
  * Exact hosts only — not every `*.vercel.app` preview.
+ * `gcfieldlog.vercel.app` is included when that production alias is attached.
  */
 export const PROCORE_REDIRECT_HOST_ALLOWLIST = [
   "www.gcfieldlog.com",
   "gcfieldlog.com",
+  "gcfieldlog.vercel.app",
   "gc-field-log.vercel.app",
   "localhost:3000",
 ] as const;
@@ -89,25 +91,39 @@ export function requestOriginForProcore(request: Request): string | null {
 }
 
 /**
- * Authorize + token exchange must share this URI.
- * 1. `PROCORE_REDIRECT_URI` env wins when set.
+ * Authorize + token exchange must share this URI byte-for-byte.
+ *
+ * 1. If `PROCORE_REDIRECT_URI` is set and its host matches this request,
+ *    send that exact env string (same-host pin / tunnel).
  * 2. Else `${requestOrigin}/api/procore/callback` when the host is allowlisted.
- * 3. Else www.gcfieldlog.com callback.
+ *    A www-only env value must not override vercel.app / apex — that is the
+ *    live Vercel failure (state cookie on one host, Procore returns to another,
+ *    then token exchange rejects the mismatched redirect_uri).
+ * 3. Else env when there is no request origin, else www default.
  */
 export function resolveProcoreRedirectUri(
   requestOrigin?: string | null,
 ): string {
   const override = readProcoreRedirectUriOverride();
-  if (override) return override;
-  if (!requestOrigin) return DEFAULT_PROCORE_REDIRECT_URI;
-  try {
-    const url = new URL(requestOrigin);
-    if (isAllowlistedProcoreRedirectHost(url.host)) {
-      return `${url.origin}${PROCORE_CALLBACK_PATH}`;
-    }
-  } catch {
-    /* fall through */
+  const requestHost = hostKey(requestOrigin);
+  const overrideHost = hostKey(override);
+
+  if (override && requestHost && overrideHost === requestHost) {
+    return override;
   }
+
+  if (requestOrigin) {
+    try {
+      const url = new URL(requestOrigin);
+      if (isAllowlistedProcoreRedirectHost(url.host)) {
+        return `${url.origin}${PROCORE_CALLBACK_PATH}`;
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  if (override && !requestHost) return override;
   return DEFAULT_PROCORE_REDIRECT_URI;
 }
 
@@ -149,9 +165,19 @@ export function procoreRedirectUrisToRegister(): string[] {
   return [
     "https://www.gcfieldlog.com/api/procore/callback",
     "https://gcfieldlog.com/api/procore/callback",
+    "https://gcfieldlog.vercel.app/api/procore/callback",
     "https://gc-field-log.vercel.app/api/procore/callback",
     "http://localhost:3000/api/procore/callback",
   ];
+}
+
+function hostKey(originOrUri: string | null | undefined): string | null {
+  if (!originOrUri) return null;
+  try {
+    return new URL(originOrUri).host.toLowerCase().replace(/\.$/, "") || null;
+  } catch {
+    return null;
+  }
 }
 
 function readSecretFile(path: string): string | undefined {
