@@ -1,6 +1,7 @@
 "use client";
 
 import { ReadAloudButton } from "@/components/ReadAloudButton";
+import { VoiceSetupNote } from "@/components/VoiceSetupNote";
 import { rfiSpeakText } from "@/lib/rfiDictation";
 import type { Rfi } from "@/lib/pack";
 
@@ -44,6 +45,7 @@ export function RfiList({ rfis }: Props) {
           />
         ) : null}
       </div>
+      <VoiceSetupNote />
       {rfis.length === 0 ? (
         <p className="text-sm text-muted">No RFIs linked to this room.</p>
       ) : (

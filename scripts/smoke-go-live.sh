@@ -118,6 +118,51 @@ else
   note "sheet-pdf not a hard failure (configure Drive for 200 application/pdf)"
 fi
 
+# --- Grok Voice (status + unconfigured/configured degrade) ---
+# Never treat a missing key as a hard fail. Fail if status is not JSON/200
+# or if the body looks like it leaked a key.
+voice_status_body="$tmpdir/voice.status"
+voice_status_hdr="$tmpdir/voice.status.hdr"
+voice_status_code=$(fetch "$voice_status_body" "$voice_status_hdr" "$BASE_URL/api/voice/status") || true
+voice_configured=$(json_field "$voice_status_body" "configured")
+if [[ "$voice_status_code" != "200" ]]; then
+  fail "GET /api/voice/status → $voice_status_code (expected 200 JSON)"
+elif grep -qiE 'xai-[A-Za-z0-9]{8,}|Bearer |sk-[A-Za-z0-9]{8,}' "$voice_status_body"; then
+  fail "GET /api/voice/status body looks like it leaked a secret"
+elif grep -qiE '"key"[[:space:]]*:' "$voice_status_body"; then
+  fail "GET /api/voice/status must not include a key field"
+else
+  ok "GET /api/voice/status → 200 configured=${voice_configured:-false}"
+fi
+
+tts_body="$tmpdir/voice.tts"
+tts_hdr="$tmpdir/voice.tts.hdr"
+tts_code=$(
+  fetch "$tts_body" "$tts_hdr" -X POST "$BASE_URL/api/tts" \
+    -H "Content-Type: application/json" \
+    -d '{"text":"Read-aloud smoke."}'
+) || true
+tts_err=$(json_field "$tts_body" "code")
+if [[ "$tts_code" == "503" && "$tts_err" == "unconfigured" ]]; then
+  ok "POST /api/tts → 503 unconfigured (key unset)"
+elif [[ "$tts_code" == "200" ]]; then
+  ok "POST /api/tts → 200 (key configured)"
+else
+  note "POST /api/tts → $tts_code code=${tts_err:-n/a} (not a hard fail)"
+fi
+
+dict_body="$tmpdir/voice.dict"
+dict_hdr="$tmpdir/voice.dict.hdr"
+dict_code=$(fetch "$dict_body" "$dict_hdr" -X POST "$BASE_URL/api/dictation") || true
+dict_err=$(json_field "$dict_body" "code")
+if [[ "$dict_code" == "503" && "$dict_err" == "unconfigured" ]]; then
+  ok "POST /api/dictation → 503 unconfigured (key unset)"
+elif [[ "$dict_code" == "400" && "$dict_err" == "bad_input" ]]; then
+  ok "POST /api/dictation → 400 bad_input (key configured, no file)"
+else
+  note "POST /api/dictation → $dict_code code=${dict_err:-n/a} (not a hard fail)"
+fi
+
 # --- GET /api/time?job=maple-point (must be 200) ---
 time_body="$tmpdir/time.body"
 time_hdr="$tmpdir/time.hdr"
