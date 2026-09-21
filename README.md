@@ -30,7 +30,7 @@ Must match this path — nothing else in the primary nav:
 | Share (`/share`) | Create folders, pin full disciplines (electrical / lighting / architectural) or Maple Point room packs, puller-gated **Refresh all**. |
 | Pricing (`/pricing`) | Subscribe CTA → Stripe-hosted Checkout (60-day trial, payment method collected). |
 | Room pack request | Room number (e.g. `733`). **Connected puller:** `POST /api/room-pack` tries Procore REST with stored tokens (demo slug, exact `projectName`, or allowlist), then opens `/pack/[requestId]`. Bot wake + cached `room_packs` if REST cannot run **and** the job is not a fictional demo. **Viewer / unconnected puller:** **Open pack** only — no pull. Local demo (no `SUPABASE_URL`) loads Maple Point JSON unless REST succeeds. |
-| Pack viewer | Field stack on `/pack/[requestId]`: **architectural floor plan first** (A-*, architectural, floor plan heuristics; else current primary), oversized crimson SVG box around the room walls, **vector markup tools** (circle, box, arrow, text note) with one-tap **Create RFI**, then remaining sheets (power, lighting, …) and linked RFIs. Drawing number + revision letter stamps stay on the top bar and each sheet (`A-101 Rev A`). Website open always re-reads `room_packs` (no-store). Status shows **live** (Procore REST this pull), **cached** (`room_packs` / bot fallback), or **demo**. Viewers cannot pull. |
+| Pack viewer | Field stack on `/pack/[requestId]`: **architectural floor plan first** (A-*, architectural, floor plan heuristics; else current primary), oversized crimson SVG box around the room walls, **vector markup tools** (circle, box, arrow, text note) with one-tap **Create RFI**, then remaining sheets (power, lighting, …) and linked RFIs. Drawing number + revision letter stamps stay on the top bar and each sheet (`A-101 Rev A`). Website open always re-reads `room_packs` (no-store) and re-pulls from Procore when a connected puller is online. Device **offline pack cache** is fallback only (see below). Status shows **live** (Procore REST this pull), **cached** (`room_packs` / bot fallback), **offline** (device snapshot), or **demo**. Viewers cannot pull. |
 | Generate RFI / Materials | Live pack actions. Drafts go to foreman Pat Nguyen — not a Procore submit. **Dictate** fills the form from the mic; **Read aloud** speaks RFIs. **Create RFI** from a selected sheet markup prefills the same draft. Phone photo attaches as a data URL on the draft. |
 | Voice (Grok) | Server-side `XAI_API_KEY` → `/api/dictation` (STT) and `/api/tts` (TTS). Never `NEXT_PUBLIC_`. |
 | Time (`/time`) | Maple Point **worker punch** (GPS geofence) and **foreman crew week**. Field log only — not payroll/ADP. |
@@ -656,6 +656,23 @@ Live packs are produced by the **Procore bot** (`969a9d8e-c07f-44c3-ae9d-862704c
 **Local demo:** `SUPABASE_URL` / `SUPABASE_ANON_KEY` unset → local Maple Point JSON.
 
 The bot (or ops) persists by inserting a `room_packs` row (`project_name`, `request_id`, `room`, `pulled_at`, `pack_data`). Optional website callback: `POST /api/room-pack/refresh` with `{ pack }` and a puller cookie/header.
+
+## Offline pack cache vs live Procore re-pull
+
+**Online (www): always live.** Opening `/pack/[requestId]` still re-reads `room_packs` with `cache: "no-store"`. Connected pullers still POST `/api/room-pack/refresh` (Procore REST, then bot). The device cache is **never** the online source of truth and is **not** a second Procore path.
+
+**Offline (no signal / fetch fail):** if that live fetch throws or the response is not a pack, the viewer serves the **last good snapshot already pulled onto this device** so sheets and RFIs still open. A racing-red banner reads **“Offline — showing cached pack from …”** plus the drawing + rev stamp (`A-101 Rev A`).
+
+| | Live re-pull | Device cache |
+| --- | --- | --- |
+| When | Browser can reach the site | Network miss after the live attempt |
+| Source | Procore REST / bot / `room_packs` | IndexedDB snapshot + Cache Storage PDF blobs |
+| Key | Server `request_id` | `project + pack/room id + revision stamp` |
+| Expiry | None (`pulled_at` is display-only) | **Calendar day `America/New_York`** (“day’s packs”). Midnight ET drops yesterday’s snapshots. |
+
+PDFs are the same viewer URLs as online (`/api/sheet-pdf?requestId=&sheetId=` or same-origin `/packs/*.pdf`). A **minimal** service worker (`/offline-pack-sw.js`) is network-first for those PDF GETs only — it does **not** intercept `/api/room-pack/*`. This is not a full offline PWA; a hard refresh of the app shell while fully offline is out of scope.
+
+Scaffold: `lib/offlinePackCache.ts` (keying / expiry), `lib/offlinePackStore.ts` (IndexedDB + Cache Storage), wired from `PackLiveReload` / `SheetViewer`.
 
 ## Pack JSON contract (`gcpullog.room_pack.v1`)
 

@@ -1,4 +1,4 @@
-import { resolveSheetPdf } from "./packNormalize";
+import { resolveSheetPdf } from "./packNormalize.ts";
 
 export type PackStatus = "ready" | "pending" | "error" | string;
 
