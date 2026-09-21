@@ -10,23 +10,43 @@ import {
   DRIVE_AUTH_MISSING_MESSAGE,
   getDriveAccessToken,
   readGoogleDriveAuth,
-} from "./driveAuth";
-import { loadLiveRoomPack } from "./livePack";
-import { driveFileId, resolveSheetPdf } from "./packNormalize";
+} from "./driveAuth.ts";
+import { loadLiveRoomPack } from "./livePack.ts";
+import { driveFileId, resolveSheetPdf } from "./packNormalize.ts";
 import {
+  DriveTokenError,
+  mapDriveDownloadStatus,
+  SHEET_PDF_MESSAGES,
+  type SheetPdfErrorCode,
+} from "./sheetPdfErrors.ts";
+import {
+  fetchWithBoundedRetry,
+  MAX_PDF_BYTES,
+  readLimitedBytes,
+} from "./sheetPdfFetch.ts";
+import {
+  isAllowedDriveDownloadHost,
   isBlockedFetchHost,
   isBrowserDirectPdfUrl,
   isGoogleDrivePdfUrl,
   isGoogleLoginHost,
   isPdfMagic,
   isProcorePdfUrl,
-} from "./sheetPdfUrl";
+} from "./sheetPdfUrl.ts";
 
-export { DRIVE_AUTH_MISSING_MESSAGE, isPdfMagic, isBlockedFetchHost };
+export { DRIVE_AUTH_MISSING_MESSAGE, MAX_PDF_BYTES, isPdfMagic, isBlockedFetchHost };
 
-export const MAX_PDF_BYTES = 45 * 1024 * 1024;
-const FETCH_TIMEOUT_MS = 25_000;
 const MAX_REDIRECTS = 5;
+
+const PUBLIC_FAILURES_TO_KEEP: ReadonlySet<SheetPdfErrorCode> = new Set([
+  "timeout",
+  "upstream_failed",
+  "too_large",
+  "not_pdf",
+  "blocked_url",
+  "invalid_pdf_url",
+  "too_many_redirects",
+]);
 
 export type SheetPdfFailure = {
   ok: false;
@@ -46,11 +66,10 @@ export type SheetPdfResult = SheetPdfSuccess | SheetPdfFailure;
 
 function fail(
   status: number,
-  code: string,
-  error: string,
+  code: SheetPdfErrorCode,
   extra?: { configured?: boolean },
 ): SheetPdfFailure {
-  return { ok: false, status, code, error, ...extra };
+  return { ok: false, status, code, error: SHEET_PDF_MESSAGES[code], ...extra };
 }
 
 function localPackPdfPath(pdfUrl: string): string | null {
@@ -62,9 +81,7 @@ function localPackPdfPath(pdfUrl: string): string | null {
   return path.join(process.cwd(), "public", "packs", name);
 }
 
-async function readLocalPackPdf(
-  pdfUrl: string,
-): Promise<Uint8Array | null> {
+async function readLocalPackPdf(pdfUrl: string): Promise<Uint8Array | null> {
   const file = localPackPdfPath(pdfUrl);
   if (!file) return null;
   try {
@@ -80,160 +97,116 @@ function filenameForSheet(sheetId: string): string {
   return `${safe}.pdf`;
 }
 
-async function readLimitedBytes(
-  response: Response,
-): Promise<Uint8Array | "too_large"> {
-  const lengthHeader = response.headers.get("content-length");
-  if (lengthHeader) {
-    const length = Number(lengthHeader);
-    if (Number.isFinite(length) && length > MAX_PDF_BYTES) return "too_large";
-  }
-  if (!response.body) {
-    const buf = new Uint8Array(await response.arrayBuffer());
-    return buf.byteLength > MAX_PDF_BYTES ? "too_large" : buf;
-  }
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (!value) continue;
-    total += value.byteLength;
-    if (total > MAX_PDF_BYTES) {
-      await reader.cancel().catch(() => undefined);
-      return "too_large";
+function failureFromTokenError(error: unknown): SheetPdfFailure {
+  if (error instanceof DriveTokenError) {
+    if (error.code === "timeout") return fail(504, "timeout", { configured: true });
+    if (error.code === "upstream_failed") {
+      return fail(502, "upstream_failed", { configured: true });
     }
-    chunks.push(value);
   }
-  const out = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    out.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return out;
+  return fail(503, "drive_auth_rejected", { configured: true });
 }
 
-async function fetchHttps(
-  url: string,
-  init: RequestInit,
-): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    return await fetch(url, {
-      ...init,
-      redirect: "manual",
-      cache: "no-store",
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-}
+type DownloadMode = "drive" | "public";
 
-export async function fetchPublicHttpsPdf(
+async function downloadHttpsPdf(
   startUrl: string,
+  headers: Record<string, string>,
+  mode: DownloadMode,
 ): Promise<SheetPdfResult> {
   let url = startUrl;
-  for (let i = 0; i <= MAX_REDIRECTS; i++) {
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     let parsed: URL;
     try {
       parsed = new URL(url);
     } catch {
-      return fail(400, "invalid_pdf_url", "Sheet PDF URL is invalid.");
+      return fail(400, "invalid_pdf_url");
     }
     if (parsed.protocol !== "https:") {
-      return fail(400, "blocked_url", "Sheet PDF URL must be https.");
+      return fail(400, "blocked_url");
     }
-    if (isBlockedFetchHost(parsed.hostname)) {
-      return fail(400, "blocked_url", "Sheet PDF host is not allowed.");
-    }
-    if (isGoogleLoginHost(parsed.hostname)) {
-      return fail(503, "drive_auth_missing", DRIVE_AUTH_MISSING_MESSAGE, {
-        configured: false,
-      });
+    if (mode === "drive") {
+      if (isGoogleLoginHost(parsed.hostname)) {
+        return fail(503, "drive_auth_rejected", { configured: true });
+      }
+      if (!isAllowedDriveDownloadHost(parsed.hostname)) {
+        return fail(400, "blocked_url");
+      }
+    } else {
+      if (isBlockedFetchHost(parsed.hostname)) return fail(400, "blocked_url");
+      if (isGoogleLoginHost(parsed.hostname)) {
+        return fail(503, "drive_auth_missing", { configured: false });
+      }
     }
 
-    let response: Response;
-    try {
-      response = await fetchHttps(url, {
-        method: "GET",
-        headers: { Accept: "application/pdf,application/octet-stream,*/*" },
-      });
-    } catch (error) {
-      const aborted =
-        error instanceof Error &&
-        (error.name === "AbortError" || /abort/i.test(error.message));
+    const fetched = await fetchWithBoundedRetry(
+      () => ({
+        url,
+        init: {
+          method: "GET",
+          headers,
+          redirect: "manual",
+          cache: "no-store",
+        },
+      }),
+      { consumeBody: (response) => readLimitedBytes(response) },
+    );
+
+    if (!fetched.ok) {
+      const code = fetched.kind === "timeout" ? "timeout" : "upstream_failed";
       return fail(
-        502,
-        aborted ? "upstream_timeout" : "upstream_failed",
-        aborted
-          ? "Timed out fetching the sheet PDF."
-          : "Could not fetch the sheet PDF.",
+        code === "timeout" ? 504 : 502,
+        code,
+        mode === "drive" ? { configured: true } : undefined,
       );
     }
 
+    const response = fetched.response;
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
-      if (!location) {
-        return fail(502, "upstream_failed", "Sheet PDF redirect was empty.");
-      }
+      if (!location) return fail(502, "upstream_failed");
       url = new URL(location, url).toString();
       continue;
     }
 
-    if (response.status === 401 || response.status === 403) {
-      return fail(503, "drive_auth_missing", DRIVE_AUTH_MISSING_MESSAGE, {
-        configured: false,
-      });
-    }
-    if (!response.ok) {
-      return fail(
-        502,
-        "upstream_failed",
-        `Could not fetch the sheet PDF (${response.status}).`,
-      );
+    if (mode === "drive") {
+      if (!response.ok) {
+        const mapped = mapDriveDownloadStatus(response.status);
+        return fail(mapped.httpStatus, mapped.code, { configured: true });
+      }
+    } else if (response.status === 401 || response.status === 403) {
+      return fail(503, "drive_auth_missing", { configured: false });
+    } else if (response.status === 404) {
+      return fail(404, "not_found");
+    } else if (!response.ok) {
+      const mapped = mapDriveDownloadStatus(response.status);
+      const code =
+        mapped.code === "drive_auth_rejected" || mapped.code === "drive_forbidden"
+          ? "upstream_failed"
+          : mapped.code;
+      return fail(mapped.httpStatus, code);
     }
 
-    const bytes = await readLimitedBytes(response);
-    if (bytes === "too_large") {
-      return fail(502, "too_large", "Sheet PDF is larger than 45 MB.");
-    }
+    const bytes = fetched.body;
+    if (!bytes || bytes === "too_large") return fail(502, "too_large");
     const type = (response.headers.get("content-type") ?? "").toLowerCase();
     if (type.includes("text/html") || !isPdfMagic(bytes)) {
-      if (isGoogleDrivePdfUrl(startUrl)) {
-        return fail(503, "drive_auth_missing", DRIVE_AUTH_MISSING_MESSAGE, {
-          configured: false,
-        });
+      if (mode === "public" && isGoogleDrivePdfUrl(startUrl)) {
+        return fail(503, "drive_auth_missing", { configured: false });
       }
-      return fail(502, "not_pdf", "Upstream sheet was not a PDF.");
+      return fail(502, "not_pdf");
     }
     return { ok: true, bytes, filename: "sheet.pdf" };
   }
-  return fail(502, "too_many_redirects", "Sheet PDF had too many redirects.");
+  return fail(502, "too_many_redirects");
 }
 
-async function fetchDriveMedia(input: {
-  fileId: string;
-  authorization?: string;
-  apiKey?: string;
-}): Promise<Response> {
-  const params = new URLSearchParams({
-    alt: "media",
-    supportsAllDrives: "true",
-    acknowledgeAbuse: "true",
-  });
-  if (input.apiKey) params.set("key", input.apiKey);
-  const url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(
-    input.fileId,
-  )}?${params.toString()}`;
-  const headers: Record<string, string> = {
-    Accept: "application/pdf,application/octet-stream,*/*",
-  };
-  if (input.authorization) headers.Authorization = input.authorization;
-  return fetchHttps(url, { method: "GET", headers });
+export async function fetchPublicHttpsPdf(startUrl: string): Promise<SheetPdfResult> {
+  return downloadHttpsPdf(
+    startUrl,
+    { Accept: "application/pdf,application/octet-stream,*/*" },
+    "public",
+  );
 }
 
 export async function fetchDrivePdf(fileId: string): Promise<SheetPdfResult> {
@@ -243,80 +216,35 @@ export async function fetchDrivePdf(fileId: string): Promise<SheetPdfResult> {
       `https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`,
     );
     if (publicAttempt.ok) return publicAttempt;
-    if (publicAttempt.code === "drive_auth_missing") return publicAttempt;
-    return fail(503, "drive_auth_missing", DRIVE_AUTH_MISSING_MESSAGE, {
-      configured: false,
-    });
+    if (PUBLIC_FAILURES_TO_KEEP.has(publicAttempt.code as SheetPdfErrorCode)) {
+      return { ...publicAttempt, configured: false };
+    }
+    return fail(503, "drive_auth_missing", { configured: false });
   }
 
-  let response: Response;
+  const headers: Record<string, string> = {
+    Accept: "application/pdf,application/octet-stream,*/*",
+  };
+  const params = new URLSearchParams({
+    alt: "media",
+    supportsAllDrives: "true",
+    acknowledgeAbuse: "true",
+  });
   try {
     if (auth.kind === "service_account") {
       const token = await getDriveAccessToken(auth.account);
-      response = await fetchDriveMedia({
-        fileId,
-        authorization: `Bearer ${token}`,
-      });
+      headers.Authorization = `Bearer ${token}`;
     } else {
-      response = await fetchDriveMedia({ fileId, apiKey: auth.apiKey });
+      params.set("key", auth.apiKey);
     }
   } catch (error) {
-    const code =
-      error instanceof Error
-        ? (error as Error & { code?: string }).code
-        : undefined;
-    if (code === "drive_auth_rejected") {
-      return fail(
-        503,
-        "drive_auth_rejected",
-        "Google Drive service account was rejected. Check GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON / GOOGLE_PRIVATE_KEY on Vercel.",
-        { configured: true },
-      );
-    }
-    const aborted =
-      error instanceof Error &&
-      (error.name === "AbortError" || /abort/i.test(error.message));
-    return fail(
-      502,
-      aborted ? "upstream_timeout" : "upstream_failed",
-      aborted
-        ? "Timed out fetching the Drive sheet PDF."
-        : "Could not reach Google Drive.",
-    );
+    return failureFromTokenError(error);
   }
 
-  if (response.status === 401) {
-    return fail(
-      503,
-      "drive_auth_rejected",
-      "Google Drive credentials were rejected.",
-      { configured: true },
-    );
-  }
-  if (response.status === 403 || response.status === 404) {
-    return fail(
-      502,
-      "drive_forbidden",
-      "Drive file is missing or not shared with the service account. Share the Procore bot pack folder with GOOGLE_CLIENT_EMAIL (Viewer).",
-      { configured: true },
-    );
-  }
-  if (!response.ok) {
-    return fail(
-      502,
-      "upstream_failed",
-      `Google Drive download failed (${response.status}).`,
-    );
-  }
-
-  const bytes = await readLimitedBytes(response);
-  if (bytes === "too_large") {
-    return fail(502, "too_large", "Sheet PDF is larger than 45 MB.");
-  }
-  if (!isPdfMagic(bytes)) {
-    return fail(502, "not_pdf", "Drive file was not a PDF.");
-  }
-  return { ok: true, bytes, filename: `${fileId}.pdf` };
+  const startUrl = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?${params.toString()}`;
+  const drive = await downloadHttpsPdf(startUrl, headers, "drive");
+  if (!drive.ok) return drive;
+  return { ...drive, filename: `${fileId}.pdf` };
 }
 
 export async function loadSheetPdf(input: {
@@ -325,50 +253,38 @@ export async function loadSheetPdf(input: {
 }): Promise<SheetPdfResult> {
   const live = await loadLiveRoomPack({ requestId: input.requestId });
   if (!live) {
-    return fail(404, "pack_not_found", "Pack not available.");
+    return fail(404, "pack_not_found");
   }
 
   const sheet = live.pack.sheets.find((item) => item.id === input.sheetId);
   if (!sheet) {
-    return fail(404, "sheet_not_found", "Sheet not found in this pack.");
+    return fail(404, "sheet_not_found");
   }
 
   const pdfUrl = resolveSheetPdf(sheet);
   if (!pdfUrl) {
-    return fail(404, "pdf_missing", "No PDF attached for this sheet.");
+    return fail(404, "pdf_missing");
   }
 
   const filename = filenameForSheet(sheet.id);
 
   const local = await readLocalPackPdf(pdfUrl);
   if (local) {
-    if (!isPdfMagic(local)) {
-      return fail(502, "not_pdf", "Local sheet file was not a PDF.");
-    }
+    if (!isPdfMagic(local)) return fail(502, "not_pdf");
     return { ok: true, bytes: local, filename };
   }
 
-  if (isProcorePdfUrl(pdfUrl)) {
-    return fail(
-      502,
-      "procore_pdf_unsupported",
-      "This sheet points at Procore. The Procore bot should store a Google Drive or public/signed PDF URL in sheets[].pdf; the website does not fetch Procore drawings.",
-    );
-  }
+  if (isProcorePdfUrl(pdfUrl)) return fail(502, "procore_pdf_unsupported");
 
   if (isGoogleDrivePdfUrl(pdfUrl)) {
     const fileId = driveFileId(pdfUrl);
-    if (!fileId) {
-      return fail(400, "invalid_pdf_url", "Drive sheet PDF URL is missing a file id.");
-    }
+    if (!fileId) return fail(400, "invalid_pdf_url");
     const drive = await fetchDrivePdf(fileId);
     if (!drive.ok) return drive;
     return { ...drive, filename };
   }
 
-  if (isBrowserDirectPdfUrl(pdfUrl)) {
-    return fail(404, "pdf_missing", "Local sheet PDF was not found.");
-  }
+  if (isBrowserDirectPdfUrl(pdfUrl)) return fail(404, "pdf_missing");
 
   const remote = await fetchPublicHttpsPdf(pdfUrl);
   if (!remote.ok) return remote;

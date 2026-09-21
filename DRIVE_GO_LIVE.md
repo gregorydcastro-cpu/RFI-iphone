@@ -28,15 +28,28 @@ Server-only. **Never** `NEXT_PUBLIC_`. Never commit. Never log the JSON or priva
 
 Use the JSON **or** email+key. Do not put secret values in git.
 
-## 3. Share the Procore bot Drive pack folder (Viewer)
+## 3. Share the Room Packs folder (Viewer)
 
-1. In Drive, open the folder the Procore bot writes pack PDFs into (same folder as the live `A207_N` sheet file).
+1. In Drive, open the Room Packs folder the Procore bot writes pack PDFs into (same folder as the live `A207_N` sheet file).
 2. Share that folder with the service account `client_email` as **Viewer**.
 3. Optional: set `GOOGLE_DRIVE_FOLDER_ID` on Vercel as an ops note.
 
 The website download uses the file id already stored on the pack. Sharing the **folder** (not each file) covers new sheets the bot adds later.
 
-Without keys, the viewer shows the 503 `drive_auth_missing` message instead of a browser **Failed to fetch**. With keys but a file not shared, expect **502** `{ code: "drive_forbidden" }`.
+Without keys, the pack viewer shows a **Drive account missing** banner (large type, Retry) instead of a browser **Failed to fetch**. JSON is **503** `{ code: "drive_auth_missing" }`.
+
+| Code | HTTP | Meaning |
+| --- | --- | --- |
+| `drive_auth_missing` | 503 | `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON` (or email + key) is unset |
+| `drive_auth_rejected` | 503 | Drive rejected that service account |
+| `drive_forbidden` | 502 | File exists for Drive but is not shared with the service account |
+| `not_found` | 404 | Drive has no file for that id (Drive also hides unshared files this way) |
+| `timeout` | 504 | Fetch timed out after one retry |
+| `upstream_failed` | 502 | Drive or the token endpoint returned a transient 5xx / could not be reached, after one retry |
+
+403 share failures and 404s are not retried. Timeouts, 429, and 5xx are retried once. Error JSON uses these codes and fixed sentences. It does not include the service-account JSON, private key, access token, or upstream body.
+
+**Separate from [issue #53](https://github.com/gregorydcastro-cpu/RFI-iphone/issues/53).** `storageKeyValid: false` on `/api/procore/status` is `SUPABASE_SERVICE_ROLE_KEY` (the Supabase **service_role** secret for Procore token storage). Sheet PDFs do not read that key. Set the Drive service account and the Room Packs folder share here; fix #53 on its own.
 
 ## 4. Vercel env (Production / Preview as needed)
 
@@ -79,4 +92,5 @@ With Drive keys unset (Maple Point demo / a host that has not gone live):
 
 - Local `/packs/*.pdf` still streams **200** `application/pdf`.
 - Live Drive sheets return **`drive_auth_missing`** with **HTTP 503**.
-- Pack viewer, Time, Voice, Stripe, and Procore OAuth are unchanged.
+- The pack viewer shows **Drive account missing**, **Sheet not shared**, or **Can't reach the sheet** / **Sheet timed out**, each with a Retry button when a refetch can help.
+- Pack viewer, Time, Voice, Stripe, and Procore OAuth are unchanged. Issue #53 (`SUPABASE_SERVICE_ROLE_KEY`) is a different secret.

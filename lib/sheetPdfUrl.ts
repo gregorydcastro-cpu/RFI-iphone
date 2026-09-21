@@ -63,6 +63,23 @@ export function isGoogleLoginHost(hostname: string): boolean {
   return host === "accounts.google.com" || host.endsWith(".accounts.google.com");
 }
 
+/** Hosts a Drive media download may redirect to. Login and token hosts are excluded. */
+export function isAllowedDriveDownloadHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/\.+$/, "");
+  if (!host || isBlockedFetchHost(host) || isGoogleLoginHost(host)) return false;
+  if (host === "oauth2.googleapis.com" || host.startsWith("oauth2.")) return false;
+  if (
+    host === "www.googleapis.com" ||
+    host === "googleapis.com" ||
+    host === "drive.google.com" ||
+    host === "docs.google.com" ||
+    host === "drive.usercontent.google.com"
+  ) {
+    return true;
+  }
+  return host.endsWith(".googleapis.com") || host.endsWith(".googleusercontent.com");
+}
+
 export function isPdfMagic(bytes: Uint8Array): boolean {
   return (
     bytes.length >= 5 &&
