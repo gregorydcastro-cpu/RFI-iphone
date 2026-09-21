@@ -3,6 +3,7 @@
 import { type ChangeEvent, type FormEvent, useMemo, useState } from "react";
 import { DictationButton } from "@/components/DictationButton";
 import { DraftToForemanSuccess } from "@/components/DraftToForemanSuccess";
+import { MarkupSaveChip } from "@/components/MarkupSaveChip";
 import { ReadAloudButton } from "@/components/ReadAloudButton";
 import { VoiceSetupNote } from "@/components/VoiceSetupNote";
 import { DEMO_FOREMAN, DEMO_JOURNEYMAN } from "@/lib/crew";
@@ -41,6 +42,7 @@ type Props = {
   initialQuestion?: string;
   initialLocation?: string;
   markupKindQuery?: string;
+  markupSaveFailed?: boolean;
   authorName: string;
   authorEmail: string;
 };
@@ -55,6 +57,7 @@ export function GenerateRfiForm({
   initialQuestion,
   initialLocation,
   markupKindQuery,
+  markupSaveFailed = false,
   authorName,
   authorEmail,
 }: Props) {
@@ -80,6 +83,7 @@ export function GenerateRfiForm({
   const [pending, setPending] = useState(false);
   const [saved, setSaved] = useState<RfiDraftPacket | null>(null);
 
+  const fromMarkup = Boolean(markupQuery || markupKindQuery);
   const selectedSheet =
     sheets.find((sheet) => sheet.id === sheetId) ?? initialSheet;
   const pin = selectedSheet
@@ -328,7 +332,7 @@ export function GenerateRfiForm({
         </span>
       </p>
 
-      {markupQuery || markupKindQuery ? (
+      {fromMarkup ? (
         <div className="border border-cta/50 bg-ink p-3 text-sm text-muted">
           <p className="font-semibold tracking-wide text-cta uppercase">
             From sheet markup
@@ -344,6 +348,30 @@ export function GenerateRfiForm({
             )}{" "}
             on {pin}. Vector overlay stays attached to this draft.
           </p>
+          {markupSaveFailed ? (
+            <div className="mt-2">
+              <MarkupSaveChip
+                chip={{ label: "Couldn't save", tone: "failed" }}
+                detail="Kept on this device. Draft still goes to the foreman."
+              />
+            </div>
+          ) : null}
+          {photos.some((photo) => photo.dataUrl) ? (
+            <ul className="mt-2 flex flex-wrap gap-2" aria-label="Photo preview">
+              {photos.map((photo) =>
+                photo.dataUrl ? (
+                  <li key={`${photo.name}-${photo.size}`}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={photo.dataUrl}
+                      alt={photo.name}
+                      className="h-16 w-16 border border-line object-cover"
+                    />
+                  </li>
+                ) : null,
+              )}
+            </ul>
+          ) : null}
         </div>
       ) : null}
 
