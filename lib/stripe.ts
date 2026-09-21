@@ -8,7 +8,7 @@
  */
 
 import Stripe from "stripe";
-import { readEnv } from "./env";
+import { readEnv } from "./env.ts";
 
 export const STRIPE_TRIAL_PERIOD_DAYS = 60;
 export const DEFAULT_APP_ORIGIN = "https://www.gcfieldlog.com";
