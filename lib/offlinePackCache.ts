@@ -180,7 +180,7 @@ export function buildOfflinePackSnapshot(input: {
     projectId: sanitizeOfflineKeyPart(lookup.projectId),
     requestId: lookup.requestId,
     roomId: sanitizeOfflineKeyPart(lookup.roomId),
-    revisionStamp: lookup.revisionStamp,
+    revisionStamp: lookup.revisionStamp ?? null,
     cachedAt,
     dayKey: packCalendarDayKey(cachedAt),
     pack: input.pack,
