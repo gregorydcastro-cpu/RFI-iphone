@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useEffect,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -12,6 +13,7 @@ import {
   createMarkupFromGesture,
   createTextMarkup,
   findMarkupAt,
+  type MarkupTextNote,
   type MarkupTool,
   type MarkupVector,
   type Point,
@@ -21,6 +23,10 @@ type DraftShape =
   | { kind: "box" | "circle" | "arrow"; start: Point; end: Point }
   | { kind: "text"; point: Point };
 
+type NoteEditor =
+  | { mode: "create"; point: Point; text: string }
+  | { mode: "edit"; id: string; point: Point; text: string };
+
 type Props = {
   items: MarkupVector[];
   selectedId: string | null;
@@ -28,6 +34,7 @@ type Props = {
   aspect: number;
   onSelect: (id: string | null) => void;
   onAdd: (item: MarkupVector) => void;
+  onUpdateText?: (id: string, text: string) => void;
 };
 
 export function MarkupOverlay({
@@ -37,12 +44,50 @@ export function MarkupOverlay({
   aspect,
   onSelect,
   onAdd,
+  onUpdateText,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [draft, setDraft] = useState<DraftShape | null>(null);
-  const [notePoint, setNotePoint] = useState<Point | null>(null);
-  const [noteText, setNoteText] = useState("");
+  const [editor, setEditor] = useState<NoteEditor | null>(null);
+  const [seenTool, setSeenTool] = useState(tool);
   const drawing = tool !== "pan";
+
+  if (tool !== seenTool) {
+    setSeenTool(tool);
+    setDraft(null);
+    setEditor(null);
+  } else if (
+    editor?.mode === "edit" &&
+    !items.some((item) => item.id === editor.id && item.kind === "text")
+  ) {
+    setEditor(null);
+  }
+
+  const cancelGesture = useCallback(() => {
+    setDraft(null);
+    setEditor(null);
+  }, []);
+
+  useEffect(() => {
+    if (!draft && !editor) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      cancelGesture();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [cancelGesture, draft, editor]);
+
+  function beginEdit(item: MarkupTextNote) {
+    setDraft(null);
+    setEditor({
+      mode: "edit",
+      id: item.id,
+      point: { x: item.x, y: item.y },
+      text: item.text,
+    });
+  }
 
   const toPoint = useCallback((event: ReactPointerEvent<SVGSVGElement>): Point => {
     const svg = svgRef.current;
@@ -62,14 +107,18 @@ export function MarkupOverlay({
     if (tool === "pan") {
       const hit = findMarkupAt(items, point.x, point.y, aspect);
       onSelect(hit?.id ?? null);
+      if (hit?.kind === "text" && onUpdateText) beginEdit(hit);
+      else setEditor(null);
       return;
     }
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     if (tool === "text") {
+      setEditor(null);
       setDraft({ kind: "text", point });
       return;
     }
+    setEditor(null);
     setDraft({ kind: tool, start: point, end: point });
     onSelect(null);
   }
@@ -91,8 +140,7 @@ export function MarkupOverlay({
     }
     const point = toPoint(event);
     if (draft.kind === "text") {
-      setNotePoint(draft.point);
-      setNoteText("");
+      setEditor({ mode: "create", point: draft.point, text: "" });
       setDraft(null);
       return;
     }
@@ -110,12 +158,17 @@ export function MarkupOverlay({
   }
 
   function commitNote() {
-    if (!notePoint) return;
-    const item = createTextMarkup({ point: notePoint, text: noteText });
+    if (!editor) return;
+    if (editor.mode === "edit") {
+      onUpdateText?.(editor.id, editor.text);
+      onSelect(editor.id);
+      setEditor(null);
+      return;
+    }
+    const item = createTextMarkup({ point: editor.point, text: editor.text });
     onAdd(item);
     onSelect(item.id);
-    setNotePoint(null);
-    setNoteText("");
+    setEditor(null);
   }
 
   const activeDraft =
@@ -128,7 +181,12 @@ export function MarkupOverlay({
     activeDraft && activeDraft.kind !== "text"
       ? previewItem(activeDraft, aspect)
       : null;
-  const activeNote = tool === "text" ? notePoint : null;
+  const activeEditor =
+    editor &&
+    ((editor.mode === "edit" && tool === "pan") ||
+      (editor.mode === "create" && tool === "text"))
+      ? editor
+      : null;
 
   return (
     <>
@@ -142,7 +200,7 @@ export function MarkupOverlay({
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerCancel={() => setDraft(null)}
+        onPointerCancel={cancelGesture}
         aria-label="Sheet markup overlay"
       >
         {items.map((item) => (
@@ -152,42 +210,57 @@ export function MarkupOverlay({
             aspect={aspect}
             selected={item.id === selectedId}
             interactive={!drawing}
-            onSelect={() => onSelect(item.id)}
+            onSelect={() => {
+              onSelect(item.id);
+              if (item.kind === "text" && tool === "pan" && onUpdateText) {
+                beginEdit(item);
+                return;
+              }
+              if (editor) setEditor(null);
+            }}
           />
         ))}
         {preview ? (
           <MarkupShape item={preview} aspect={aspect} selected preview />
         ) : null}
       </svg>
-      {activeNote ? (
+      {activeEditor ? (
         <form
           className="absolute right-2 bottom-14 left-2 z-30 flex gap-2 border border-cta bg-gline-ink/95 p-2"
           onSubmit={(event) => {
             event.preventDefault();
             commitNote();
           }}
+          onKeyDown={(event) => {
+            if (event.key !== "Escape") return;
+            event.preventDefault();
+            event.stopPropagation();
+            cancelGesture();
+          }}
         >
           <input
             autoFocus
-            value={noteText}
-            onChange={(event) => setNoteText(event.target.value)}
+            value={activeEditor.text}
+            onChange={(event) => {
+              const text = event.target.value;
+              setEditor((current) => (current ? { ...current, text } : current));
+            }}
             placeholder="Text note on this sheet"
             className="min-h-12 flex-1 border border-line bg-ink px-3 text-base text-paper outline-none focus:border-cta"
-            aria-label="Markup text note"
+            aria-label={
+              activeEditor.mode === "edit" ? "Edit markup text note" : "Markup text note"
+            }
           />
           <button
             type="submit"
             className="min-h-12 bg-cta px-3 text-xs font-semibold tracking-wide text-secondary uppercase"
           >
-            Place
+            {activeEditor.mode === "edit" ? "Save" : "Place"}
           </button>
           <button
             type="button"
             className="min-h-12 border border-line px-3 text-xs font-semibold tracking-wide text-tan uppercase"
-            onClick={() => {
-              setNotePoint(null);
-              setNoteText("");
-            }}
+            onClick={cancelGesture}
           >
             Cancel
           </button>
