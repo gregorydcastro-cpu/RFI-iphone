@@ -3,13 +3,18 @@ import { test } from "node:test";
 import {
   asMarkupVector,
   buildMarkupRfiPrefill,
+  clearAllMarkups,
   createMarkupFromGesture,
   createTextMarkup,
   findMarkupAt,
+  foremanDraftStillAllowed,
   hitTestMarkup,
+  markupSaveChip,
   markupStorageKey,
   parseVectors,
   prefillRfiFromMarkup,
+  undoLastMarkup,
+  updateTextMarkup,
 } from "./markup.ts";
 
 const forbidden = /Brown|Rossi|Danoff|Suffolk|ILSB|EL107/i;
@@ -134,4 +139,91 @@ test("RFI prefill uses Maple Point sheet pin and never names real clients", () =
   assert.match(boxed.subject, /Electrical Closet 101/);
   assert.equal(boxed.kind, "box");
   assert.doesNotMatch(JSON.stringify(boxed), forbidden);
+});
+
+test("undoLastMarkup drops the newest vector and clearAllMarkups wipes the sheet", () => {
+  const items = [
+    { id: "a", kind: "box" as const, x: 0.1, y: 0.1, w: 0.2, h: 0.2 },
+    { id: "b", kind: "arrow" as const, x1: 0.1, y1: 0.1, x2: 0.4, y2: 0.2 },
+    createTextMarkup({ point: { x: 0.2, y: 0.3 }, text: "Check panel", id: "c" }),
+  ];
+  const undone = undoLastMarkup(items);
+  assert.equal(undone.length, 2);
+  assert.equal(undone[0]?.id, "a");
+  assert.equal(undone[1]?.id, "b");
+  assert.equal(items.length, 3);
+  assert.deepEqual(undoLastMarkup([]), []);
+
+  const cleared = clearAllMarkups(items);
+  assert.deepEqual(cleared, []);
+  assert.equal(items.length, 3);
+  const empty: typeof items = [];
+  assert.equal(clearAllMarkups(empty), empty);
+  assert.equal(undoLastMarkup(empty), empty);
+});
+
+test("updateTextMarkup rewrites the tapped note and leaves other vectors", () => {
+  const note = createTextMarkup({
+    point: { x: 0.2, y: 0.3 },
+    text: "Old note",
+    id: "note-1",
+  });
+  const box = { id: "box-1", kind: "box" as const, x: 0.1, y: 0.1, w: 0.2, h: 0.2 };
+  const source = [box, note];
+  const next = updateTextMarkup(source, "note-1", "  Panel feed unclear  ");
+  assert.equal(next[0], box);
+  assert.equal(next[1]?.id, "note-1");
+  assert.equal(next[1]?.kind, "text");
+  if (next[1]?.kind === "text") {
+    assert.equal(next[1].text, "Panel feed unclear");
+    assert.equal(next[1].x, note.x);
+    assert.equal(next[1].y, note.y);
+  }
+  assert.equal(updateTextMarkup(source, "missing", "Nope"), source);
+  assert.equal(updateTextMarkup(source, "note-1", "Old note"), source);
+  assert.equal(source[1], note);
+  assert.doesNotMatch(JSON.stringify(next), forbidden);
+});
+
+test("markupSaveChip maps storage and in-flight persist", () => {
+  assert.deepEqual(markupSaveChip({ storage: "supabase", saving: true }), {
+    label: "Saving…",
+    tone: "saving",
+  });
+  assert.deepEqual(
+    markupSaveChip({ storage: "local", saving: true, persistFailed: true }),
+    { label: "Saving…", tone: "saving" },
+  );
+  assert.deepEqual(markupSaveChip({ storage: "supabase", saving: false }), {
+    label: "Saved",
+    tone: "saved",
+  });
+  assert.deepEqual(markupSaveChip({ storage: "unconfigured", saving: false }), {
+    label: "Local only",
+    tone: "local",
+  });
+  assert.deepEqual(markupSaveChip({ storage: "local", saving: false }), {
+    label: "Local only",
+    tone: "local",
+  });
+  assert.deepEqual(markupSaveChip({ storage: "unavailable", saving: false }), {
+    label: "Couldn't save",
+    tone: "failed",
+  });
+  assert.deepEqual(
+    markupSaveChip({ storage: "local", saving: false, persistFailed: true }),
+    { label: "Couldn't save", tone: "failed" },
+  );
+  assert.equal(
+    foremanDraftStillAllowed({ selected: true, persistFailed: true }),
+    true,
+  );
+  assert.equal(
+    foremanDraftStillAllowed({ selected: false, persistFailed: true }),
+    false,
+  );
+  assert.equal(
+    foremanDraftStillAllowed({ selected: true, persistFailed: false }),
+    true,
+  );
 });

@@ -206,6 +206,8 @@ Hands-in-gloves markup on the pack viewer. Vectors stay as SVG/JSON — **not** 
 6. Optional: **Take photo** (camera) or **Choose photo**. The image is stored as a data URL on the draft — not uploaded to Procore.
 7. **Send draft to Pat Nguyen**.
 
+**Undo last** drops the newest vector. **Clear all** confirms, then wipes the sheet. The toolbar save chip reads **Saving…** while a write is in flight, **Saved** when it lands in Supabase, **Local only** when the service role is absent, and **Couldn't save** when the cloud write failed. A failed save stays on this device and **Create RFI** still opens the foreman draft. With Pan on, tap a note to edit it. Escape cancels a draft shape or the note form. A phone photo attached on that draft shows a small preview; the camera input stays `capture="environment"`.
+
 Markups persist to Supabase `public.markup_overlays` (`request_id`, `sheet_id`, `vectors` jsonb, `user_id` = `auth.uid()`, `updated_at`) via service-role `/api/markups` — same write path as `rfis` / `procore_connections`. Schema is on main ([PR #9](https://github.com/gregorydcastro-cpu/RFI-iphone/pull/9)): `supabase/migrations/20260918020000_share_markup_rfi_trial.sql` plus `20260918130000_rfis_markup_overlay_fk.sql`. Auth overlay: `20260919220000_supabase_auth_profiles.sql`. Types: `lib/schema.ts`. **localStorage** (`gcfieldlog.markup:request_id:sheet_id`) is only the offline/demo fallback when `SUPABASE_SERVICE_ROLE_KEY` is missing.
 
 The RFI row’s optional `markup_id` points at the overlay. The draft packet also keeps a vector snapshot + sheet id/rev. Trial-link gating stays later. Weekly rev-only re-pull is `GET`/`POST /api/share/weekly-refresh`. A persisted bump emails the folder owner's `notify_email` when set.
