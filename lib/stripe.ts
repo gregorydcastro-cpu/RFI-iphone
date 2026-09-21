@@ -2,13 +2,18 @@
  * Server-only Stripe helpers. Secret keys stay on the server.
  * NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is Dashboard-only for this PR
  * (hosted Checkout does not need Stripe.js).
+ *
+ * Register the production webhook on www — Stripe does not follow
+ * redirects, and apex gcfieldlog.com may 308 to www.
  */
 
 import Stripe from "stripe";
 import { readEnv } from "./env";
 
 export const STRIPE_TRIAL_PERIOD_DAYS = 60;
-export const DEFAULT_APP_ORIGIN = "https://gcfieldlog.com";
+export const DEFAULT_APP_ORIGIN = "https://www.gcfieldlog.com";
+export const STRIPE_WEBHOOK_PATH = "/api/stripe/webhook";
+export const STRIPE_PRODUCTION_WEBHOOK_URL = `${DEFAULT_APP_ORIGIN}${STRIPE_WEBHOOK_PATH}`;
 
 export type StripeCheckoutConfig = {
   secretKey: string;
@@ -60,9 +65,9 @@ export function getStripe(): Stripe | null {
 }
 
 /**
- * success_url / cancel_url host. Production is always gcfieldlog.com.
- * Localhost and Vercel previews use the incoming request origin so
- * Checkout can return to the same host.
+ * success_url / cancel_url host. Production is always www.gcfieldlog.com
+ * (apex may 308 to www). Localhost and Vercel previews use the incoming
+ * request origin so Checkout can return to the same host.
  */
 export function checkoutReturnOrigin(request: Request): string {
   try {

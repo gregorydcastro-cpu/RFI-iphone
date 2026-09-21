@@ -58,9 +58,9 @@ export function SubscribeCta({ configured, defaultEmail = "" }: Props) {
       </label>
       {!configured ? (
         <p className="text-sm text-cta">
-          Billing is not configured on this host. Set{" "}
+          Stripe keys are missing on Vercel. Set{" "}
           <code className="font-mono">STRIPE_SECRET_KEY</code> and{" "}
-          <code className="font-mono">STRIPE_PRICE_ID</code> on Vercel
+          <code className="font-mono">STRIPE_PRICE_ID</code> on Production
           (server-only).
         </p>
       ) : null}
@@ -83,7 +83,7 @@ export function SubscribeCta({ configured, defaultEmail = "" }: Props) {
 function checkoutErrorMessage(code: string | undefined): string {
   switch (code) {
     case "billing_unconfigured":
-      return "Stripe is not configured on this host yet.";
+      return "Stripe keys are missing on Vercel. Checkout cannot start until they are set.";
     case "checkout_failed":
     case "checkout_url_missing":
       return "Stripe Checkout could not start. Check the Price ID and secret key.";

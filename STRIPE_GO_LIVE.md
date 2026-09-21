@@ -1,8 +1,21 @@
 # Stripe go-live checklist (Greg)
 
-Operator steps to take **GC Field Log** Checkout live on [gcfieldlog.com](https://gcfieldlog.com). Maple Point local demos do **not** need these keys. Do not put secret values in git.
+Operator steps to take **GC Field Log** Checkout live on [www.gcfieldlog.com](https://www.gcfieldlog.com) (issue [#26](https://github.com/gregorydcastro-cpu/RFI-iphone/issues/26)). Maple Point local demos do **not** need these keys. Do not put secret values in git.
 
-Without `STRIPE_SECRET_KEY` + `STRIPE_PRICE_ID`, `POST /api/stripe/checkout` returns `{ ok: false, error: "billing_unconfigured" }` with **503**. `/pricing` still renders.
+Without `STRIPE_SECRET_KEY` + `STRIPE_PRICE_ID`, `POST /api/stripe/checkout` returns `{ ok: false, error: "billing_unconfigured" }` with **503**. `/pricing` still renders. That 503 means **Vercel Production is missing Stripe keys**, not a host allowlist.
+
+## When keys arrive
+
+1. Product + recurring Price → Vercel `STRIPE_PRICE_ID`
+2. `STRIPE_SECRET_KEY` + `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (test keys first, then live)
+3. Payment method domains: `gcfieldlog.com`, `www.gcfieldlog.com` (+ `localhost` for test)
+4. Enable Cards (Apple Pay / Google Pay wallets follow). PayPal if the account country supports it.
+5. Webhook URL **`https://www.gcfieldlog.com/api/stripe/webhook`** — **www, not apex** (apex may 308; Stripe does not follow redirects)
+6. Events: `checkout.session.completed`, `customer.subscription.updated`, `invoice.paid`
+7. Signing secret → Vercel `STRIPE_WEBHOOK_SECRET`
+8. Confirm `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` on Production (`billing_customers` is already live on gc-field-log)
+9. **Redeploy Production** after saving env
+10. `POST /api/stripe/checkout` is no longer `billing_unconfigured` 503; complete a test Checkout, then switch to live keys + a live webhook endpoint
 
 ## 1. Product + recurring Price → `STRIPE_PRICE_ID`
 
@@ -38,8 +51,10 @@ On the same Payment methods page, enable **PayPal** if Stripe supports it for th
 ## 5. Webhook → `STRIPE_WEBHOOK_SECRET`
 
 1. [Webhooks](https://dashboard.stripe.com/webhooks) → **Add endpoint**.
-2. Endpoint URL: **`https://gcfieldlog.com/api/stripe/webhook`**
+2. Endpoint URL: **`https://www.gcfieldlog.com/api/stripe/webhook`**
+   - Use **www**, not apex. Stripe does not follow redirects; `https://gcfieldlog.com/api/stripe/webhook` may **308** to www and delivery will fail.
    - Preview hosts: `{preview-url}/api/stripe/webhook`
+   - Test vs live: create the endpoint in the **same Dashboard mode** as the secret key. Live keys need a separate live endpoint and a new `whsec_…`.
 3. Events (at least):
    - `checkout.session.completed`
    - `customer.subscription.updated`
@@ -59,7 +74,7 @@ Without `STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK_SECRET`, the webhook route also r
 | `SUPABASE_URL` | Same project as `room_packs` / `procore_connections` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Webhook upserts `public.billing_customers`. Anon key must **not** write this table. |
 
-Never commit these values.
+Never commit these values. After saving Production env, **Redeploy** so Checkout and the webhook pick up the keys.
 
 ## 7. Apply the `billing_customers` migration
 
@@ -67,11 +82,11 @@ On the gc-field-log Supabase project, apply:
 
 `supabase/migrations/20260918120000_billing_customers.sql`
 
-That creates `public.billing_customers` (RLS on; anon has no grants; service role upserts). The webhook cannot persist rows until this SQL has run.
+That creates `public.billing_customers` (RLS on; anon has no grants; service role upserts). The webhook cannot persist rows until this SQL has run. **Already applied** on gc-field-log — re-run only if a new project needs the table.
 
 ## 8. Confirm unconfigured behavior
 
-With keys unset (Maple Point demo / a host that has not gone live):
+With keys unset (Maple Point demo / Vercel Production before Stripe env is set):
 
 - `/pricing` still renders.
 - `POST /api/stripe/checkout` returns **`billing_unconfigured`** with **HTTP 503**.
