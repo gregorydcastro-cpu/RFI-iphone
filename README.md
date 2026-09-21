@@ -455,7 +455,9 @@ The website resolves a sheet PDF as: non-empty same-origin or absolute `pdf` fir
 1. Google Cloud → create a service account with no extra roles required beyond Drive file access via sharing.
 2. Paste the JSON into Vercel **`GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`** (Production; Preview if you test live packs there). Never `NEXT_PUBLIC_`. Never commit.
 3. In Drive, share the folder the Procore bot writes pack PDFs into with that `client_email` as **Viewer** (same folder as the `A207_N` / lighting sheet files). Optional: set `GOOGLE_DRIVE_FOLDER_ID` to that folder id as an ops reminder — the download uses the file id already in `sheets[].pdf`.
-4. Without these keys, the viewer shows the 503 message instead of **Failed to fetch**. With keys but a file not shared, expect **502** `{ code: "drive_forbidden" }`.
+4. Without these keys, the viewer shows a field-crew banner (Drive is not configured) instead of a raw **Failed to fetch**. With keys but a file not shared, expect **502** `{ code: "drive_forbidden" }`.
+
+**Field viewer:** `SheetViewer` reads `{ code, configured, error }` from a failed `/api/sheet-pdf` JSON body. Crew copy covers Drive not configured, Drive forbidden / folder not shared, sheet not in the pack, timeout, not a PDF, and network. Network drops and transient upstream 5xx (`upstream_timeout`, `upstream_failed`, including HTTP 408/504) retry automatically twice (400ms, then 900ms) before that banner. The banner has a glove-sized **Retry**. If the pack or sheet PDF is missing, the banner tells the crew to connect Procore as a puller, and that ops may need a valid `SUPABASE_SERVICE_ROLE_KEY` ([issue #53](https://github.com/gregorydcastro-cpu/RFI-iphone/issues/53)) before tokens can be stored. The viewer never prints that secret. A working Drive service account still streams `application/pdf` with no extra client step.
 
 ```bash
 # Missing requestId/sheetId

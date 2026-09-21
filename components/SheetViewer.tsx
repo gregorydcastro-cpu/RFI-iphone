@@ -24,6 +24,14 @@ import {
   type MarkupVector,
 } from "@/lib/markup";
 import type { Layout } from "@/lib/pack";
+import {
+  fetchSheetPdfBytes,
+  isSheetPdfAbortError,
+  SHEET_PDF_RENDER_FAILURE,
+  sheetPdfCrewMessage,
+  SheetPdfLoadError,
+  type SheetPdfCrewCopy,
+} from "@/lib/sheetPdfFailure";
 import { MarkupOverlay } from "./MarkupOverlay";
 import { MarkupToolbar } from "./MarkupToolbar";
 import { useMarkupOverlay } from "./useMarkupOverlay";
@@ -56,7 +64,9 @@ export function SheetViewer({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const transformRef = useRef<ReactZoomPanPinchContentRef>(null);
   const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<SheetPdfCrewCopy | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
   const [aspect, setAspect] = useState(1224 / 792);
   const [pagePts, setPagePts] = useState<{ width: number; height: number }>();
   const [tool, setTool] = useState<MarkupTool>("pan");
@@ -83,31 +93,16 @@ export function SheetViewer({
 
     async function render() {
       setReady(false);
-      setError(null);
-      const response = await fetch(pdfUrl, {
+      setFailure(null);
+      setRetrying(false);
+      const bytes = await fetchSheetPdfBytes({
+        url: pdfUrl,
         signal: abort.signal,
-        credentials: "same-origin",
+        onRetry: () => {
+          if (!cancelled) setRetrying(true);
+        },
       });
-      if (!response.ok) {
-        const type = response.headers.get("content-type") ?? "";
-        if (type.includes("application/json")) {
-          const body = (await response.json()) as { error?: string };
-          throw new Error(
-            body.error?.trim() || `Could not load sheet (${response.status})`,
-          );
-        }
-        throw new Error(`Could not load sheet (${response.status})`);
-      }
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      if (
-        bytes.byteLength < 5 ||
-        bytes[0] !== 0x25 ||
-        bytes[1] !== 0x50 ||
-        bytes[2] !== 0x44 ||
-        bytes[3] !== 0x46
-      ) {
-        throw new Error("Sheet response was not a PDF");
-      }
+      if (cancelled) return;
       const pdfjs = await import("pdfjs-dist");
       pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
       const loadingTask = pdfjs.getDocument({ data: bytes });
@@ -124,25 +119,35 @@ export function SheetViewer({
       await page.render({ canvas, viewport }).promise;
       if (!cancelled) {
         setReady(true);
+        setRetrying(false);
         transformRef.current?.resetTransform();
       }
     }
 
     void render().catch((err: unknown) => {
-      if (cancelled) return;
-      if (err instanceof DOMException && err.name === "AbortError") return;
-      if (err instanceof Error && err.name === "AbortError") return;
-      setReady(true);
-      setError(err instanceof Error ? err.message : "Could not render sheet");
+      if (cancelled || isSheetPdfAbortError(err)) return;
+      setReady(false);
+      setRetrying(false);
+      if (err instanceof SheetPdfLoadError) {
+        setFailure(err.copy);
+        return;
+      }
+      setFailure(SHEET_PDF_RENDER_FAILURE);
     });
 
     return () => {
       cancelled = true;
       abort.abort();
     };
-  }, [pdfUrl]);
+  }, [pdfUrl, reloadToken]);
 
   const missingPdf = !pdfUrl;
+  const missingCopy = sheetPdfCrewMessage({
+    code: "pdf_missing",
+    status: 404,
+    network: false,
+  });
+  const banner = missingPdf ? missingCopy : failure;
   const selected: MarkupVector | null =
     markup.items.find((item) => item.id === selectedId) ?? null;
   const drawing = tool !== "pan";
@@ -323,14 +328,33 @@ export function SheetViewer({
                 ? "Markup selected · Create RFI sends a draft to the foreman"
                 : "Pinch or +/− to zoom · drag to pan · tap a note to edit"}
       </p>
-      {!ready && !error && !missingPdf ? (
+      {!ready && !banner && !missingPdf ? (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-charcoal/80 text-sm text-muted">
-          Loading sheet…
+          {retrying ? "Retrying sheet…" : "Loading sheet…"}
         </div>
       ) : null}
-      {error || missingPdf ? (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-ink/80 px-4 py-2 text-center text-xs text-accent">
-          {missingPdf ? "No PDF attached for this sheet" : error}
+      {banner ? (
+        <div className="absolute inset-0 z-30 flex items-center justify-center overflow-y-auto bg-ink/92 px-4 py-4">
+          <div
+            role="alert"
+            className="w-full max-w-md border border-cta/60 bg-ink px-4 py-4 text-center"
+          >
+            <p className="text-base font-semibold text-cta">{banner.message}</p>
+            {banner.detail ? (
+              <p className="mt-2 text-sm leading-relaxed text-paper">
+                {banner.detail}
+              </p>
+            ) : null}
+            {pdfUrl ? (
+              <button
+                type="button"
+                className="mt-4 inline-flex min-h-14 min-w-36 items-center justify-center border border-cta bg-cta px-6 text-base font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover"
+                onClick={() => setReloadToken((token) => token + 1)}
+              >
+                Retry
+              </button>
+            ) : null}
+          </div>
         </div>
       ) : null}
     </div>

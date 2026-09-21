@@ -13,6 +13,7 @@ import {
 } from "./driveAuth";
 import { loadLiveRoomPack } from "./livePack";
 import { driveFileId, resolveSheetPdf } from "./packNormalize";
+import { classifyUpstreamHttpStatus } from "./sheetPdfFailure";
 import {
   isBlockedFetchHost,
   isBrowserDirectPdfUrl,
@@ -190,10 +191,13 @@ export async function fetchPublicHttpsPdf(
       });
     }
     if (!response.ok) {
+      const code = classifyUpstreamHttpStatus(response.status);
       return fail(
         502,
-        "upstream_failed",
-        `Could not fetch the sheet PDF (${response.status}).`,
+        code,
+        code === "upstream_timeout"
+          ? "Timed out fetching the sheet PDF."
+          : `Could not fetch the sheet PDF (${response.status}).`,
       );
     }
 
@@ -302,10 +306,13 @@ export async function fetchDrivePdf(fileId: string): Promise<SheetPdfResult> {
     );
   }
   if (!response.ok) {
+    const code = classifyUpstreamHttpStatus(response.status);
     return fail(
       502,
-      "upstream_failed",
-      `Google Drive download failed (${response.status}).`,
+      code,
+      code === "upstream_timeout"
+        ? "Timed out fetching the Drive sheet PDF."
+        : `Google Drive download failed (${response.status}).`,
     );
   }
 
