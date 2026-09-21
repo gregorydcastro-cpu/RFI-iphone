@@ -38,6 +38,45 @@ export const MARKUP_RFI_PREFILL_KEY = "gcfieldlog.markup_rfi_prefill";
 
 export type MarkupTool = "pan" | MarkupKind;
 
+/** Where the latest overlay write landed. Mirrors `/api/markups` `storage`. */
+export type MarkupStorageKind = "supabase" | "local" | "unconfigured" | "unavailable";
+
+export type MarkupSaveChipTone = "saving" | "saved" | "local" | "failed";
+
+export type MarkupSaveChip = {
+  label: "Saving…" | "Saved" | "Local only" | "Couldn't save";
+  tone: MarkupSaveChipTone;
+};
+
+/**
+ * Toolbar chip. In-flight wins. A failed cloud write (or `unavailable`)
+ * is "Couldn't save" even when a local copy exists. Supabase success is
+ * "Saved". Missing service role / device fallback is "Local only".
+ */
+export function markupSaveChip(input: {
+  storage: MarkupStorageKind;
+  saving: boolean;
+  persistFailed?: boolean;
+}): MarkupSaveChip {
+  if (input.saving) return { label: "Saving…", tone: "saving" };
+  if (input.persistFailed || input.storage === "unavailable") {
+    return { label: "Couldn't save", tone: "failed" };
+  }
+  if (input.storage === "supabase") return { label: "Saved", tone: "saved" };
+  return { label: "Local only", tone: "local" };
+}
+
+/**
+ * Cloud failure must not block the foreman draft.
+ * `persistFailed` is part of the call so the save result is explicit at the gate.
+ */
+export function foremanDraftStillAllowed(input: {
+  selected: boolean;
+  persistFailed: boolean;
+}): boolean {
+  return input.selected && typeof input.persistFailed === "boolean";
+}
+
 export type Point = { x: number; y: number };
 
 /** Client overlay row. Same columns as `MarkupOverlayRow`; timestamps optional until saved. */
@@ -325,6 +364,34 @@ export function createTextMarkup(input: {
     y: clamp01(input.point.y),
     text: input.text.trim(),
   };
+}
+
+/** Drop the newest vector. Empty overlays stay empty. Does not mutate `items`. */
+export function undoLastMarkup(items: MarkupVector[]): MarkupVector[] {
+  if (items.length === 0) return items;
+  return items.slice(0, -1);
+}
+
+/** Wipe every vector on the sheet. Does not mutate `items`. */
+export function clearAllMarkups(items: MarkupVector[]): MarkupVector[] {
+  if (items.length === 0) return items;
+  return [];
+}
+
+/** Replace the text of one note. Other vectors and unknown ids stay put. */
+export function updateTextMarkup(
+  items: MarkupVector[],
+  id: string,
+  text: string,
+): MarkupVector[] {
+  const nextText = text.trim();
+  let changed = false;
+  const next = items.map((item) => {
+    if (item.id !== id || item.kind !== "text" || item.text === nextText) return item;
+    changed = true;
+    return { ...item, text: nextText };
+  });
+  return changed ? next : items;
 }
 
 export function hitTestMarkup(

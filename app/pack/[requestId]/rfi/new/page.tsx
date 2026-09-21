@@ -20,6 +20,7 @@ type Props = {
     question?: string;
     location?: string;
     kind?: string;
+    markupSave?: string;
   }>;
 };
 
@@ -65,6 +66,7 @@ export default async function NewRfiPage({ params, searchParams }: Props) {
           initialQuestion={query.question}
           initialLocation={query.location}
           markupKindQuery={query.kind}
+          markupSaveFailed={query.markupSave === "failed"}
           authorName={author.name}
           authorEmail={author.email}
         />

@@ -15,6 +15,10 @@ import {
 } from "@/lib/highlight";
 import {
   buildMarkupRfiPrefill,
+  clearAllMarkups,
+  foremanDraftStillAllowed,
+  undoLastMarkup,
+  updateTextMarkup,
   writeMarkupRfiPrefill,
   type MarkupTool,
   type MarkupVector,
@@ -58,6 +62,7 @@ export function SheetViewer({
   const [tool, setTool] = useState<MarkupTool>("pan");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const router = useRouter();
+  const creatingRef = useRef(false);
   const markupEnabled = Boolean(requestId && sheetId);
   const markup = useMarkupOverlay(requestId ?? "", sheetId ?? "", {
     readOnly,
@@ -153,31 +158,67 @@ export function SheetViewer({
     setSelectedId(null);
   }
 
+  function handleUndo() {
+    const next = undoLastMarkup(markup.items);
+    markup.setItems(next);
+    if (selectedId && !next.some((item) => item.id === selectedId)) {
+      setSelectedId(next.at(-1)?.id ?? null);
+    }
+  }
+
+  function handleClearAll() {
+    markup.setItems(clearAllMarkups(markup.items));
+    setSelectedId(null);
+  }
+
+  function handleUpdateText(id: string, text: string) {
+    markup.setItems((current) => updateTextMarkup(current, id, text));
+    setSelectedId(id);
+  }
+
   async function handleCreateRfi() {
-    if (!requestId || !sheetId || !selected) return;
-    const saved = await markup.flush();
-    const overlayId = saved.id || markup.overlayId;
-    const prefill = buildMarkupRfiPrefill({
-      requestId,
-      overlayId,
-      item: selected,
-      sheetId,
-      sheetRev: sheetRev ?? "",
-      roomName: roomName ?? "",
-      roomNumber,
-      vectors: saved.vectors,
-    });
-    writeMarkupRfiPrefill(prefill);
-    const params = new URLSearchParams({
-      sheet: sheetId,
-      markup: overlayId,
-      item: selected.id,
-      subject: prefill.subject,
-      question: prefill.question,
-      location: prefill.location,
-      kind: prefill.kind,
-    });
-    router.push(`/pack/${requestId}/rfi/new?${params.toString()}`);
+    if (creatingRef.current || !requestId || !sheetId || !selected) return;
+    creatingRef.current = true;
+    try {
+      const outcome = await markup.flush();
+      const item =
+        outcome.record.vectors.items.find((entry) => entry.id === selected.id) ??
+        selected;
+      if (
+        !foremanDraftStillAllowed({
+          selected: true,
+          persistFailed: outcome.persistFailed,
+        })
+      ) {
+        creatingRef.current = false;
+        return;
+      }
+      const overlayId = outcome.record.id || markup.overlayId;
+      const prefill = buildMarkupRfiPrefill({
+        requestId,
+        overlayId,
+        item,
+        sheetId,
+        sheetRev: sheetRev ?? "",
+        roomName: roomName ?? "",
+        roomNumber,
+        vectors: outcome.record.vectors,
+      });
+      writeMarkupRfiPrefill(prefill);
+      const params = new URLSearchParams({
+        sheet: sheetId,
+        markup: overlayId,
+        item: item.id,
+        subject: prefill.subject,
+        question: prefill.question,
+        location: prefill.location,
+        kind: prefill.kind,
+      });
+      if (outcome.persistFailed) params.set("markupSave", "failed");
+      router.push(`/pack/${requestId}/rfi/new?${params.toString()}`);
+    } catch {
+      creatingRef.current = false;
+    }
   }
 
   return (
@@ -187,8 +228,16 @@ export function SheetViewer({
           tool={tool}
           onTool={setTool}
           selected={selected}
-          onCreateRfi={handleCreateRfi}
+          itemCount={markup.items.length}
+          storage={markup.storage}
+          saving={!markup.ready || markup.saving}
+          persistFailed={markup.ready && markup.persistFailed}
+          onCreateRfi={() => {
+            void handleCreateRfi();
+          }}
           onDeleteSelected={handleDeleteSelected}
+          onUndo={handleUndo}
+          onClearAll={handleClearAll}
           disabled={!ready}
         />
       ) : null}
@@ -228,6 +277,7 @@ export function SheetViewer({
                     aspect={aspect}
                     onSelect={readOnly ? () => undefined : setSelectedId}
                     onAdd={readOnly ? () => undefined : handleAdd}
+                    onUpdateText={readOnly ? undefined : handleUpdateText}
                   />
                 ) : null}
               </div>
@@ -267,9 +317,11 @@ export function SheetViewer({
             ? tool === "text"
               ? "Tap the sheet to place a note"
               : "Drag on the sheet · vector overlay (not a photo bake)"
-            : selected
-              ? "Markup selected · Create RFI sends a draft to the foreman"
-              : "Pinch or +/− to zoom · drag to pan · tap a markup to select"}
+            : selected?.kind === "text"
+              ? "Note selected · tap it to edit · Create RFI drafts to the foreman"
+              : selected
+                ? "Markup selected · Create RFI sends a draft to the foreman"
+                : "Pinch or +/− to zoom · drag to pan · tap a note to edit"}
       </p>
       {!ready && !error && !missingPdf ? (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-charcoal/80 text-sm text-muted">
