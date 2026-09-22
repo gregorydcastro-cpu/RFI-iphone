@@ -21,8 +21,8 @@ export function OfflinePackBanner({ snapshot }: Props) {
       </p>
       <p className="mt-0.5 text-sm text-paper">{offlineBannerText(snapshot)}</p>
       <p className="mt-1 text-xs text-tan">
-        Live pulls need a connection. This is today's last good snapshot
-        on this device — not a second Procore path.
+        Live pulls need a connection. This is the last good snapshot from
+        today on this device — not a second Procore path.
       </p>
     </div>
   );
