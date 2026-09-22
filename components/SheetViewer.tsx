@@ -24,6 +24,8 @@ import {
   type MarkupVector,
 } from "@/lib/markup";
 import type { Layout } from "@/lib/pack";
+import { isPdfMagic } from "@/lib/sheetPdfUrl";
+import { matchCachedPdf, putPdfBytes } from "@/lib/offlinePackStore";
 import { MarkupOverlay } from "./MarkupOverlay";
 import { MarkupToolbar } from "./MarkupToolbar";
 import { useMarkupOverlay } from "./useMarkupOverlay";
@@ -84,30 +86,7 @@ export function SheetViewer({
     async function render() {
       setReady(false);
       setError(null);
-      const response = await fetch(pdfUrl, {
-        signal: abort.signal,
-        credentials: "same-origin",
-      });
-      if (!response.ok) {
-        const type = response.headers.get("content-type") ?? "";
-        if (type.includes("application/json")) {
-          const body = (await response.json()) as { error?: string };
-          throw new Error(
-            body.error?.trim() || `Could not load sheet (${response.status})`,
-          );
-        }
-        throw new Error(`Could not load sheet (${response.status})`);
-      }
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      if (
-        bytes.byteLength < 5 ||
-        bytes[0] !== 0x25 ||
-        bytes[1] !== 0x50 ||
-        bytes[2] !== 0x44 ||
-        bytes[3] !== 0x46
-      ) {
-        throw new Error("Sheet response was not a PDF");
-      }
+      const bytes = await loadSheetPdfBytes(pdfUrl, abort.signal);
       const pdfjs = await import("pdfjs-dist");
       pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
       const loadingTask = pdfjs.getDocument({ data: bytes });
@@ -364,4 +343,47 @@ function HighlightOverlay({
       />
     </svg>
   );
+}
+
+async function loadSheetPdfBytes(
+  pdfUrl: string,
+  signal: AbortSignal,
+): Promise<Uint8Array> {
+  let networkError: Error | null = null;
+  try {
+    const response = await fetch(pdfUrl, {
+      signal,
+      credentials: "same-origin",
+    });
+    if (response.ok) {
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (isPdfMagic(bytes)) {
+        void putPdfBytes(pdfUrl, bytes);
+        return bytes;
+      }
+      networkError = new Error("Sheet response was not a PDF");
+    } else {
+      const type = response.headers.get("content-type") ?? "";
+      if (type.includes("application/json")) {
+        const body = (await response.json()) as { error?: string };
+        networkError = new Error(
+          body.error?.trim() || `Could not load sheet (${response.status})`,
+        );
+      } else {
+        networkError = new Error(`Could not load sheet (${response.status})`);
+      }
+    }
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    if (err instanceof Error && err.name === "AbortError") throw err;
+    networkError =
+      err instanceof Error ? err : new Error("Could not load sheet");
+  }
+
+  const cached = await matchCachedPdf(pdfUrl);
+  if (cached) {
+    const bytes = new Uint8Array(await cached.arrayBuffer());
+    if (isPdfMagic(bytes)) return bytes;
+  }
+  throw networkError ?? new Error("Could not load sheet");
 }
