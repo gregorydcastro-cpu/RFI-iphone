@@ -12,8 +12,20 @@ import {
   normalizePrivateKey,
   parseDriveServiceAccountJson,
   type DriveServiceAccount,
-} from "./driveCredentials";
-import { readEnvAlias } from "./env";
+} from "./driveCredentials.ts";
+import { readEnvAlias } from "./env.ts";
+import {
+  DriveTokenError,
+  DRIVE_AUTH_MISSING_MESSAGE,
+  mapDriveTokenStatus,
+} from "./sheetPdfErrors.ts";
+import {
+  fetchWithBoundedRetry,
+  SHEET_PDF_RETRY_ATTEMPTS,
+  SHEET_PDF_TOKEN_TIMEOUT_MS,
+} from "./sheetPdfFetch.ts";
+
+export { DRIVE_AUTH_MISSING_MESSAGE };
 
 export const GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_KEY =
   "GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON" as const;
@@ -21,9 +33,6 @@ export const GOOGLE_CLIENT_EMAIL_KEY = "GOOGLE_CLIENT_EMAIL" as const;
 export const GOOGLE_PRIVATE_KEY_KEY = "GOOGLE_PRIVATE_KEY" as const;
 export const GOOGLE_DRIVE_API_KEY_KEY = "GOOGLE_DRIVE_API_KEY" as const;
 export const GOOGLE_DRIVE_FOLDER_ID_KEY = "GOOGLE_DRIVE_FOLDER_ID" as const;
-
-export const DRIVE_AUTH_MISSING_MESSAGE =
-  "Google Drive credentials are not configured. Set GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON (or GOOGLE_CLIENT_EMAIL + GOOGLE_PRIVATE_KEY) on Vercel and share the Procore bot pack folder with that service account.";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.readonly";
@@ -111,8 +120,16 @@ function signServiceAccountJwt(account: DriveServiceAccount): string {
   return `${unsigned}.${signature}`;
 }
 
+type TokenFetchOptions = {
+  fetchImpl?: (input: string, init: RequestInit) => Promise<Response>;
+  sleep?: (ms: number) => Promise<void>;
+  timeoutMs?: number;
+  attempts?: number;
+};
+
 export async function getDriveAccessToken(
   account: DriveServiceAccount,
+  options?: TokenFetchOptions,
 ): Promise<string> {
   const now = Date.now();
   if (
@@ -124,15 +141,37 @@ export async function getDriveAccessToken(
   }
 
   const assertion = signServiceAccountJwt(account);
-  const response = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion,
+  const fetched = await fetchWithBoundedRetry(
+    () => ({
+      url: TOKEN_URL,
+      init: {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+          assertion,
+        }),
+        cache: "no-store",
+        redirect: "manual",
+      },
     }),
-    cache: "no-store",
-  });
+    {
+      fetchImpl: options?.fetchImpl,
+      sleep: options?.sleep,
+      timeoutMs: options?.timeoutMs ?? SHEET_PDF_TOKEN_TIMEOUT_MS,
+      attempts: options?.attempts ?? SHEET_PDF_RETRY_ATTEMPTS,
+    },
+  );
+  if (!fetched.ok) {
+    throw new DriveTokenError(
+      fetched.kind === "timeout" ? "timeout" : "upstream_failed",
+    );
+  }
+
+  const response = fetched.response;
+  if (response.status >= 300 && response.status < 400) {
+    throw new DriveTokenError("upstream_failed");
+  }
   const json: unknown = await response.json().catch(() => null);
   const rec =
     json && typeof json === "object" ? (json as Record<string, unknown>) : null;
@@ -141,9 +180,7 @@ export async function getDriveAccessToken(
   const expiresIn =
     typeof rec?.expires_in === "number" ? rec.expires_in : 3600;
   if (!response.ok || !accessToken) {
-    const err = new Error("Google Drive service account was rejected.");
-    (err as Error & { code?: string }).code = "drive_auth_rejected";
-    throw err;
+    throw new DriveTokenError(mapDriveTokenStatus(response.status).code);
   }
   cachedToken = {
     accessToken,

@@ -1,4 +1,5 @@
 import { loadSheetPdf } from "@/lib/sheetPdf";
+import { publicSheetPdfError } from "@/lib/sheetPdfErrors";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -50,12 +51,10 @@ export async function GET(request: Request) {
   const result = await loadSheetPdf({ requestId, sheetId });
   if (!result.ok) {
     return json(
-      {
-        ok: false,
-        error: result.error,
+      publicSheetPdfError({
         code: result.code,
         configured: result.configured,
-      },
+      }),
       result.status,
     );
   }
