@@ -1,4 +1,1 @@
-import SwiftData
-import SwiftUI
-
-// probe small
+@file:///workspace/swiftui-land/GCFieldLog/Features/Count/CountViews.swift
