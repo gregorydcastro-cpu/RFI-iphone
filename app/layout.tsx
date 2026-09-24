@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Oswald } from "next/font/google";
 import { AppleComingSoonBanner } from "@/components/AppleComingSoonBanner";
+import { OfflinePackServiceWorker } from "@/components/OfflinePackServiceWorker";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex min-h-full flex-col font-sans">
         <AppleComingSoonBanner />
+        <OfflinePackServiceWorker />
         {children}
       </body>
     </html>
