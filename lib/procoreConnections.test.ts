@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { afterEach, test } from "node:test";
 import {
+  diagnoseSupabaseServiceRoleKey,
   isProcoreTokenStorageConfigured,
   isSupabaseServiceRoleKeyValid,
   jwtRoleClaim,
@@ -74,27 +75,31 @@ test("isSupabaseServiceRoleKeyValid is false for missing, malformed, and anon ke
   assert.equal(isSupabaseServiceRoleKeyValid(), false);
   assert.equal(procoreStorageFailureReason(), "storage_key_invalid");
 
-  process.env.SUPABASE_SERVICE_ROLE_KEY = "sb_publishable_not_a_jwt";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "sb_publishable_TESTONLY";
   assert.equal(isProcoreTokenStorageConfigured(), true);
   assert.equal(isSupabaseServiceRoleKeyValid(), false);
-  assert.equal(jwtRoleClaim("sb_publishable_not_a_jwt"), null);
+  assert.equal(jwtRoleClaim("sb_publishable_TESTONLY"), null);
 
   process.env.SUPABASE_SERVICE_ROLE_KEY = fakeJwt("service_role").slice(0, 24);
   assert.equal(isSupabaseServiceRoleKeyValid(), false);
 });
 
-test("isSupabaseServiceRoleKeyValid is true only for a service_role JWT", () => {
+test("isSupabaseServiceRoleKeyValid is true for service_role JWT and sb_secret_", () => {
   clearServiceEnv();
   process.env.SUPABASE_URL = "https://maplepointfake.supabase.co";
   process.env.SUPABASE_SERVICE_ROLE_KEY = fakeJwt("service_role");
   assert.equal(isProcoreTokenStorageConfigured(), true);
   assert.equal(isSupabaseServiceRoleKeyValid(), true);
   assert.equal(procoreStorageFailureReason(), "storage_write_failed");
+
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "sb_secret_TESTONLY";
+  assert.equal(isSupabaseServiceRoleKeyValid(), true);
+  assert.equal(diagnoseSupabaseServiceRoleKey().kind, "secret");
 });
 
 test("service role helpers never log the key", () => {
   const src = readFileSync(new URL("./procoreConnections.ts", import.meta.url), "utf8");
-  assert.match(src, /jwtRoleClaim/);
+  assert.match(src, /diagnoseSupabaseServiceRoleKey/);
   assert.match(src, /Never logs the key/);
   assert.doesNotMatch(src, /console\.\w+\([^)]*serviceRoleKey/);
   assert.match(src, /body: await restErrorSnippet\(response\)/);

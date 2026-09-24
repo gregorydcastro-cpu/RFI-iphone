@@ -35,9 +35,11 @@ test("callback maps missing env, bad JWT, and REST failure to distinct reasons",
   assert.match(callback, /reason: "storage_unconfigured"/);
   assert.match(callback, /reason: "storage_key_invalid"/);
   assert.match(callback, /reason: "storage_write_failed"/);
-  assert.match(callback, /jwtRole !== "service_role"/);
+  assert.match(callback, /isSupabaseServiceRoleKeyValid\(\)/);
+  assert.match(callback, /diagnoseSupabaseServiceRoleKey/);
   assert.doesNotMatch(callback, /console\.\w+\([^)]*service\.serviceRoleKey/);
   assert.match(status, /storageKeyValid: isSupabaseServiceRoleKeyValid\(\)/);
+  assert.match(status, /storageKeyProblem/);
   assert.match(card, /storageConfigured && !view\.storageKeyValid/);
   assert.match(card, /procoreErrorMessage\("storage_key_invalid"\)/);
   assert.equal(forbidden.test(`${callback}\n${status}\n${card}`), false);
