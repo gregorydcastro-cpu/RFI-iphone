@@ -7,6 +7,7 @@ import {
 } from "./driveCredentials.ts";
 import { driveFileId, resolveSheetPdf } from "./packNormalize.ts";
 import {
+  isAllowedDriveDownloadHost,
   isBlockedFetchHost,
   isBrowserDirectPdfUrl,
   isGoogleDrivePdfUrl,
@@ -120,6 +121,16 @@ test("Procore drawing hosts are flagged so the proxy can refuse them", () => {
     true,
   );
   assert.equal(isProcorePdfUrl("/packs/maple-point-a101.pdf"), false);
+});
+
+test("Drive media redirects stay on Google download hosts", () => {
+  assert.equal(isAllowedDriveDownloadHost("www.googleapis.com"), true);
+  assert.equal(isAllowedDriveDownloadHost("doc-0s-docs.googleusercontent.com"), true);
+  assert.equal(isAllowedDriveDownloadHost("drive.usercontent.google.com"), true);
+  assert.equal(isAllowedDriveDownloadHost("accounts.google.com"), false);
+  assert.equal(isAllowedDriveDownloadHost("oauth2.googleapis.com"), false);
+  assert.equal(isAllowedDriveDownloadHost("169.254.169.254"), false);
+  assert.equal(isAllowedDriveDownloadHost("evil.example"), false);
 });
 
 test("private hosts are blocked for plain PDF fetch", () => {

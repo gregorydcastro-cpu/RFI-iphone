@@ -92,7 +92,7 @@ Connect always sends that string (https, no trailing slash) on authorize and tok
 | `SUPABASE_SERVICE_ROLE_KEY` | **Required to write tokens.** Anon key must not read or write `procore_connections`. |
 | `SUPABASE_ANON_KEY` | Live `room_packs` reads (not token storage) |
 | `XAI_API_KEY` | **Grok Voice.** Server-only. Batch STT (`POST https://api.x.ai/v1/stt`) and TTS (`POST https://api.x.ai/v1/tts`). Never `NEXT_PUBLIC_`. Alias `xai_api_key` also read. |
-| `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON` | **Live sheet PDFs.** Preferred. Full Google service account JSON. Server-only. Share the Procore bot Drive folder with `client_email`. |
+| `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON` | **Live sheet PDFs.** Preferred. Full Google service account JSON. Server-only. Share the Room Packs folder (the folder the Procore bot writes PDFs into) with `client_email` as Viewer. This is separate from `SUPABASE_SERVICE_ROLE_KEY` ([issue #53](https://github.com/gregorydcastro-cpu/RFI-iphone/issues/53)). |
 | `GOOGLE_CLIENT_EMAIL` | Alternate to JSON. Service account email (`…@….iam.gserviceaccount.com`). |
 | `GOOGLE_PRIVATE_KEY` | Alternate to JSON. PEM private key (`-----BEGIN PRIVATE KEY-----`; `\n` escapes are fine). |
 | `GOOGLE_DRIVE_API_KEY` | Optional. Only works for Drive files shared “Anyone with the link”. Live bot packs are typically private. |
@@ -446,7 +446,7 @@ The website resolves a sheet PDF as: non-empty same-origin or absolute `pdf` fir
 **Fetch order (server):**
 
 1. Local `/packs/*.pdf` from `public/packs` (Maple Point).
-2. **Google Drive** file id → Drive API `files.get?alt=media&supportsAllDrives=true` when a service account or API key is configured. If credentials are missing, try an unauthenticated download; a login wall returns **503** `{ code: "drive_auth_missing" }`.
+2. **Google Drive** file id → Drive API `files.get?alt=media&supportsAllDrives=true` when a service account or API key is configured. Transient timeouts and Drive 429/5xx are retried once. If credentials are missing, try an unauthenticated download; a login wall returns **503** `{ code: "drive_auth_missing" }`. A file the service account cannot download is **502** `{ code: "drive_forbidden" }`. A missing file is **404** `{ code: "not_found" }`. A timed-out fetch is **504** `{ code: "timeout" }`.
 3. Other **https** public/signed URLs (private IPs blocked).
 4. **procore.com** URLs are **not** fetched (bot owns the Procore pull). **502** `{ code: "procore_pdf_unsupported" }` — store a Drive or public/signed URL in `sheets[].pdf`.
 
@@ -455,7 +455,16 @@ The website resolves a sheet PDF as: non-empty same-origin or absolute `pdf` fir
 1. Google Cloud → create a service account with no extra roles required beyond Drive file access via sharing.
 2. Paste the JSON into Vercel **`GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`** (Production; Preview if you test live packs there). Never `NEXT_PUBLIC_`. Never commit.
 3. In Drive, share the folder the Procore bot writes pack PDFs into with that `client_email` as **Viewer** (same folder as the `A207_N` / lighting sheet files). Optional: set `GOOGLE_DRIVE_FOLDER_ID` to that folder id as an ops reminder — the download uses the file id already in `sheets[].pdf`.
-4. Without these keys, the viewer shows the 503 message instead of **Failed to fetch**. With keys but a file not shared, expect **502** `{ code: "drive_forbidden" }`.
+4. Without these keys, the pack viewer shows a gloves-sized **Drive account missing** banner (retry button) instead of **Failed to fetch**. With keys but a file not shared, expect **502** `{ code: "drive_forbidden" }` and a **Sheet not shared** banner. A network or timeout failure uses **Can't reach the sheet** / **Sheet timed out**.
+
+**Ops — sheet PDFs vs Procore token storage ([issue #53](https://github.com/gregorydcastro-cpu/RFI-iphone/issues/53)):**
+
+| What failed | What to set | Where |
+| --- | --- | --- |
+| `/api/sheet-pdf` returns `drive_auth_missing`, `drive_auth_rejected`, or `drive_forbidden` | `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON` (or `GOOGLE_CLIENT_EMAIL` + `GOOGLE_PRIVATE_KEY`). Share the **Room Packs** folder with that service account as **Viewer**. | [DRIVE_GO_LIVE.md](DRIVE_GO_LIVE.md) |
+| `/api/procore/status` returns `storageKeyValid: false` | `SUPABASE_SERVICE_ROLE_KEY` must be the Supabase **service_role** secret used to store Procore tokens. | [Issue #53](https://github.com/gregorydcastro-cpu/RFI-iphone/issues/53) |
+
+Do not invent or commit either value. Issue #53 does not configure Drive, and a Drive service account does not write `procore_connections`.
 
 ```bash
 # Missing requestId/sheetId
