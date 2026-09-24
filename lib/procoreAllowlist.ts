@@ -30,6 +30,9 @@ export function parseProjectAllowlist(
   return out;
 }
 
+/** Same parser as `parseProjectAllowlist`. */
+export const parseProcoreProjectAllowlist = parseProjectAllowlist;
+
 export function readProjectAllowlist(): string[] {
   return parseProjectAllowlist(
     readEnvAlias(PROCORE_PROJECT_ALLOWLIST_KEY, "procore_project_allowlist"),
