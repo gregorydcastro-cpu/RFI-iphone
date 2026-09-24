@@ -1,5 +1,6 @@
 import type { FieldRoleName } from "./auth";
 import {
+  diagnoseSupabaseServiceRoleKey,
   fetchProcoreConnectionStatus,
   isProcoreTokenStorageConfigured,
   isSupabaseServiceRoleKeyValid,
@@ -19,6 +20,8 @@ export type ProcoreConnectionView = {
   oauthConfigured: boolean;
   storageConfigured: boolean;
   storageKeyValid: boolean;
+  /** Human reason when storageKeyValid is false. Never includes the key. */
+  storageKeyProblem: string | null;
   connection: ProcoreConnectionStatus | null;
 };
 
@@ -28,6 +31,9 @@ export async function getProcoreConnectionView(
   const oauthConfigured = isProcoreOAuthConfigured();
   const storageConfigured = isProcoreTokenStorageConfigured();
   const storageKeyValid = isSupabaseServiceRoleKeyValid();
+  const storageKeyProblem = storageKeyValid
+    ? null
+    : diagnoseSupabaseServiceRoleKey().message;
   if (!session) {
     return {
       signedIn: false,
@@ -40,6 +46,7 @@ export async function getProcoreConnectionView(
       oauthConfigured,
       storageConfigured,
       storageKeyValid,
+      storageKeyProblem,
       connection: null,
     };
   }
@@ -60,6 +67,7 @@ export async function getProcoreConnectionView(
     oauthConfigured,
     storageConfigured,
     storageKeyValid,
+    storageKeyProblem,
     connection,
   };
 }

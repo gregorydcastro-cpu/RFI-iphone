@@ -2,8 +2,9 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { cookieSecureFromRequest, procoreLinkedCookieOptions } from "@/lib/auth";
 import {
+  diagnoseSupabaseServiceRoleKey,
   getSupabaseServiceConfig,
-  jwtRoleClaim,
+  isSupabaseServiceRoleKeyValid,
   upsertProcoreConnection,
 } from "@/lib/procoreConnections";
 import {
@@ -109,11 +110,15 @@ export async function GET(request: Request) {
     clearOAuthCookies(response, secure, request);
     return response;
   }
-  const jwtRole = jwtRoleClaim(service.serviceRoleKey);
-  if (jwtRole !== "service_role") {
+  if (!isSupabaseServiceRoleKeyValid()) {
+    const diagnosis = diagnoseSupabaseServiceRoleKey();
     console.error(
-      "[gcfieldlog] SUPABASE_SERVICE_ROLE_KEY JWT is not service_role",
-      { jwtRole },
+      "[gcfieldlog] SUPABASE_SERVICE_ROLE_KEY is not a valid service_role/secret key",
+      {
+        kind: diagnosis.kind,
+        role: diagnosis.role,
+        projectRefMatches: diagnosis.projectRefMatches,
+      },
     );
     const response = redirectAccount(request, {
       procore: "error",

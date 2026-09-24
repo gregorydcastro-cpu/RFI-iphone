@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  diagnoseSupabaseServiceRoleKey,
   isProcoreTokenStorageConfigured,
   isSupabaseServiceRoleKeyValid,
 } from "@/lib/procoreConnections";
@@ -21,5 +22,8 @@ export async function GET() {
     oauthConfigured: isProcoreOAuthConfigured(),
     storageConfigured: isProcoreTokenStorageConfigured(),
     storageKeyValid: isSupabaseServiceRoleKeyValid(),
+    storageKeyProblem: isSupabaseServiceRoleKeyValid()
+      ? null
+      : diagnoseSupabaseServiceRoleKey().message,
   });
 }
