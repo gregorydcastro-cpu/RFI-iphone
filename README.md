@@ -319,18 +319,18 @@ No crypto or stablecoin code in this app. Later you can turn on Stripe’s crypt
 **Dashboard — webhook**
 
 1. [Webhooks](https://dashboard.stripe.com/webhooks) → **Add endpoint**.
-2. Endpoint URL: **`https://gcfieldlog.com/api/stripe/webhook`** (use the Preview URL + `/api/stripe/webhook` for Vercel previews).
+2. Endpoint URL: **`https://www.gcfieldlog.com/api/stripe/webhook`** (www, not apex — Stripe does not follow a 308). Use the Preview URL + `/api/stripe/webhook` for Vercel previews.
 3. Events (at least): `checkout.session.completed`, `customer.subscription.updated`, `invoice.paid`.
 4. Copy the endpoint **Signing secret** into Vercel `STRIPE_WEBHOOK_SECRET`.
 5. Apply the SQL in `supabase/migrations/20260918120000_billing_customers.sql` on the gc-field-log Supabase project so the webhook can upsert rows.
 
 **App routes**
 
-- `POST /api/stripe/checkout` — creates a subscription Checkout Session (`trial_period_days: 60`, promotion codes allowed). Redirects the browser to Stripe-hosted Checkout. `success_url` / `cancel_url` return to `/pricing` on gcfieldlog.com (localhost and `*.vercel.app` use the request origin).
+- `POST /api/stripe/checkout` — creates a subscription Checkout Session (`trial_period_days: 60`, promotion codes allowed). Redirects the browser to Stripe-hosted Checkout. `success_url` / `cancel_url` return to `/pricing` on www.gcfieldlog.com (localhost and `*.vercel.app` use the request origin).
 - `POST /api/stripe/webhook` — verifies `Stripe-Signature`, logs the event, upserts `billing_customers`. Does **not** send email yet (TODO in the handler).
 - `/pricing` — Subscribe CTA.
 
-If Stripe env is missing, `/pricing` still renders and Checkout returns `billing_unconfigured` (503). Pack viewer and Procore OAuth are unchanged.
+If Stripe env is missing on Vercel, `/pricing` still renders and Checkout returns `billing_unconfigured` (503). That is missing keys, not a host allowlist. Pack viewer and Procore OAuth are unchanged.
 
 #### Billing table (`public.billing_customers`)
 
