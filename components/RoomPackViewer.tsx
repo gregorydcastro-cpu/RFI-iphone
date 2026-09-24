@@ -2,6 +2,9 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { OfflinePackBanner } from "./OfflinePackBanner";
+import type { PackLiveMeta } from "./PackLiveReload";
+import type { OfflinePackSnapshot } from "@/lib/offlinePackCache";
 import { highlightForSheet } from "@/lib/highlight";
 import {
   formatPulledAt,
@@ -31,7 +34,7 @@ type Props = {
   projectSlug?: string;
   demoFallback?: boolean;
   supabaseConfigured?: boolean;
-  source?: "procore" | "supabase" | "local" | "none";
+  source?: "procore" | "supabase" | "local" | "offline" | "none";
   pull?: "procore" | "bot" | "none";
   procoreLinked?: boolean;
   readOnly?: boolean;
@@ -56,6 +59,8 @@ export function RoomPackViewer({
   const [livePack, setLivePack] = useState<RoomPack | null>(null);
   const [liveSource, setLiveSource] = useState(source);
   const [livePull, setLivePull] = useState(pull);
+  const [offlineSnapshot, setOfflineSnapshot] =
+    useState<OfflinePackSnapshot | null>(null);
   const displayedPack = livePack ?? pack;
   const [toast, setToast] = useState<string | null>(null);
   const { primary, rest } = useMemo(
@@ -74,18 +79,22 @@ export function RoomPackViewer({
       })
     : null;
 
-  const handleLivePack = useCallback(
-    (next: RoomPack, meta?: { source?: string; pull?: string }) => {
-      setLivePack(next);
-      if (meta?.source) {
-        setLiveSource(meta.source as typeof liveSource);
-      }
-      if (meta?.pull) {
-        setLivePull(meta.pull as typeof livePull);
-      }
-    },
-    [],
-  );
+  const handleLivePack = useCallback((next: RoomPack, meta?: PackLiveMeta) => {
+    setLivePack(next);
+    if (meta?.offline && meta.snapshot) {
+      setOfflineSnapshot(meta.snapshot);
+      setLiveSource("offline");
+      setLivePull("none");
+      return;
+    }
+    setOfflineSnapshot(null);
+    if (meta?.source) {
+      setLiveSource(meta.source as typeof liveSource);
+    }
+    if (meta?.pull) {
+      setLivePull(meta.pull as typeof livePull);
+    }
+  }, []);
 
   function handleAction(action: PackAction) {
     if (readOnly) return;
@@ -135,6 +144,7 @@ export function RoomPackViewer({
         procoreLinked={procoreLinked}
         onPack={handleLivePack}
       />
+      {offlineSnapshot ? <OfflinePackBanner snapshot={offlineSnapshot} /> : null}
       <JumpNav primary={primary} rest={rest} />
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-4 sm:px-4 lg:px-6">
         <section id="floor-plan" className="flex flex-col">
@@ -351,10 +361,10 @@ function PackContextBar({
   projectSlug?: string;
   demoFallback?: boolean;
   supabaseConfigured: boolean;
-  source?: "procore" | "supabase" | "local" | "none";
+  source?: "procore" | "supabase" | "local" | "offline" | "none";
   pull?: "procore" | "bot" | "none";
   procoreLinked: boolean;
-  onPack: (pack: RoomPack, meta?: { source?: string; pull?: string }) => void;
+  onPack: (pack: RoomPack, meta?: PackLiveMeta) => void;
 }) {
   const stamp = sheetRevisionLabel(sheet);
   const pulled = formatPulledAt(pack.pulled_at);
@@ -428,6 +438,7 @@ function freshnessLabel(input: {
   packStatus: string;
 }): string {
   if (input.pull === "procore" || input.source === "procore") return "live";
+  if (input.source === "offline") return "offline";
   if (input.demoFallback && !input.supabaseConfigured) return "demo";
   if (input.source === "local" || input.demoFallback) return "demo";
   if (input.source === "supabase" || input.pull === "bot") return "cached";
@@ -438,11 +449,13 @@ function StatusBadge({ status }: { status: string }) {
   const tone =
     status === "ready" || status === "live"
       ? "border-emerald-700/60 bg-emerald-950/50 text-emerald-300"
-      : status === "pending" || status === "accepted"
-        ? "border-accent/50 bg-accent-deep/40 text-paper"
-        : status === "cached"
-          ? "border-accent-2/50 bg-panel text-accent-2"
-          : "border-line bg-panel text-muted";
+      : status === "offline"
+        ? "border-cta/60 bg-ink text-cta"
+        : status === "pending" || status === "accepted"
+          ? "border-accent/50 bg-accent-deep/40 text-paper"
+          : status === "cached"
+            ? "border-accent-2/50 bg-panel text-accent-2"
+            : "border-line bg-panel text-muted";
   return (
     <span className={`border px-2 py-1 font-medium capitalize ${tone}`}>
       {status}
