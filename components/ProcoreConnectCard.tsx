@@ -96,7 +96,7 @@ export function ProcoreConnectCard({ view, compact = false }: Props) {
       ) : null}
       {view.storageConfigured && !view.storageKeyValid ? (
         <p className="mt-2 text-sm text-cta">
-          {procoreErrorMessage("storage_key_invalid")}
+          {view.storageKeyProblem ?? procoreErrorMessage("storage_key_invalid")}
         </p>
       ) : !view.storageConfigured ? (
         <p className="mt-2 text-sm text-cta">
