@@ -25,6 +25,9 @@ const HANDLED_EVENTS = new Set([
 /**
  * Stripe webhook. Verifies the signature, then upserts billing_customers.
  * Does not send email yet.
+ *
+ * Dashboard endpoint URL (www, not apex — Stripe does not follow 308s):
+ * https://www.gcfieldlog.com/api/stripe/webhook
  */
 export async function POST(request: Request) {
   const stripe = getStripe();
