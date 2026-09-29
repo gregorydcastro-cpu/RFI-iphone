@@ -10,6 +10,13 @@
  */
 
 import { readEnvAlias } from "./env.ts";
+import {
+  checkSupabaseServiceRoleKey,
+  expectedSupabaseProjectRefFromEnv,
+} from "./supabaseKeyCheck.ts";
+
+export { jwtRoleClaim } from "./supabaseKeyCheck.ts";
+export type { SupabaseKeyCheckResult } from "./supabaseKeyCheck.ts";
 
 export const PROCORE_CONNECTIONS_TABLE = "procore_connections";
 
@@ -60,26 +67,33 @@ export function isProcoreTokenStorageConfigured(): boolean {
 }
 
 /**
- * True when SUPABASE_SERVICE_ROLE_KEY is a compact JWT whose payload
- * `role` is `service_role`. False if missing, malformed, truncated, or
- * any other role (anon / authenticated / publishable). Never logs the key.
+ * True when SUPABASE_SERVICE_ROLE_KEY is a service_role JWT (matching
+ * project ref when URL is set) or a newer `sb_secret_…` key. False for
+ * missing, anon, publishable, malformed, or wrong-project keys. Never logs the key.
  */
 export function isSupabaseServiceRoleKeyValid(): boolean {
-  const config = getSupabaseServiceConfig();
-  if (!config) return false;
-  return jwtRoleClaim(config.serviceRoleKey) === "service_role";
+  return diagnoseSupabaseServiceRoleKey().ok;
 }
 
-/** JWT `role` claim from a compact JWT. Never logs the token. */
-export function jwtRoleClaim(token: string): string | null {
-  const payload = decodeJwtPayload(token);
-  return typeof payload?.role === "string" ? payload.role : null;
+/** Human diagnostic for status endpoints. Never includes the key value. */
+export function diagnoseSupabaseServiceRoleKey() {
+  const config = getSupabaseServiceConfig();
+  if (!config) {
+    return checkSupabaseServiceRoleKey(
+      undefined,
+      expectedSupabaseProjectRefFromEnv(),
+    );
+  }
+  return checkSupabaseServiceRoleKey(
+    config.serviceRoleKey,
+    expectedSupabaseProjectRefFromEnv(),
+  );
 }
 
 /**
  * Classify a failed token upsert. `storage_unconfigured` only when URL or
  * key is missing; `storage_key_invalid` when a key is present but is not a
- * service_role JWT; otherwise `storage_write_failed`.
+ * service_role / secret key; otherwise `storage_write_failed`.
  */
 export function procoreStorageFailureReason(): ProcoreStorageFailureReason {
   if (!getSupabaseServiceConfig()) return "storage_unconfigured";
@@ -273,21 +287,6 @@ async function restFetch(
 
 function asStringOrNull(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
-}
-
-function decodeJwtPayload(token: string): Record<string, unknown> | null {
-  const parts = token.split(".");
-  if (parts.length !== 3 || !parts[1]) return null;
-  try {
-    const json = Buffer.from(parts[1], "base64url").toString("utf8");
-    const parsed: unknown = JSON.parse(json);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return null;
-    }
-    return parsed as Record<string, unknown>;
-  } catch {
-    return null;
-  }
 }
 
 async function restErrorSnippet(response: Response): Promise<string> {

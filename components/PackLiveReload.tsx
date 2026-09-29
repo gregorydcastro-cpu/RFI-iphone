@@ -1,8 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useOfflinePackCache } from "@/components/useOfflinePackCache";
+import {
+  isOfflineFetchFailure,
+  offlineBannerText,
+  type OfflinePackSnapshot,
+} from "@/lib/offlinePackCache";
 import type { RoomPack } from "@/lib/pack";
 import { formatPulledAt, sheetRevisionLabel } from "@/lib/pack";
+
+export type PackLiveMeta = {
+  source?: string;
+  pull?: string;
+  offline?: boolean;
+  snapshot?: OfflinePackSnapshot | null;
+};
 
 type Props = {
   requestId: string;
@@ -11,7 +24,7 @@ type Props = {
   procoreLinked: boolean;
   supabaseConfigured: boolean;
   demoFallback: boolean;
-  onPack: (pack: RoomPack, meta?: { source?: string; pull?: string }) => void;
+  onPack: (pack: RoomPack, meta?: PackLiveMeta) => void;
 };
 
 type LivePayload = {
@@ -46,12 +59,45 @@ export function PackLiveReload({
       : "Demo pack (Maple Point). Supabase / Procore path is unset locally.",
   );
   const [busy, setBusy] = useState(false);
+  const offline = useOfflinePackCache({
+    requestId,
+    projectId: projectSlug,
+    roomId: requestedRoom,
+  });
 
   useEffect(() => {
     let cancelled = false;
 
+    function acceptLive(data: LivePayload) {
+      if (!data.pack) return false;
+      onPack(data.pack, {
+        source: data.source,
+        pull: data.pull,
+        offline: false,
+        snapshot: null,
+      });
+      setMessage(statusLine(data, requestedRoom));
+      void offline.remember(data.pack);
+      return true;
+    }
+
+    async function serveOffline() {
+      const snapshot = await offline.readFallback(false);
+      if (cancelled) return Boolean(snapshot);
+      if (!snapshot) return false;
+      onPack(snapshot.pack, {
+        source: "offline",
+        pull: "none",
+        offline: true,
+        snapshot,
+      });
+      setMessage(offlineBannerText(snapshot));
+      return true;
+    }
+
     async function load(triggerPull: boolean) {
       setBusy(true);
+      let fetchFailed = false;
       try {
         if (triggerPull && procoreLinked) {
           const refresh = await fetch("/api/room-pack/refresh", {
@@ -71,10 +117,14 @@ export function PackLiveReload({
             setMessage("View only — pulls are disabled for this session.");
             return;
           }
-          if (refresh.ok && data.ok && data.pack) {
-            onPack(data.pack, { source: data.source, pull: data.pull });
-            setMessage(statusLine(data, requestedRoom));
-            return;
+          if (refresh.ok && data.ok && acceptLive(data)) return;
+          if (
+            isOfflineFetchFailure({
+              ok: refresh.ok,
+              status: refresh.status,
+            })
+          ) {
+            fetchFailed = true;
           }
         }
 
@@ -88,21 +138,27 @@ export function PackLiveReload({
         });
         const data = (await live.json()) as LivePayload;
         if (cancelled) return;
-        if (live.ok && data.ok && data.pack) {
-          onPack(data.pack, { source: data.source, pull: data.pull });
-          setMessage(statusLine(data, requestedRoom));
-          return;
+        if (live.ok && data.ok && acceptLive(data)) return;
+        if (
+          isOfflineFetchFailure({
+            ok: live.ok,
+            status: live.status,
+          })
+        ) {
+          fetchFailed = true;
         }
+        if (fetchFailed && (await serveOffline())) return;
         setMessage(
           data.error ??
             "Could not load a live pack. Maple Point demo stays on screen.",
         );
       } catch {
-        if (!cancelled) {
-          setMessage(
-            "Could not reach the pack service. Maple Point demo stays on screen.",
-          );
-        }
+        fetchFailed = true;
+        if (cancelled) return;
+        if (await serveOffline()) return;
+        setMessage(
+          "Could not reach the pack service. Maple Point demo stays on screen.",
+        );
       } finally {
         if (!cancelled) setBusy(false);
       }
@@ -112,7 +168,7 @@ export function PackLiveReload({
     return () => {
       cancelled = true;
     };
-  }, [onPack, procoreLinked, projectSlug, requestId, requestedRoom]);
+  }, [offline, onPack, procoreLinked, projectSlug, requestId, requestedRoom]);
 
   return (
     <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-tan">
@@ -138,10 +194,47 @@ export function PackLiveReload({
                 });
                 const data = (await refresh.json()) as LivePayload;
                 if (refresh.ok && data.ok && data.pack) {
-                  onPack(data.pack, { source: data.source, pull: data.pull });
+                  onPack(data.pack, {
+                    source: data.source,
+                    pull: data.pull,
+                    offline: false,
+                    snapshot: null,
+                  });
                   setMessage(statusLine(data, requestedRoom));
+                  void offline.remember(data.pack);
                 } else if (refresh.status === 403) {
                   setMessage("View only — pulls are disabled for this session.");
+                } else if (
+                  isOfflineFetchFailure({
+                    ok: refresh.ok,
+                    status: refresh.status,
+                  })
+                ) {
+                  const snapshot = await offline.readFallback(false);
+                  if (snapshot) {
+                    onPack(snapshot.pack, {
+                      source: "offline",
+                      pull: "none",
+                      offline: true,
+                      snapshot,
+                    });
+                    setMessage(offlineBannerText(snapshot));
+                  }
+                }
+              } catch {
+                const snapshot = await offline.readFallback(false);
+                if (snapshot) {
+                  onPack(snapshot.pack, {
+                    source: "offline",
+                    pull: "none",
+                    offline: true,
+                    snapshot,
+                  });
+                  setMessage(offlineBannerText(snapshot));
+                } else {
+                  setMessage(
+                    "Could not reach the pack service. Maple Point demo stays on screen.",
+                  );
                 }
               } finally {
                 setBusy(false);
