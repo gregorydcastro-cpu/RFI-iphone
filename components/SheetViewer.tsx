@@ -24,6 +24,7 @@ import {
   type MarkupVector,
 } from "@/lib/markup";
 import type { Layout } from "@/lib/pack";
+import { matchCachedPdf, putPdfBytes } from "@/lib/offlinePackStore";
 import {
   readSheetPdfBanner,
   sheetPdfBanner,
@@ -64,6 +65,7 @@ export function SheetViewer({
   const transformRef = useRef<ReactZoomPanPinchContentRef>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<SheetPdfBanner | null>(null);
+  const [offlineCopy, setOfflineCopy] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [aspect, setAspect] = useState(1224 / 792);
   const [pagePts, setPagePts] = useState<{ width: number; height: number }>();
@@ -89,34 +91,15 @@ export function SheetViewer({
     if (!pdfUrl || !canvas) return;
     const abort = new AbortController();
 
-    async function render() {
-      setReady(false);
-      setError(null);
-      let response: Response;
-      try {
-        response = await fetch(pdfUrl, {
-          signal: abort.signal,
-          credentials: "same-origin",
-        });
-      } catch (err: unknown) {
-        if (cancelled) return;
-        if (err instanceof DOMException && err.name === "AbortError") return;
-        if (err instanceof Error && err.name === "AbortError") return;
-        setError(sheetPdfBanner({ network: true }));
-        return;
-      }
-      if (cancelled) return;
-      if (!response.ok) {
-        const banner = await readSheetPdfBanner(response);
-        if (!cancelled) setError(banner);
-        return;
-      }
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      if (cancelled) return;
-      if (!isPdfMagic(bytes)) {
-        setError(sheetPdfBanner({ code: "not_pdf" }));
-        return;
-      }
+    async function tryCachedPdf(): Promise<Uint8Array | null> {
+      const cached = await matchCachedPdf(pdfUrl);
+      if (!cached) return null;
+      const bytes = new Uint8Array(await cached.arrayBuffer());
+      if (!isPdfMagic(bytes)) return null;
+      return bytes;
+    }
+
+    async function paintPdf(bytes: Uint8Array) {
       const pdfjs = await import("pdfjs-dist");
       pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
       const loadingTask = pdfjs.getDocument({ data: bytes });
@@ -135,6 +118,57 @@ export function SheetViewer({
         setReady(true);
         transformRef.current?.resetTransform();
       }
+    }
+
+    async function render() {
+      setReady(false);
+      setError(null);
+      setOfflineCopy(false);
+      let response: Response;
+      try {
+        response = await fetch(pdfUrl, {
+          signal: abort.signal,
+          credentials: "same-origin",
+        });
+      } catch (err: unknown) {
+        if (cancelled) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        if (err instanceof Error && err.name === "AbortError") return;
+        const cached = await tryCachedPdf();
+        if (cached) {
+          setOfflineCopy(true);
+          await paintPdf(cached);
+          return;
+        }
+        setError(sheetPdfBanner({ network: true }));
+        return;
+      }
+      if (cancelled) return;
+      if (!response.ok) {
+        const banner = await readSheetPdfBanner(response);
+        const cached = await tryCachedPdf();
+        if (cached) {
+          setOfflineCopy(true);
+          await paintPdf(cached);
+          return;
+        }
+        if (!cancelled) setError(banner);
+        return;
+      }
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (cancelled) return;
+      if (!isPdfMagic(bytes)) {
+        const cached = await tryCachedPdf();
+        if (cached) {
+          setOfflineCopy(true);
+          await paintPdf(cached);
+          return;
+        }
+        setError(sheetPdfBanner({ code: "not_pdf" }));
+        return;
+      }
+      void putPdfBytes(pdfUrl, bytes);
+      await paintPdf(bytes);
     }
 
     void render().catch((err: unknown) => {
@@ -332,6 +366,11 @@ export function SheetViewer({
                 ? "Markup selected · Create RFI sends a draft to the foreman"
                 : "Pinch or +/− to zoom · drag to pan · tap a note to edit"}
       </p>
+      {offlineCopy && ready && !failure ? (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-ink/80 px-4 py-2 text-center text-xs text-metal">
+          Showing offline copy · live fetch unavailable
+        </div>
+      ) : null}
       {!ready && !failure ? (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-charcoal/80 text-sm text-muted">
           Loading sheet…
