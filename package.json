@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "node --experimental-strip-types --test lib/*.test.ts",
     "generate-demo": "node scripts/generate-demo-sheets.mjs",
-    "postinstall": "node scripts/copy-pdf-worker.mjs"
+    "postinstall": "node scripts/copy-pdf-worker.mjs",
+    "check:supabase-keys": "node --experimental-strip-types scripts/check-supabase-keys.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
