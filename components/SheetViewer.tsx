@@ -25,7 +25,11 @@ import {
 } from "@/lib/markup";
 import type { Layout } from "@/lib/pack";
 import { OFFLINE_SHEET_NOTE } from "@/lib/offlinePackCache";
-import { matchCachedPdf, putPdfBytes } from "@/lib/offlinePackStore";
+import {
+  deleteCachedPdf,
+  matchCachedPdf,
+  putPdfBytes,
+} from "@/lib/offlinePackStore";
 import {
   readSheetPdfBanner,
   sheetPdfBanner,
@@ -103,7 +107,10 @@ export function SheetViewer({
       const cached = await matchCachedPdf(pdfUrl);
       if (!cached) return null;
       const bytes = new Uint8Array(await cached.arrayBuffer());
-      if (!isPdfMagic(bytes)) return null;
+      if (!isPdfMagic(bytes)) {
+        void deleteCachedPdf(pdfUrl);
+        return null;
+      }
       return bytes;
     }
 
@@ -250,6 +257,9 @@ export function SheetViewer({
           return;
         }
 
+        await putPdfBytes(pdfUrl, bytes);
+        if (cancelled) return;
+
         try {
           await paintPdf(bytes);
         } catch (err: unknown) {
@@ -257,7 +267,6 @@ export function SheetViewer({
           await showCachedOrBanner(sheetPdfBanner({ interrupted: true }));
           return;
         }
-        if (!cancelled) void putPdfBytes(pdfUrl, bytes);
         return;
       }
 
