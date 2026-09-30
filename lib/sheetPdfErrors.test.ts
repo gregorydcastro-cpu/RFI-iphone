@@ -98,6 +98,12 @@ test("field banners differ for missing account, share, and network", () => {
   assert.match(shared.message, /not shared/i);
   assert.match(offline.message, /connection/i);
   assert.equal(sheetPdfBanner({ code: "pdf_missing" }).retryable, false);
+  const stopped = sheetPdfBanner({ interrupted: true });
+  assert.equal(stopped.title, "Sheet download stopped");
+  assert.match(stopped.message, /Tap Retry/);
+  assert.equal(stopped.retryable, true);
+  assert.equal(stopped.code, undefined);
+  assert.equal(sheetPdfBanner({ code: "timeout" }).code, "timeout");
 });
 
 test("banner uses the code and ignores a poisoned error string", async () => {

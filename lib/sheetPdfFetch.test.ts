@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   fetchWithBoundedRetry,
   parseRetryAfterMs,
+  readLimitedBytes,
   SHEET_PDF_RETRY_ATTEMPTS,
   SHEET_PDF_RETRY_MAX_WAIT_MS,
   sheetPdfBackoffMs,
@@ -159,3 +160,59 @@ test("403 does not read the error body", async () => {
   if (result.ok) assert.equal(result.body, undefined);
   assert.equal(consumed, 0);
 });
+
+test("a dropped PDF body retries, including a short Content-Length", async () => {
+  let calls = 0;
+  const reset = await fetchWithBoundedRetry(
+    () => ({ url: "https://www.googleapis.com/drive/v3/files/abc", init: {} }),
+    {
+      fetchImpl: async () => {
+        calls += 1;
+        return new Response("%PDF", { status: 200 });
+      },
+      consumeBody: async () => {
+        if (calls === 1) throw new Error("ECONNRESET");
+        return new Uint8Array([0x25, 0x50, 0x44, 0x46]);
+      },
+      sleep: async () => {},
+    },
+  );
+  assert.equal(reset.ok, true);
+  if (reset.ok) {
+    assert.deepEqual(reset.body, new Uint8Array([0x25, 0x50, 0x44, 0x46]));
+  }
+  assert.equal(calls, 2);
+
+  calls = 0;
+  const short = await fetchWithBoundedRetry(
+    () => ({ url: "https://www.googleapis.com/drive/v3/files/abc", init: {} }),
+    {
+      fetchImpl: async () => {
+        calls += 1;
+        const body =
+          calls === 1
+            ? shortPdfStream(8000)
+            : new Uint8Array([0x25, 0x50, 0x44, 0x46]);
+        return new Response(body, {
+          status: 200,
+          headers: { "content-length": calls === 1 ? "8000" : "4" },
+        });
+      },
+      consumeBody: (response) => readLimitedBytes(response),
+      sleep: async () => {},
+    },
+  );
+  assert.equal(short.ok, true);
+  if (short.ok) assert.equal(short.body?.byteLength, 4);
+  assert.equal(calls, 2);
+});
+
+function shortPdfStream(declared: number): ReadableStream<Uint8Array> {
+  void declared;
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(new Uint8Array([0x25, 0x50, 0x44, 0x46]));
+      controller.close();
+    },
+  });
+}

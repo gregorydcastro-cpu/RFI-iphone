@@ -19,7 +19,7 @@ export function SheetPdfErrorBanner({ title, message, onRetry }: Props) {
         <button
           type="button"
           onClick={onRetry}
-          className="mt-4 inline-flex min-h-12 min-w-12 items-center justify-center border border-cta bg-cta px-5 text-base font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover"
+          className="mt-4 flex min-h-12 w-full items-center justify-center border border-cta bg-cta px-5 text-base font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover"
         >
           Retry
         </button>

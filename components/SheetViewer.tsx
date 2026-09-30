@@ -31,6 +31,13 @@ import {
   sheetPdfBanner,
   type SheetPdfBanner,
 } from "@/lib/sheetPdfErrors";
+import {
+  isOfflinePdfResponse,
+  isShortPdfDownload,
+  SHEET_PDF_CLIENT_ATTEMPTS,
+  SHEET_PDF_CLIENT_BACKOFF_MS,
+  shouldAutoRetrySheetPdf,
+} from "@/lib/sheetPdfLoad";
 import { isPdfMagic } from "@/lib/sheetPdfUrl";
 import { MarkupOverlay } from "./MarkupOverlay";
 import { MarkupToolbar } from "./MarkupToolbar";
@@ -121,62 +128,28 @@ export function SheetViewer({
       }
     }
 
-    async function render() {
-      setReady(false);
-      setError(null);
-      setOfflineCopy(false);
-      let response: Response;
-      try {
-        response = await fetch(pdfUrl, {
-          signal: abort.signal,
-          credentials: "same-origin",
-        });
-      } catch (err: unknown) {
-        if (cancelled) return;
-        if (err instanceof DOMException && err.name === "AbortError") return;
-        if (err instanceof Error && err.name === "AbortError") return;
-        const cached = await tryCachedPdf();
-        if (cached) {
-          setOfflineCopy(true);
-          await paintPdf(cached);
-          return;
-        }
-        setError(sheetPdfBanner({ network: true }));
-        return;
-      }
-      if (cancelled) return;
-      if (!response.ok) {
-        const banner = await readSheetPdfBanner(response);
-        const cached = await tryCachedPdf();
-        if (cached) {
-          setOfflineCopy(true);
-          await paintPdf(cached);
-          return;
-        }
-        if (!cancelled) setError(banner);
-        return;
-      }
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      if (cancelled) return;
-      if (!isPdfMagic(bytes)) {
-        const cached = await tryCachedPdf();
-        if (cached) {
-          setOfflineCopy(true);
-          await paintPdf(cached);
-          return;
-        }
-        setError(sheetPdfBanner({ code: "not_pdf" }));
-        return;
-      }
-      void putPdfBytes(pdfUrl, bytes);
-      await paintPdf(bytes);
+    function isAbort(err: unknown): boolean {
+      return (
+        (err instanceof DOMException && err.name === "AbortError") ||
+        (err instanceof Error && err.name === "AbortError")
+      );
     }
 
-    void render().catch(async (err: unknown) => {
-      if (cancelled) return;
-      if (err instanceof DOMException && err.name === "AbortError") return;
-      if (err instanceof Error && err.name === "AbortError") return;
-      // A mid-body failure skips the cache checks inside render().
+    async function pause(ms: number) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, ms);
+        abort.signal.addEventListener(
+          "abort",
+          () => {
+            clearTimeout(timer);
+            resolve();
+          },
+          { once: true },
+        );
+      });
+    }
+
+    async function showCachedOrBanner(banner: SheetPdfBanner) {
       try {
         const cached = await tryCachedPdf();
         if (cancelled) return;
@@ -186,10 +159,114 @@ export function SheetViewer({
           await paintPdf(cached);
           return;
         }
-      } catch {
-        if (cancelled) return;
+      } catch (err: unknown) {
+        if (cancelled || isAbort(err)) return;
       }
-      if (!cancelled) setError(sheetPdfBanner({}));
+      if (!cancelled) setError(banner);
+    }
+
+    async function render() {
+      setReady(false);
+      setError(null);
+      setOfflineCopy(false);
+      let banner: SheetPdfBanner = sheetPdfBanner({ network: true });
+
+      for (let attempt = 0; attempt < SHEET_PDF_CLIENT_ATTEMPTS; attempt++) {
+        if (cancelled || abort.signal.aborted) return;
+        let response: Response;
+        try {
+          response = await fetch(pdfUrl, {
+            signal: abort.signal,
+            credentials: "same-origin",
+          });
+        } catch (err: unknown) {
+          if (cancelled || isAbort(err)) return;
+          banner = sheetPdfBanner({ network: true });
+          if (shouldAutoRetrySheetPdf({ attempt, network: true })) {
+            await pause(SHEET_PDF_CLIENT_BACKOFF_MS);
+            continue;
+          }
+          await showCachedOrBanner(banner);
+          return;
+        }
+        if (cancelled) return;
+
+        if (response.ok && isOfflinePdfResponse(response.headers)) {
+          try {
+            const bytes = new Uint8Array(await response.arrayBuffer());
+            if (cancelled) return;
+            if (!isPdfMagic(bytes)) {
+              await showCachedOrBanner(sheetPdfBanner({ code: "not_pdf" }));
+              return;
+            }
+            setOfflineCopy(true);
+            await paintPdf(bytes);
+          } catch (err: unknown) {
+            if (cancelled || isAbort(err)) return;
+            await showCachedOrBanner(sheetPdfBanner({ interrupted: true }));
+          }
+          return;
+        }
+
+        if (!response.ok) {
+          banner = await readSheetPdfBanner(response);
+          await showCachedOrBanner(banner);
+          return;
+        }
+
+        let bytes: Uint8Array;
+        try {
+          bytes = new Uint8Array(await response.arrayBuffer());
+        } catch (err: unknown) {
+          if (cancelled || isAbort(err)) return;
+          banner = sheetPdfBanner({ interrupted: true });
+          if (shouldAutoRetrySheetPdf({ attempt, interrupted: true })) {
+            await pause(SHEET_PDF_CLIENT_BACKOFF_MS);
+            continue;
+          }
+          await showCachedOrBanner(banner);
+          return;
+        }
+        if (cancelled) return;
+
+        if (
+          isShortPdfDownload(
+            bytes.byteLength,
+            response.headers.get("content-length"),
+            response.headers.get("content-encoding"),
+          )
+        ) {
+          banner = sheetPdfBanner({ interrupted: true });
+          if (shouldAutoRetrySheetPdf({ attempt, interrupted: true })) {
+            await pause(SHEET_PDF_CLIENT_BACKOFF_MS);
+            continue;
+          }
+          await showCachedOrBanner(banner);
+          return;
+        }
+
+        if (!isPdfMagic(bytes)) {
+          await showCachedOrBanner(sheetPdfBanner({ code: "not_pdf" }));
+          return;
+        }
+
+        try {
+          await paintPdf(bytes);
+        } catch (err: unknown) {
+          if (cancelled || isAbort(err)) return;
+          await showCachedOrBanner(sheetPdfBanner({ interrupted: true }));
+          return;
+        }
+        if (!cancelled) void putPdfBytes(pdfUrl, bytes);
+        return;
+      }
+
+      if (!cancelled) await showCachedOrBanner(banner);
+    }
+
+    void render().catch(async (err: unknown) => {
+      if (cancelled || isAbort(err)) return;
+      await showCachedOrBanner(sheetPdfBanner({ interrupted: true }));
     });
 
     return () => {

@@ -136,6 +136,8 @@ export type SheetPdfBanner = {
   title: string;
   message: string;
   retryable: boolean;
+  /** Present when the response named a known code. Not rendered. */
+  code?: SheetPdfErrorCode;
 };
 
 const NO_RETRY: ReadonlySet<SheetPdfErrorCode> = new Set([
@@ -226,12 +228,20 @@ const NETWORK_BANNER: SheetPdfBanner = {
   retryable: true,
 };
 
+const INTERRUPTED_BANNER: SheetPdfBanner = {
+  title: "Sheet download stopped",
+  message: "The sheet PDF stopped before it finished. Tap Retry.",
+  retryable: true,
+};
+
 export function sheetPdfBanner(input: {
   code?: string | null;
   httpStatus?: number;
   network?: boolean;
+  interrupted?: boolean;
 }): SheetPdfBanner {
   if (input.network) return NETWORK_BANNER;
+  if (input.interrupted) return INTERRUPTED_BANNER;
   const code = isSheetPdfErrorCode(input.code) ? input.code : undefined;
   if (code) {
     const copy = FIELD_COPY[code];
@@ -239,6 +249,7 @@ export function sheetPdfBanner(input: {
       title: copy.title,
       message: copy.message,
       retryable: !NO_RETRY.has(code),
+      code,
     };
   }
   const status = input.httpStatus ?? 0;
