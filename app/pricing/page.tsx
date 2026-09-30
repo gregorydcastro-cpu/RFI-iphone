@@ -1,7 +1,11 @@
 import { AppHeader } from "@/components/AppHeader";
 import { SubscribeCta } from "@/components/SubscribeCta";
 import { getProcoreConnectionView } from "@/lib/procoreStatus";
-import { STRIPE_TRIAL_PERIOD_DAYS, isStripeCheckoutConfigured } from "@/lib/stripe";
+import {
+  STRIPE_TRIAL_PERIOD_DAYS,
+  isStripeCheckoutConfigured,
+  missingStripeProductionEnv,
+} from "@/lib/stripe";
 import { readAppSession } from "@/lib/session.server";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +19,7 @@ export default async function PricingPage({ searchParams }: Props) {
   const session = await readAppSession();
   const view = await getProcoreConnectionView(session);
   const configured = isStripeCheckoutConfigured();
+  const missingStripeEnv = missingStripeProductionEnv();
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -73,6 +78,7 @@ export default async function PricingPage({ searchParams }: Props) {
           </ul>
           <SubscribeCta
             configured={configured}
+            missing={missingStripeEnv}
             defaultEmail={session?.email ?? ""}
           />
         </section>

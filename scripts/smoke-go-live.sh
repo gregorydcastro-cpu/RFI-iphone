@@ -75,17 +75,19 @@ else
 fi
 
 # --- POST /api/stripe/checkout ---
-# Unconfigured: 503 billing_unconfigured. Configured: 200 JSON or a redirect.
+# Still unconfigured: 503 billing_unconfigured (no Stripe API call).
+# Live: 200 JSON with a Checkout URL, or a redirect.
 checkout_body="$tmpdir/checkout.body"
 checkout_hdr="$tmpdir/checkout.hdr"
 checkout_code=$(
   fetch "$checkout_body" "$checkout_hdr" -X POST "$BASE_URL/api/stripe/checkout"
 ) || true
 checkout_err=$(json_field "$checkout_body" "error")
+checkout_msg=$(json_field "$checkout_body" "message")
 if [[ "$checkout_code" == "503" && "$checkout_err" == "billing_unconfigured" ]]; then
-  ok "POST /api/stripe/checkout → 503 billing_unconfigured (keys unset)"
+  ok "POST /api/stripe/checkout → 503 billing_unconfigured (Production env unset) ${checkout_msg:-}"
 elif [[ "$checkout_code" =~ ^2 ]]; then
-  ok "POST /api/stripe/checkout → $checkout_code (configured)"
+  ok "POST /api/stripe/checkout → $checkout_code (configured — STRIPE_SECRET_KEY and STRIPE_PRICE_ID landed)"
 elif [[ "$checkout_code" =~ ^3 ]]; then
   location=$(
     awk 'BEGIN { IGNORECASE=1 } /^location:/ { sub(/\r$/, ""); print; exit }' \
@@ -94,6 +96,24 @@ elif [[ "$checkout_code" =~ ^3 ]]; then
   ok "POST /api/stripe/checkout → $checkout_code redirect ${location:-}"
 else
   fail "POST /api/stripe/checkout → $checkout_code error=${checkout_err:-n/a} (expected 503 billing_unconfigured or 200/redirect)"
+fi
+
+# --- POST /api/stripe/webhook (no signature; does not call Stripe) ---
+# 503 billing_unconfigured: STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET unset.
+# 400 missing_signature: both set.
+webhook_body="$tmpdir/webhook.body"
+webhook_hdr="$tmpdir/webhook.hdr"
+webhook_code=$(
+  fetch "$webhook_body" "$webhook_hdr" -X POST "$BASE_URL/api/stripe/webhook"
+) || true
+webhook_err=$(json_field "$webhook_body" "error")
+webhook_msg=$(json_field "$webhook_body" "message")
+if [[ "$webhook_code" == "503" && "$webhook_err" == "billing_unconfigured" ]]; then
+  ok "POST /api/stripe/webhook → 503 billing_unconfigured (STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET unset) ${webhook_msg:-}"
+elif [[ "$webhook_code" == "400" && "$webhook_err" == "missing_signature" ]]; then
+  ok "POST /api/stripe/webhook → 400 missing_signature (webhook keys present)"
+else
+  note "POST /api/stripe/webhook → $webhook_code error=${webhook_err:-n/a} (expected 503 billing_unconfigured or 400 missing_signature)"
 fi
 
 # --- GET /api/sheet-pdf (print status + JSON code; 503 is still expected) ---

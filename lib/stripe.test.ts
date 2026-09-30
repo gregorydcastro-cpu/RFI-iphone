@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { afterEach, test } from "node:test";
 import {
+  BILLING_UNCONFIGURED_MESSAGE,
+  billingUnconfiguredBody,
+  formatBillingUnconfigured,
+} from "./billingMessages.ts";
+import {
   DEFAULT_APP_ORIGIN,
   STRIPE_PRODUCTION_WEBHOOK_URL,
   STRIPE_TRIAL_PERIOD_DAYS,
@@ -14,6 +19,9 @@ import {
   getStripeSecretKey,
   getStripeWebhookSecret,
   isStripeCheckoutConfigured,
+  missingStripeCheckoutEnv,
+  missingStripeProductionEnv,
+  missingStripeWebhookEnv,
 } from "./stripe.ts";
 
 const forbidden = /Brown|Rossi|Danoff|Suffolk|ILSB|EL107/i;
@@ -92,23 +100,72 @@ test("checkout and webhook routes return billing_unconfigured 503 when keys are 
   const checkout = readRepo("app/api/stripe/checkout/route.ts");
   const webhook = readRepo("app/api/stripe/webhook/route.ts");
 
-  assert.match(checkout, /error:\s*"billing_unconfigured"/);
+  assert.match(checkout, /billingUnconfiguredBody\(missingStripeCheckoutEnv\(\)\)/);
   assert.match(checkout, /status:\s*503/);
   assert.match(checkout, /getStripeCheckoutConfig\(\)/);
   assert.match(checkout, /getStripe\(\)/);
 
-  assert.match(webhook, /error:\s*"billing_unconfigured"/);
+  assert.match(webhook, /billingUnconfiguredBody\(missingStripeWebhookEnv\(\)\)/);
   assert.match(webhook, /status:\s*503/);
   assert.match(webhook, /getStripeWebhookSecret\(\)/);
   assert.match(webhook, /https:\/\/www\.gcfieldlog\.com\/api\/stripe\/webhook/);
 
-  const checkoutUnconfigured = checkout.indexOf('"billing_unconfigured"');
+  const checkoutUnconfigured = checkout.indexOf("billingUnconfiguredBody(");
   const checkout503 = checkout.indexOf("status: 503");
   assert.ok(checkoutUnconfigured >= 0 && checkout503 > checkoutUnconfigured);
 
-  const webhookUnconfigured = webhook.indexOf('"billing_unconfigured"');
+  const webhookUnconfigured = webhook.indexOf("billingUnconfiguredBody(");
   const webhook503 = webhook.indexOf("status: 503");
   assert.ok(webhookUnconfigured >= 0 && webhook503 > webhookUnconfigured);
+});
+
+test("billing_unconfigured body names Production env and drops anything that is not a key name", () => {
+  clearStripeEnv();
+  assert.deepEqual(missingStripeCheckoutEnv(), [
+    "STRIPE_SECRET_KEY",
+    "STRIPE_PRICE_ID",
+  ]);
+  assert.deepEqual(missingStripeWebhookEnv(), [
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+  ]);
+  assert.deepEqual(missingStripeProductionEnv(), [
+    "STRIPE_SECRET_KEY",
+    "STRIPE_PRICE_ID",
+    "STRIPE_WEBHOOK_SECRET",
+  ]);
+
+  const body = billingUnconfiguredBody(missingStripeCheckoutEnv());
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "billing_unconfigured");
+  assert.deepEqual(body.missing, ["STRIPE_SECRET_KEY", "STRIPE_PRICE_ID"]);
+  assert.match(body.message, /STRIPE_SECRET_KEY/);
+  assert.match(body.message, /STRIPE_PRICE_ID/);
+  assert.match(body.message, /Production/);
+  assert.match(body.message, /Not a host allowlist/);
+  assert.doesNotMatch(body.message, /STRIPE_WEBHOOK_SECRET/);
+
+  const poisoned = billingUnconfiguredBody([
+    "STRIPE_SECRET_KEY",
+    "not-a-key",
+    "STRIPE_SECRET_KEY=placeholder",
+  ]);
+  assert.deepEqual(poisoned.missing, ["STRIPE_SECRET_KEY"]);
+  assert.doesNotMatch(JSON.stringify(poisoned), /placeholder/);
+  assert.doesNotMatch(JSON.stringify(poisoned), inventedSecret);
+
+  assert.equal(formatBillingUnconfigured(), BILLING_UNCONFIGURED_MESSAGE);
+  assert.match(BILLING_UNCONFIGURED_MESSAGE, /STRIPE_WEBHOOK_SECRET/);
+
+  process.env.STRIPE_SECRET_KEY = "placeholder-not-a-stripe-secret";
+  process.env.STRIPE_PRICE_ID = "placeholder-not-a-price-id";
+  assert.deepEqual(missingStripeCheckoutEnv(), []);
+  assert.equal(isStripeCheckoutConfigured(), true);
+  assert.deepEqual(missingStripeProductionEnv(), ["STRIPE_WEBHOOK_SECRET"]);
+  assert.match(
+    formatBillingUnconfigured(missingStripeProductionEnv()),
+    /STRIPE_WEBHOOK_SECRET/,
+  );
 });
 
 test("SubscribeCta treats billing_unconfigured as coming soon, not a host allowlist", () => {
@@ -120,13 +177,14 @@ test("SubscribeCta treats billing_unconfigured as coming soon, not a host allowl
   assert.match(cta, /Checkout stayed closed/);
   assert.match(cta, /case "billing_unconfigured":/);
   assert.match(cta, /kind: "held"/);
+  assert.match(cta, /formatBillingUnconfigured/);
+  assert.match(cta, /not missing Production env/);
   assert.doesNotMatch(cta, /disabled=\{!configured/);
   assert.doesNotMatch(cta, /not configured on this host/);
   assert.doesNotMatch(cta, /this host yet/);
-  assert.match(cta, /STRIPE_SECRET_KEY/);
-  assert.match(cta, /STRIPE_PRICE_ID/);
-  assert.match(cta, /on Vercel/);
   assert.match(pricing, /Billing isn't live yet/);
+  assert.match(pricing, /missingStripeProductionEnv/);
+  assert.match(pricing, /missing=\{missingStripeEnv\}/);
   assert.match(account, /Billing isn't live yet/);
 });
 
@@ -139,12 +197,18 @@ test("go-live docs tell Greg to register the www webhook URL", () => {
   assert.match(live, /does not follow redirects/);
   assert.match(readme, /missing keys, not a host allowlist/);
   assert.match(live, /Vercel Production is missing Stripe keys/);
+  assert.match(live, /## One-pass \(live keys on Production\)/);
+  assert.match(live, /NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY/);
+  assert.match(live, /Redeploy Production/);
+  assert.match(live, /still-unconfigured vs live/);
 });
 
 test("smoke script still treats unconfigured checkout as 503 billing_unconfigured", () => {
   const smoke = readRepo("scripts/smoke-go-live.sh");
   assert.match(smoke, /503 billing_unconfigured/);
   assert.match(smoke, /\/api\/stripe\/checkout/);
+  assert.match(smoke, /\/api\/stripe\/webhook/);
+  assert.match(smoke, /400 missing_signature/);
   assert.ok(smoke.includes('BASE_URL="${BASE_URL:-https://www.gcfieldlog.com}"'));
 });
 
@@ -187,6 +251,7 @@ test("Stripe helpers and copy stay Maple Point / fictional and invent no keys", 
     readRepo("lib/stripe.ts"),
     readRepo("STRIPE_GO_LIVE.md"),
     readRepo("components/SubscribeCta.tsx"),
+    readRepo("lib/billingMessages.ts"),
     readRepo("app/pricing/page.tsx"),
     readRepo("app/account/page.tsx"),
     readRepo("app/api/stripe/checkout/route.ts"),

@@ -1,9 +1,15 @@
 "use client";
 
+import {
+  billingEnvNames,
+  formatBillingUnconfigured,
+} from "@/lib/billingMessages";
 import { type FormEvent, useId, useState } from "react";
 
 type Props = {
   configured: boolean;
+  /** Unset Production env key names. Values are never passed. */
+  missing?: readonly string[];
   defaultEmail?: string;
 };
 
@@ -11,16 +17,23 @@ type CheckoutPayload = {
   ok?: boolean;
   url?: string;
   error?: string;
+  missing?: string[];
 };
 
 const BILLING_HELD_TITLE = "Billing isn't live yet";
 
-export function SubscribeCta({ configured, defaultEmail = "" }: Props) {
+export function SubscribeCta({
+  configured,
+  missing = [],
+  defaultEmail = "",
+}: Props) {
   const [email, setEmail] = useState(defaultEmail);
   const [error, setError] = useState<string | null>(null);
   const [held, setHeld] = useState(false);
+  const [apiMissing, setApiMissing] = useState<readonly string[]>([]);
   const [pending, setPending] = useState(false);
   const statusId = useId();
+  const namedMissing = billingEnvNames([...missing, ...apiMissing]);
   const showHeld = !configured || held;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -40,6 +53,7 @@ export function SubscribeCta({ configured, defaultEmail = "" }: Props) {
       const data = await readCheckoutJson(response);
       const feedback = checkoutFeedback(data.error);
       if (feedback.kind === "held") {
+        if (data.missing?.length) setApiMissing(data.missing);
         setHeld(true);
         return;
       }
@@ -59,7 +73,15 @@ export function SubscribeCta({ configured, defaultEmail = "" }: Props) {
   return (
     <form onSubmit={onSubmit} className="mt-6 max-w-md space-y-4">
       {showHeld ? (
-        <BillingHeldNotice id={statusId} confirmed={held} />
+        <BillingHeldNotice
+          id={statusId}
+          confirmed={held}
+          missing={namedMissing}
+        />
+      ) : namedMissing.length > 0 ? (
+        <p id={statusId} role="status" className="text-xs leading-relaxed text-tan">
+          {formatBillingUnconfigured(namedMissing)}
+        </p>
       ) : null}
       <label className="block text-xs font-semibold tracking-wide text-muted uppercase">
         Email for Checkout
@@ -80,7 +102,7 @@ export function SubscribeCta({ configured, defaultEmail = "" }: Props) {
       <button
         type="submit"
         disabled={pending}
-        aria-describedby={showHeld ? statusId : undefined}
+        aria-describedby={showHeld || namedMissing.length > 0 ? statusId : undefined}
         className="w-full bg-cta px-4 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60 sm:w-auto"
       >
         {pending
@@ -96,9 +118,11 @@ export function SubscribeCta({ configured, defaultEmail = "" }: Props) {
 function BillingHeldNotice({
   id,
   confirmed,
+  missing,
 }: {
   id: string;
   confirmed: boolean;
+  missing: readonly string[];
 }) {
   return (
     <div id={id} role="status" aria-live="polite" className="border border-line bg-ink">
@@ -113,10 +137,7 @@ function BillingHeldNotice({
             : "Checkout is coming soon. Nothing is charged from this page until billing opens."}
         </p>
         <p className="mt-2 text-xs leading-relaxed text-tan">
-          Operators: set{" "}
-          <code className="font-mono text-paper">STRIPE_SECRET_KEY</code> and{" "}
-          <code className="font-mono text-paper">STRIPE_PRICE_ID</code> on Vercel
-          (server-only).
+          {formatBillingUnconfigured(missing)}
         </p>
       </div>
     </div>
@@ -141,7 +162,8 @@ function checkoutFeedback(
     case "checkout_url_missing":
       return {
         kind: "error",
-        message: "Stripe Checkout could not start. Check the Price ID and secret key.",
+        message:
+          "Stripe Checkout could not start. The Price ID or secret key was rejected. This is not missing Production env.",
       };
     default:
       return { kind: "error", message: "Could not start Checkout. Try again." };
