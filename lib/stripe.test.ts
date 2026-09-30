@@ -168,16 +168,24 @@ test("billing_unconfigured body names Production env and drops anything that is 
   );
 });
 
-test("SubscribeCta treats billing_unconfigured as missing Production env, not a host allowlist", () => {
+test("SubscribeCta treats billing_unconfigured as coming soon, not a host allowlist", () => {
   const cta = readRepo("components/SubscribeCta.tsx");
   const pricing = readRepo("app/pricing/page.tsx");
-  assert.match(cta, /formatBillingUnconfigured/);
+  const account = readRepo("app/account/page.tsx");
+  assert.match(cta, /Billing isn't live yet/);
+  assert.match(cta, /Checkout is coming soon/);
+  assert.match(cta, /Checkout stayed closed/);
   assert.match(cta, /case "billing_unconfigured":/);
+  assert.match(cta, /kind: "held"/);
+  assert.match(cta, /formatBillingUnconfigured/);
   assert.match(cta, /not missing Production env/);
+  assert.doesNotMatch(cta, /disabled=\{!configured/);
   assert.doesNotMatch(cta, /not configured on this host/);
   assert.doesNotMatch(cta, /this host yet/);
+  assert.match(pricing, /Billing isn't live yet/);
   assert.match(pricing, /missingStripeProductionEnv/);
   assert.match(pricing, /missing=\{missingStripeEnv\}/);
+  assert.match(account, /Billing isn't live yet/);
 });
 
 test("go-live docs tell Greg to register the www webhook URL", () => {
@@ -245,6 +253,7 @@ test("Stripe helpers and copy stay Maple Point / fictional and invent no keys", 
     readRepo("components/SubscribeCta.tsx"),
     readRepo("lib/billingMessages.ts"),
     readRepo("app/pricing/page.tsx"),
+    readRepo("app/account/page.tsx"),
     readRepo("app/api/stripe/checkout/route.ts"),
     readRepo("app/api/stripe/webhook/route.ts"),
   ].join("\n");

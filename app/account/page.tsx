@@ -8,6 +8,7 @@ import { canManageNotifyEmail } from "@/lib/accountRole";
 import { canInviteCrew, fieldRoleLabel } from "@/lib/inviteRole";
 import { getProcoreConnectionView, procoreErrorMessage } from "@/lib/procoreStatus";
 import { readAppSession } from "@/lib/session.server";
+import { isStripeCheckoutConfigured } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ export default async function AccountPage({ searchParams }: Props) {
     : null;
   const error =
     query.procore === "error" ? procoreErrorMessage(query.reason) : null;
+  const billingLive = isStripeCheckoutConfigured();
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -122,8 +124,9 @@ export default async function AccountPage({ searchParams }: Props) {
             Subscription
           </h2>
           <p className="mt-2 text-sm text-muted">
-            60-day free trial on Stripe-hosted Checkout, then monthly. Cards,
-            Apple Pay, and PayPal when those methods are on in the Dashboard.
+            {billingLive
+              ? "60-day free trial on Stripe-hosted Checkout, then monthly. Cards, Apple Pay, and PayPal when those methods are on in the Dashboard."
+              : "Billing isn't live yet. Pricing shows the crew plan until Checkout opens."}
           </p>
           <Link
             href="/pricing"

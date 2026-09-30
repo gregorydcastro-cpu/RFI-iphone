@@ -2,7 +2,7 @@
 
 Operator steps to take **GC Field Log** Checkout live on [www.gcfieldlog.com](https://www.gcfieldlog.com) (issue [#26](https://github.com/gregorydcastro-cpu/RFI-iphone/issues/26)). Maple Point local demos do **not** need these keys. Do not put secret values in git.
 
-Until those keys are set, `POST /api/stripe/checkout` and `POST /api/stripe/webhook` return **HTTP 503** `{ ok: false, error: "billing_unconfigured" }` plus `missing` (env **names** only) and a `message`. `/pricing` still renders and shows the same sentence. That 503 means **Vercel Production is missing Stripe keys**, not a host allowlist and not a rejected Price.
+Until those keys are set, `POST /api/stripe/checkout` and `POST /api/stripe/webhook` return **HTTP 503** `{ ok: false, error: "billing_unconfigured" }` plus `missing` (env **names** only) and a `message`. `/pricing` still renders and leads with **Billing isn't live yet** (crew copy). The operator line names the unset Production env. Clicking Subscribe shows that notice in place. That 503 means **Vercel Production is missing Stripe keys**, not a host allowlist and not a rejected Price.
 
 ## One-pass (live keys on Production)
 
@@ -14,7 +14,7 @@ Until those keys are set, `POST /api/stripe/checkout` and `POST /api/stripe/webh
 2. **Redeploy Production** so the running build picks up the env.
 3. **Register the webhook** in Stripe **live** mode at **`https://www.gcfieldlog.com/api/stripe/webhook`** — **www, not apex** (apex may 308; Stripe does not follow redirects). Events: `checkout.session.completed`, `customer.subscription.updated`, `invoice.paid`.
 4. **Hit checkout once** on [https://www.gcfieldlog.com/pricing](https://www.gcfieldlog.com/pricing) (or `POST /api/stripe/checkout`):
-   - Page names unset Production env, and checkout/webhook return **503** `billing_unconfigured` → keys did not land. Confirm the Vercel scope is **Production**, save, redeploy.
+   - Page leads with **Billing isn't live yet**, the operator line names unset Production env, and checkout/webhook return **503** `billing_unconfigured` → keys did not land. Confirm the Vercel scope is **Production**, save, redeploy.
    - Browser redirects to Stripe Checkout (API **200** `{ ok: true, url }`) → `STRIPE_SECRET_KEY` and `STRIPE_PRICE_ID` are live. Finish or cancel.
    - Checkout can succeed while the page still names `STRIPE_WEBHOOK_SECRET`. A no-signature `POST /api/stripe/webhook` stays **503** until that secret is set, then returns **400** `missing_signature` (keys present; no Stripe API call).
 
@@ -91,7 +91,7 @@ That creates `public.billing_customers` (RLS on; anon has no grants; service rol
 
 With keys unset (Maple Point demo / Vercel Production before the one-pass above):
 
-- `/pricing` still renders and names the unset Production env (`STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`). Not a host allowlist.
+- `/pricing` still renders, leads with **Billing isn't live yet**, and the operator line names unset Production env (`STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`). Not a host allowlist.
 - `POST /api/stripe/checkout` returns **HTTP 503** `{ ok: false, error: "billing_unconfigured" }`. `missing` is the unset checkout keys (secret and/or price). No Stripe API call.
 - `POST /api/stripe/webhook` with no signature returns the same 503 until `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are both set, then **400** `missing_signature`.
 - Pack viewer, Time, Voice, and Procore OAuth are unchanged.
