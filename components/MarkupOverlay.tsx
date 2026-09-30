@@ -226,7 +226,7 @@ export function MarkupOverlay({
       </svg>
       {activeEditor ? (
         <form
-          className="absolute right-2 bottom-14 left-2 z-30 flex gap-2 border border-cta bg-gline-ink/95 p-2"
+          className="absolute right-2 bottom-[4.5rem] left-2 z-30 flex gap-2 border border-cta bg-gline-ink/95 p-2"
           onSubmit={(event) => {
             event.preventDefault();
             commitNote();

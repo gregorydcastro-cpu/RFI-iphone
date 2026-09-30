@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useOfflinePackCache } from "@/components/useOfflinePackCache";
 import {
   isOfflineFetchFailure,
-  offlineBannerText,
+  OFFLINE_STATUS_LINE,
   type OfflinePackSnapshot,
 } from "@/lib/offlinePackCache";
 import type { RoomPack } from "@/lib/pack";
@@ -91,7 +91,7 @@ export function PackLiveReload({
         offline: true,
         snapshot,
       });
-      setMessage(offlineBannerText(snapshot));
+      setMessage(OFFLINE_STATUS_LINE);
       return true;
     }
 
@@ -218,7 +218,7 @@ export function PackLiveReload({
                       offline: true,
                       snapshot,
                     });
-                    setMessage(offlineBannerText(snapshot));
+                    setMessage(OFFLINE_STATUS_LINE);
                   }
                 }
               } catch {
@@ -230,7 +230,7 @@ export function PackLiveReload({
                     offline: true,
                     snapshot,
                   });
-                  setMessage(offlineBannerText(snapshot));
+                  setMessage(OFFLINE_STATUS_LINE);
                 } else {
                   setMessage(
                     "Could not reach the pack service. Maple Point demo stays on screen.",

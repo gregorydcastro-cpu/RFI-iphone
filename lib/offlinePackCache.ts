@@ -287,6 +287,18 @@ export function offlineBannerText(
   return `Offline — showing cached pack from ${when}${suffix}`;
 }
 
+/**
+ * Context-bar line while `OfflinePackBanner` carries the time and stamp.
+ * Kept short so the title row does not repeat the banner sentence.
+ */
+export const OFFLINE_STATUS_LINE = "Device snapshot · not a live pull.";
+
+/**
+ * Sheet strip when live PDF bytes miss and a device copy paints.
+ * Sits above the markup toolbar — that bar used to cover this note.
+ */
+export const OFFLINE_SHEET_NOTE = "Offline copy · live sheet didn't load";
+
 export function sheetBlobKey(sheet: Pick<Sheet, "id" | "rev">): string {
   return `${sheet.id}::${sheet.rev}`;
 }

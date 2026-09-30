@@ -24,6 +24,7 @@ import {
   type MarkupVector,
 } from "@/lib/markup";
 import type { Layout } from "@/lib/pack";
+import { OFFLINE_SHEET_NOTE } from "@/lib/offlinePackCache";
 import { matchCachedPdf, putPdfBytes } from "@/lib/offlinePackStore";
 import {
   readSheetPdfBanner,
@@ -171,11 +172,24 @@ export function SheetViewer({
       await paintPdf(bytes);
     }
 
-    void render().catch((err: unknown) => {
+    void render().catch(async (err: unknown) => {
       if (cancelled) return;
       if (err instanceof DOMException && err.name === "AbortError") return;
       if (err instanceof Error && err.name === "AbortError") return;
-      setError(sheetPdfBanner({}));
+      // A mid-body failure skips the cache checks inside render().
+      try {
+        const cached = await tryCachedPdf();
+        if (cancelled) return;
+        if (cached) {
+          setError(null);
+          setOfflineCopy(true);
+          await paintPdf(cached);
+          return;
+        }
+      } catch {
+        if (cancelled) return;
+      }
+      if (!cancelled) setError(sheetPdfBanner({}));
     });
 
     return () => {
@@ -264,131 +278,147 @@ export function SheetViewer({
     }
   }
 
+  const showOfflineNote = offlineCopy && ready && !failure;
+
   return (
-    <div className="relative h-full min-h-0 w-full overflow-hidden bg-charcoal">
-      {markupEnabled && !readOnly ? (
-        <MarkupToolbar
-          tool={tool}
-          onTool={setTool}
-          selected={selected}
-          itemCount={markup.items.length}
-          storage={markup.storage}
-          saving={!markup.ready || markup.saving}
-          persistFailed={markup.ready && markup.persistFailed}
-          onCreateRfi={() => {
-            void handleCreateRfi();
-          }}
-          onDeleteSelected={handleDeleteSelected}
-          onUndo={handleUndo}
-          onClearAll={handleClearAll}
-          disabled={!ready}
-        />
-      ) : null}
-      <TransformWrapper
-        ref={transformRef}
-        minScale={0.4}
-        maxScale={8}
-        initialScale={1}
-        centerOnInit
-        fitOnInit
-        limitToBounds={false}
-        wheel={{ disabled: true }}
-        panning={{ disabled: !readOnly && drawing }}
-        pinch={{ step: 5 }}
-        doubleClick={{ disabled: !readOnly && drawing, mode: "zoomIn", step: 0.7 }}
-      >
-        {({ zoomIn, zoomOut, resetTransform }) => (
-          <>
-            <TransformComponent
-              wrapperClass="!h-full !w-full"
-              contentClass="!flex !h-full !w-full !items-center !justify-center"
-            >
-              <div
-                className="relative w-[min(100%,1100px)] shadow-md"
-                style={{ aspectRatio: `${aspect}` }}
-              >
-                <canvas
-                  ref={canvasRef}
-                  className="absolute inset-0 h-full w-full bg-white"
-                />
-                {overlay ? <HighlightOverlay highlight={overlay} /> : null}
-                {markupEnabled ? (
-                  <MarkupOverlay
-                    items={markup.items}
-                    selectedId={readOnly ? null : selectedId}
-                    tool={readOnly ? "pan" : tool}
-                    aspect={aspect}
-                    onSelect={readOnly ? () => undefined : setSelectedId}
-                    onAdd={readOnly ? () => undefined : handleAdd}
-                    onUpdateText={readOnly ? undefined : handleUpdateText}
-                  />
-                ) : null}
-              </div>
-            </TransformComponent>
-            <div className="absolute bottom-3 left-3 z-20 flex items-center gap-1 border border-line bg-gline-ink/90 p-1 text-paper">
-              <button
-                type="button"
-                className="min-h-10 min-w-10 px-2 py-1 text-sm hover:bg-accent"
-                onClick={() => zoomOut()}
-                aria-label="Zoom out"
-              >
-                −
-              </button>
-              <button
-                type="button"
-                className="min-h-10 min-w-10 px-2 py-1 text-sm hover:bg-accent"
-                onClick={() => zoomIn()}
-                aria-label="Zoom in"
-              >
-                +
-              </button>
-              <button
-                type="button"
-                className="min-h-10 px-2 py-1 text-xs hover:bg-accent"
-                onClick={() => resetTransform()}
-              >
-                Reset
-              </button>
-            </div>
-          </>
-        )}
-      </TransformWrapper>
-      <p className="pointer-events-none absolute right-3 bottom-3 bg-gline-ink/80 px-2 py-1 text-[11px] text-metal">
-        {readOnly
-          ? "View only · pinch or +/− to zoom · drag to pan"
-          : drawing
-            ? tool === "text"
-              ? "Tap the sheet to place a note"
-              : "Drag on the sheet · vector overlay (not a photo bake)"
-            : selected?.kind === "text"
-              ? "Note selected · tap it to edit · Create RFI drafts to the foreman"
-              : selected
-                ? "Markup selected · Create RFI sends a draft to the foreman"
-                : "Pinch or +/− to zoom · drag to pan · tap a note to edit"}
-      </p>
-      {offlineCopy && ready && !failure ? (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-ink/80 px-4 py-2 text-center text-xs text-metal">
-          Showing offline copy · live fetch unavailable
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-charcoal">
+      {showOfflineNote ? (
+        <div
+          role="status"
+          className="flex shrink-0 items-center justify-between gap-3 border-b border-cta/70 bg-ink px-3 py-2"
+        >
+          <p className="min-w-0 text-sm leading-snug font-medium text-paper">
+            {OFFLINE_SHEET_NOTE}
+          </p>
+          <button
+            type="button"
+            onClick={() => setLoadAttempt((current) => current + 1)}
+            className="inline-flex min-h-12 shrink-0 items-center justify-center border border-cta bg-cta px-4 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover"
+          >
+            Retry
+          </button>
         </div>
       ) : null}
-      {!ready && !failure ? (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-charcoal/80 text-sm text-muted">
-          Loading sheet…
-        </div>
-      ) : null}
-      {failure ? (
-        <div className="absolute inset-0 z-30 flex items-start justify-center overflow-y-auto bg-charcoal/85 px-3 pt-16 pb-16 sm:items-center sm:pt-4">
-          <SheetPdfErrorBanner
-            title={failure.title}
-            message={failure.message}
-            onRetry={
-              failure.retryable
-                ? () => setLoadAttempt((current) => current + 1)
-                : undefined
-            }
+      <div className="relative min-h-0 flex-1">
+        {markupEnabled && !readOnly ? (
+          <MarkupToolbar
+            tool={tool}
+            onTool={setTool}
+            selected={selected}
+            itemCount={markup.items.length}
+            storage={markup.storage}
+            saving={!markup.ready || markup.saving}
+            persistFailed={markup.ready && markup.persistFailed}
+            onCreateRfi={() => {
+              void handleCreateRfi();
+            }}
+            onDeleteSelected={handleDeleteSelected}
+            onUndo={handleUndo}
+            onClearAll={handleClearAll}
+            disabled={!ready}
           />
-        </div>
-      ) : null}
+        ) : null}
+        <TransformWrapper
+          ref={transformRef}
+          minScale={0.4}
+          maxScale={8}
+          initialScale={1}
+          centerOnInit
+          fitOnInit
+          limitToBounds={false}
+          wheel={{ disabled: true }}
+          panning={{ disabled: !readOnly && drawing }}
+          pinch={{ step: 5 }}
+          doubleClick={{ disabled: !readOnly && drawing, mode: "zoomIn", step: 0.7 }}
+        >
+          {({ zoomIn, zoomOut, resetTransform }) => (
+            <>
+              <TransformComponent
+                wrapperClass="!h-full !w-full"
+                contentClass="!flex !h-full !w-full !items-center !justify-center"
+              >
+                <div
+                  className="relative w-[min(100%,1100px)] shadow-md"
+                  style={{ aspectRatio: `${aspect}` }}
+                >
+                  <canvas
+                    ref={canvasRef}
+                    className="absolute inset-0 h-full w-full bg-white"
+                  />
+                  {overlay ? <HighlightOverlay highlight={overlay} /> : null}
+                  {markupEnabled ? (
+                    <MarkupOverlay
+                      items={markup.items}
+                      selectedId={readOnly ? null : selectedId}
+                      tool={readOnly ? "pan" : tool}
+                      aspect={aspect}
+                      onSelect={readOnly ? () => undefined : setSelectedId}
+                      onAdd={readOnly ? () => undefined : handleAdd}
+                      onUpdateText={readOnly ? undefined : handleUpdateText}
+                    />
+                  ) : null}
+                </div>
+              </TransformComponent>
+              <div className="absolute bottom-3 left-3 z-20 flex items-center gap-1 border border-line bg-gline-ink/90 p-1 text-paper">
+                <button
+                  type="button"
+                  className="min-h-10 min-w-10 px-2 py-1 text-sm hover:bg-accent"
+                  onClick={() => zoomOut()}
+                  aria-label="Zoom out"
+                >
+                  −
+                </button>
+                <button
+                  type="button"
+                  className="min-h-10 min-w-10 px-2 py-1 text-sm hover:bg-accent"
+                  onClick={() => zoomIn()}
+                  aria-label="Zoom in"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  className="min-h-10 px-2 py-1 text-xs hover:bg-accent"
+                  onClick={() => resetTransform()}
+                >
+                  Reset
+                </button>
+              </div>
+            </>
+          )}
+        </TransformWrapper>
+        <p className="pointer-events-none absolute right-3 bottom-3 z-10 max-w-[calc(100%-11.5rem)] bg-gline-ink/80 px-2 py-1 text-right text-[11px] leading-snug text-metal">
+          {readOnly
+            ? "View only · pinch or +/− to zoom · drag to pan"
+            : drawing
+              ? tool === "text"
+                ? "Tap the sheet to place a note"
+                : "Drag on the sheet · vector overlay (not a photo bake)"
+              : selected?.kind === "text"
+                ? "Note selected · tap it to edit · Create RFI drafts to the foreman"
+                : selected
+                  ? "Markup selected · Create RFI sends a draft to the foreman"
+                  : "Pinch or +/− to zoom · drag to pan · tap a note to edit"}
+        </p>
+        {!ready && !failure ? (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-charcoal/80 text-sm text-muted">
+            Loading sheet…
+          </div>
+        ) : null}
+        {failure ? (
+          <div className="absolute inset-0 z-30 flex items-start justify-center overflow-y-auto bg-charcoal/85 px-3 pt-16 pb-16 sm:items-center sm:pt-4">
+            <SheetPdfErrorBanner
+              title={failure.title}
+              message={failure.message}
+              onRetry={
+                failure.retryable
+                  ? () => setLoadAttempt((current) => current + 1)
+                  : undefined
+              }
+            />
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

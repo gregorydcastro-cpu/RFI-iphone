@@ -20,7 +20,7 @@ export function MarkupSaveChip({
     <span
       role="status"
       aria-live="polite"
-      className={`inline-flex min-h-12 max-w-full flex-wrap items-center gap-x-2 border px-3 text-xs font-semibold tracking-wide uppercase ${toneClass[chip.tone]}`}
+      className={`inline-flex min-h-12 max-w-full shrink-0 flex-wrap items-center gap-x-2 border px-3 text-xs font-semibold tracking-wide uppercase ${toneClass[chip.tone]}`}
     >
       {chip.label}
       {detail ? (
