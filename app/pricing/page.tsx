@@ -31,10 +31,22 @@ export default async function PricingPage({ searchParams }: Props) {
           Crew subscription
         </h1>
         <p className="mt-3 max-w-2xl text-sm text-muted">
-          {STRIPE_TRIAL_PERIOD_DAYS}-day free trial, then the monthly price set
-          in Stripe. Checkout always collects a payment method (card, Apple
-          Pay, or PayPal when those are enabled in the Dashboard) so the trial
-          converts automatically. Promotion codes are accepted on Checkout.
+          {configured ? (
+            <>
+              {STRIPE_TRIAL_PERIOD_DAYS}-day free trial, then the monthly price
+              set in Stripe. Checkout always collects a payment method (card,
+              Apple Pay, or PayPal when those are enabled in the Dashboard) so
+              the trial converts automatically. Promotion codes are accepted on
+              Checkout.
+            </>
+          ) : (
+            <>
+              {"Billing isn't live yet. "}
+              The crew plan below is a preview — {STRIPE_TRIAL_PERIOD_DAYS}{" "}
+              days free, then monthly — and Checkout stays closed until billing
+              opens. Nothing is charged from this page.
+            </>
+          )}
         </p>
         {query.checkout === "success" ? (
           <p className="mt-4 text-sm text-accent-2" role="status">

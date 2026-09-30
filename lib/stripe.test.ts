@@ -111,14 +111,23 @@ test("checkout and webhook routes return billing_unconfigured 503 when keys are 
   assert.ok(webhookUnconfigured >= 0 && webhook503 > webhookUnconfigured);
 });
 
-test("SubscribeCta treats billing_unconfigured as missing Vercel keys, not a host allowlist", () => {
+test("SubscribeCta treats billing_unconfigured as coming soon, not a host allowlist", () => {
   const cta = readRepo("components/SubscribeCta.tsx");
-  assert.match(cta, /Stripe keys are missing on Vercel/);
+  const pricing = readRepo("app/pricing/page.tsx");
+  const account = readRepo("app/account/page.tsx");
+  assert.match(cta, /Billing isn't live yet/);
+  assert.match(cta, /Checkout is coming soon/);
+  assert.match(cta, /Checkout stayed closed/);
   assert.match(cta, /case "billing_unconfigured":/);
+  assert.match(cta, /kind: "held"/);
+  assert.doesNotMatch(cta, /disabled=\{!configured/);
   assert.doesNotMatch(cta, /not configured on this host/);
   assert.doesNotMatch(cta, /this host yet/);
   assert.match(cta, /STRIPE_SECRET_KEY/);
   assert.match(cta, /STRIPE_PRICE_ID/);
+  assert.match(cta, /on Vercel/);
+  assert.match(pricing, /Billing isn't live yet/);
+  assert.match(account, /Billing isn't live yet/);
 });
 
 test("go-live docs tell Greg to register the www webhook URL", () => {
@@ -178,6 +187,8 @@ test("Stripe helpers and copy stay Maple Point / fictional and invent no keys", 
     readRepo("lib/stripe.ts"),
     readRepo("STRIPE_GO_LIVE.md"),
     readRepo("components/SubscribeCta.tsx"),
+    readRepo("app/pricing/page.tsx"),
+    readRepo("app/account/page.tsx"),
     readRepo("app/api/stripe/checkout/route.ts"),
     readRepo("app/api/stripe/webhook/route.ts"),
   ].join("\n");

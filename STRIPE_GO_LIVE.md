@@ -2,7 +2,7 @@
 
 Operator steps to take **GC Field Log** Checkout live on [www.gcfieldlog.com](https://www.gcfieldlog.com) (issue [#26](https://github.com/gregorydcastro-cpu/RFI-iphone/issues/26)). Maple Point local demos do **not** need these keys. Do not put secret values in git.
 
-Without `STRIPE_SECRET_KEY` + `STRIPE_PRICE_ID`, `POST /api/stripe/checkout` returns `{ ok: false, error: "billing_unconfigured" }` with **503**. `/pricing` still renders. That 503 means **Vercel Production is missing Stripe keys**, not a host allowlist.
+Without `STRIPE_SECRET_KEY` + `STRIPE_PRICE_ID`, `POST /api/stripe/checkout` returns `{ ok: false, error: "billing_unconfigured" }` with **503**. `/pricing` still renders and leads with **Billing isn't live yet** (crew copy, plus the Vercel env hint for operators). Clicking Subscribe shows that notice in place. That 503 means **Vercel Production is missing Stripe keys**, not a host allowlist.
 
 ## When keys arrive
 

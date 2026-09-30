@@ -330,7 +330,7 @@ No crypto or stablecoin code in this app. Later you can turn on Stripe’s crypt
 - `POST /api/stripe/webhook` — verifies `Stripe-Signature`, logs the event, upserts `billing_customers`. Does **not** send email yet (TODO in the handler).
 - `/pricing` — Subscribe CTA.
 
-If Stripe env is missing on Vercel, `/pricing` still renders and Checkout returns `billing_unconfigured` (503). That is missing keys, not a host allowlist. Pack viewer and Procore OAuth are unchanged.
+If Stripe env is missing on Vercel, `/pricing` still renders a calm “Billing isn't live yet” notice and Checkout returns `billing_unconfigured` (503). Clicking Subscribe shows that notice in place — nothing redirects and no charge starts. That is missing keys, not a host allowlist. Pack viewer and Procore OAuth are unchanged.
 
 #### Billing table (`public.billing_customers`)
 
