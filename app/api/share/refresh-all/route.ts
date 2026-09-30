@@ -27,7 +27,9 @@ function json(data: unknown, status = 200) {
  * Weekly automation is GET/POST `/api/share/weekly-refresh` (CRON_SECRET).
  * Maple Point / DEMO_JOBS never enqueue a bot wake (catalog compare only).
  * Emails this owner's notify_email after a persisted bump. Missing
- * notify_email skips (refresh still succeeds).
+ * notify_email skips (refresh still succeeds). `errors` lists pins or
+ * cache writes that did not save; `ok` stays true so the portal can show
+ * a partial result instead of a failed request.
  */
 export async function POST(request: Request) {
   const { session, role } = await fieldRoleForRequest(request);
@@ -67,7 +69,12 @@ export async function POST(request: Request) {
     accepted: true,
     stub: false,
     implemented: true,
-    refresh: plan.scanned === 0 ? "empty" : "complete",
+    refresh:
+      plan.scanned === 0
+        ? "empty"
+        : errors.length > 0 || plan.missing > 0
+          ? "partial"
+          : "complete",
     weeklyCron: false,
     notify,
     storage,
@@ -77,6 +84,7 @@ export async function POST(request: Request) {
     missing: plan.missing,
     bumps,
     items: plan.items,
+    errors,
     botId: PROCORE_BOT_ID,
     bot,
     note:
