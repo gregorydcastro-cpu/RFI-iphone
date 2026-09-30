@@ -1,13 +1,20 @@
 "use client";
 
+import { formatBillingUnconfigured } from "@/lib/billingMessages";
 import { type FormEvent, useState } from "react";
 
 type Props = {
   configured: boolean;
+  /** Unset Production env key names. Values are never passed. */
+  missing?: readonly string[];
   defaultEmail?: string;
 };
 
-export function SubscribeCta({ configured, defaultEmail = "" }: Props) {
+export function SubscribeCta({
+  configured,
+  missing = [],
+  defaultEmail = "",
+}: Props) {
   const [email, setEmail] = useState(defaultEmail);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -30,9 +37,10 @@ export function SubscribeCta({ configured, defaultEmail = "" }: Props) {
         ok?: boolean;
         url?: string;
         error?: string;
+        missing?: string[];
       };
       if (!response.ok || !data.ok || !data.url) {
-        setError(checkoutErrorMessage(data.error));
+        setError(checkoutErrorMessage(data.error, data.missing));
         return;
       }
       window.location.assign(data.url);
@@ -56,12 +64,9 @@ export function SubscribeCta({ configured, defaultEmail = "" }: Props) {
           placeholder="foreman@crew.example"
         />
       </label>
-      {!configured ? (
-        <p className="text-sm text-cta">
-          Stripe keys are missing on Vercel. Set{" "}
-          <code className="font-mono">STRIPE_SECRET_KEY</code> and{" "}
-          <code className="font-mono">STRIPE_PRICE_ID</code> on Production
-          (server-only).
+      {!configured || missing.length > 0 ? (
+        <p role="status" className="text-sm text-cta">
+          {formatBillingUnconfigured(missing)}
         </p>
       ) : null}
       {error ? (
@@ -80,13 +85,16 @@ export function SubscribeCta({ configured, defaultEmail = "" }: Props) {
   );
 }
 
-function checkoutErrorMessage(code: string | undefined): string {
+function checkoutErrorMessage(
+  code: string | undefined,
+  missing?: readonly string[],
+): string {
   switch (code) {
     case "billing_unconfigured":
-      return "Stripe keys are missing on Vercel. Checkout cannot start until they are set.";
+      return formatBillingUnconfigured(missing);
     case "checkout_failed":
     case "checkout_url_missing":
-      return "Stripe Checkout could not start. Check the Price ID and secret key.";
+      return "Stripe Checkout could not start. The Price ID or secret key was rejected. This is not missing Production env.";
     default:
       return "Could not start Checkout. Try again.";
   }
