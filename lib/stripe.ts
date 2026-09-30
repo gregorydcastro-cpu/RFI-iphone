@@ -54,6 +54,42 @@ export function isStripeCheckoutConfigured(): boolean {
   return getStripeCheckoutConfig() !== null;
 }
 
+/** Checkout 503 when either of these is unset. Names only — never values. */
+export function missingStripeCheckoutEnv(): Array<
+  "STRIPE_SECRET_KEY" | "STRIPE_PRICE_ID"
+> {
+  const missing: Array<"STRIPE_SECRET_KEY" | "STRIPE_PRICE_ID"> = [];
+  if (!getStripeSecretKey()) missing.push("STRIPE_SECRET_KEY");
+  if (!getStripePriceId()) missing.push("STRIPE_PRICE_ID");
+  return missing;
+}
+
+/** Webhook 503 when either of these is unset. Names only — never values. */
+export function missingStripeWebhookEnv(): Array<
+  "STRIPE_SECRET_KEY" | "STRIPE_WEBHOOK_SECRET"
+> {
+  const missing: Array<"STRIPE_SECRET_KEY" | "STRIPE_WEBHOOK_SECRET"> = [];
+  if (!getStripeSecretKey()) missing.push("STRIPE_SECRET_KEY");
+  if (!getStripeWebhookSecret()) missing.push("STRIPE_WEBHOOK_SECRET");
+  return missing;
+}
+
+/**
+ * Production env the pricing page should name when unset.
+ * Checkout can be ready while the webhook secret is still missing.
+ */
+export function missingStripeProductionEnv(): Array<
+  "STRIPE_SECRET_KEY" | "STRIPE_PRICE_ID" | "STRIPE_WEBHOOK_SECRET"
+> {
+  const missing: Array<
+    "STRIPE_SECRET_KEY" | "STRIPE_PRICE_ID" | "STRIPE_WEBHOOK_SECRET"
+  > = [];
+  if (!getStripeSecretKey()) missing.push("STRIPE_SECRET_KEY");
+  if (!getStripePriceId()) missing.push("STRIPE_PRICE_ID");
+  if (!getStripeWebhookSecret()) missing.push("STRIPE_WEBHOOK_SECRET");
+  return missing;
+}
+
 /** Lazy so Next.js can import this module during builds without a secret. */
 export function getStripe(): Stripe | null {
   const secretKey = getStripeSecretKey();

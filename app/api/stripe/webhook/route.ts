@@ -6,10 +6,12 @@ import {
   upsertBillingCustomer,
   type BillingStatus,
 } from "@/lib/billingCustomers";
+import { billingUnconfiguredBody } from "@/lib/billingMessages";
 import {
   asStripeId,
   getStripe,
   getStripeWebhookSecret,
+  missingStripeWebhookEnv,
   unixToIso,
 } from "@/lib/stripe";
 
@@ -33,10 +35,9 @@ export async function POST(request: Request) {
   const stripe = getStripe();
   const webhookSecret = getStripeWebhookSecret();
   if (!stripe || !webhookSecret) {
-    return NextResponse.json(
-      { ok: false, error: "billing_unconfigured" },
-      { status: 503 },
-    );
+    return NextResponse.json(billingUnconfiguredBody(missingStripeWebhookEnv()), {
+      status: 503,
+    });
   }
 
   const signature = request.headers.get("stripe-signature");
