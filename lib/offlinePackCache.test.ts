@@ -7,6 +7,8 @@ import {
   isOfflineFetchFailure,
   isOfflineSnapshotExpired,
   lookupFromPack,
+  OFFLINE_SHEET_NOTE,
+  OFFLINE_STATUS_LINE,
   offlineBannerText,
   offlinePackCacheKey,
   offlinePackLatestKey,
@@ -242,4 +244,9 @@ test("banner names the cached stamp and does not use real client names", () => {
   assert.match(line, /A-101 Rev A/);
   assert.equal(forbidden.test(line), false);
   assert.equal(forbidden.test(JSON.stringify(snapshot)), false);
+  assert.equal(OFFLINE_STATUS_LINE.includes("showing cached pack"), false);
+  assert.equal(OFFLINE_SHEET_NOTE.includes("fetch"), false);
+  assert.match(OFFLINE_SHEET_NOTE, /Offline copy/);
+  assert.equal(forbidden.test(OFFLINE_STATUS_LINE), false);
+  assert.equal(forbidden.test(OFFLINE_SHEET_NOTE), false);
 });
