@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useOfflinePackCache } from "@/components/useOfflinePackCache";
 import {
+  classifyPackRefresh,
   isOfflineFetchFailure,
   OFFLINE_STATUS_LINE,
   type OfflinePackSnapshot,
@@ -68,8 +69,8 @@ export function PackLiveReload({
   useEffect(() => {
     let cancelled = false;
 
-    function acceptLive(data: LivePayload) {
-      if (!data.pack) return false;
+    async function acceptLive(data: LivePayload) {
+      if (!data.pack || cancelled) return false;
       onPack(data.pack, {
         source: data.source,
         pull: data.pull,
@@ -77,7 +78,7 @@ export function PackLiveReload({
         snapshot: null,
       });
       setMessage(statusLine(data, requestedRoom));
-      void offline.remember(data.pack);
+      await offline.remember(data.pack);
       return true;
     }
 
@@ -100,30 +101,36 @@ export function PackLiveReload({
       let fetchFailed = false;
       try {
         if (triggerPull && procoreLinked) {
-          const refresh = await fetch("/api/room-pack/refresh", {
-            method: "POST",
-            cache: "no-store",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              projectSlug,
-              requestId,
-              room: requestedRoom,
-            }),
-          });
-          const data = (await refresh.json()) as LivePayload;
-          if (cancelled) return;
-          if (refresh.status === 403) {
-            setMessage("View only — pulls are disabled for this session.");
-            return;
-          }
-          if (refresh.ok && data.ok && acceptLive(data)) return;
-          if (
-            isOfflineFetchFailure({
-              ok: refresh.ok,
+          try {
+            const refresh = await fetch("/api/room-pack/refresh", {
+              method: "POST",
+              cache: "no-store",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                projectSlug,
+                requestId,
+                room: requestedRoom,
+              }),
+            });
+            const data = (await refresh.json()) as LivePayload;
+            if (cancelled) return;
+            const gate = classifyPackRefresh({
+              httpOk: refresh.ok,
               status: refresh.status,
-            })
-          ) {
+              hasPack: Boolean(data.ok && data.pack),
+            });
+            if (gate === "accept") {
+              if (await acceptLive(data)) return;
+              if (cancelled) return;
+            } else if (gate === "view-only") {
+              setMessage("View only — pulls are disabled for this session.");
+            } else if (gate === "miss") {
+              fetchFailed = true;
+            }
+          } catch {
+            // A dropped pull must not skip the live no-store read below.
+            if (cancelled) return;
             fetchFailed = true;
           }
         }
@@ -138,7 +145,7 @@ export function PackLiveReload({
         });
         const data = (await live.json()) as LivePayload;
         if (cancelled) return;
-        if (live.ok && data.ok && acceptLive(data)) return;
+        if (live.ok && data.ok && (await acceptLive(data))) return;
         if (
           isOfflineFetchFailure({
             ok: live.ok,
@@ -201,7 +208,7 @@ export function PackLiveReload({
                     snapshot: null,
                   });
                   setMessage(statusLine(data, requestedRoom));
-                  void offline.remember(data.pack);
+                  await offline.remember(data.pack);
                 } else if (refresh.status === 403) {
                   setMessage("View only — pulls are disabled for this session.");
                 } else if (

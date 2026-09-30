@@ -2,11 +2,15 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { RoomPack } from "./pack.ts";
 import {
+  absolutePdfCacheUrl,
   blobRefsForPack,
   buildOfflinePackSnapshot,
+  classifyPackRefresh,
   isOfflineFetchFailure,
   isOfflineSnapshotExpired,
+  isQuotaExceededError,
   lookupFromPack,
+  OFFLINE_PDF_CACHE,
   OFFLINE_SHEET_NOTE,
   OFFLINE_STATUS_LINE,
   offlineBannerText,
@@ -14,9 +18,12 @@ import {
   offlinePackLatestKey,
   OFFLINE_PACK_TZ,
   packCalendarDayKey,
+  pdfBytesAreCacheable,
+  pdfCacheUrlsToDrop,
   pickValidOfflineSnapshot,
   shouldUseOfflineFallback,
   shouldWriteOfflineSnapshot,
+  staleOfflinePdfCacheNames,
 } from "./offlinePackCache.ts";
 
 const forbidden = /Brown|Rossi/i;
@@ -249,4 +256,105 @@ test("banner names the cached stamp and does not use real client names", () => {
   assert.match(OFFLINE_SHEET_NOTE, /Offline copy/);
   assert.equal(forbidden.test(OFFLINE_STATUS_LINE), false);
   assert.equal(forbidden.test(OFFLINE_SHEET_NOTE), false);
+});
+
+test("pdf cache key ignores hash and stays on the viewer URL", () => {
+  assert.equal(
+    absolutePdfCacheUrl(
+      "/api/sheet-pdf?requestId=maple-point-733&sheetId=A-101",
+      "https://www.gcfieldlog.com",
+    ),
+    "https://www.gcfieldlog.com/api/sheet-pdf?requestId=maple-point-733&sheetId=A-101",
+  );
+  assert.equal(
+    absolutePdfCacheUrl(
+      "/packs/maple-point-a101.pdf#page=2",
+      "https://www.gcfieldlog.com",
+    ),
+    "https://www.gcfieldlog.com/packs/maple-point-a101.pdf",
+  );
+});
+
+test("only a complete PDF body is safe to cache", () => {
+  const pdf = new TextEncoder().encode("%PDF-1.7\n1 0 obj\n%%EOF");
+  assert.equal(pdfBytesAreCacheable(pdf), true);
+  assert.equal(
+    pdfBytesAreCacheable(pdf, new Headers({ "content-type": "application/pdf" })),
+    true,
+  );
+  assert.equal(
+    pdfBytesAreCacheable(
+      pdf,
+      new Headers({
+        "content-type": "application/pdf",
+        "content-length": String(pdf.byteLength),
+      }),
+    ),
+    true,
+  );
+  const cut = pdf.slice(0, 8);
+  assert.equal(
+    pdfBytesAreCacheable(
+      cut,
+      new Headers({
+        "content-type": "application/pdf",
+        "content-length": "8000",
+      }),
+    ),
+    false,
+  );
+  assert.equal(
+    pdfBytesAreCacheable(
+      new TextEncoder().encode("<html>no sheet</html>"),
+      new Headers({ "content-type": "text/html" }),
+    ),
+    false,
+  );
+  assert.equal(
+    pdfBytesAreCacheable(
+      pdf,
+      new Headers({ "content-type": "application/json" }),
+    ),
+    false,
+  );
+});
+
+test("day boundary drops unreferenced pdf URLs and old cache names", () => {
+  const origin = "https://www.gcfieldlog.com";
+  const keep = absolutePdfCacheUrl("/packs/maple-point-a101.pdf", origin);
+  const orphan = absolutePdfCacheUrl("/packs/maple-point-old.pdf", origin);
+  assert.deepEqual(pdfCacheUrlsToDrop([keep, orphan], ["/packs/maple-point-a101.pdf"], origin), [
+    orphan,
+  ]);
+  assert.deepEqual(
+    staleOfflinePdfCacheNames([
+      OFFLINE_PDF_CACHE,
+      "gcfieldlog-offline-pdfs-v0",
+      "other-cache",
+    ]),
+    ["gcfieldlog-offline-pdfs-v0"],
+  );
+});
+
+test("quota errors are recognized and view-only 403 still continues", () => {
+  const quota = new Error("quota");
+  quota.name = "QuotaExceededError";
+  assert.equal(isQuotaExceededError(quota), true);
+  assert.equal(isQuotaExceededError(new Error("nope")), false);
+  assert.equal(
+    classifyPackRefresh({ httpOk: false, status: 403, hasPack: false }),
+    "view-only",
+  );
+  assert.equal(
+    classifyPackRefresh({ httpOk: true, status: 200, hasPack: true }),
+    "accept",
+  );
+  assert.equal(
+    classifyPackRefresh({ httpOk: false, status: 500, hasPack: false }),
+    "miss",
+  );
+  assert.equal(
+    classifyPackRefresh({ httpOk: true, status: 200, hasPack: false }),
+    "reject",
+  );
 });

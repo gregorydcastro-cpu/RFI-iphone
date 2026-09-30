@@ -7,7 +7,8 @@ import {
   type Sheet,
 } from "./pack.ts";
 import { resolveSheetPdf } from "./packNormalize.ts";
-import { viewerSheetPdfSrc } from "./sheetPdfUrl.ts";
+import { isShortPdfDownload } from "./sheetPdfLoad.ts";
+import { isPdfMagic, viewerSheetPdfSrc } from "./sheetPdfUrl.ts";
 
 /**
  * Client-side offline pack cache (device only).
@@ -301,4 +302,92 @@ export const OFFLINE_SHEET_NOTE = "Offline copy · live sheet didn't load";
 
 export function sheetBlobKey(sheet: Pick<Sheet, "id" | "rev">): string {
   return `${sheet.id}::${sheet.rev}`;
+}
+
+/**
+ * Absolute Cache Storage key for a viewer PDF URL.
+ * Hash is stripped so `#page` fragments do not split one sheet into two entries.
+ * Same string the service worker uses — a `Request` with `cache: "no-store"`
+ * cannot be passed to `cache.put` (browsers reject it).
+ */
+export function absolutePdfCacheUrl(src: string, origin?: string): string {
+  const base =
+    origin ??
+    (typeof location !== "undefined" ? location.origin : "http://localhost");
+  const url = new URL(src, base);
+  url.hash = "";
+  return url.href;
+}
+
+/**
+ * A body is safe to keep as a day's sheet only when it is a real PDF and the
+ * download was not cut short. HTML/JSON error pages must not replace a good copy.
+ */
+export function pdfBytesAreCacheable(
+  bytes: Uint8Array,
+  headers?: { get(name: string): string | null },
+): boolean {
+  if (!isPdfMagic(bytes)) return false;
+  if (!headers) return true;
+  const type = (headers.get("content-type") ?? "").toLowerCase();
+  if (type.includes("html") || type.includes("json")) return false;
+  return !isShortPdfDownload(
+    bytes.byteLength,
+    headers.get("content-length"),
+    headers.get("content-encoding"),
+  );
+}
+
+/** Cache names from older workers. Never includes the live PDF cache. */
+export function staleOfflinePdfCacheNames(
+  names: string[],
+  current: string = OFFLINE_PDF_CACHE,
+): string[] {
+  const prefix = "gcfieldlog-offline-pdfs-";
+  return names.filter((name) => name.startsWith(prefix) && name !== current);
+}
+
+/**
+ * PDF URLs stored in Cache Storage that no surviving day's snapshot still references.
+ * `cachedUrls` and `keepUrls` may be relative or absolute; comparison is on the absolute href.
+ */
+export function pdfCacheUrlsToDrop(
+  cachedUrls: string[],
+  keepUrls: string[],
+  origin?: string,
+): string[] {
+  const keep = new Set(
+    keepUrls.map((url) => absolutePdfCacheUrl(url, origin)),
+  );
+  return cachedUrls.filter(
+    (url) => !keep.has(absolutePdfCacheUrl(url, origin)),
+  );
+}
+
+export function isQuotaExceededError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const name =
+    "name" in error && error.name != null ? String(error.name) : "";
+  if (name === "QuotaExceededError") return true;
+  const message =
+    "message" in error && error.message != null ? String(error.message) : "";
+  return /quota/i.test(message);
+}
+
+/**
+ * What the pack page should do with one `/api/room-pack/refresh` result.
+ * View-only 403 is not an offline miss — the live GET still runs.
+ * A dropped refresh must not skip that live GET either.
+ */
+export function classifyPackRefresh(input: {
+  httpOk: boolean;
+  status: number;
+  hasPack: boolean;
+}): "accept" | "view-only" | "miss" | "reject" {
+  if (input.status === 403) return "view-only";
+  if (input.httpOk && input.hasPack) return "accept";
+  if (isOfflineFetchFailure({ ok: input.httpOk, status: input.status })) {
+    return "miss";
+  }
+  return "reject";
 }
