@@ -1,22 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   MAPLE_POINT_REQUEST_ID,
   packHrefForSheet,
   type ShareCatalog,
 } from "@/lib/shareCatalog";
 import type { PinnedSheetDiscipline } from "@/lib/schema";
+import type { ShareRefreshError, ShareRefreshItem } from "@/lib/shareRefresh";
+import {
+  SHARE_REFRESH_BUSY_LABEL,
+  SHARE_REFRESH_PROGRESS_LABEL,
+  describeShareRefreshOutcome,
+  shareRefreshBlockedMessage,
+  shareRefreshFailureMessage,
+  type ShareRefreshOutcome,
+  type ShareRefreshPinMark,
+} from "@/lib/shareRefreshStatus";
 import type { ShareFolderWithPins } from "@/lib/shareStore";
-import type { ShareRefreshItem } from "@/lib/shareRefresh";
-
-type NotifyPayload = {
-  sent?: boolean;
-  skipped?: boolean;
-  code?: string;
-  note?: string;
-};
 
 type RefreshPayload = {
   ok?: boolean;
@@ -25,28 +27,28 @@ type RefreshPayload = {
   bumped?: number;
   unchanged?: number;
   missing?: number;
-  refresh?: string;
-  storage?: string;
-  weeklyCron?: boolean;
-  notify?: NotifyPayload;
-  note?: string;
+  notify?: { sent?: boolean; code?: string };
   items?: ShareRefreshItem[];
+  errors?: ShareRefreshError[];
 };
 
-function notifyStatusLabel(notify: NotifyPayload | undefined): string {
-  if (!notify) return "skipped (unconfigured)";
-  if (notify.sent) return "sent";
-  if (notify.code === "no_bumps") return "skipped (no bumps)";
-  if (notify.code === "notify_unconfigured") return "skipped (unconfigured)";
-  if (notify.code === "notify_email_unset") return "skipped (no notify email)";
-  if (notify.code === "send_failed") return "failed (refresh still saved)";
-  if (notify.code === "persist_failed") return "skipped (persist failed)";
-  return notify.code ?? "skipped";
+function pinMarkLabel(mark: ShareRefreshPinMark | undefined): string | null {
+  if (mark === "bumped") return "Updated";
+  if (mark === "current") return "Current";
+  if (mark === "unavailable") return "Not refreshed";
+  return null;
+}
+
+function pinMarkClass(mark: ShareRefreshPinMark | undefined): string {
+  if (mark === "bumped") return "text-accent-2";
+  if (mark === "unavailable") return "text-tan";
+  return "text-metal";
 }
 
 type Props = {
   signedIn: boolean;
   canRefresh: boolean;
+  procoreConnected: boolean;
   roleLabel: string;
   catalog: ShareCatalog;
   initialFolders: ShareFolderWithPins[];
@@ -56,6 +58,7 @@ type Props = {
 export function SharePortal({
   signedIn,
   canRefresh,
+  procoreConnected,
   roleLabel,
   catalog,
   initialFolders,
@@ -64,10 +67,13 @@ export function SharePortal({
   const [folders, setFolders] = useState(initialFolders);
   const [storage, setStorage] = useState(initialStorage);
   const [name, setName] = useState("");
-  const [pending, setPending] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [refresh, setRefresh] = useState<RefreshPayload | null>(null);
+  const [outcome, setOutcome] = useState<ShareRefreshOutcome | null>(null);
+  const lock = useRef(false);
   const [packByFolder, setPackByFolder] = useState<Record<string, string>>(() => {
     const first = catalog.room_packs[0]?.id ?? "maple-point";
     const initial: Record<string, string> = {};
@@ -81,6 +87,7 @@ export function SharePortal({
     () => folders.reduce((sum, folder) => sum + folder.pins.length, 0),
     [folders],
   );
+  const refreshNote = shareRefreshBlockedMessage({ canRefresh, procoreConnected });
 
   async function reload() {
     const response = await fetch("/api/share/folders", { cache: "no-store" });
@@ -98,17 +105,21 @@ export function SharePortal({
   }
 
   async function run(label: string, work: () => Promise<void>) {
-    if (pending) return;
-    setPending(true);
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
     setError(null);
+    setRefreshError(null);
     setStatus(null);
+    setOutcome(null);
     try {
       await work();
       setStatus(label);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Request failed");
     } finally {
-      setPending(false);
+      lock.current = false;
+      setBusy(false);
     }
   }
 
@@ -196,15 +207,50 @@ export function SharePortal({
   }
 
   async function refreshAll() {
-    await run("Refresh all finished", async () => {
+    if (lock.current || !canRefresh) return;
+    lock.current = true;
+    setBusy(true);
+    setRefreshing(true);
+    setError(null);
+    setRefreshError(null);
+    setStatus(null);
+    setOutcome(null);
+    try {
       const response = await fetch("/api/share/refresh-all", { method: "POST" });
-      const data = (await response.json()) as RefreshPayload;
-      setRefresh(data);
-      if (!response.ok || !data.ok) {
-        throw new Error(data.error ?? "Refresh all failed");
+      let data: RefreshPayload;
+      try {
+        data = (await response.json()) as RefreshPayload;
+      } catch {
+        throw new Error(shareRefreshFailureMessage({ status: response.status }));
       }
-      await reload();
-    });
+      if (!response.ok || !data.ok) {
+        throw new Error(
+          shareRefreshFailureMessage({ status: response.status, error: data.error }),
+        );
+      }
+      setOutcome(describeShareRefreshOutcome(data));
+      try {
+        await reload();
+      } catch (caught) {
+        setRefreshError(
+          caught instanceof Error
+            ? caught.message
+            : "Refresh saved, but the folder list did not reload.",
+        );
+      }
+    } catch (caught) {
+      const message =
+        caught instanceof Error ? caught.message : "Refresh all did not finish. Try again.";
+      setRefreshError(
+        message === "Failed to fetch"
+          ? "Refresh all did not finish. Check the connection and try again."
+          : message,
+      );
+    } finally {
+      lock.current = false;
+      setBusy(false);
+      setRefreshing(false);
+    }
   }
 
   if (!signedIn) {
@@ -232,18 +278,10 @@ export function SharePortal({
               Refresh pinned sheets
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-muted">
-              Manual <span className="text-paper">Refresh all</span> is
-              puller-gated. It walks pins, compares revs to{" "}
-              <span className="font-mono text-xs text-metal">
-                sheet_revision_cache
-              </span>
-              , and records bumps. Pack pulls still need Connect Procore.
-              Weekly cron updates every pin when rev bumps. The folder
-              owner is emailed only when a bump persists and{" "}
-              <span className="font-mono text-xs text-metal">
-                notify_email
-              </span>{" "}
-              is set.
+              Refresh all checks pinned sheets against the current pack
+              revision and records a change when the revision moved. It does
+              not download drawings. A live pack pull still needs Connect
+              Procore.
             </p>
             <p className="mt-2 font-mono text-xs text-metal">
               {folders.length} folder{folders.length === 1 ? "" : "s"} · {pinCount}{" "}
@@ -252,27 +290,84 @@ export function SharePortal({
           </div>
           <button
             type="button"
-            disabled={!canRefresh || pending}
+            disabled={!canRefresh || busy}
+            aria-busy={refreshing}
             onClick={() => void refreshAll()}
-            className="bg-cta px-5 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-50"
+            className="bg-cta px-5 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {pending ? "Working…" : "Refresh all"}
+            {refreshing ? SHARE_REFRESH_BUSY_LABEL : "Refresh all"}
           </button>
         </div>
-        {!canRefresh ? (
-          <p className="mt-3 text-sm text-tan">
-            Sign in as a puller to run Refresh all. Viewers can still create
-            folders and pin Maple Point packs. Pack pulls still need Connect
-            Procore.
-          </p>
-        ) : null}
-        {refresh?.ok ? (
-          <p className="mt-3 text-sm text-accent-2" role="status">
-            Scanned {refresh.scanned ?? 0}: {refresh.bumped ?? 0} bumped,{" "}
-            {refresh.unchanged ?? 0} unchanged, {refresh.missing ?? 0} missing.
-            Notify: {notifyStatusLabel(refresh.notify)}.
-          </p>
-        ) : null}
+        <div
+          className={
+            refreshing || refreshError || outcome || refreshNote
+              ? "mt-3 space-y-3"
+              : undefined
+          }
+          aria-live="polite"
+        >
+          {refreshing ? (
+            <p role="status" className="text-sm text-paper">
+              {SHARE_REFRESH_PROGRESS_LABEL}
+            </p>
+          ) : (
+            <>
+              {refreshError ? (
+                <p role="alert" className="text-sm text-cta">
+                  {refreshError}
+                </p>
+              ) : null}
+              {outcome ? (
+                <div
+                  role="status"
+                  className={
+                    outcome.tone === "partial"
+                      ? "border border-tan/60 bg-ink px-3 py-3"
+                      : outcome.tone === "empty"
+                        ? "border border-line bg-ink px-3 py-3"
+                        : "border border-accent-2/40 bg-ink px-3 py-3"
+                  }
+                >
+                  <p
+                    className={
+                      outcome.tone === "clear"
+                        ? "text-sm text-accent-2"
+                        : outcome.tone === "partial"
+                          ? "text-sm text-paper"
+                          : "text-sm text-muted"
+                    }
+                  >
+                    {outcome.headline}
+                  </p>
+                  {outcome.lines.length > 0 ? (
+                    <ul className="mt-2 space-y-1">
+                      {outcome.lines.map((line) => (
+                        <li
+                          key={line.text}
+                          className={
+                            line.tone === "problem"
+                              ? "text-sm text-tan"
+                              : line.tone === "hint"
+                                ? "text-sm text-muted"
+                                : "text-sm text-paper"
+                          }
+                        >
+                          {line.text}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {outcome.notifyLine ? (
+                    <p className="mt-2 text-xs text-tan">{outcome.notifyLine}</p>
+                  ) : null}
+                </div>
+              ) : null}
+              {!refreshError && !outcome && refreshNote ? (
+                <p className="text-sm text-tan">{refreshNote}</p>
+              ) : null}
+            </>
+          )}
+        </div>
       </section>
 
       <section className="border border-line bg-panel p-5">
@@ -301,7 +396,7 @@ export function SharePortal({
           </label>
           <button
             type="submit"
-            disabled={pending}
+            disabled={busy}
             className="self-end bg-cta px-5 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-50"
           >
             Create
@@ -340,7 +435,7 @@ export function SharePortal({
                 </div>
                 <button
                   type="button"
-                  disabled={pending}
+                  disabled={busy}
                   onClick={() => void deleteFolder(folder.id)}
                   className="border border-line px-3 py-1.5 text-xs font-semibold tracking-wide text-muted uppercase hover:border-cta hover:text-secondary disabled:opacity-50"
                 >
@@ -356,7 +451,7 @@ export function SharePortal({
                   <button
                     key={discipline}
                     type="button"
-                    disabled={pending}
+                    disabled={busy}
                     onClick={() => void pinDiscipline(folder.id, discipline)}
                     className="border border-line px-3 py-1.5 text-xs font-semibold tracking-wide text-secondary uppercase hover:border-cta disabled:opacity-50"
                   >
@@ -387,7 +482,7 @@ export function SharePortal({
                 </select>
                 <button
                   type="button"
-                  disabled={pending}
+                  disabled={busy}
                   onClick={() => void pinPack(folder.id)}
                   className="border border-cta/60 px-3 py-2 text-xs font-semibold tracking-wide text-secondary uppercase hover:bg-cta/10 disabled:opacity-50"
                 >
@@ -408,6 +503,13 @@ export function SharePortal({
                         <p className="font-mono text-sm text-paper">
                           {pin.sheet_id}
                           {pin.last_seen_rev ? ` Rev ${pin.last_seen_rev}` : ""}
+                          {outcome?.marks[pin.id] ? (
+                            <span
+                              className={`ml-2 font-sans text-[10px] font-semibold tracking-wide uppercase ${pinMarkClass(outcome.marks[pin.id])}`}
+                            >
+                              {pinMarkLabel(outcome.marks[pin.id])}
+                            </span>
+                          ) : null}
                         </p>
                         <p className="text-xs text-muted">
                           {pin.project_name}
@@ -426,7 +528,7 @@ export function SharePortal({
                         </Link>
                         <button
                           type="button"
-                          disabled={pending}
+                          disabled={busy}
                           onClick={() => void unpin(pin.id)}
                           className="text-xs font-semibold tracking-wide text-muted uppercase hover:text-cta disabled:opacity-50"
                         >

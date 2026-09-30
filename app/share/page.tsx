@@ -49,11 +49,12 @@ export default async function SharePage() {
           <SharePortal
             signedIn={view.signedIn}
             canRefresh={canRefresh}
+            procoreConnected={view.connected}
             roleLabel={
               view.role === "puller"
                 ? view.connected
                   ? "puller · Procore connected"
-                  : "puller · Refresh all (metadata)"
+                  : "puller · Procore not connected"
                 : view.signedIn
                   ? "view only"
                   : "signed out"
