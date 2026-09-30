@@ -141,7 +141,7 @@ export async function getDriveAccessToken(
   }
 
   const assertion = signServiceAccountJwt(account);
-  const fetched = await fetchWithBoundedRetry(
+  const fetched = await fetchWithBoundedRetry<Record<string, unknown> | null>(
     () => ({
       url: TOKEN_URL,
       init: {
@@ -160,6 +160,11 @@ export async function getDriveAccessToken(
       sleep: options?.sleep,
       timeoutMs: options?.timeoutMs ?? SHEET_PDF_TOKEN_TIMEOUT_MS,
       attempts: options?.attempts ?? SHEET_PDF_RETRY_ATTEMPTS,
+      consumeBody: async (response) => {
+        const json: unknown = await response.json();
+        if (!json || typeof json !== "object") return null;
+        return json as Record<string, unknown>;
+      },
     },
   );
   if (!fetched.ok) {
@@ -172,15 +177,16 @@ export async function getDriveAccessToken(
   if (response.status >= 300 && response.status < 400) {
     throw new DriveTokenError("upstream_failed");
   }
-  const json: unknown = await response.json().catch(() => null);
-  const rec =
-    json && typeof json === "object" ? (json as Record<string, unknown>) : null;
+  if (!response.ok) {
+    throw new DriveTokenError(mapDriveTokenStatus(response.status).code);
+  }
+  const rec = fetched.body;
   const accessToken =
     typeof rec?.access_token === "string" ? rec.access_token : "";
   const expiresIn =
     typeof rec?.expires_in === "number" ? rec.expires_in : 3600;
-  if (!response.ok || !accessToken) {
-    throw new DriveTokenError(mapDriveTokenStatus(response.status).code);
+  if (!accessToken) {
+    throw new DriveTokenError("drive_auth_rejected");
   }
   cachedToken = {
     accessToken,

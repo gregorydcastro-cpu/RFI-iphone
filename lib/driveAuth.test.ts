@@ -62,6 +62,57 @@ test("token 401 is not retried and the upstream body is not returned", async () 
   resetDriveTokenCache();
 });
 
+test("a dropped token body retries and does not become auth rejection", async () => {
+  resetDriveTokenCache();
+  let calls = 0;
+  const token = await getDriveAccessToken(account, {
+    fetchImpl: async () => {
+      calls += 1;
+      if (calls === 1) {
+        return new Response("BEGIN PRIVATE KEY", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(
+        JSON.stringify({ access_token: "ya29.after-retry", expires_in: 3600 }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    },
+    sleep: async () => {},
+  });
+  assert.equal(token, "ya29.after-retry");
+  assert.equal(calls, 2);
+  resetDriveTokenCache();
+});
+
+test("a token body that never recovers does not leak upstream text", async () => {
+  resetDriveTokenCache();
+  let calls = 0;
+  await assert.rejects(
+    () =>
+      getDriveAccessToken(account, {
+        fetchImpl: async () => {
+          calls += 1;
+          return new Response("BEGIN PRIVATE KEY ya29.secret", {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        },
+        sleep: async () => {},
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof DriveTokenError);
+      assert.equal(error.code, "upstream_failed");
+      assert.equal(error.message.includes("BEGIN PRIVATE"), false);
+      assert.equal(error.message.includes("ya29"), false);
+      return true;
+    },
+  );
+  assert.equal(calls, 2);
+  resetDriveTokenCache();
+});
+
 test("token timeouts retry then surface timeout", async () => {
   resetDriveTokenCache();
   let calls = 0;

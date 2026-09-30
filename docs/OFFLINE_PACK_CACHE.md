@@ -11,6 +11,6 @@
 | Key | Server `request_id` | `project + pack/room id + revision stamp` |
 | Expiry | None (`pulled_at` is display-only) | **Calendar day `America/New_York`** (“day’s packs”). Midnight ET drops yesterday’s snapshots. |
 
-PDFs are the same viewer URLs as online (`/api/sheet-pdf?requestId=&sheetId=` or same-origin `/packs/*.pdf`). A **minimal** service worker (`/offline-pack-sw.js`) is network-first for those PDF GETs only — it does **not** intercept `/api/room-pack/*`. This is not a full offline PWA; a hard refresh of the app shell while fully offline is out of scope.
+PDFs are the same viewer URLs as online (`/api/sheet-pdf?requestId=&sheetId=` or same-origin `/packs/*.pdf`). A **minimal** service worker (`/offline-pack-sw.js`) is network-first for those PDF GETs only — it does **not** intercept `/api/room-pack/*`. When that live fetch fails and a cached PDF exists, the worker marks the response `X-GCFieldLog-Offline: 1` so the viewer shows the offline note instead of a normal sheet. With no cache, the failure reaches the viewer banner. This is not a full offline PWA; a hard refresh of the app shell while fully offline is out of scope.
 
 Scaffold: `lib/offlinePackCache.ts` (keying / expiry), `lib/offlinePackStore.ts` (IndexedDB + Cache Storage), wired from `PackLiveReload` / `SheetViewer`.

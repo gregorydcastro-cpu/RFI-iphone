@@ -4,6 +4,7 @@
  */
 
 import { isRetryableDriveStatus } from "./sheetPdfErrors.ts";
+import { isShortPdfDownload } from "./sheetPdfLoad.ts";
 
 /** Per-attempt cap for PDF bytes. Two attempts plus token exchange stay under maxDuration. */
 export const SHEET_PDF_FETCH_TIMEOUT_MS = 20_000;
@@ -21,7 +22,7 @@ export type FetchRetryOptions<T> = {
   timeoutMs?: number;
   attempts?: number;
   now?: () => number;
-  /** Read a 2xx body before the attempt timer is cleared. Timeouts retry. */
+  /** Read a 2xx body before the attempt timer is cleared. Timeouts and dropped bodies retry. */
   consumeBody?: (response: Response) => Promise<T>;
 };
 
@@ -60,6 +61,14 @@ export function isTimeoutError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   if (error.name === "AbortError" || error.name === "TimeoutError") return true;
   return /aborted|timeout/i.test(error.message);
+}
+
+/** Body ended before Content-Length. Message stays generic — no URL, no bytes. */
+export class IncompleteDownloadError extends Error {
+  constructor() {
+    super("incomplete download");
+    this.name = "IncompleteDownloadError";
+  }
 }
 
 function defaultSleep(ms: number): Promise<void> {
@@ -116,7 +125,7 @@ export async function fetchWithBoundedRetry<T>(
           clear();
           await cancelBody(response);
           const timedOut = isTimeoutError(error);
-          if (!timedOut || last) {
+          if (last) {
             return {
               ok: false,
               kind: timedOut ? "timeout" : "unreachable",
@@ -159,7 +168,17 @@ export async function readLimitedBytes(
   }
   if (!response.body) {
     const buf = new Uint8Array(await response.arrayBuffer());
-    return buf.byteLength > maxBytes ? "too_large" : buf;
+    if (buf.byteLength > maxBytes) return "too_large";
+    if (
+      isShortPdfDownload(
+        buf.byteLength,
+        lengthHeader,
+        response.headers.get("content-encoding"),
+      )
+    ) {
+      throw new IncompleteDownloadError();
+    }
+    return buf;
   }
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -174,6 +193,9 @@ export async function readLimitedBytes(
       return "too_large";
     }
     chunks.push(value);
+  }
+  if (isShortPdfDownload(total, lengthHeader, response.headers.get("content-encoding"))) {
+    throw new IncompleteDownloadError();
   }
   const out = new Uint8Array(total);
   let offset = 0;

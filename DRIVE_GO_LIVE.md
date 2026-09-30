@@ -45,9 +45,9 @@ Without keys, the pack viewer shows a **Drive account missing** banner (large ty
 | `drive_forbidden` | 502 | File exists for Drive but is not shared with the service account |
 | `not_found` | 404 | Drive has no file for that id (Drive also hides unshared files this way) |
 | `timeout` | 504 | Fetch timed out after one retry |
-| `upstream_failed` | 502 | Drive or the token endpoint returned a transient 5xx / could not be reached, after one retry |
+| `upstream_failed` | 502 | Drive or the token endpoint returned a transient 5xx, dropped the body, or could not be reached, after one retry |
 
-403 share failures and 404s are not retried. Timeouts, 429, and 5xx are retried once. Error JSON uses these codes and fixed sentences. It does not include the service-account JSON, private key, access token, or upstream body.
+403 share failures and 404s are not retried. Timeouts, 429, 5xx, and a body that ends early are retried once. Error JSON uses these codes and fixed sentences. It does not include the service-account JSON, private key, access token, or upstream body.
 
 **Separate from [issue #53](https://github.com/gregorydcastro-cpu/RFI-iphone/issues/53).** `storageKeyValid: false` on `/api/procore/status` is `SUPABASE_SERVICE_ROLE_KEY` (the Supabase **service_role** secret for Procore token storage). Sheet PDFs do not read that key. Set the Drive service account and the Room Packs folder share here; fix #53 on its own.
 
