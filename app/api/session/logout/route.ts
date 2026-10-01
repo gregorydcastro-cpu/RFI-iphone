@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { cookieSecureFromRequest, procoreLinkedCookieOptions } from "@/lib/auth";
+import { authAppOrigin } from "@/lib/authHosts";
+import { sessionExitLocation } from "@/lib/authMessages";
 import { procoreOAuthCookies } from "@/lib/procoreOAuth";
+import { expireSupabaseAuthCookies } from "@/lib/session";
 import { expireStubSessionCookie } from "@/lib/stubSession";
 import { createSupabaseRouteClient } from "@/lib/supabase/server";
 
@@ -13,12 +16,21 @@ function clearAuthCookies(request: Request, response: NextResponse) {
   for (const cookie of procoreOAuthCookies(null, secure, request)) {
     response.cookies.set(cookie);
   }
+  for (const cookie of expireSupabaseAuthCookies(request.headers.get("cookie"), secure)) {
+    response.cookies.set(cookie);
+  }
 }
 
 export async function GET(request: Request) {
-  const url = new URL("/", request.url);
-  url.searchParams.set("signedOut", "1");
-  const response = NextResponse.redirect(url);
+  const incoming = new URL(request.url);
+  const response = NextResponse.redirect(
+    sessionExitLocation({
+      origin: authAppOrigin(request),
+      next: incoming.searchParams.get("next"),
+      reason: incoming.searchParams.get("reason"),
+      auth: incoming.searchParams.get("auth"),
+    }),
+  );
   const supabase = createSupabaseRouteClient(request, response);
   if (supabase) {
     await supabase.auth.signOut();

@@ -1,7 +1,7 @@
 import { AppHeader } from "@/components/AppHeader";
 import { TimeBoard } from "@/components/TimeBoard";
 import { getProcoreConnectionView } from "@/lib/procoreStatus";
-import { readAppSession } from "@/lib/session.server";
+import { readAppSession, supabaseSessionCookiePresent } from "@/lib/session.server";
 import { getTimeSnapshot } from "@/lib/timeStore";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -16,6 +16,7 @@ export const metadata: Metadata = {
 
 export default async function TimePage() {
   const session = await readAppSession();
+  const sessionEnded = !session && (await supabaseSessionCookiePresent());
   const view = await getProcoreConnectionView(session);
   const snapshot = await getTimeSnapshot();
   if (!snapshot) notFound();
@@ -32,6 +33,7 @@ export default async function TimePage() {
         initial={snapshot}
         sessionEmail={session?.email ?? null}
         signedIn={Boolean(session)}
+        sessionEnded={sessionEnded}
       />
     </div>
   );

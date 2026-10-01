@@ -16,6 +16,8 @@ import {
   type TimeSnapshot,
   type TimeStorage,
 } from "@/lib/time";
+import { ReadAloudButton } from "@/components/ReadAloudButton";
+import { signedOutGate } from "@/lib/authMessages";
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
@@ -25,9 +27,15 @@ type Props = {
   initial: TimeSnapshot;
   sessionEmail: string | null;
   signedIn: boolean;
+  sessionEnded?: boolean;
 };
 
-export function TimeBoard({ initial, sessionEmail, signedIn }: Props) {
+export function TimeBoard({
+  initial,
+  sessionEmail,
+  signedIn,
+  sessionEnded = false,
+}: Props) {
   const [snapshot, setSnapshot] = useState(initial);
   const [mode, setMode] = useState<Mode>("punch");
   const [workerId, setWorkerId] = useState(() =>
@@ -147,13 +155,7 @@ export function TimeBoard({ initial, sessionEmail, signedIn }: Props) {
         PIN. Crew week is the log for this job. {storageLine(snapshot.storage)}
       </p>
       {!signedIn ? (
-        <p className="mt-3 text-base text-paper">
-          You are signed out.{" "}
-          <Link href="/?next=/time" className="font-semibold text-accent underline">
-            Sign in
-          </Link>{" "}
-          to punch or edit.
-        </p>
+        <SignedOutTimeNote sessionEnded={sessionEnded} />
       ) : null}
 
       <div
@@ -178,6 +180,7 @@ export function TimeBoard({ initial, sessionEmail, signedIn }: Props) {
             workerId={workerId}
             pin={pin}
             signedIn={signedIn}
+            sessionEnded={sessionEnded}
             sessionEmail={sessionEmail}
             pending={pending}
             error={error}
@@ -200,6 +203,7 @@ export function TimeBoard({ initial, sessionEmail, signedIn }: Props) {
             snapshot={snapshot}
             weeks={weeks}
             signedIn={signedIn}
+            sessionEnded={sessionEnded}
             pending={pending}
             error={error}
             notice={notice}
@@ -212,6 +216,26 @@ export function TimeBoard({ initial, sessionEmail, signedIn }: Props) {
         )}
       </div>
     </main>
+  );
+}
+
+function SignedOutTimeNote({ sessionEnded }: { sessionEnded: boolean }) {
+  const gate = signedOutGate({
+    next: "/time",
+    sessionEnded,
+    detail: "to punch or edit.",
+  });
+  return (
+    <div className="mt-3">
+      <p className="text-base text-paper">
+        {gate.lead}{" "}
+        <Link href={gate.href} className="font-semibold text-accent underline">
+          Sign in
+        </Link>{" "}
+        to punch or edit.
+      </p>
+      <ReadAloudButton id="time-signed-out" text={gate.text} label="Hear this" className="mt-3" />
+    </div>
   );
 }
 

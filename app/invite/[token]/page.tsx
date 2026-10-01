@@ -1,8 +1,10 @@
+import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { InviteRedeemForm } from "@/components/InviteRedeemForm";
+import { inviteAcceptPath, signInContinuePath } from "@/lib/authMessages";
 import { previewInvite } from "@/lib/inviteStore";
 import { getProcoreConnectionView } from "@/lib/procoreStatus";
-import { readAppSession } from "@/lib/session.server";
+import { readAppSession, supabaseSessionCookiePresent } from "@/lib/session.server";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +19,9 @@ type Props = {
 export default async function InviteLandingPage({ params }: Props) {
   const { token } = await params;
   const session = await readAppSession();
+  if (!session && (await supabaseSessionCookiePresent())) {
+    redirect(signInContinuePath(inviteAcceptPath(token), true));
+  }
   const view = await getProcoreConnectionView(session);
   const preview = await previewInvite(token);
 

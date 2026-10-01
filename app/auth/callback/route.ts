@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookieSecureFromRequest } from "@/lib/auth";
 import { authAppOrigin } from "@/lib/authHosts";
-import { safeNextPath } from "@/lib/authMessages";
+import { authCallbackLocation } from "@/lib/authMessages";
+import { expireSupabaseAuthCookies } from "@/lib/session";
 import { expireStubSessionCookie } from "@/lib/stubSession";
 import { createSupabaseRouteClient } from "@/lib/supabase/server";
 
@@ -10,41 +11,46 @@ export const dynamic = "force-dynamic";
 /**
  * PKCE / magic-link / confirm-email callback.
  * Exchanges `code` for a Supabase session cookie. Never a stub cookie.
+ * Failures return to login with a safe `next`, and drop leftover auth cookies.
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const origin = authAppOrigin(request);
   const code = url.searchParams.get("code");
-  const next = safeNextPath(url.searchParams.get("next"));
-  const dest = new URL(next, origin);
-  const response = NextResponse.redirect(dest);
+  const next = url.searchParams.get("next");
   const secure = cookieSecureFromRequest(request);
-  response.cookies.set(expireStubSessionCookie(secure));
 
   if (!code) {
-    dest.searchParams.set("auth", "error");
-    dest.searchParams.set("reason", "missing_code");
-    return NextResponse.redirect(dest);
+    return authFailure(request, origin, next, "missing_code", secure);
   }
+
+  const response = NextResponse.redirect(authCallbackLocation(origin, next, "session"));
+  response.cookies.set(expireStubSessionCookie(secure));
 
   const supabase = createSupabaseRouteClient(request, response);
   if (!supabase) {
-    dest.pathname = "/";
-    dest.searchParams.set("auth", "error");
-    dest.searchParams.set("reason", "auth_unconfigured");
-    return NextResponse.redirect(dest);
+    return authFailure(request, origin, next, "auth_unconfigured", secure);
   }
 
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) {
-    const login = new URL("/", origin);
-    login.searchParams.set("auth", "error");
-    login.searchParams.set("reason", "exchange_failed");
-    login.searchParams.set("next", next);
-    const failed = NextResponse.redirect(login);
-    failed.cookies.set(expireStubSessionCookie(secure));
-    return failed;
+    return authFailure(request, origin, next, "exchange_failed", secure);
   }
 
   return response;
+}
+
+function authFailure(
+  request: Request,
+  origin: string,
+  next: string | null,
+  outcome: "missing_code" | "exchange_failed" | "auth_unconfigured",
+  secure: boolean,
+) {
+  const failed = NextResponse.redirect(authCallbackLocation(origin, next, outcome));
+  failed.cookies.set(expireStubSessionCookie(secure));
+  for (const cookie of expireSupabaseAuthCookies(request.headers.get("cookie"), secure)) {
+    failed.cookies.set(cookie);
+  }
+  return failed;
 }

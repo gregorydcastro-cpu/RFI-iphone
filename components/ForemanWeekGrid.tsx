@@ -14,6 +14,7 @@ import {
   type TimeSnapshot,
   type WorkerWeek,
 } from "@/lib/time";
+import { sessionGateLead } from "@/lib/authMessages";
 import { useMemo, useRef, useState } from "react";
 
 const inputClass =
@@ -23,6 +24,7 @@ type Props = {
   snapshot: TimeSnapshot;
   weeks: WorkerWeek[];
   signedIn: boolean;
+  sessionEnded?: boolean;
   pending: boolean;
   error: string | null;
   notice: string | null;
@@ -34,6 +36,7 @@ export function ForemanWeekGrid({
   snapshot,
   weeks,
   signedIn,
+  sessionEnded = false,
   pending,
   error,
   notice,
@@ -273,7 +276,9 @@ export function ForemanWeekGrid({
             />
           </label>
           {!signedIn ? (
-            <p className="mt-3 text-base text-cta">You are signed out. Sign in to save edits.</p>
+            <p className="mt-3 text-base text-cta">
+              {sessionGateLead(sessionEnded)} Sign in to save edits.
+            </p>
           ) : null}
           {notice ? (
             <p

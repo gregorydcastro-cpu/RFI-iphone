@@ -4,14 +4,19 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { LoginForm } from "@/components/LoginForm";
-import { safeNextPath } from "@/lib/authMessages";
-import { readAppSession } from "@/lib/session.server";
+import { safeNextPath, staleSessionClearPath } from "@/lib/authMessages";
+import { readAppSession, supabaseSessionCookiePresent } from "@/lib/session.server";
 import { isSupabaseAuthConfigured } from "@/lib/supabase/config";
 
 export const dynamic = "force-dynamic";
 
 type Props = {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{
+    next?: string;
+    auth?: string;
+    reason?: string;
+    cleared?: string;
+  }>;
 };
 
 export default async function LoginPage({ searchParams }: Props) {
@@ -19,9 +24,21 @@ export default async function LoginPage({ searchParams }: Props) {
   // Host is not a gate — vercel.app and custom domains share keys-only.
   await headers();
   const query = await searchParams;
+  const next = safeNextPath(query.next);
   const session = await readAppSession();
   if (session) {
-    redirect(safeNextPath(query.next));
+    redirect(next);
+  }
+  // Auth cookie with no session looks signed-in on the next gated page.
+  // Clear it once, then show login. `cleared=1` stops a redirect loop.
+  if (query.cleared !== "1" && (await supabaseSessionCookiePresent())) {
+    redirect(
+      staleSessionClearPath({
+        next: query.next,
+        auth: query.auth,
+        reason: query.reason,
+      }),
+    );
   }
 
   return (

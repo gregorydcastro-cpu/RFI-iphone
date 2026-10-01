@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
+import { ReadAloudButton } from "@/components/ReadAloudButton";
 import { InviteCrewCard } from "@/components/InviteCrewCard";
 import { NotifyEmailForm } from "@/components/NotifyEmailForm";
 import { ProcoreConnectCard } from "@/components/ProcoreConnectCard";
@@ -7,8 +8,9 @@ import { formatBillingUnconfigured } from "@/lib/billingMessages";
 import { loadAccountNotifyEmail } from "@/lib/accountNotifyEmail";
 import { canManageNotifyEmail } from "@/lib/accountRole";
 import { canInviteCrew, fieldRoleLabel } from "@/lib/inviteRole";
+import { signedOutGate } from "@/lib/authMessages";
 import { getProcoreConnectionView, procoreErrorMessage } from "@/lib/procoreStatus";
-import { readAppSession } from "@/lib/session.server";
+import { readAppSession, supabaseSessionCookiePresent } from "@/lib/session.server";
 import { stripeReadiness } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +22,13 @@ type Props = {
 export default async function AccountPage({ searchParams }: Props) {
   const query = await searchParams;
   const session = await readAppSession();
+  const sessionEnded = !session && (await supabaseSessionCookiePresent());
   const view = await getProcoreConnectionView(session);
+  const signedOut = signedOutGate({
+    next: "/account",
+    sessionEnded,
+    detail: "to open this account, then connect Procore if you pull packs.",
+  });
   const notify = session && canManageNotifyEmail(session.role)
     ? await loadAccountNotifyEmail(session.userId)
     : null;
@@ -43,13 +51,21 @@ export default async function AccountPage({ searchParams }: Props) {
           Procore connection
         </h1>
         {!view.signedIn ? (
-          <p className="mt-4 text-base text-paper">
-            You are signed out.{" "}
-            <Link href="/?next=/account" className="font-semibold text-accent underline">
-              Sign in
-            </Link>{" "}
-            to open this account, then connect Procore if you pull packs.
-          </p>
+          <div className="mt-4">
+            <p className="text-base text-paper">
+              {signedOut.lead}{" "}
+              <Link href={signedOut.href} className="font-semibold text-accent underline">
+                Sign in
+              </Link>{" "}
+              to open this account, then connect Procore if you pull packs.
+            </p>
+            <ReadAloudButton
+              id="account-signed-out"
+              text={signedOut.text}
+              label="Hear this"
+              className="mt-3"
+            />
+          </div>
         ) : (
           <dl className="mt-4 space-y-1 text-sm text-muted">
             <div>
