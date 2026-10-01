@@ -77,6 +77,7 @@ Demo packs may also load from `/packs/<requestId>.json` / static PDFs under `/pa
 - Auth: session + writable role
 - Body: `subject`, `description` (required); optional `location`, `sheet_id`, `markup_id` (UUID), `status` (draft)
 - 200: `{ ok: true, persisted, storage, procore: false, sentTo: { name, role, email }, row }`
+- 503: configured `rfis` write did not land — `{ ok: false, error, code: "save_failed", storage: "unavailable", procore: false }`. Not a success.
 - Never submits to Procore — drafts to foreman packet only.
 
 ---

@@ -13,6 +13,10 @@ type Props = {
   backHref: string;
   speakId?: string;
   speakText?: string;
+  /** Replaces the default "sent to foreman" line. */
+  summary?: string;
+  /** `sent` is with the crew. `phone` stayed on this device. Default keeps the prior frame. */
+  tone?: "sent" | "phone";
   children?: ReactNode;
 };
 
@@ -26,23 +30,32 @@ export function DraftToForemanSuccess({
   backHref,
   speakId,
   speakText,
+  summary,
+  tone,
   children,
 }: Props) {
+  const frame =
+    tone === "phone"
+      ? "border-tan bg-panel"
+      : tone === "sent"
+        ? "border-accent-2/70 bg-panel"
+        : "border-cta/50 bg-panel shadow-[0_0_0_1px_rgb(225_6_0_/_0.2)]";
   return (
-    <div
-      role="status"
-      className="space-y-4 border border-cta/50 bg-panel p-4 shadow-[0_0_0_1px_rgb(225_6_0_/_0.2)]"
-    >
+    <div role="status" className={`space-y-4 border p-4 ${frame}`}>
       <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
         Draft to foreman
       </p>
       <h2 className="font-display text-2xl tracking-wide text-paper uppercase">
         {heading}
       </h2>
-      <p className="text-sm text-muted">
-        {packetLabel} sent to{" "}
-        <span className="font-medium text-paper">{DEMO_FOREMAN.name}</span> (
-        {DEMO_FOREMAN.role}). Not filed in Procore.
+      <p className={summary ? "text-base text-paper" : "text-sm text-muted"}>
+        {summary ?? (
+          <>
+            {packetLabel} sent to{" "}
+            <span className="font-medium">{DEMO_FOREMAN.name}</span> (
+            {DEMO_FOREMAN.role}). Not filed in Procore.
+          </>
+        )}
       </p>
       <dl className="space-y-1 text-sm text-muted">
         <div>

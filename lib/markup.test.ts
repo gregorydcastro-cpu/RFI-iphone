@@ -9,10 +9,13 @@ import {
   findMarkupAt,
   foremanDraftStillAllowed,
   hitTestMarkup,
+  MARKUP_RFI_QUERY_MAX,
+  markupRfiQuery,
   markupSaveChip,
   markupStorageKey,
   parseVectors,
   prefillRfiFromMarkup,
+  resolveMarkupRfiFields,
   undoLastMarkup,
   updateTextMarkup,
 } from "./markup.ts";
@@ -139,6 +142,118 @@ test("RFI prefill uses Maple Point sheet pin and never names real clients", () =
   assert.match(boxed.subject, /Electrical Closet 101/);
   assert.equal(boxed.kind, "box");
   assert.doesNotMatch(JSON.stringify(boxed), forbidden);
+});
+
+test("long markup notes clip the subject on a word and keep the full description", () => {
+  const note =
+    "Need a spare breaker for the future IT rack on the electrical panel schedule before rough-in inspection tomorrow morning at Maple Point";
+  assert.ok(note.length > 80);
+  const prefill = prefillRfiFromMarkup({
+    item: createTextMarkup({ point: { x: 0.2, y: 0.3 }, text: note, id: "note-long" }),
+    sheetId: "A-101",
+    sheetRev: "A",
+    roomName: "Electrical Closet 101",
+  });
+  assert.ok(prefill.subject.length <= 80);
+  assert.ok(prefill.subject.length > 24);
+  assert.equal(note.startsWith(prefill.subject), true);
+  assert.equal(note[prefill.subject.length], " ");
+  assert.equal(prefill.subject.includes("…"), false);
+  assert.match(prefill.question, new RegExp(note.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(prefill.question, /A-101 Rev A/);
+  assert.match(prefill.question, /not a Procore submit/i);
+  assert.doesNotMatch(prefill.subject, forbidden);
+  assert.doesNotMatch(prefill.question, forbidden);
+});
+
+test("stored markup prefill restores a description the URL cut off", () => {
+  const full =
+    "Field markup (note) on A-101 Rev A. Text note: Need a spare breaker for the future IT rack. Location: Electrical Closet 101.";
+  const stored = {
+    requestId: "maple-point",
+    overlayId: "11111111-1111-4111-8111-111111111111",
+    itemId: "note-1",
+    sheetId: "A-101",
+    sheetRev: "A",
+    kind: "text" as const,
+    subject: "Need a spare breaker for the future IT rack",
+    question: full,
+    location: "Electrical Closet 101",
+    vectors: { items: [] },
+  };
+  const restored = resolveMarkupRfiFields({
+    requestId: "maple-point",
+    markupId: stored.overlayId,
+    itemId: stored.itemId,
+    urlSubject: "Need a spare breaker for the fut…",
+    urlQuestion: "",
+    urlLocation: "",
+    stored,
+  });
+  assert.equal(restored.subject, stored.subject);
+  assert.equal(restored.question, full);
+  assert.equal(restored.location, "Electrical Closet 101");
+
+  const otherItem = resolveMarkupRfiFields({
+    requestId: "maple-point",
+    markupId: stored.overlayId,
+    itemId: "other-note",
+    urlSubject: "Box on A-101",
+    urlQuestion: "Field markup (box) on A-101.",
+    stored,
+  });
+  assert.equal(otherItem.subject, "Box on A-101");
+  assert.equal(otherItem.question, "Field markup (box) on A-101.");
+
+  const fresh = resolveMarkupRfiFields({
+    requestId: "maple-point",
+    urlSubject: "",
+    urlQuestion: "",
+    stored,
+  });
+  assert.equal(fresh.subject, "");
+  assert.equal(fresh.question, "");
+});
+
+test("markup RFI query drops a description that would be cut from the URL", () => {
+  const question = `Field markup (note) on A-101 Rev A. ${"panel ".repeat(400)}`;
+  assert.ok(question.length > MARKUP_RFI_QUERY_MAX);
+  const query = markupRfiQuery({
+    requestId: "maple-point",
+    overlayId: "11111111-1111-4111-8111-111111111111",
+    itemId: "note-1",
+    sheetId: "A-101",
+    sheetRev: "A",
+    kind: "text",
+    subject: "Need a spare breaker",
+    question,
+    location: "Electrical Closet 101",
+    vectors: { items: [] },
+  });
+  assert.ok(query.length <= MARKUP_RFI_QUERY_MAX);
+  assert.equal(query.includes("question="), false);
+  assert.match(query, /subject=/);
+  assert.match(query, /item=note-1/);
+  assert.match(query, /kind=text/);
+
+  const short = markupRfiQuery(
+    {
+      requestId: "maple-point",
+      overlayId: "11111111-1111-4111-8111-111111111111",
+      itemId: "box-1",
+      sheetId: "A-101",
+      sheetRev: "A",
+      kind: "box",
+      subject: "Box on A-101 Rev A — Electrical Closet 101",
+      question: "Field markup (box) on A-101 Rev A.",
+      location: "Electrical Closet 101",
+      vectors: { items: [] },
+    },
+    true,
+  );
+  assert.match(short, /question=/);
+  assert.match(short, /markupSave=failed/);
+  assert.doesNotMatch(short, forbidden);
 });
 
 test("undoLastMarkup drops the newest vector and clearAllMarkups wipes the sheet", () => {

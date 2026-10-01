@@ -17,6 +17,7 @@ import {
   buildMarkupRfiPrefill,
   clearAllMarkups,
   foremanDraftStillAllowed,
+  markupRfiQuery,
   undoLastMarkup,
   updateTextMarkup,
   writeMarkupRfiPrefill,
@@ -79,6 +80,7 @@ export function SheetViewer({
   const [error, setError] = useState<SheetPdfBanner | null>(null);
   const [offlineCopy, setOfflineCopy] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [aspect, setAspect] = useState(1224 / 792);
   const [pagePts, setPagePts] = useState<{ width: number; height: number }>();
   const [tool, setTool] = useState<MarkupTool>("pan");
@@ -322,6 +324,7 @@ export function SheetViewer({
   async function handleCreateRfi() {
     if (creatingRef.current || !requestId || !sheetId || !selected) return;
     creatingRef.current = true;
+    setCreateError(null);
     try {
       const outcome = await markup.flush();
       const item =
@@ -334,6 +337,7 @@ export function SheetViewer({
         })
       ) {
         creatingRef.current = false;
+        setCreateError("Select a markup, then tap Create RFI.");
         return;
       }
       const overlayId = outcome.record.id || markup.overlayId;
@@ -348,19 +352,14 @@ export function SheetViewer({
         vectors: outcome.record.vectors,
       });
       writeMarkupRfiPrefill(prefill);
-      const params = new URLSearchParams({
-        sheet: sheetId,
-        markup: overlayId,
-        item: item.id,
-        subject: prefill.subject,
-        question: prefill.question,
-        location: prefill.location,
-        kind: prefill.kind,
-      });
-      if (outcome.persistFailed) params.set("markupSave", "failed");
-      router.push(`/pack/${requestId}/rfi/new?${params.toString()}`);
+      const query = markupRfiQuery(prefill, outcome.persistFailed);
+      router.push(`/pack/${requestId}/rfi/new?${query}`);
+      window.setTimeout(() => {
+        creatingRef.current = false;
+      }, 1200);
     } catch {
       creatingRef.current = false;
+      setCreateError("Tap Create RFI again.");
     }
   }
 
@@ -368,6 +367,15 @@ export function SheetViewer({
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-charcoal">
+      {createError ? (
+        <div
+          role="alert"
+          className="flex shrink-0 flex-col gap-2 border-b border-cta/70 bg-ink px-3 py-3"
+        >
+          <p className="text-lg font-semibold text-cta">Draft did not open</p>
+          <p className="text-base leading-snug text-paper">{createError}</p>
+        </div>
+      ) : null}
       {showOfflineNote ? (
         <div
           role="status"

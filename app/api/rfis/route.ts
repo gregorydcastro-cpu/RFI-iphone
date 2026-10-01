@@ -1,5 +1,6 @@
 import { DEMO_FOREMAN } from "@/lib/crew";
 import { canWriteFieldLog } from "@/lib/invites";
+import { rfiCreateOutcome } from "@/lib/rfiCreate";
 import { isRfiDraftStatus } from "@/lib/rfiSchema";
 import { fieldRoleForRequest } from "@/lib/session.server";
 import { insertRfiDraftRow, isRfiTableWriteConfigured } from "@/lib/supabaseRfis";
@@ -45,6 +46,7 @@ function newUuid(): string {
  *
  * Service-role persist when configured; otherwise the client keeps
  * localStorage and this returns `persisted: false`.
+ * A configured write that does not land is 503 — not a silent success.
  * `markup_id` is the optional overlay FK when Create RFI came from a markup.
  */
 export async function POST(request: Request) {
@@ -93,6 +95,24 @@ export async function POST(request: Request) {
       })
     : null;
 
+  const outcome = rfiCreateOutcome({
+    saved: Boolean(row),
+    writeConfigured: configured,
+  });
+  if (!outcome.ok) {
+    return json(
+      {
+        ok: false,
+        error: outcome.error,
+        code: outcome.code,
+        persisted: false,
+        storage: outcome.storage,
+        procore: false,
+      },
+      outcome.status,
+    );
+  }
+
   const now = new Date().toISOString();
   const packet = row ?? {
     id,
@@ -109,8 +129,8 @@ export async function POST(request: Request) {
 
   return json({
     ok: true,
-    persisted: Boolean(row),
-    storage: row ? "supabase" : configured ? "unavailable" : "unconfigured",
+    persisted: outcome.persisted,
+    storage: outcome.storage,
     procore: false,
     sentTo: {
       name: DEMO_FOREMAN.name,
