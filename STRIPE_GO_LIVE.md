@@ -12,11 +12,17 @@ Until those keys are set, `POST /api/stripe/checkout` and `POST /api/stripe/webh
    - `STRIPE_WEBHOOK_SECRET` (`whsec_…` from step 3 — if you create the endpoint after this paste, save the signing secret and redeploy again)
    - optional `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (`pk_live_…`). Hosted Checkout does not require it.
 2. **Redeploy Production** so the running build picks up the env.
-3. **Register the webhook** in Stripe **live** mode at **`https://www.gcfieldlog.com/api/stripe/webhook`** — **www, not apex** (apex may 308; Stripe does not follow redirects). Events: `checkout.session.completed`, `customer.subscription.updated`, `invoice.paid`.
+3. **Register the webhook** in Stripe **live** mode at **`https://www.gcfieldlog.com/api/stripe/webhook`** — **www, not apex** (apex may 308; Stripe does not follow redirects). Events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`.
 4. **Hit checkout once** on [https://www.gcfieldlog.com/pricing](https://www.gcfieldlog.com/pricing) (or `POST /api/stripe/checkout`):
    - Page leads with **Billing isn't live yet**, the operator line names unset Production env, and checkout/webhook return **503** `billing_unconfigured` → keys did not land. Confirm the Vercel scope is **Production**, save, redeploy.
    - Browser redirects to Stripe Checkout (API **200** `{ ok: true, url }`) → `STRIPE_SECRET_KEY` and `STRIPE_PRICE_ID` are live. Finish or cancel.
    - Checkout can succeed while the page still names `STRIPE_WEBHOOK_SECRET`. A no-signature `POST /api/stripe/webhook` stays **503** until that secret is set, then returns **400** `missing_signature` (keys present; no Stripe API call).
+5. **Confirm the webhook path** with `bash scripts/smoke-go-live.sh` (this script never signs and never sends `Stripe-Signature`):
+   - `POST /api/stripe/webhook` **503** `billing_unconfigured` → `STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK_SECRET` is still unset. `missing` lists those names.
+   - **400** `missing_signature` → both webhook env names are set. That is the configured check. The script does not create a charge.
+   - `GET /api/stripe/webhook` **405** `method_not_allowed` → the route is up; only POST is accepted.
+   - After the Dashboard endpoint exists, use **Send test event** there. A signed `customer.subscription.deleted` sets `billing_customers.status` to `canceled`. Redelivery upserts the same `stripe_customer_id` and does not wipe a stored email, subscription id, or trial end when the new payload omits them. A delete for an older subscription does not overwrite a newer subscription id already stored.
+   - A signed event that returns **500** is Stripe's retry signal. Vercel logs `[gcfieldlog] stripe webhook handler failed` with `code` `storage_unconfigured`, `upsert_failed`, or `lookup_failed` (no secret values). `storage_unconfigured` means `SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` is missing.
 
 `bash scripts/smoke-go-live.sh` prints the same split. Sections below are the same setup in more detail (domains, PayPal, test keys). `billing_customers` is already applied on gc-field-log.
 
@@ -61,10 +67,13 @@ On the same Payment methods page, enable **PayPal** if Stripe supports it for th
 3. Events (at least):
    - `checkout.session.completed`
    - `customer.subscription.updated`
+   - `customer.subscription.deleted` (subscription ended — row becomes `canceled`)
    - `invoice.paid`
 4. Copy the endpoint **Signing secret** (`whsec_…`) into Vercel **`STRIPE_WEBHOOK_SECRET`** (server-only, never `NEXT_PUBLIC_`).
 
-Without `STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK_SECRET`, the webhook route also returns `billing_unconfigured` (503) and `missing` lists those key names. After both are set, a request with no `Stripe-Signature` returns **400** `missing_signature`.
+Without `STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK_SECRET`, `POST /api/stripe/webhook` returns `billing_unconfigured` (503) and `missing` lists those key names. After both are set, a request with no `Stripe-Signature` returns **400** `missing_signature`. `GET`, `PUT`, `PATCH`, `DELETE`, and `HEAD` return **405** `method_not_allowed` whether or not the keys are set. The route stays on the Node.js runtime so the raw body can be verified.
+
+`invoice.paid` reads the subscription id from the current payload (`parent.subscription_details.subscription`) and from older webhook API versions (`subscription` on the invoice or its lines). A redelivered event upserts the same customer. Handler failures return **500** so Stripe retries; the log `code` is `storage_unconfigured`, `upsert_failed`, or `lookup_failed` and does not include secret values.
 
 ## 6. Vercel env (Production / Preview as needed)
 
@@ -94,6 +103,7 @@ With keys unset (Maple Point demo / Vercel Production before the one-pass above)
 - `/pricing` still renders, leads with **Billing isn't live yet**, and the operator line names unset Production env (`STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`). Not a host allowlist.
 - `POST /api/stripe/checkout` returns **HTTP 503** `{ ok: false, error: "billing_unconfigured" }`. `missing` is the unset checkout keys (secret and/or price). No Stripe API call.
 - `POST /api/stripe/webhook` with no signature returns the same 503 until `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are both set, then **400** `missing_signature`.
+- `GET /api/stripe/webhook` returns **405** `method_not_allowed`.
 - Pack viewer, Time, Voice, and Procore OAuth are unchanged.
 
 After redeploy, success is a redirect to Stripe Checkout. A 503 on that same POST means Production env still did not land.

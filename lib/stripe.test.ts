@@ -201,6 +201,10 @@ test("go-live docs tell Greg to register the www webhook URL", () => {
   assert.match(live, /NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY/);
   assert.match(live, /Redeploy Production/);
   assert.match(live, /still-unconfigured vs live/);
+  assert.match(live, /customer\.subscription\.deleted/);
+  assert.match(live, /method_not_allowed/);
+  assert.match(live, /storage_unconfigured/);
+  assert.match(readme, /customer\.subscription\.deleted/);
 });
 
 test("smoke script still treats unconfigured checkout as 503 billing_unconfigured", () => {
@@ -209,7 +213,29 @@ test("smoke script still treats unconfigured checkout as 503 billing_unconfigure
   assert.match(smoke, /\/api\/stripe\/checkout/);
   assert.match(smoke, /\/api\/stripe\/webhook/);
   assert.match(smoke, /400 missing_signature/);
+  assert.match(smoke, /405 method_not_allowed/);
+  assert.match(smoke, /customer\.subscription\.deleted/);
+  assert.match(smoke, /never signs/);
   assert.ok(smoke.includes('BASE_URL="${BASE_URL:-https://www.gcfieldlog.com}"'));
+});
+
+test("webhook route stays on nodejs, rejects other methods, and handles subscription end", () => {
+  const webhook = readRepo("app/api/stripe/webhook/route.ts");
+  assert.match(webhook, /export const runtime = "nodejs"/);
+  assert.doesNotMatch(webhook, /runtime = "edge"/);
+  assert.match(webhook, /request\.text\(\)/);
+  assert.match(webhook, /method_not_allowed/);
+  assert.match(webhook, /status:\s*405/);
+  assert.match(webhook, /customer\.subscription\.deleted/);
+  assert.match(webhook, /storage_unconfigured/);
+  assert.match(webhook, /upsert_failed/);
+  assert.match(webhook, /stripeWebhookHandlerCode/);
+  assert.match(webhook, /invoiceSubscriptionId/);
+  assert.match(webhook, /duplicate/);
+  assert.match(webhook, /billingUnconfiguredBody\(missingStripeWebhookEnv\(\)\)/);
+  const unconfigured = webhook.indexOf("billingUnconfiguredBody(");
+  const verify = webhook.indexOf("constructEvent");
+  assert.ok(unconfigured >= 0 && verify > unconfigured);
 });
 
 test("checkoutReturnOrigin canonicalizes production to www", () => {
@@ -256,6 +282,8 @@ test("Stripe helpers and copy stay Maple Point / fictional and invent no keys", 
     readRepo("app/account/page.tsx"),
     readRepo("app/api/stripe/checkout/route.ts"),
     readRepo("app/api/stripe/webhook/route.ts"),
+    readRepo("lib/stripeWebhook.ts"),
+    readRepo("lib/billingCustomers.ts"),
   ].join("\n");
   assert.equal(forbidden.test(blob), false);
   assert.match(blob, /Maple Point/);
