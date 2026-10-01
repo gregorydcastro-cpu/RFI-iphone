@@ -5,9 +5,16 @@ import { WorkerPunchCard } from "@/components/WorkerPunchCard";
 import {
   buildWorkerWeeks,
   defaultWorkerId,
+  foremanPunchNotice,
+  mergePunches,
   mondayOfWeek,
+  PUNCH_SAVE_FAILED_MESSAGE,
+  punchWriteAccepted,
   todayYmd,
+  workerPunchNotice,
+  type TimePunch,
   type TimeSnapshot,
+  type TimeStorage,
 } from "@/lib/time";
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -29,6 +36,7 @@ export function TimeBoard({ initial, sessionEmail, signedIn }: Props) {
   const [pin, setPin] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -59,6 +67,7 @@ export function TimeBoard({ initial, sessionEmail, signedIn }: Props) {
   async function postPunch(body: Record<string, unknown>) {
     setPending(true);
     setError(null);
+    setNotice(null);
     try {
       const response = await fetch("/api/time/punches", {
         method: "POST",
@@ -69,26 +78,43 @@ export function TimeBoard({ initial, sessionEmail, signedIn }: Props) {
         ok?: boolean;
         error?: string;
         code?: string;
+        storage?: TimeStorage;
+        punch?: TimePunch;
+        punches?: TimePunch[];
         distance_m?: number;
         radius_m?: number;
       };
-      if (!response.ok || !data.ok) {
+      if (!response.ok || !punchWriteAccepted(data)) {
         if (data.code === "off_site") {
           setError(
             `Off site — punch-in locked (${Math.round(data.distance_m ?? 0)} m away, fence ${data.radius_m ?? snapshot.site.radius_m} m).`,
           );
+        } else if (data.storage === "unavailable") {
+          setError(PUNCH_SAVE_FAILED_MESSAGE);
         } else {
-          setError(data.error ?? "Could not save punch");
+          setError(data.error ?? PUNCH_SAVE_FAILED_MESSAGE);
         }
         return;
       }
+      const incoming = data.punches ?? (data.punch ? [data.punch] : []);
+      if (incoming.length > 0) {
+        setSnapshot((prev) => ({
+          ...prev,
+          punches: mergePunches(prev.punches, incoming),
+        }));
+      }
+      if (body.foreman === true) {
+        setNotice(foremanPunchNotice(typeof body.punchId === "string" ? "edit" : "add"));
+      } else if (body.punchType === "in" || body.punchType === "out") {
+        setNotice(workerPunchNotice(body.punchType, incoming[0]?.punched_at));
+      } else {
+        setNotice("Saved.");
+      }
       await reload(
-        body.foreman === true
-          ? snapshot.weekStart
-          : mondayOfWeek(todayYmd()),
+        body.foreman === true ? snapshot.weekStart : mondayOfWeek(todayYmd()),
       );
     } catch {
-      setError("Could not reach time service.");
+      setError("Could not reach time. Check the connection and try again.");
     } finally {
       setPending(false);
     }
@@ -97,11 +123,14 @@ export function TimeBoard({ initial, sessionEmail, signedIn }: Props) {
   function pickWorker(id: string) {
     setWorkerId(id);
     setPin("");
+    setNotice(null);
+    setError(null);
   }
 
   function pickMode(next: Mode) {
     setMode(next);
     setError(null);
+    setNotice(null);
     if (next === "punch") void reload(mondayOfWeek(todayYmd()));
   }
 
@@ -113,11 +142,9 @@ export function TimeBoard({ initial, sessionEmail, signedIn }: Props) {
       <h1 className="font-display mt-1 text-3xl tracking-wide text-paper">
         Crew time
       </h1>
-      <p className="mt-2 max-w-2xl text-sm text-muted">
-        Replace paper timesheets on this job. Punch in/out on a phone; on a
-        shared iPad switch workers with PIN. GPS fence from this job’s site
-        config. Foreman week is the crew log — not ADP, not payroll. Storage:{" "}
-        {snapshot.storage === "supabase" ? "Supabase" : "demo memory"}.
+      <p className="mt-2 max-w-2xl text-base text-muted">
+        Punch in or out on your phone. On a shared iPad, switch names with a
+        PIN. Crew week is the log for this job. {storageLine(snapshot.storage)}
       </p>
       {!signedIn ? (
         <p className="mt-3 text-base text-paper">
@@ -151,8 +178,10 @@ export function TimeBoard({ initial, sessionEmail, signedIn }: Props) {
             workerId={workerId}
             pin={pin}
             signedIn={signedIn}
+            sessionEmail={sessionEmail}
             pending={pending}
             error={error}
+            notice={notice}
             onWorkerId={pickWorker}
             onPin={setPin}
             onPunch={(input) =>
@@ -173,6 +202,7 @@ export function TimeBoard({ initial, sessionEmail, signedIn }: Props) {
             signedIn={signedIn}
             pending={pending}
             error={error}
+            notice={notice}
             onWeekChange={(weekStart) => {
               const next = mondayOfWeek(weekStart || todayYmd());
               void reload(next);
@@ -183,6 +213,12 @@ export function TimeBoard({ initial, sessionEmail, signedIn }: Props) {
       </div>
     </main>
   );
+}
+
+function storageLine(storage: TimeStorage): string {
+  if (storage === "supabase") return "Punches save to this job.";
+  if (storage === "unavailable") return "Time is offline right now.";
+  return "This is a demo. Punches are not on a real timesheet.";
 }
 
 function ModeTab({

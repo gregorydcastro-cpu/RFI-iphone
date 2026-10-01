@@ -13,6 +13,7 @@ import {
   isPunchType,
   mondayOfWeek,
   TIME_JOB_SLUG,
+  punchPersistOutcome,
   todayYmd,
   type JobSite,
   type PunchType,
@@ -357,42 +358,46 @@ function makeForemanPunch(
   };
 }
 
+function rememberPunch(punch: TimePunch) {
+  const list = memory().punches;
+  const index = list.findIndex((row) => row.id === punch.id);
+  if (index >= 0) list[index] = punch;
+  else list.push(punch);
+}
+
 async function persistPunch(
   punch: TimePunch,
   storageHint: TimeStorage,
-): Promise<{ ok: true; punch: TimePunch; storage: TimeStorage } | PunchWriteResult> {
-  memory().punches.push(punch);
-  if (isTimeTableWriteConfigured()) {
-    const row = await insertTimePunchRow(punch);
-    if (row) return { ok: true, punch: row, storage: "supabase" };
-    return { ok: true, punch, storage: "unavailable" };
-  }
-  return {
-    ok: true,
+): Promise<PunchWriteResult> {
+  const writeConfigured = isTimeTableWriteConfigured();
+  const saved = writeConfigured ? await insertTimePunchRow(punch) : null;
+  const outcome = punchPersistOutcome({
     punch,
-    storage: storageHint === "supabase" ? "memory" : storageHint,
-  };
+    saved,
+    writeConfigured,
+    storageHint,
+  });
+  if (!outcome.ok) return outcome;
+  rememberPunch(outcome.punch);
+  return outcome;
 }
 
 async function persistUpdated(
   punch: TimePunch,
   storageHint: TimeStorage,
-): Promise<{ ok: true; punch: TimePunch; storage: TimeStorage } | PunchWriteResult> {
-  const list = memory().punches;
-  const index = list.findIndex((row) => row.id === punch.id);
-  if (index >= 0) list[index] = punch;
-  else list.push(punch);
-
-  if (isTimeTableWriteConfigured()) {
-    const row = await updateTimePunchRow(punch.id, punch);
-    if (row) return { ok: true, punch: row, storage: "supabase" };
-    const inserted = await insertTimePunchRow(punch);
-    if (inserted) return { ok: true, punch: inserted, storage: "supabase" };
-    return { ok: true, punch, storage: "unavailable" };
+): Promise<PunchWriteResult> {
+  const writeConfigured = isTimeTableWriteConfigured();
+  let saved: TimePunch | null = null;
+  if (writeConfigured) {
+    saved = (await updateTimePunchRow(punch.id, punch)) ?? (await insertTimePunchRow(punch));
   }
-  return {
-    ok: true,
+  const outcome = punchPersistOutcome({
     punch,
-    storage: storageHint === "supabase" ? "memory" : storageHint,
-  };
+    saved,
+    writeConfigured,
+    storageHint,
+  });
+  if (!outcome.ok) return outcome;
+  rememberPunch(outcome.punch);
+  return outcome;
 }

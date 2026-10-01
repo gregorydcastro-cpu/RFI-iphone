@@ -22,6 +22,7 @@ export function AppHeader({
   const resolvedRole: FieldRoleName | null =
     role ?? (signedIn ? (procoreLinked ? "puller" : "viewer") : null);
   const connected = procoreConnected || procoreLinked;
+  const jobsActive = pathname === "/jobs" || pathname.startsWith("/jobs/");
   const timeActive = pathname === "/time" || pathname.startsWith("/time/");
   const shareActive = pathname === "/share" || pathname.startsWith("/share/");
   const accountActive =
@@ -43,7 +44,10 @@ export function AppHeader({
         >
           {signedIn ? (
             <>
-              <Link className="text-secondary hover:text-cta" href="/jobs">
+              <Link
+                className={jobsActive ? "text-cta" : "text-secondary hover:text-cta"}
+                href="/jobs"
+              >
                 Jobs
               </Link>
               <span className="cursor-default text-tan/50" title="Later">
