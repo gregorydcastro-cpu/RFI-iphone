@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
+import { VoiceEmptyState } from "@/components/VoiceEmptyState";
 import { VoiceFeedback } from "@/components/VoiceFeedback";
 import {
   getReadAloudServerSnapshot,
@@ -10,6 +11,7 @@ import {
   subscribeReadAloud,
 } from "@/lib/readAloudStore";
 import { voiceErrorMessage } from "@/lib/voiceErrors";
+import { voiceEmptyMessage } from "@/lib/voiceEmpty";
 import {
   getVoiceStatusServerSnapshot,
   getVoiceStatusSnapshot,
@@ -85,6 +87,12 @@ export function ReadAloudButton({
   const buttonLabel =
     mode === "loading" ? "Loading…" : mode === "playing" ? "Stop" : label;
   const error = active ? player.error : null;
+
+  if (!text.trim()) {
+    return (
+      <VoiceEmptyState message={voiceEmptyMessage("unread")} className={className} />
+    );
+  }
 
   async function onClick() {
     if (blocked) return;

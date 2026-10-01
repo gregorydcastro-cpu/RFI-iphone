@@ -379,9 +379,9 @@ export function SheetViewer({
       {showOfflineNote ? (
         <div
           role="status"
-          className="flex shrink-0 items-center justify-between gap-3 border-b border-cta/70 bg-ink px-3 py-2"
+          className="flex shrink-0 items-center justify-between gap-3 border-b border-tan/80 bg-ink px-3 py-2.5"
         >
-          <p className="min-w-0 text-sm leading-snug font-medium text-paper">
+          <p className="min-w-0 text-base leading-snug font-medium text-paper">
             {OFFLINE_SHEET_NOTE}
           </p>
           <button

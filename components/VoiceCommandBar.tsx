@@ -119,8 +119,8 @@ export function VoiceCommandBar(props: Props) {
 
   const hint =
     props.mode === "jobs"
-      ? 'Say “open Maple Point pack” or “pull room 101”. Viewers open; connected pullers refresh.'
-      : 'Say “pull room 101” or “open room 733”. Uses the same open/pull path as the button.';
+      ? "Say “open Maple Point pack” or “pull room 101”."
+      : "Say “pull room 101” or “open room 733”.";
 
   return (
     <div className="space-y-2 border border-line bg-panel p-4">

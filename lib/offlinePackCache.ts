@@ -1,5 +1,4 @@
 import {
-  formatPulledAt,
   primaryRevisionStamp,
   sheetRevisionLabel,
   type RevisionStamp,
@@ -271,12 +270,32 @@ export function pickValidOfflineSnapshot(
   return valid[0] ?? null;
 }
 
+/** Phone clock in the day's-pack zone. Not a UTC stamp. */
+export function offlineWhenLabel(iso?: string | null): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: OFFLINE_PACK_TZ,
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })
+    .format(date)
+    .replace(/[\u202f\u00a0]/g, " ");
+}
+
+/**
+ * One phone line for the pack strip. Not the sheet-PDF error card:
+ * no "didn't load", no Retry, no Procore path talk.
+ */
 export function offlineBannerText(
   snapshot: Pick<OfflinePackSnapshot, "cachedAt" | "revisionStamp" | "pack">,
 ): string {
   const when =
-    formatPulledAt(snapshot.cachedAt) ??
-    formatPulledAt(snapshot.pack.pulled_at) ??
+    offlineWhenLabel(snapshot.cachedAt) ??
+    offlineWhenLabel(snapshot.pack.pulled_at) ??
     snapshot.cachedAt;
   const stamp = snapshot.revisionStamp
     ? sheetRevisionLabel({
@@ -285,7 +304,7 @@ export function offlineBannerText(
       })
     : null;
   const suffix = stamp ? ` · ${stamp}` : "";
-  return `Offline — showing cached pack from ${when}${suffix}`;
+  return `Offline. Saved pack from ${when}${suffix}.`;
 }
 
 /**
@@ -297,8 +316,9 @@ export const OFFLINE_STATUS_LINE = "Device snapshot · not a live pull.";
 /**
  * Sheet strip when live PDF bytes miss and a device copy paints.
  * Sits above the markup toolbar — that bar used to cover this note.
+ * Says the phone has the sheet. The red PDF card is the miss with no copy.
  */
-export const OFFLINE_SHEET_NOTE = "Offline copy · live sheet didn't load";
+export const OFFLINE_SHEET_NOTE = "Offline copy · saved on this phone";
 
 export function sheetBlobKey(sheet: Pick<Sheet, "id" | "rev">): string {
   return `${sheet.id}::${sheet.rev}`;

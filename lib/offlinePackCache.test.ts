@@ -14,6 +14,7 @@ import {
   OFFLINE_SHEET_NOTE,
   OFFLINE_STATUS_LINE,
   offlineBannerText,
+  offlineWhenLabel,
   offlinePackCacheKey,
   offlinePackLatestKey,
   OFFLINE_PACK_TZ,
@@ -247,13 +248,18 @@ test("banner names the cached stamp and does not use real client names", () => {
     cachedAt: "2026-09-21T14:00:00.000Z",
   });
   const line = offlineBannerText(snapshot);
-  assert.match(line, /^Offline — showing cached pack from /);
-  assert.match(line, /A-101 Rev A/);
+  assert.equal(offlineWhenLabel("2026-09-21T14:00:00.000Z"), "Sep 21, 10:00 AM");
+  assert.match(line, /^Offline\. Saved pack from Sep 21, 10:00 AM/);
+  assert.match(line, /A-101 Rev A\.$/);
+  assert.equal(line.includes("Procore"), false);
+  assert.equal(/didn't load|reach the sheet|Tap Retry/i.test(line), false);
   assert.equal(forbidden.test(line), false);
   assert.equal(forbidden.test(JSON.stringify(snapshot)), false);
   assert.equal(OFFLINE_STATUS_LINE.includes("showing cached pack"), false);
   assert.equal(OFFLINE_SHEET_NOTE.includes("fetch"), false);
+  assert.equal(OFFLINE_SHEET_NOTE.includes("didn't load"), false);
   assert.match(OFFLINE_SHEET_NOTE, /Offline copy/);
+  assert.equal(/reach the sheet|Tap Retry/i.test(OFFLINE_SHEET_NOTE), false);
   assert.equal(forbidden.test(OFFLINE_STATUS_LINE), false);
   assert.equal(forbidden.test(OFFLINE_SHEET_NOTE), false);
 });
