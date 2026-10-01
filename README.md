@@ -200,9 +200,12 @@ Hands-in-gloves markup on the pack viewer. Vectors stay as SVG/JSON — **not** 
 2. Jobs → **Maple Point Medical Office** → Open pack (room `101` or `733`).
 3. On the floor plan (or any sheet), tap **Box**, **Circle**, **Arrow**, or **Note**. Pan stays for zooming.
 4. Drag on the sheet (or tap to place a text note). The new markup stays selected.
-5. Tap **Create RFI**. `/pack/[requestId]/rfi/new` opens with subject, question, location, and sheet/rev pin filled from the markup.
-6. Optional: **Take photo** (camera) or **Choose photo**. The image is stored as a data URL on the draft — not uploaded to Procore.
+5. Tap **Create RFI**. `/pack/[requestId]/rfi/new` opens with subject, description, location, and sheet/rev pin filled from the markup. A long note keeps the full text in the description. The subject stops on a word (same idea as Dictate RFI). If the URL is too long, the description is restored from this phone.
+6. Optional: **Take photo** (camera) or **Choose photo**. The image is stored as a data URL on the draft — not uploaded to Procore. **Dictate RFI** still fills subject and description. Say send draft to send it.
 7. **Send draft to Pat Nguyen**.
+   - **Draft sent** — Pat Nguyen has this draft. Not a Procore submit.
+   - **Saved on this phone** — the crew does not have it yet (no service role, or you are signed out). Sign in is on that screen when you are signed out.
+   - **Draft did not send** — large red banner and **Retry**. The subject and description stay in the form. A configured `rfis` write that does not land returns 503, not a fake success.
 
 **Undo last** drops the newest vector. **Clear all** confirms, then wipes the sheet. The toolbar save chip reads **Saving…** while a write is in flight, **Saved** when it lands in Supabase, **Local only** when the service role is absent, and **Couldn't save** when the cloud write failed. A failed save stays on this device and **Create RFI** still opens the foreman draft. With Pan on, tap a note to edit it. Escape cancels a draft shape or the note form. A phone photo attached on that draft shows a small preview; the camera input stays `capture="environment"`.
 

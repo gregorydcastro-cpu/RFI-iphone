@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type ChangeEvent, type FormEvent, useMemo, useState } from "react";
+import { type ChangeEvent, type FormEvent, useMemo, useState, useSyncExternalStore } from "react";
 import { DictationButton } from "@/components/DictationButton";
 import { DraftToForemanSuccess } from "@/components/DraftToForemanSuccess";
 import { MarkupSaveChip } from "@/components/MarkupSaveChip";
@@ -20,7 +20,16 @@ import {
   loadLocalOverlay,
   markupKindLabel,
   readMarkupRfiPrefill,
+  readMarkupRfiPrefillSnapshot,
+  resolveMarkupRfiFields,
+  subscribeMarkupRfiPrefill,
 } from "@/lib/markup";
+import {
+  rfiCreateAccepted,
+  rfiCreateFailure,
+  rfiCreateSuccessCopy,
+  type RfiCreateFailure,
+} from "@/lib/rfiCreate";
 import { sheetRevisionLabel, type RoomPack } from "@/lib/pack";
 import {
   applyRfiSpeechToFields,
@@ -72,15 +81,32 @@ export function GenerateRfiForm({
     sheets[0];
   const initialSheet = queried ?? fallback;
 
-  const [subject, setSubject] = useState(initialSubject ?? "");
-  const [question, setQuestion] = useState(initialQuestion ?? "");
-  const [location, setLocation] = useState(
-    initialLocation || pack.room.name || pack.layout?.locator || "",
+  const storedPrefill = useSyncExternalStore(
+    subscribeMarkupRfiPrefill,
+    () => readMarkupRfiPrefillSnapshot(requestId),
+    () => null,
   );
+  const seeded = resolveMarkupRfiFields({
+    requestId,
+    markupId: markupQuery,
+    itemId: markupItemQuery,
+    urlSubject: initialSubject,
+    urlQuestion: initialQuestion,
+    urlLocation: initialLocation,
+    stored: storedPrefill,
+  });
+  const roomFallback = initialLocation || pack.room.name || pack.layout?.locator || "";
+  const [subjectDraft, setSubjectDraft] = useState<string | null>(null);
+  const [questionDraft, setQuestionDraft] = useState<string | null>(null);
+  const [locationDraft, setLocationDraft] = useState<string | null>(null);
+  const subject = subjectDraft ?? seeded.subject;
+  const question = questionDraft ?? seeded.question;
+  const location = locationDraft ?? (seeded.location || roomFallback);
   const [sheetId, setSheetId] = useState(initialSheet?.id ?? "");
   const [photos, setPhotos] = useState<DraftPhoto[]>([]);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [createFailure, setCreateFailure] = useState<RfiCreateFailure | null>(null);
   const [pending, setPending] = useState(false);
   const [saved, setSaved] = useState<RfiDraftPacket | null>(null);
   const [dictateNote, setDictateNote] = useState<string | null>(null);
@@ -152,11 +178,13 @@ export function GenerateRfiForm({
     const nextSubject = fields.subject.trim();
     const nextQuestion = fields.question.trim();
     if (!nextSubject || !nextQuestion) {
+      setCreateFailure(null);
       setError("Add a subject and a description.");
       return;
     }
     setPending(true);
     setError(null);
+    setCreateFailure(null);
     setNeedsSignIn(false);
 
     const sheetPinId = selectedSheet?.id ?? pack.revision_stamp?.drawing ?? "";
@@ -198,6 +226,7 @@ export function GenerateRfiForm({
     };
 
     let signedOut = false;
+    let failure: RfiCreateFailure | null = null;
     try {
       const response = await fetch("/api/rfis", {
         method: "POST",
@@ -212,15 +241,19 @@ export function GenerateRfiForm({
           status: "draft",
         }),
       });
-      if (response.status === 401) signedOut = true;
-      const data = (await response.json()) as {
+      const data = (await response.json().catch(() => ({}))) as {
         ok?: boolean;
+        error?: string;
         persisted?: boolean;
         storage?: RfiDraftPacket["storage"];
         row?: { id?: string; created_at?: string; status?: "draft" | "ready" };
         sentTo?: RfiDraftPacket["sentTo"];
       };
-      if (response.ok && data.ok && data.row?.id) {
+      if (response.status === 401) {
+        signedOut = true;
+      } else if (!response.ok || !rfiCreateAccepted(data) || !data.row?.id) {
+        failure = rfiCreateFailure({ status: response.status, error: data.error });
+      } else {
         packet = {
           ...packet,
           id: data.row.id,
@@ -232,7 +265,13 @@ export function GenerateRfiForm({
         };
       }
     } catch {
-      // localStorage still holds the draft for the demo
+      failure = rfiCreateFailure({ status: 0 });
+    }
+
+    if (failure) {
+      setCreateFailure(failure);
+      setPending(false);
+      return;
     }
 
     saveRfiDraft(packet);
@@ -249,11 +288,12 @@ export function GenerateRfiForm({
   async function onDictate(text: string) {
     const parsed = parseRfiDictation(text);
     const next = applyRfiSpeechToFields(parsed, { subject, question, location });
-    if (next.subject !== subject) setSubject(next.subject);
+    if (next.subject !== subject) setSubjectDraft(next.subject);
     // STT writes subject plus the full spoken body into Question / description.
-    if (next.question) setQuestion(next.question);
-    if (next.location !== location) setLocation(next.location);
+    if (next.question) setQuestionDraft(next.question);
+    if (next.location !== location) setLocationDraft(next.location);
     setError(null);
+    setCreateFailure(null);
     if (!next.subject && !next.question) {
       setDictateNote("Nothing landed. Tap retry and speak the subject and the issue.");
       return;
@@ -277,7 +317,12 @@ export function GenerateRfiForm({
   }
 
   if (saved) {
+    const result = rfiCreateSuccessCopy(
+      needsSignIn ? "signed_out" : saved.persisted ? "crew" : "phone",
+    );
     const confirmationSpeak = [
+      result.heading,
+      result.summary,
       rfiSpeakText({
         title: saved.subject,
         status: saved.status,
@@ -285,16 +330,13 @@ export function GenerateRfiForm({
         location: saved.location,
         draftToForeman: true,
       }),
-      needsSignIn
-        ? "You are signed out. This draft is on this phone. Sign in to keep it with the crew."
-        : "",
-    ]
-      .filter(Boolean)
-      .join(" ");
+    ].join(" ");
     const signInHref = `/?next=${encodeURIComponent(`/pack/${requestId}/rfi/new`)}`;
     return (
       <DraftToForemanSuccess
-        heading={needsSignIn ? "RFI draft saved on this phone" : "RFI draft sent"}
+        heading={result.heading}
+        summary={result.summary}
+        tone={result.tone}
         packetLabel="Draft RFI packet"
         jobName={saved.jobName}
         roomName={saved.location || saved.roomName}
@@ -309,13 +351,12 @@ export function GenerateRfiForm({
         speakText={confirmationSpeak}
       >
         {needsSignIn ? (
-          <p className="text-base text-paper">
-            You are signed out. This draft is on this phone.{" "}
-            <Link href={signInHref} className="font-semibold text-accent underline">
-              Sign in
-            </Link>{" "}
-            to keep it with the crew.
-          </p>
+          <Link
+            href={signInHref}
+            className="inline-flex min-h-12 w-full items-center justify-center border border-line bg-panel-2 px-4 py-3 text-base font-semibold tracking-wide text-paper uppercase"
+          >
+            Sign in
+          </Link>
         ) : null}
         <div className="border border-line bg-ink p-3 text-sm">
           <p className="font-medium text-paper">{saved.subject}</p>
@@ -344,12 +385,8 @@ export function GenerateRfiForm({
               ))}
             </ul>
           ) : null}
-          <p className="mt-2 text-xs text-muted">
-            Status {saved.status}
-            {saved.persisted
-              ? " · saved on rfis"
-              : " · saved on this device"}
-            . Not a Procore submit.
+          <p className="mt-2 text-base text-paper">
+            {saved.persisted ? "With the crew." : "On this phone only."} Not a Procore submit.
           </p>
         </div>
       </DraftToForemanSuccess>
@@ -374,7 +411,7 @@ export function GenerateRfiForm({
           <p className="font-semibold tracking-wide text-cta uppercase">
             From sheet markup
           </p>
-          <p className="mt-1 text-paper">
+          <p className="mt-1 text-base text-paper">
             {markupKindLabel(
               markupKindQuery === "circle" ||
                 markupKindQuery === "box" ||
@@ -383,7 +420,12 @@ export function GenerateRfiForm({
                 ? markupKindQuery
                 : "box",
             )}{" "}
-            on {pin}. Vector overlay stays attached to this draft.
+            on {pin || "this sheet"}.
+          </p>
+          <p className="mt-1 text-base text-paper">
+            {subject || question
+              ? "Subject and description are filled in below. The markup stays on this draft."
+              : "Add a subject and a description, or dictate them."}
           </p>
           {markupSaveFailed ? (
             <div className="mt-2">
@@ -448,7 +490,7 @@ export function GenerateRfiForm({
         Location (room)
         <input
           value={location}
-          onChange={(event) => setLocation(event.target.value)}
+          onChange={(event) => setLocationDraft(event.target.value)}
           className={inputClass}
           placeholder="Electrical Closet 101"
         />
@@ -483,7 +525,7 @@ export function GenerateRfiForm({
         <input
           required
           value={subject}
-          onChange={(event) => setSubject(event.target.value)}
+          onChange={(event) => setSubjectDraft(event.target.value)}
           className={inputClass}
           placeholder="Panel feed clarification"
         />
@@ -500,7 +542,7 @@ export function GenerateRfiForm({
           required
           rows={5}
           value={question}
-          onChange={(event) => setQuestion(event.target.value)}
+          onChange={(event) => setQuestionDraft(event.target.value)}
           className={inputClass}
           placeholder="What is unclear on this sheet? Dictate fills this field."
         />
@@ -578,18 +620,38 @@ export function GenerateRfiForm({
       </div>
 
       {error ? (
-        <p role="alert" className="text-sm text-cta">
+        <p role="alert" className="border border-cta/70 bg-ink px-4 py-4 text-base text-paper">
           {error}
         </p>
       ) : null}
+      {createFailure ? (
+        <div role="alert" className="border border-cta/70 bg-ink px-4 py-4">
+          <p className="text-lg font-semibold text-cta">{createFailure.title}</p>
+          <p className="mt-2 text-base leading-snug text-paper">{createFailure.message}</p>
+          {createFailure.retry ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                void submitDraft({ subject, question, location });
+              }}
+              className="mt-4 flex min-h-12 w-full items-center justify-center bg-cta px-4 text-base font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
+            >
+              {pending ? "Sending draft…" : "Retry"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-12 w-full bg-cta px-4 py-3 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
-      >
-        {pending ? "Sending draft…" : `Send draft to ${DEMO_FOREMAN.name}`}
-      </button>
+      {createFailure?.retry ? null : (
+        <button
+          type="submit"
+          disabled={pending}
+          className="min-h-12 w-full bg-cta px-4 py-3 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
+        >
+          {pending ? "Sending draft…" : `Send draft to ${DEMO_FOREMAN.name}`}
+        </button>
+      )}
     </form>
   );
 }
@@ -603,6 +665,19 @@ function readFileDataUrl(file: File): Promise<string> {
   });
 }
 
+function matchingStoredPrefill(input: {
+  requestId: string;
+  markupQuery?: string;
+  markupItemQuery?: string;
+}): ReturnType<typeof readMarkupRfiPrefill> {
+  if (!input.markupQuery && !input.markupItemQuery) return null;
+  const stored = readMarkupRfiPrefill(input.requestId);
+  if (!stored) return null;
+  if (input.markupQuery && stored.overlayId !== input.markupQuery) return null;
+  if (input.markupItemQuery && stored.itemId !== input.markupItemQuery) return null;
+  return stored;
+}
+
 function resolveMarkupAttachment(input: {
   requestId: string;
   pack: RoomPack;
@@ -610,7 +685,7 @@ function resolveMarkupAttachment(input: {
   markupQuery?: string;
   markupItemQuery?: string;
 }): RfiMarkupRef | null {
-  const fromSession = readMarkupRfiPrefill(input.requestId);
+  const fromSession = matchingStoredPrefill(input);
   if (fromSession) {
     return {
       overlayId: fromSession.overlayId,

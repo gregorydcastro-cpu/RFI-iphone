@@ -264,51 +264,113 @@ export function asOverlayRecord(
 
 export function writeMarkupRfiPrefill(prefill: MarkupRfiPrefill): void {
   if (typeof window === "undefined") return;
-  try {
-    window.sessionStorage.setItem(MARKUP_RFI_PREFILL_KEY, JSON.stringify(prefill));
-  } catch {
-    // ignore
+  const raw = JSON.stringify(prefill);
+  for (const store of [window.sessionStorage, window.localStorage]) {
+    try {
+      store.setItem(MARKUP_RFI_PREFILL_KEY, raw);
+    } catch {
+      // Quota or private mode — the other store, or the URL, can still carry it.
+    }
   }
 }
 
 export function readMarkupRfiPrefill(requestId: string): MarkupRfiPrefill | null {
   if (typeof window === "undefined") return null;
+  for (const store of [window.sessionStorage, window.localStorage]) {
+    try {
+      const raw = store.getItem(MARKUP_RFI_PREFILL_KEY);
+      if (!raw) continue;
+      const parsed = parseMarkupRfiPrefill(JSON.parse(raw) as unknown, requestId);
+      if (parsed) return parsed;
+    } catch {
+      // try the other store
+    }
+  }
+  return null;
+}
+
+const prefillSnapshotCache: {
+  raw: string;
+  requestId: string;
+  value: MarkupRfiPrefill | null;
+} = { raw: "\0", requestId: "", value: null };
+
+/**
+ * Stable snapshot for `useSyncExternalStore`. Same storage text returns
+ * the same object so a client render can restore a description the URL cut.
+ */
+export function readMarkupRfiPrefillSnapshot(requestId: string): MarkupRfiPrefill | null {
+  if (typeof window === "undefined") return null;
+  let raw = "";
   try {
-    const raw = window.sessionStorage.getItem(MARKUP_RFI_PREFILL_KEY);
-    if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return null;
-    const record = parsed as Record<string, unknown>;
-    if (record.requestId !== requestId) return null;
-    if (typeof record.overlayId !== "string" || typeof record.itemId !== "string") {
-      return null;
-    }
-    if (typeof record.sheetId !== "string" || typeof record.kind !== "string") {
-      return null;
-    }
-    if (
-      record.kind !== "circle" &&
-      record.kind !== "box" &&
-      record.kind !== "arrow" &&
-      record.kind !== "text"
-    ) {
-      return null;
-    }
-    return {
-      requestId,
-      overlayId: record.overlayId,
-      itemId: record.itemId,
-      sheetId: record.sheetId,
-      sheetRev: typeof record.sheetRev === "string" ? record.sheetRev : "",
-      kind: record.kind,
-      subject: typeof record.subject === "string" ? record.subject : "",
-      question: typeof record.question === "string" ? record.question : "",
-      location: typeof record.location === "string" ? record.location : "",
-      vectors: parseVectors(record.vectors),
-    };
+    raw =
+      window.sessionStorage.getItem(MARKUP_RFI_PREFILL_KEY) ||
+      window.localStorage.getItem(MARKUP_RFI_PREFILL_KEY) ||
+      "";
   } catch {
+    raw = "";
+  }
+  if (prefillSnapshotCache.raw === raw && prefillSnapshotCache.requestId === requestId) {
+    return prefillSnapshotCache.value;
+  }
+  prefillSnapshotCache.raw = raw;
+  prefillSnapshotCache.requestId = requestId;
+  if (!raw) {
+    prefillSnapshotCache.value = null;
     return null;
   }
+  try {
+    prefillSnapshotCache.value = parseMarkupRfiPrefill(JSON.parse(raw) as unknown, requestId);
+  } catch {
+    prefillSnapshotCache.value = null;
+  }
+  return prefillSnapshotCache.value;
+}
+
+export function subscribeMarkupRfiPrefill(onStoreChange: () => void): () => void {
+  if (typeof window === "undefined") return () => undefined;
+  const onStorage = (event: StorageEvent) => {
+    if (event.key && event.key !== MARKUP_RFI_PREFILL_KEY) return;
+    prefillSnapshotCache.raw = "\0";
+    onStoreChange();
+  };
+  window.addEventListener("storage", onStorage);
+  return () => window.removeEventListener("storage", onStorage);
+}
+
+export function parseMarkupRfiPrefill(
+  value: unknown,
+  requestId: string,
+): MarkupRfiPrefill | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  if (record.requestId !== requestId) return null;
+  if (typeof record.overlayId !== "string" || typeof record.itemId !== "string") {
+    return null;
+  }
+  if (typeof record.sheetId !== "string" || typeof record.kind !== "string") {
+    return null;
+  }
+  if (
+    record.kind !== "circle" &&
+    record.kind !== "box" &&
+    record.kind !== "arrow" &&
+    record.kind !== "text"
+  ) {
+    return null;
+  }
+  return {
+    requestId,
+    overlayId: record.overlayId,
+    itemId: record.itemId,
+    sheetId: record.sheetId,
+    sheetRev: typeof record.sheetRev === "string" ? record.sheetRev : "",
+    kind: record.kind,
+    subject: typeof record.subject === "string" ? record.subject : "",
+    question: typeof record.question === "string" ? record.question : "",
+    location: typeof record.location === "string" ? record.location : "",
+    vectors: parseVectors(record.vectors),
+  };
 }
 
 export function createMarkupFromGesture(input: {
@@ -474,6 +536,27 @@ function pct(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
+/** Same budget as RFI dictation subjects. Never slice through a word. */
+export const MARKUP_SUBJECT_MAX = 80;
+
+/**
+ * Query string budget for `/rfi/new`. Longer descriptions stay in
+ * session/local storage so a sign-in redirect cannot cut them off.
+ */
+export const MARKUP_RFI_QUERY_MAX = 1500;
+
+export function clipMarkupSubject(text: string, max = MARKUP_SUBJECT_MAX): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (clean.length <= max) return clean;
+  const slice = clean.slice(0, max);
+  const lastSpace = slice.lastIndexOf(" ");
+  const clipped = (lastSpace > 24 ? slice.slice(0, lastSpace) : slice).replace(
+    /[,;:\s]+$/,
+    "",
+  );
+  return clipped.trim();
+}
+
 export function prefillRfiFromMarkup(input: {
   item: MarkupVector;
   sheetId: string;
@@ -490,18 +573,94 @@ export function prefillRfiFromMarkup(input: {
     (input.roomNumber ? `Room ${input.roomNumber}` : "Room");
   const note =
     input.item.kind === "text" && input.item.text.trim()
-      ? input.item.text.trim()
+      ? input.item.text.trim().replace(/\s+/g, " ")
       : null;
   const subject = note
-    ? `${note.slice(0, 72)}${note.length > 72 ? "…" : ""}`
+    ? clipMarkupSubject(note)
     : `${kind} on ${pin} — ${location}`;
+  const described =
+    input.item.kind === "text" && note ? { ...input.item, text: note } : input.item;
   const question = [
     `Field markup (${kind.toLowerCase()}) on ${pin}.`,
-    describeMarkup(input.item),
+    describeMarkup(described),
     `Location: ${location}.`,
     "Please confirm the condition at this marked-up view. Vector overlay is attached on this draft (not a flattened image). Draft to the foreman only — not a Procore submit.",
   ].join(" ");
   return { subject, question, location };
+}
+
+/**
+ * Prefer the stored draft when the URL copy was cut. A different item
+ * never reuses another markup's subject or description.
+ */
+export function resolveMarkupRfiFields(input: {
+  requestId: string;
+  markupId?: string;
+  itemId?: string;
+  urlSubject?: string;
+  urlQuestion?: string;
+  urlLocation?: string;
+  stored: MarkupRfiPrefill | null;
+}): { subject: string; question: string; location: string } {
+  const stored = matchingMarkupPrefill(input);
+  const urlSubject = input.urlSubject?.trim() ?? "";
+  const urlQuestion = input.urlQuestion?.trim() ?? "";
+  const urlLocation = input.urlLocation?.trim() ?? "";
+  return {
+    subject: preferCompleteField(urlSubject, stored?.subject ?? ""),
+    question: preferCompleteField(urlQuestion, stored?.question ?? ""),
+    location: urlLocation || stored?.location?.trim() || "",
+  };
+}
+
+function matchingMarkupPrefill(input: {
+  requestId: string;
+  markupId?: string;
+  itemId?: string;
+  stored: MarkupRfiPrefill | null;
+}): MarkupRfiPrefill | null {
+  const stored = input.stored;
+  if (!stored || stored.requestId !== input.requestId) return null;
+  if (!input.itemId && !input.markupId) return null;
+  if (input.itemId && stored.itemId !== input.itemId) return null;
+  if (input.markupId && stored.overlayId !== input.markupId) return null;
+  return stored;
+}
+
+function preferCompleteField(urlValue: string, storedValue: string): string {
+  const url = urlValue.trim();
+  const stored = storedValue.trim();
+  if (!stored) return url;
+  if (!url) return stored;
+  if (stored === url) return stored;
+  const urlStem = url.replace(/[….]+$/u, "").trim();
+  if (stored.startsWith(urlStem) && stored.length >= urlStem.length) return stored;
+  if (url.startsWith(stored) && url.length > stored.length) return url;
+  const prefix = urlStem.slice(0, 24);
+  if (prefix && stored.length > url.length && stored.includes(prefix)) return stored;
+  return url;
+}
+
+/** Short query for the draft page. Drops `question` when the URL would be cut. */
+export function markupRfiQuery(
+  prefill: MarkupRfiPrefill,
+  markupSaveFailed = false,
+): string {
+  const params = new URLSearchParams({
+    sheet: prefill.sheetId,
+    markup: prefill.overlayId,
+    item: prefill.itemId,
+    subject: prefill.subject,
+    location: prefill.location,
+    kind: prefill.kind,
+  });
+  if (markupSaveFailed) params.set("markupSave", "failed");
+  const withQuestion = new URLSearchParams(params);
+  withQuestion.set("question", prefill.question);
+  if (withQuestion.toString().length <= MARKUP_RFI_QUERY_MAX) {
+    return withQuestion.toString();
+  }
+  return params.toString();
 }
 
 export function buildMarkupRfiPrefill(input: {
