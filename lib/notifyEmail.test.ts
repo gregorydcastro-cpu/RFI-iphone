@@ -41,11 +41,10 @@ test("parseNotifyEmailInput trims and lowercases on write", () => {
   assert.equal(normalizeNotifyEmail("nope"), null);
 });
 
-test("resolveBumpNotifyRecipients uses notify_email and ignores fallback", () => {
+test("resolveBumpNotifyRecipients uses only notify_email", () => {
   const plan = resolveBumpNotifyRecipients(
     [mapleBump],
     new Map([[mapleOwner, "foreman@crew.example"]]),
-    "mike@crew.example",
   );
   assert.equal(plan.deliveries.length, 1);
   assert.equal(plan.deliveries[0]?.to, "foreman@crew.example");
@@ -64,14 +63,14 @@ test("resolveBumpNotifyRecipients skips when notify_email is unset", () => {
   assert.equal(plan.skipped[0]?.owner_user_id, mapleOwner);
 });
 
-test("resolveBumpNotifyRecipients uses temporary NOTIFY_MIKE_EMAIL fallback", () => {
+test("resolveBumpNotifyRecipients skips a blank notify_email", () => {
   const plan = resolveBumpNotifyRecipients(
     [mapleBump],
     new Map([[mapleOwner, ""]]),
-    "mike@crew.example",
   );
-  assert.equal(plan.deliveries[0]?.to, "mike@crew.example");
-  assert.equal(plan.deliveries[0]?.source, "fallback");
+  assert.equal(plan.deliveries.length, 0);
+  assert.equal(plan.skipped[0]?.reason, "unset");
+  assert.equal(plan.skipped[0]?.owner_user_id, mapleOwner);
 });
 
 test("resolveBumpNotifyRecipients groups by owner and skips orphan pins", () => {

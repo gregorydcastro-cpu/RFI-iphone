@@ -10,8 +10,8 @@
  * GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON (or GOOGLE_CLIENT_EMAIL +
  * GOOGLE_PRIVATE_KEY). Pinned-rev bump email uses per-user
  * procore_connections.notify_email plus RESEND_API_KEY (shared sender;
- * server-only, never NEXT_PUBLIC_). NOTIFY_MIKE_EMAIL is a temporary
- * fallback only. Optional PROCORE_PROJECT_ALLOWLIST restricts REST
+ * server-only, never NEXT_PUBLIC_). Recipients are that column only.
+ * Optional PROCORE_PROJECT_ALLOWLIST restricts REST
  * project-name resolution; PROCORE_BOT_WAKE_URL / PROCORE_BOT_WAKE_SECRET
  * wake Greg's Procore bot (not the deleted webhook). The only public
  * Stripe key is NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY. Never NEXT_PUBLIC_
