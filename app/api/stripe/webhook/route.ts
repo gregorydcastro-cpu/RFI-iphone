@@ -9,12 +9,12 @@ import {
   type BillingCustomer,
   type BillingStatus,
 } from "@/lib/billingCustomers";
-import { billingUnconfiguredBody } from "@/lib/billingMessages";
 import {
   asStripeId,
   getStripe,
   getStripeWebhookSecret,
   missingStripeWebhookEnv,
+  stripeSoftFailBody,
   unixToIso,
 } from "@/lib/stripe";
 import {
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
   const stripe = getStripe();
   const webhookSecret = getStripeWebhookSecret();
   if (!stripe || !webhookSecret) {
-    return NextResponse.json(billingUnconfiguredBody(missingStripeWebhookEnv()), {
+    return NextResponse.json(stripeSoftFailBody(missingStripeWebhookEnv()), {
       status: 503,
     });
   }

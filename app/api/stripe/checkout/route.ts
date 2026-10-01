@@ -3,13 +3,13 @@ import {
   fetchBillingCustomerByEmail,
   isBillingStorageConfigured,
 } from "@/lib/billingCustomers";
-import { billingUnconfiguredBody } from "@/lib/billingMessages";
 import {
   STRIPE_TRIAL_PERIOD_DAYS,
   checkoutReturnOrigin,
   getStripe,
   getStripeCheckoutConfig,
   missingStripeCheckoutEnv,
+  stripeSoftFailBody,
 } from "@/lib/stripe";
 import { readAppSession } from "@/lib/session.server";
 
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
   const config = getStripeCheckoutConfig();
   const stripe = getStripe();
   if (!config || !stripe) {
-    return NextResponse.json(billingUnconfiguredBody(missingStripeCheckoutEnv()), {
+    return NextResponse.json(stripeSoftFailBody(missingStripeCheckoutEnv()), {
       status: 503,
     });
   }
