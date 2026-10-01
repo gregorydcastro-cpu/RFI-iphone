@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { type ChangeEvent, type FormEvent, useMemo, useState } from "react";
 import { DictationButton } from "@/components/DictationButton";
 import { DraftToForemanSuccess } from "@/components/DraftToForemanSuccess";
@@ -82,6 +83,8 @@ export function GenerateRfiForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [saved, setSaved] = useState<RfiDraftPacket | null>(null);
+  const [dictateNote, setDictateNote] = useState<string | null>(null);
+  const [needsSignIn, setNeedsSignIn] = useState(false);
 
   const fromMarkup = Boolean(markupQuery || markupKindQuery);
   const selectedSheet =
@@ -149,11 +152,12 @@ export function GenerateRfiForm({
     const nextSubject = fields.subject.trim();
     const nextQuestion = fields.question.trim();
     if (!nextSubject || !nextQuestion) {
-      setError("Subject and question are required.");
+      setError("Add a subject and a description.");
       return;
     }
     setPending(true);
     setError(null);
+    setNeedsSignIn(false);
 
     const sheetPinId = selectedSheet?.id ?? pack.revision_stamp?.drawing ?? "";
     const locationValue = fields.location.trim() || pack.room.name;
@@ -193,6 +197,7 @@ export function GenerateRfiForm({
       storage: "local",
     };
 
+    let signedOut = false;
     try {
       const response = await fetch("/api/rfis", {
         method: "POST",
@@ -207,6 +212,7 @@ export function GenerateRfiForm({
           status: "draft",
         }),
       });
+      if (response.status === 401) signedOut = true;
       const data = (await response.json()) as {
         ok?: boolean;
         persisted?: boolean;
@@ -230,6 +236,7 @@ export function GenerateRfiForm({
     }
 
     saveRfiDraft(packet);
+    setNeedsSignIn(signedOut);
     setSaved(packet);
     setPending(false);
   }
@@ -243,10 +250,23 @@ export function GenerateRfiForm({
     const parsed = parseRfiDictation(text);
     const next = applyRfiSpeechToFields(parsed, { subject, question, location });
     if (next.subject !== subject) setSubject(next.subject);
-    // STT always writes the spoken body into Question / description.
+    // STT writes subject plus the full spoken body into Question / description.
     if (next.question) setQuestion(next.question);
     if (next.location !== location) setLocation(next.location);
     setError(null);
+    if (!next.subject && !next.question) {
+      setDictateNote("Nothing landed. Tap retry and speak the subject and the issue.");
+      return;
+    }
+    const savedBits = [
+      next.subject ? "subject" : "",
+      next.question ? "description" : "",
+    ].filter(Boolean);
+    setDictateNote(
+      savedBits.length
+        ? `Saved ${savedBits.join(" and ")}.`
+        : "Saved to the draft.",
+    );
     if (parsed.send) {
       await submitDraft({
         subject: next.subject,
@@ -257,16 +277,24 @@ export function GenerateRfiForm({
   }
 
   if (saved) {
-    const confirmationSpeak = rfiSpeakText({
-      title: saved.subject,
-      status: saved.status,
-      question: saved.question,
-      location: saved.location,
-      draftToForeman: true,
-    });
+    const confirmationSpeak = [
+      rfiSpeakText({
+        title: saved.subject,
+        status: saved.status,
+        question: saved.question,
+        location: saved.location,
+        draftToForeman: true,
+      }),
+      needsSignIn
+        ? "You are signed out. This draft is on this phone. Sign in to keep it with the crew."
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const signInHref = `/?next=${encodeURIComponent(`/pack/${requestId}/rfi/new`)}`;
     return (
       <DraftToForemanSuccess
-        heading="RFI draft sent"
+        heading={needsSignIn ? "RFI draft saved on this phone" : "RFI draft sent"}
         packetLabel="Draft RFI packet"
         jobName={saved.jobName}
         roomName={saved.location || saved.roomName}
@@ -280,6 +308,15 @@ export function GenerateRfiForm({
         speakId={`rfi-draft-${saved.id}`}
         speakText={confirmationSpeak}
       >
+        {needsSignIn ? (
+          <p className="text-base text-paper">
+            You are signed out. This draft is on this phone.{" "}
+            <Link href={signInHref} className="font-semibold text-accent underline">
+              Sign in
+            </Link>{" "}
+            to keep it with the crew.
+          </p>
+        ) : null}
         <div className="border border-line bg-ink p-3 text-sm">
           <p className="font-medium text-paper">{saved.subject}</p>
           <p className="mt-2 whitespace-pre-wrap text-muted">{saved.question}</p>
@@ -381,10 +418,12 @@ export function GenerateRfiForm({
         </p>
         <div className="flex flex-col gap-2 sm:flex-row">
           <DictationButton
+            handsFree
+            onStart={() => setDictateNote(null)}
             onTranscript={onDictate}
             disabled={pending}
             label="Dictate RFI"
-            hint="Tap mic, speak the issue, tap again. Subject and location fill when spoken. Question / description always gets the transcript. Say “send draft” to send to Pat Nguyen."
+            hint="Tap once. Speak the subject and the issue. Pause when you are done. Say send draft to send it to Pat Nguyen."
           />
           <ReadAloudButton
             id={`rfi-form-${requestId}`}
@@ -393,6 +432,11 @@ export function GenerateRfiForm({
           />
         </div>
         <VoiceSetupNote />
+        {dictateNote ? (
+          <p role="status" className="text-base font-semibold text-paper">
+            {dictateNote}
+          </p>
+        ) : null}
       </div>
 
       <label className="block text-xs font-semibold tracking-wide text-muted uppercase">

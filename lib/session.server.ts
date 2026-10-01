@@ -2,6 +2,7 @@
  * Server session: Supabase Auth getUser() + profiles / app_metadata role.
  */
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   parseFieldRoleName,
@@ -9,10 +10,12 @@ import {
   readFieldRole,
   type FieldRole,
 } from "./auth";
+import { signInContinuePath } from "./authMessages";
 import { fieldRoleFromInviteRole } from "./invites";
 import { fieldRoleFromRedeemedEmail } from "./inviteStore";
 import { fetchProfileRole, upsertProfile } from "./profiles";
 import {
+  hasSupabaseAuthCookie,
   isStubUserId,
   resolveSessionRole,
   type AppSession,
@@ -82,11 +85,15 @@ export async function fieldRoleForRequest(request: Request): Promise<{
   };
 }
 
+export async function supabaseSessionCookiePresent(): Promise<boolean> {
+  const jar = await cookies();
+  return hasSupabaseAuthCookie(jar.getAll().map((cookie) => cookie.name));
+}
+
 export async function requireAppSession(nextPath: string): Promise<AppSession> {
   const session = await readAppSession();
   if (!session) {
-    const next = nextPath.startsWith("/") ? nextPath : `/${nextPath}`;
-    redirect(`/?next=${encodeURIComponent(next)}`);
+    redirect(signInContinuePath(nextPath, await supabaseSessionCookiePresent()));
   }
   return session;
 }

@@ -17,6 +17,7 @@ function clearAuthCookies(request: Request, response: NextResponse) {
 
 export async function GET(request: Request) {
   const url = new URL("/", request.url);
+  url.searchParams.set("signedOut", "1");
   const response = NextResponse.redirect(url);
   const supabase = createSupabaseRouteClient(request, response);
   if (supabase) {

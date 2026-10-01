@@ -26,6 +26,7 @@ export default async function PackPage({ params, searchParams }: Props) {
   const { requestId } = await params;
   const query = await searchParams;
   const role = await getFieldRole();
+  const signedIn = Boolean(role.session);
   const requestedJob = query.job ? getJob(query.job) : undefined;
   const live = await loadLiveRoomPack({
     requestId,
@@ -45,9 +46,11 @@ export default async function PackPage({ params, searchParams }: Props) {
       supabaseConfigured={live.supabaseConfigured}
       source={live.source}
       pull={live.pull}
-      procoreLinked={role.procoreLinked}
-      role={role.role}
-      readOnly={role.role === "viewer"}
+      signedIn={signedIn}
+      sessionEnded={role.sessionEnded}
+      procoreLinked={signedIn && role.procoreLinked}
+      role={signedIn ? role.role : null}
+      readOnly={!signedIn || role.role === "viewer"}
     />
   );
 }

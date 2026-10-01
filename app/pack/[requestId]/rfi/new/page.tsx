@@ -2,9 +2,9 @@ import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { GenerateRfiForm } from "@/components/GenerateRfiForm";
 import { getFieldRole } from "@/lib/auth.server";
+import { signInContinuePath } from "@/lib/authMessages";
 import { authorFromSessionEmail } from "@/lib/crew";
 import { loadLiveRoomPack } from "@/lib/livePack";
-import { readAppSession } from "@/lib/session.server";
 import { notFound, redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -29,11 +29,35 @@ type Props = {
  * Prefills job, room, and `?sheet=` pin from the pack. `?markup=` / `?item=`
  * come from one-tap Create RFI on a selected vector overlay.
  */
+function rfiReturnPath(
+  requestId: string,
+  query: {
+    sheet?: string;
+    markup?: string;
+    item?: string;
+    subject?: string;
+    question?: string;
+    location?: string;
+    kind?: string;
+    markupSave?: string;
+  },
+): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value) params.set(key, value);
+  }
+  const qs = params.toString();
+  return `/pack/${requestId}/rfi/new${qs ? `?${qs}` : ""}`;
+}
+
 export default async function NewRfiPage({ params, searchParams }: Props) {
   const { requestId } = await params;
   const query = await searchParams;
   const role = await getFieldRole();
-  const session = await readAppSession();
+  const session = role.session;
+  if (!session) {
+    redirect(signInContinuePath(rfiReturnPath(requestId, query), role.sessionEnded));
+  }
   if (role.role === "viewer") {
     redirect(`/pack/${requestId}`);
   }
@@ -44,7 +68,11 @@ export default async function NewRfiPage({ params, searchParams }: Props) {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <AppHeader signedIn procoreLinked={role.procoreLinked} />
+      <AppHeader
+        signedIn
+        role={session.role}
+        procoreLinked={role.procoreLinked}
+      />
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4 p-4 sm:p-6">
         <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
           Draft to foreman

@@ -18,7 +18,10 @@ export default async function JobPage({ params, searchParams }: Props) {
   const query = await searchParams;
   const job = getJob(projectSlug);
   if (!job) notFound();
-  const session = await requireAppSession(`/jobs/${projectSlug}`);
+  const next = query.room
+    ? `/jobs/${projectSlug}?room=${encodeURIComponent(query.room)}`
+    : `/jobs/${projectSlug}`;
+  const session = await requireAppSession(next);
   const view = await getProcoreConnectionView(session);
   const canPull = view.role === "puller" && view.connected;
 

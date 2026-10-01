@@ -49,6 +49,15 @@ export function isStubUserId(userId: string | null | undefined): boolean {
   return typeof userId === "string" && userId.startsWith("stub:");
 }
 
+/**
+ * True when a Supabase Auth cookie is still on the request.
+ * A code-verifier cookie alone is not a session.
+ * Chunked cookies look like `sb-<ref>-auth-token.0`.
+ */
+export function hasSupabaseAuthCookie(names: readonly string[]): boolean {
+  return names.some((name) => /^sb-[a-z0-9]+-auth-token(?:\.\d+)?$/i.test(name));
+}
+
 export async function resolveSessionRole(
   user: AuthUserLike,
   deps: {

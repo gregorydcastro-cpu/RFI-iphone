@@ -143,7 +143,8 @@ test("session and callback routes use authAppOrigin, not raw Host reflection", (
     new URL("../app/auth/callback/route.ts", import.meta.url),
     "utf8",
   );
-  assert.match(session, /authCallbackUrl\(authAppOrigin\(request\)\)/);
+  assert.match(session, /authCallbackUrl\(\s*authAppOrigin\(request\)/);
+  assert.match(session, /safeNextPath/);
   assert.match(callback, /authAppOrigin\(request\)/);
   assert.equal(/x-forwarded-host/.test(session), false);
   assert.equal(/url\.origin/.test(callback), false);

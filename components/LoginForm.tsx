@@ -11,9 +11,11 @@ import {
   FieldAuthModeSwitch,
   FIELD_AUTH_INPUT_CLASS,
 } from "@/components/FieldAuthModeSwitch";
+import { ReadAloudButton } from "@/components/ReadAloudButton";
 import {
   authUnconfiguredMessage,
   friendlyAuthError,
+  loginArrivalMessage,
   loginCallbackMessage,
   loginModeCopy,
   safeNextPath,
@@ -42,6 +44,14 @@ export function LoginForm({ authConfigured = true }: Props) {
   );
   const configError = authConfigured ? null : authUnconfiguredMessage();
   const bannerError = error ?? configError ?? callbackError;
+  const arrival = loginArrivalMessage({
+    auth: searchParams.get("auth"),
+    reason: searchParams.get("reason"),
+    signedOut: searchParams.get("signedOut"),
+    next: searchParams.get("next"),
+  });
+  const spoken = bannerError ?? info ?? arrival;
+  const returnPath = safeNextPath(searchParams.get("next"));
 
   function changeMode(next: FieldAuthMode) {
     setMode(next);
@@ -66,6 +76,7 @@ export function LoginForm({ authConfigured = true }: Props) {
           email,
           password: mode === "otp" ? undefined : password,
           mode,
+          next: returnPath,
         }),
       });
       const data = (await response.json()) as {
@@ -85,7 +96,7 @@ export function LoginForm({ authConfigured = true }: Props) {
         );
         return;
       }
-      router.push(safeNextPath(searchParams.get("next")));
+      router.push(returnPath);
       router.refresh();
     } catch {
       setError("Could not reach auth. Check the connection and try again.");
@@ -176,6 +187,22 @@ export function LoginForm({ authConfigured = true }: Props) {
         >
           {info}
         </p>
+      ) : null}
+      {arrival && !bannerError && !info ? (
+        <p
+          role="status"
+          className="mt-5 border border-accent-2/40 bg-panel-2 px-4 py-3 text-base text-paper"
+        >
+          {arrival}
+        </p>
+      ) : null}
+      {spoken ? (
+        <ReadAloudButton
+          id="login-status"
+          text={spoken}
+          label="Hear this"
+          className="mt-3"
+        />
       ) : null}
 
       <button
