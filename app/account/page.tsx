@@ -3,12 +3,13 @@ import { AppHeader } from "@/components/AppHeader";
 import { InviteCrewCard } from "@/components/InviteCrewCard";
 import { NotifyEmailForm } from "@/components/NotifyEmailForm";
 import { ProcoreConnectCard } from "@/components/ProcoreConnectCard";
+import { formatBillingUnconfigured } from "@/lib/billingMessages";
 import { loadAccountNotifyEmail } from "@/lib/accountNotifyEmail";
 import { canManageNotifyEmail } from "@/lib/accountRole";
 import { canInviteCrew, fieldRoleLabel } from "@/lib/inviteRole";
 import { getProcoreConnectionView, procoreErrorMessage } from "@/lib/procoreStatus";
 import { readAppSession } from "@/lib/session.server";
-import { isStripeCheckoutConfigured } from "@/lib/stripe";
+import { stripeReadiness } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export default async function AccountPage({ searchParams }: Props) {
     : null;
   const error =
     query.procore === "error" ? procoreErrorMessage(query.reason) : null;
-  const billingLive = isStripeCheckoutConfigured();
+  const billing = stripeReadiness();
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -117,7 +118,11 @@ export default async function AccountPage({ searchParams }: Props) {
             Open share folders
           </Link>
         </section>
-        <section className="mt-8 max-w-lg border border-line bg-panel p-4">
+        <section
+          className="mt-8 max-w-lg border border-line bg-panel p-4"
+          data-billing-checkout={billing.checkoutConfigured ? "true" : "false"}
+          data-billing-webhook={billing.webhookConfigured ? "true" : "false"}
+        >
           <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
             Billing
           </p>
@@ -125,9 +130,11 @@ export default async function AccountPage({ searchParams }: Props) {
             Subscription
           </h2>
           <p className="mt-2 text-sm text-muted">
-            {billingLive
-              ? "60-day free trial on Stripe-hosted Checkout, then monthly. Cards, Apple Pay, and PayPal when those methods are on in the Dashboard."
-              : "Billing isn't live yet. Pricing shows the crew plan until Checkout opens."}
+            {billing.checkoutConfigured
+              ? billing.webhookConfigured
+                ? "60-day free trial on Stripe-hosted Checkout, then monthly. Cards, Apple Pay, and PayPal when those methods are on in the Dashboard."
+                : "Checkout can open. STRIPE_WEBHOOK_SECRET is still unset on Vercel Production, so subscription updates wait until that name is set."
+              : `Billing isn't live yet. Pricing shows the crew plan until Checkout opens. ${formatBillingUnconfigured(billing.missing)}`}
           </p>
           <Link
             href="/pricing"

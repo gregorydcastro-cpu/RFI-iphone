@@ -8,6 +8,10 @@
  */
 
 import Stripe from "stripe";
+import {
+  billingUnconfiguredBody,
+  type BillingProductionEnvKey,
+} from "./billingMessages.ts";
 import { readEnv } from "./env.ts";
 
 export const STRIPE_TRIAL_PERIOD_DAYS = 60;
@@ -88,6 +92,54 @@ export function missingStripeProductionEnv(): Array<
   if (!getStripePriceId()) missing.push("STRIPE_PRICE_ID");
   if (!getStripeWebhookSecret()) missing.push("STRIPE_WEBHOOK_SECRET");
   return missing;
+}
+
+export type StripeEnvPresence = Record<BillingProductionEnvKey, boolean>;
+
+/**
+ * Whether each Production Stripe env name is set. Booleans only.
+ * Never returns values, lengths, or key prefixes.
+ */
+export function stripeEnvPresence(): StripeEnvPresence {
+  return {
+    STRIPE_SECRET_KEY: Boolean(getStripeSecretKey()),
+    STRIPE_PRICE_ID: Boolean(getStripePriceId()),
+    STRIPE_WEBHOOK_SECRET: Boolean(getStripeWebhookSecret()),
+  };
+}
+
+export type StripeReadiness = {
+  ok: true;
+  checkoutConfigured: boolean;
+  webhookConfigured: boolean;
+  present: StripeEnvPresence;
+  missing: BillingProductionEnvKey[];
+};
+
+/** Operator readiness. Safe to return from GET /api/stripe/status. */
+export function stripeReadiness(): StripeReadiness {
+  const present = stripeEnvPresence();
+  return {
+    ok: true,
+    checkoutConfigured: present.STRIPE_SECRET_KEY && present.STRIPE_PRICE_ID,
+    webhookConfigured:
+      present.STRIPE_SECRET_KEY && present.STRIPE_WEBHOOK_SECRET,
+    present,
+    missing: missingStripeProductionEnv(),
+  };
+}
+
+/**
+ * 503 body for checkout and webhook. `missing` is filtered to env names.
+ * The two booleans match stripeReadiness and do not echo key material.
+ */
+export function stripeSoftFailBody(missing: readonly string[]) {
+  const readiness = stripeReadiness();
+  return {
+    ...billingUnconfiguredBody(missing),
+    checkoutConfigured: readiness.checkoutConfigured,
+    webhookConfigured: readiness.webhookConfigured,
+  };
 }
 
 /** Lazy so Next.js can import this module during builds without a secret. */

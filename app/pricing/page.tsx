@@ -1,11 +1,7 @@
 import { AppHeader } from "@/components/AppHeader";
 import { SubscribeCta } from "@/components/SubscribeCta";
 import { getProcoreConnectionView } from "@/lib/procoreStatus";
-import {
-  STRIPE_TRIAL_PERIOD_DAYS,
-  isStripeCheckoutConfigured,
-  missingStripeProductionEnv,
-} from "@/lib/stripe";
+import { STRIPE_TRIAL_PERIOD_DAYS, stripeReadiness } from "@/lib/stripe";
 import { readAppSession } from "@/lib/session.server";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +14,9 @@ export default async function PricingPage({ searchParams }: Props) {
   const query = await searchParams;
   const session = await readAppSession();
   const view = await getProcoreConnectionView(session);
-  const configured = isStripeCheckoutConfigured();
-  const missingStripeEnv = missingStripeProductionEnv();
+  const readiness = stripeReadiness();
+  const configured = readiness.checkoutConfigured;
+  const missingStripeEnv = readiness.missing;
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -64,7 +61,11 @@ export default async function PricingPage({ searchParams }: Props) {
             Checkout canceled. No charge was made.
           </p>
         ) : null}
-        <section className="mt-8 border border-line bg-panel p-6">
+        <section
+          className="mt-8 border border-line bg-panel p-6"
+          data-billing-checkout={configured ? "true" : "false"}
+          data-billing-webhook={readiness.webhookConfigured ? "true" : "false"}
+        >
           <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
             Monthly
           </p>

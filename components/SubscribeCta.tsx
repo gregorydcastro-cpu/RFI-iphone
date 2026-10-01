@@ -82,7 +82,11 @@ export function SubscribeCta({
         <p id={statusId} role="status" className="text-xs leading-relaxed text-tan">
           {formatBillingUnconfigured(namedMissing)}
         </p>
-      ) : null}
+      ) : (
+        <p id={statusId} role="status" className="text-xs leading-relaxed text-muted">
+          Checkout is ready. Stripe key values stay on the server.
+        </p>
+      )}
       <label className="block text-xs font-semibold tracking-wide text-muted uppercase">
         Email for Checkout
         <input
@@ -102,7 +106,7 @@ export function SubscribeCta({
       <button
         type="submit"
         disabled={pending}
-        aria-describedby={showHeld || namedMissing.length > 0 ? statusId : undefined}
+        aria-describedby={statusId}
         className="w-full bg-cta px-4 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60 sm:w-auto"
       >
         {pending

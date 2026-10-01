@@ -5,10 +5,15 @@
 #   bash scripts/smoke-go-live.sh
 #   BASE_URL=https://www.gcfieldlog.com bash scripts/smoke-go-live.sh
 #
-# Exits non-zero on unexpected hard failures (pricing not 200, checkout not
-# 503-or-configured, webhook POST not 503-or-400, webhook GET not 405).
+# Exits non-zero on unexpected hard failures (pricing not 200, Stripe status
+# not boolean readiness, checkout not 503 while unset, webhook POST not
+# 503-or-400, webhook GET not 405).
 # Live sheet-pdf may still return drive_auth_missing 503 until Drive keys are set.
-# This script never signs a Stripe event and never prints secret values.
+# This script never signs a Stripe event, never creates a Checkout Session
+# once checkoutConfigured is true, and never prints secret values.
+#
+# Vercel Production names (no values): STRIPE_SECRET_KEY, STRIPE_PRICE_ID,
+# STRIPE_WEBHOOK_SECRET.
 
 set -u
 
@@ -28,7 +33,7 @@ note() { log "NOTE: $*"; }
 assert_no_secret() {
   local file="$1"
   local label="$2"
-  if grep -qE 'sk_(live|test)_[A-Za-z0-9]|whsec_[A-Za-z0-9]|rk_(live|test)_[A-Za-z0-9]|service_role' "$file"; then
+  if grep -qE 'sk_(live|test)_[A-Za-z0-9]|whsec_[A-Za-z0-9]|rk_(live|test)_[A-Za-z0-9]|pk_(live|test)_[A-Za-z0-9]|price_[A-Za-z0-9]{6,}|service_role' "$file"; then
     fail "$label body looks like it leaked a secret"
   fi
 }
@@ -47,7 +52,9 @@ except Exception:
 val = data.get(field, "")
 if val is None:
     val = ""
-if isinstance(val, list):
+if isinstance(val, bool):
+    print("true" if val else "false")
+elif isinstance(val, list):
     print(",".join(str(item) for item in val))
 else:
     print(val)
@@ -87,30 +94,117 @@ if [[ "$pricing_code" == "200" ]]; then
 else
   fail "GET /pricing → $pricing_code (expected 200)"
 fi
+assert_no_secret "$pricing_body" "GET /pricing"
+
+# --- GET /api/stripe/status (booleans + unset env names; never values) ---
+status_body="$tmpdir/stripe.status"
+status_hdr="$tmpdir/stripe.status.hdr"
+status_code=$(fetch "$status_body" "$status_hdr" "$BASE_URL/api/stripe/status") || true
+assert_no_secret "$status_body" "GET /api/stripe/status"
+status_flags="$tmpdir/stripe.status.flags"
+python3 - "$status_body" "$status_code" "$status_flags" <<'PY'
+import json, sys
+path, code, dest = sys.argv[1], sys.argv[2], sys.argv[3]
+allowed = ("STRIPE_SECRET_KEY", "STRIPE_PRICE_ID", "STRIPE_WEBHOOK_SECRET")
+problems = []
+data = None
+try:
+    with open(path, encoding="utf-8") as handle:
+        data = json.load(handle)
+except Exception:
+    data = None
+if code != "200" or not isinstance(data, dict):
+    problems.append(f"status HTTP {code} is not JSON readiness")
+else:
+    for key in ("checkoutConfigured", "webhookConfigured"):
+        if not isinstance(data.get(key), bool):
+            problems.append(f"{key} is not a boolean")
+    present = data.get("present")
+    if not isinstance(present, dict):
+        problems.append("present is not an object")
+        present = {}
+    for name in allowed:
+        if not isinstance(present.get(name), bool):
+            problems.append(f"present.{name} is not a boolean")
+    missing = data.get("missing")
+    if not isinstance(missing, list) or any(not isinstance(item, str) for item in missing):
+        problems.append("missing is not a list of names")
+        missing = []
+    elif any(item not in allowed for item in missing):
+        problems.append("missing contains a non-env name")
+    if isinstance(data.get("checkoutConfigured"), bool) and isinstance(present, dict):
+        expect_checkout = bool(present.get("STRIPE_SECRET_KEY") and present.get("STRIPE_PRICE_ID"))
+        expect_webhook = bool(present.get("STRIPE_SECRET_KEY") and present.get("STRIPE_WEBHOOK_SECRET"))
+        if data.get("checkoutConfigured") is not expect_checkout:
+            problems.append("checkoutConfigured does not match present")
+        if data.get("webhookConfigured") is not expect_webhook:
+            problems.append("webhookConfigured does not match present")
+        for name in allowed:
+            is_set = present.get(name) is True
+            if is_set and name in missing:
+                problems.append(f"{name} is present and missing")
+            if not is_set and name not in missing:
+                problems.append(f"{name} is unset but not listed in missing")
+    blob = json.dumps(data)
+    for needle in ("sk_live_", "sk_test_", "whsec_", "pk_live_", "pk_test_", "rk_live_", "rk_test_"):
+        if needle in blob:
+            problems.append(f"body contains {needle}")
+def shell_quote(value):
+    return "'" + value.replace("'", "'\"'\"'") + "'"
+checkout = bool(isinstance(data, dict) and data.get("checkoutConfigured") is True)
+webhook = bool(isinstance(data, dict) and data.get("webhookConfigured") is True)
+missing = []
+if isinstance(data, dict) and isinstance(data.get("missing"), list):
+    missing = [item for item in data["missing"] if isinstance(item, str)]
+with open(dest, "w", encoding="utf-8") as handle:
+    handle.write("checkout_configured=" + shell_quote("true" if checkout else "false") + "\n")
+    handle.write("webhook_configured=" + shell_quote("true" if webhook else "false") + "\n")
+    handle.write("status_missing=" + shell_quote(",".join(missing)) + "\n")
+    handle.write("status_problems=" + shell_quote("; ".join(problems)) + "\n")
+PY
+checkout_configured=false
+webhook_configured=false
+status_missing=""
+status_problems="status check did not run"
+if [[ -f "$status_flags" ]]; then
+  # shellcheck disable=SC1090
+  source "$status_flags"
+fi
+if [[ -n "${status_problems}" ]]; then
+  fail "GET /api/stripe/status → ${status_problems}"
+else
+  ok "GET /api/stripe/status → 200 checkoutConfigured=${checkout_configured} webhookConfigured=${webhook_configured} missing=${status_missing:-none}"
+fi
+if [[ "$pricing_code" == "200" ]]; then
+  if ! grep -q "data-billing-checkout=\"${checkout_configured}\"" "$pricing_body"; then
+    fail "GET /pricing data-billing-checkout does not match status checkoutConfigured=${checkout_configured}"
+  elif ! grep -q "data-billing-webhook=\"${webhook_configured}\"" "$pricing_body"; then
+    fail "GET /pricing data-billing-webhook does not match status webhookConfigured=${webhook_configured}"
+  else
+    ok "GET /pricing billing flags match status (checkout=${checkout_configured} webhook=${webhook_configured})"
+  fi
+fi
 
 # --- POST /api/stripe/checkout ---
-# Still unconfigured: 503 billing_unconfigured (no Stripe API call).
-# Live: 200 JSON with a Checkout URL, or a redirect.
+# Unconfigured: 503 billing_unconfigured (no Stripe API call).
+# Configured: do not POST. A session create is a live Stripe call, not a readiness check.
 checkout_body="$tmpdir/checkout.body"
 checkout_hdr="$tmpdir/checkout.hdr"
-checkout_code=$(
-  fetch "$checkout_body" "$checkout_hdr" -X POST "$BASE_URL/api/stripe/checkout"
-) || true
-checkout_err=$(json_field "$checkout_body" "error")
-checkout_missing=$(json_field "$checkout_body" "missing")
-assert_no_secret "$checkout_body" "POST /api/stripe/checkout"
-if [[ "$checkout_code" == "503" && "$checkout_err" == "billing_unconfigured" ]]; then
-  ok "POST /api/stripe/checkout → 503 billing_unconfigured missing=${checkout_missing:-} (Production env unset)"
-elif [[ "$checkout_code" =~ ^2 ]]; then
-  ok "POST /api/stripe/checkout → $checkout_code (configured — STRIPE_SECRET_KEY and STRIPE_PRICE_ID landed)"
-elif [[ "$checkout_code" =~ ^3 ]]; then
-  location=$(
-    awk 'BEGIN { IGNORECASE=1 } /^location:/ { sub(/\r$/, ""); print; exit }' \
-      "$checkout_hdr"
-  )
-  ok "POST /api/stripe/checkout → $checkout_code redirect ${location:-}"
+if [[ "$checkout_configured" == "true" ]]; then
+  ok "POST /api/stripe/checkout skipped (checkoutConfigured=true — no Checkout Session created)"
 else
-  fail "POST /api/stripe/checkout → $checkout_code error=${checkout_err:-n/a} (expected 503 billing_unconfigured or 200/redirect)"
+  checkout_code=$(
+    fetch "$checkout_body" "$checkout_hdr" -X POST "$BASE_URL/api/stripe/checkout"
+  ) || true
+  checkout_err=$(json_field "$checkout_body" "error")
+  checkout_missing=$(json_field "$checkout_body" "missing")
+  checkout_flag=$(json_field "$checkout_body" "checkoutConfigured")
+  assert_no_secret "$checkout_body" "POST /api/stripe/checkout"
+  if [[ "$checkout_code" == "503" && "$checkout_err" == "billing_unconfigured" && "$checkout_flag" == "false" ]]; then
+    ok "POST /api/stripe/checkout → 503 billing_unconfigured checkoutConfigured=false missing=${checkout_missing:-} (Production env unset)"
+  else
+    fail "POST /api/stripe/checkout → ${checkout_code:-} error=${checkout_err:-n/a} checkoutConfigured=${checkout_flag:-n/a} (expected 503 billing_unconfigured checkoutConfigured=false)"
+  fi
 fi
 
 # --- POST /api/stripe/webhook (no signature; does not call Stripe) ---
@@ -123,13 +217,14 @@ webhook_code=$(
 ) || true
 webhook_err=$(json_field "$webhook_body" "error")
 webhook_missing=$(json_field "$webhook_body" "missing")
+webhook_flag=$(json_field "$webhook_body" "webhookConfigured")
 assert_no_secret "$webhook_body" "POST /api/stripe/webhook"
-if [[ "$webhook_code" == "503" && "$webhook_err" == "billing_unconfigured" ]]; then
-  ok "POST /api/stripe/webhook → 503 billing_unconfigured missing=${webhook_missing:-} (STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET unset)"
-elif [[ "$webhook_code" == "400" && "$webhook_err" == "missing_signature" ]]; then
+if [[ "$webhook_configured" == "false" && "$webhook_code" == "503" && "$webhook_err" == "billing_unconfigured" && "$webhook_flag" == "false" ]]; then
+  ok "POST /api/stripe/webhook → 503 billing_unconfigured webhookConfigured=false missing=${webhook_missing:-} (STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET unset)"
+elif [[ "$webhook_configured" == "true" && "$webhook_code" == "400" && "$webhook_err" == "missing_signature" ]]; then
   ok "POST /api/stripe/webhook → 400 missing_signature (webhook keys present; unsigned on purpose)"
 else
-  fail "POST /api/stripe/webhook → $webhook_code error=${webhook_err:-n/a} (expected 503 billing_unconfigured or 400 missing_signature)"
+  fail "POST /api/stripe/webhook → $webhook_code error=${webhook_err:-n/a} webhookConfigured=${webhook_flag:-n/a} (status webhookConfigured=${webhook_configured}; expected 503 billing_unconfigured or 400 missing_signature)"
 fi
 
 # --- GET /api/stripe/webhook (wrong method; does not read Stripe keys) ---
@@ -147,6 +242,10 @@ else
 fi
 
 log ""
+log "Stripe readiness (names only: STRIPE_SECRET_KEY, STRIPE_PRICE_ID, STRIPE_WEBHOOK_SECRET):"
+log "  GET /api/stripe/status → booleans checkoutConfigured / webhookConfigured / present. No key values."
+log "  POST /api/stripe/checkout runs only when checkoutConfigured is false, and must be 503 billing_unconfigured."
+log "  When checkoutConfigured is true this script does not create a Checkout Session."
 log "Stripe webhook verify (this script never signs and never sends Stripe-Signature):"
 log "  POST 503 billing_unconfigured → STRIPE_SECRET_KEY and/or STRIPE_WEBHOOK_SECRET still unset on this host."
 log "  POST 400 missing_signature → both webhook env names are set. Unsigned on purpose."
