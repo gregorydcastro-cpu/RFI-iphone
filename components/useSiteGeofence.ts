@@ -19,7 +19,7 @@ export type GeoState =
     };
 
 export const LOCATION_ENABLE_HINT =
-  "Location is required to punch in. iPhone: Settings → Privacy & Security → Location Services → Safari or Chrome → While Using. Desktop: address-bar lock icon → Location → Allow, then Retry. Punch-in stays locked without GPS.";
+  "Allow location for this site, then tap Retry.";
 
 export function useSiteGeofence(site: JobSite) {
   const [geo, setGeo] = useState<GeoState>({ status: "pending" });

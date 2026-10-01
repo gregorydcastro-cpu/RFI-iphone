@@ -1,4 +1,4 @@
-import { DEMO_FOREMAN, DEMO_JOURNEYMAN } from "./crew";
+import { DEMO_FOREMAN, DEMO_JOURNEYMAN } from "./crew.ts";
 
 /** US Central — Maple Point demo city (Cedar Falls). September 2026 is CDT (UTC-5). */
 export const JOB_TIMEZONE = "America/Chicago";
@@ -263,4 +263,96 @@ export function defaultWorkerId(
   const alex = workers.find((worker) => worker.email === DEMO_JOURNEYMAN.email);
   const pat = workers.find((worker) => worker.email === DEMO_FOREMAN.email);
   return alex?.id ?? pat?.id ?? workers[0]?.id ?? "";
+}
+
+/** Shared-iPad PIN. Your own signed-in name can punch without it. */
+export function workerPunchNeedsPin(
+  worker: Worker,
+  workers: Worker[],
+  sessionEmail: string | null | undefined,
+): boolean {
+  const own = workerFromSessionEmail(workers, sessionEmail);
+  if (!own) return true;
+  return own.id !== worker.id;
+}
+
+export const PUNCH_SAVE_FAILED_MESSAGE = "Punch did not save. Try again.";
+
+export type PunchPersistResult =
+  | { ok: true; punch: TimePunch; storage: TimeStorage }
+  | { ok: false; status: 503; error: string; code: "save_failed" };
+
+/**
+ * A configured time table that rejects the insert is a failed punch.
+ * Demo memory (no service role) still counts as saved.
+ */
+export function punchPersistOutcome(input: {
+  punch: TimePunch;
+  saved: TimePunch | null;
+  writeConfigured: boolean;
+  storageHint: TimeStorage;
+}): PunchPersistResult {
+  if (input.writeConfigured) {
+    if (!input.saved) {
+      return {
+        ok: false,
+        status: 503,
+        error: PUNCH_SAVE_FAILED_MESSAGE,
+        code: "save_failed",
+      };
+    }
+    return { ok: true, punch: input.saved, storage: "supabase" };
+  }
+  return {
+    ok: true,
+    punch: input.punch,
+    storage: input.storageHint === "supabase" ? "memory" : input.storageHint,
+  };
+}
+
+/** Client guard: ok + unavailable storage is not a saved punch. */
+export function punchWriteAccepted(data: {
+  ok?: boolean;
+  storage?: string | null;
+}): boolean {
+  return data.ok === true && data.storage !== "unavailable";
+}
+
+export function workerPunchNotice(punchType: PunchType, punchedAt?: string): string {
+  const when = punchedAt ? ` at ${formatPunchClock(punchedAt)}` : "";
+  return punchType === "in"
+    ? `Punched in${when}. You are on the clock.`
+    : `Punched out${when}. You are off the clock.`;
+}
+
+export function foremanPunchNotice(kind: "add" | "edit"): string {
+  return kind === "edit" ? "Punch time updated." : "Missed punch saved.";
+}
+
+export function dayHoursParts(day: Pick<DayHours, "hours" | "open" | "missedOut">): {
+  primary: string;
+  secondary: string | null;
+} {
+  if (day.missedOut) return { primary: "No out", secondary: null };
+  if (day.open) {
+    return day.hours > 0.05
+      ? { primary: formatHours(day.hours), secondary: "on" }
+      : { primary: "On", secondary: null };
+  }
+  return { primary: formatHours(day.hours), secondary: null };
+}
+
+export function dayHoursLabel(day: Pick<DayHours, "hours" | "open" | "missedOut">): string {
+  const parts = dayHoursParts(day);
+  return parts.secondary ? `${parts.primary} ${parts.secondary}` : parts.primary;
+}
+
+export function mergePunches(current: TimePunch[], incoming: TimePunch[]): TimePunch[] {
+  const next = current.slice();
+  for (const punch of incoming) {
+    const index = next.findIndex((row) => row.id === punch.id);
+    if (index >= 0) next[index] = punch;
+    else next.push(punch);
+  }
+  return next;
 }

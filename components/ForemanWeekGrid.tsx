@@ -4,17 +4,20 @@ import {
   addDays,
   chicagoDateTimeIso,
   DAILY_OT_HOURS,
+  dayHoursLabel,
+  dayHoursParts,
   formatHours,
   formatPunchClock,
   WEEKDAY_LABELS,
   WEEKLY_OT_HOURS,
+  type DayHours,
   type TimeSnapshot,
   type WorkerWeek,
 } from "@/lib/time";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 const inputClass =
-  "mt-1 w-full border border-line bg-ink px-3 py-2 text-sm text-paper outline-none focus:border-cta";
+  "mt-1 w-full border border-line bg-ink px-3 py-3 text-base text-paper outline-none focus:border-cta";
 
 type Props = {
   snapshot: TimeSnapshot;
@@ -22,6 +25,7 @@ type Props = {
   signedIn: boolean;
   pending: boolean;
   error: string | null;
+  notice: string | null;
   onWeekChange: (weekStart: string) => void;
   onSave: (body: Record<string, unknown>) => Promise<void>;
 };
@@ -32,6 +36,7 @@ export function ForemanWeekGrid({
   signedIn,
   pending,
   error,
+  notice,
   onWeekChange,
   onSave,
 }: Props) {
@@ -42,6 +47,7 @@ export function ForemanWeekGrid({
   const [note, setNote] = useState("");
   const [editPunchId, setEditPunchId] = useState<string | null>(null);
   const [editTime, setEditTime] = useState("07:00");
+  const editRef = useRef<HTMLDivElement>(null);
 
   const selectedDayPunches = useMemo(() => {
     return snapshot.punches
@@ -50,12 +56,20 @@ export function ForemanWeekGrid({
       .sort((a, b) => a.punched_at.localeCompare(b.punched_at));
   }, [snapshot.punches, workerId, ymd]);
 
+  const selectedWorker = snapshot.workers.find((worker) => worker.id === workerId);
   const weekLabel = new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
     timeZone: "UTC",
   }).format(new Date(`${snapshot.weekStart}T00:00:00Z`));
+
+  function selectDay(nextWorkerId: string, nextYmd: string) {
+    setWorkerId(nextWorkerId);
+    setYmd(nextYmd);
+    setEditPunchId(null);
+    editRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
 
   async function addMissed() {
     if (!signedIn) return;
@@ -84,35 +98,71 @@ export function ForemanWeekGrid({
     <section className="border border-line bg-panel p-4 sm:p-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="font-display text-xl tracking-wide text-paper">
-            Crew week
-          </h2>
-          <p className="mt-1 text-sm text-muted">
-            Maple Point only. OT over {DAILY_OT_HOURS}h/day or {WEEKLY_OT_HOURS}h/week
-            in red. Field log — not payroll.
+          <h2 className="font-display text-xl tracking-wide text-paper">Crew week</h2>
+          <p className="mt-1 text-base text-muted">
+            {snapshot.site.name}. Red means overtime (over {DAILY_OT_HOURS} hours
+            a day or {WEEKLY_OT_HOURS} a week) or no punch-out. Tap a day to fix
+            it. This is the field log, not payroll.
           </p>
         </div>
         <div className="flex items-center gap-2 text-sm">
           <button
             type="button"
-            className="border border-line px-2 py-1 text-paper hover:border-cta"
+            className="min-h-11 border border-line px-3 text-paper hover:border-cta"
             onClick={() => onWeekChange(addDays(snapshot.weekStart, -7))}
           >
-            Prev
+            Prev week
           </button>
           <span className="font-mono text-xs text-metal">Week of {weekLabel}</span>
           <button
             type="button"
-            className="border border-line px-2 py-1 text-paper hover:border-cta"
+            className="min-h-11 border border-line px-3 text-paper hover:border-cta"
             onClick={() => onWeekChange(addDays(snapshot.weekStart, 7))}
           >
-            Next
+            Next week
           </button>
         </div>
       </div>
 
-      <div className="mt-4 overflow-x-auto">
-        <table className="min-w-[720px] w-full border-collapse text-sm">
+      <ul className="mt-4 space-y-3 md:hidden">
+        {weeks.map((row) => (
+          <li key={row.worker.id} className="border border-line bg-ink p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-base text-paper">{row.worker.name}</p>
+                <p className="text-sm text-metal">{row.worker.role}</p>
+              </div>
+              <div className="text-right">
+                <p
+                  className={`text-lg font-semibold ${
+                    row.weekOvertime ? "text-cta" : "text-paper"
+                  }`}
+                >
+                  {formatHours(row.totalHours)}
+                </p>
+                <p className="text-sm text-muted">
+                  {row.daysWorked || 0} {row.daysWorked === 1 ? "day" : "days"}
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-7 gap-1">
+              {row.days.map((day, index) => (
+                <DayCell
+                  key={day.ymd}
+                  day={day}
+                  label={WEEKDAY_LABELS[index] ?? ""}
+                  selected={workerId === row.worker.id && ymd === day.ymd}
+                  onSelect={() => selectDay(row.worker.id, day.ymd)}
+                  stacked
+                />
+              ))}
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-4 hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[720px] border-collapse text-sm">
           <thead>
             <tr className="text-left text-xs tracking-wide text-muted uppercase">
               <th className="border-b border-line py-2 pr-3 font-semibold">Crew</th>
@@ -122,7 +172,7 @@ export function ForemanWeekGrid({
                 </th>
               ))}
               <th className="border-b border-line px-2 py-2 font-semibold">Days</th>
-              <th className="border-b border-line pl-2 py-2 font-semibold">Hours</th>
+              <th className="border-b border-line py-2 pl-2 font-semibold">Hours</th>
             </tr>
           </thead>
           <tbody>
@@ -130,36 +180,18 @@ export function ForemanWeekGrid({
               <tr key={row.worker.id} className="align-top">
                 <td className="border-b border-line py-2 pr-3">
                   <div className="text-paper">{row.worker.name}</div>
-                  <div className="font-mono text-[11px] text-metal">
-                    {row.worker.role}
-                  </div>
+                  <div className="font-mono text-[11px] text-metal">{row.worker.role}</div>
                 </td>
-                {row.days.map((day) => {
-                  const overtime = day.overtime;
-                  const label = day.missedOut
-                    ? "missed out"
-                    : day.open
-                      ? day.hours > 0.05
-                        ? `${formatHours(day.hours)} · on`
-                        : "on"
-                      : formatHours(day.hours);
-                  return (
-                    <td key={day.ymd} className="border-b border-line px-2 py-2">
-                      <button
-                        type="button"
-                        className={`block text-left ${
-                          overtime || day.missedOut ? "font-semibold text-cta" : "text-paper"
-                        }`}
-                        onClick={() => {
-                          setWorkerId(row.worker.id);
-                          setYmd(day.ymd);
-                        }}
-                      >
-                        {label}
-                      </button>
-                    </td>
-                  );
-                })}
+                {row.days.map((day) => (
+                  <td key={day.ymd} className="border-b border-line px-1 py-2">
+                    <DayCell
+                      day={day}
+                      label={dayHoursLabel(day)}
+                      selected={workerId === row.worker.id && ymd === day.ymd}
+                      onSelect={() => selectDay(row.worker.id, day.ymd)}
+                    />
+                  </td>
+                ))}
                 <td className="border-b border-line px-2 py-2 text-paper">
                   {row.daysWorked || "—"}
                 </td>
@@ -176,16 +208,20 @@ export function ForemanWeekGrid({
         </table>
       </div>
 
-      <div className="mt-6 grid gap-4 border-t border-line pt-4 sm:grid-cols-2">
+      <div
+        ref={editRef}
+        id="crew-day-edit"
+        className="mt-6 scroll-mt-4 grid gap-4 border-t border-line pt-4 sm:grid-cols-2"
+      >
         <div>
           <h3 className="font-display text-lg tracking-wide text-paper">
-            Add / correct punch
+            {selectedWorker ? selectedWorker.name : "Crew"} · {formatDayLabel(ymd)}
           </h3>
-          <p className="mt-1 text-xs text-muted">
-            Foreman override skips the GPS fence. Use for missed punches only.
+          <p className="mt-1 text-base text-muted">
+            Add a missed punch for this day, or correct a time in the list.
           </p>
-          <label className="mt-3 block text-xs font-semibold tracking-wide text-muted uppercase">
-            Worker
+          <label className="mt-3 block text-sm font-semibold tracking-wide text-muted uppercase">
+            Name
             <select
               className={inputClass}
               value={workerId}
@@ -198,7 +234,7 @@ export function ForemanWeekGrid({
               ))}
             </select>
           </label>
-          <label className="mt-3 block text-xs font-semibold tracking-wide text-muted uppercase">
+          <label className="mt-3 block text-sm font-semibold tracking-wide text-muted uppercase">
             Date
             <input
               type="date"
@@ -208,7 +244,7 @@ export function ForemanWeekGrid({
             />
           </label>
           <div className="mt-3 grid grid-cols-2 gap-3">
-            <label className="block text-xs font-semibold tracking-wide text-muted uppercase">
+            <label className="block text-sm font-semibold tracking-wide text-muted uppercase">
               In
               <input
                 type="time"
@@ -217,7 +253,7 @@ export function ForemanWeekGrid({
                 onChange={(event) => setInTime(event.target.value)}
               />
             </label>
-            <label className="block text-xs font-semibold tracking-wide text-muted uppercase">
+            <label className="block text-sm font-semibold tracking-wide text-muted uppercase">
               Out
               <input
                 type="time"
@@ -227,20 +263,28 @@ export function ForemanWeekGrid({
               />
             </label>
           </div>
-          <label className="mt-3 block text-xs font-semibold tracking-wide text-muted uppercase">
+          <label className="mt-3 block text-sm font-semibold tracking-wide text-muted uppercase">
             Note
             <input
               className={inputClass}
               value={note}
               onChange={(event) => setNote(event.target.value)}
-              placeholder="Forgot to punch / late truck"
+              placeholder="Forgot to punch"
             />
           </label>
           {!signedIn ? (
-            <p className="mt-3 text-sm text-cta">You are signed out. Sign in to save edits.</p>
+            <p className="mt-3 text-base text-cta">You are signed out. Sign in to save edits.</p>
+          ) : null}
+          {notice ? (
+            <p
+              className="mt-3 border border-accent-2/50 bg-panel-2 px-3 py-3 text-base text-paper"
+              role="status"
+            >
+              {notice}
+            </p>
           ) : null}
           {error ? (
-            <p className="mt-3 text-sm text-cta" role="alert">
+            <p className="mt-3 border border-cta/50 bg-cta/10 px-3 py-3 text-base text-cta" role="alert">
               {error}
             </p>
           ) : null}
@@ -248,33 +292,31 @@ export function ForemanWeekGrid({
             type="button"
             disabled={pending || !signedIn}
             onClick={() => void addMissed()}
-            className="mt-4 bg-cta px-4 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
+            className="mt-4 min-h-12 bg-cta px-4 py-2.5 text-base font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
           >
             {pending ? "Saving…" : "Save missed punch"}
           </button>
         </div>
         <div>
-          <h3 className="font-display text-lg tracking-wide text-paper">
-            That day
-          </h3>
+          <h3 className="font-display text-lg tracking-wide text-paper">That day</h3>
           {selectedDayPunches.length === 0 ? (
-            <p className="mt-2 text-sm text-muted">No punches. Add a missed pair.</p>
+            <p className="mt-2 text-base text-muted">No punches. Add a missed pair.</p>
           ) : (
             <ul className="mt-2 space-y-2">
               {selectedDayPunches.map((punch) => (
                 <li
                   key={punch.id}
-                  className="flex flex-wrap items-center justify-between gap-2 border border-line bg-ink px-3 py-2 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-2 border border-line bg-ink px-3 py-3 text-base"
                 >
                   <span className="text-paper">
-                    {punch.punch_type.toUpperCase()} {formatPunchClock(punch.punched_at)}
+                    {punch.punch_type === "in" ? "In" : "Out"} {formatPunchClock(punch.punched_at)}
                     {punch.edited_by_foreman ? (
-                      <span className="ml-2 text-xs text-accent-2">edited</span>
+                      <span className="ml-2 text-sm text-accent-2">edited</span>
                     ) : null}
                   </span>
                   <button
                     type="button"
-                    className="text-xs font-semibold tracking-wide text-accent uppercase hover:text-cta"
+                    className="min-h-11 text-sm font-semibold tracking-wide text-accent uppercase hover:text-cta"
                     onClick={() => {
                       setEditPunchId(punch.id);
                       setEditTime(clockValue(punch.punched_at));
@@ -288,7 +330,7 @@ export function ForemanWeekGrid({
           )}
           {editPunchId ? (
             <div className="mt-3 flex items-end gap-3">
-              <label className="block text-xs font-semibold tracking-wide text-muted uppercase">
+              <label className="block text-sm font-semibold tracking-wide text-muted uppercase">
                 New time
                 <input
                   type="time"
@@ -301,7 +343,7 @@ export function ForemanWeekGrid({
                 type="button"
                 disabled={pending || !signedIn}
                 onClick={() => void saveEdit()}
-                className="border border-cta px-3 py-2 text-xs font-semibold tracking-wide text-paper uppercase hover:bg-cta"
+                className="min-h-12 border border-cta px-3 py-2 text-sm font-semibold tracking-wide text-paper uppercase hover:bg-cta"
               >
                 Update
               </button>
@@ -313,6 +355,47 @@ export function ForemanWeekGrid({
   );
 }
 
+function DayCell({
+  day,
+  label,
+  selected,
+  onSelect,
+  stacked = false,
+}: {
+  day: DayHours;
+  label: string;
+  selected: boolean;
+  onSelect: () => void;
+  stacked?: boolean;
+}) {
+  const hot = day.overtime || day.missedOut;
+  const parts = dayHoursParts(day);
+  const empty = !hot && !day.open && parts.primary === "—";
+  const tone = hot ? "font-semibold text-cta" : empty ? "text-muted" : "text-paper";
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onSelect}
+      className={`w-full text-center ${tone} ${
+        selected ? "border border-cta bg-panel-2" : "border border-transparent"
+      } ${stacked ? "min-h-14 px-0.5 py-1" : "min-h-11 px-2 py-1 text-left"}`}
+    >
+      {stacked ? (
+        <>
+          <span className="block text-[10px] tracking-wide text-muted uppercase">{label}</span>
+          <span className="mt-0.5 block text-sm leading-tight">{parts.primary}</span>
+          {parts.secondary ? (
+            <span className="block text-[10px] tracking-wide uppercase">{parts.secondary}</span>
+          ) : null}
+        </>
+      ) : (
+        label
+      )}
+    </button>
+  );
+}
+
 function chicagoYmd(iso: string): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Chicago",
@@ -320,6 +403,15 @@ function chicagoYmd(iso: string): string {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date(iso));
+}
+
+function formatDayLabel(ymd: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${ymd}T00:00:00Z`));
 }
 
 function clockValue(iso: string): string {

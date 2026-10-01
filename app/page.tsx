@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { headers } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { LoginForm } from "@/components/LoginForm";
@@ -37,9 +38,25 @@ export default async function LoginPage({ searchParams }: Props) {
         >
           <LoginForm authConfigured={isSupabaseAuthConfigured()} />
         </Suspense>
-        <p className="mt-6 max-w-md text-center text-sm text-muted">
-          Maple Point Medical Office and other fictional jobs. Sign in to open
-          packs — there is no guest bypass.
+        <p className="mt-6 max-w-md text-center text-base text-paper">
+          After sign-in, punch in or open a job.
+        </p>
+        <div className="mt-3 grid w-full max-w-md grid-cols-2 gap-3">
+          <Link
+            href="/?next=/time"
+            className="flex min-h-14 items-center justify-center bg-cta px-3 text-center text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover"
+          >
+            Punch in
+          </Link>
+          <Link
+            href="/?next=/jobs"
+            className="flex min-h-14 items-center justify-center border border-line bg-panel px-3 text-center text-sm font-semibold tracking-wide text-paper uppercase hover:border-cta"
+          >
+            Open a job
+          </Link>
+        </div>
+        <p className="mt-3 max-w-md text-center text-sm text-muted">
+          Maple Point and the other jobs here are fictional.
         </p>
       </main>
     </div>

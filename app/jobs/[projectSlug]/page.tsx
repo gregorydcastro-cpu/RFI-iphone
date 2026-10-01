@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { ProcoreConnectCard } from "@/components/ProcoreConnectCard";
 import { RequestPackForm } from "@/components/RequestPackForm";
 import { getJob } from "@/lib/jobs";
+import { TIME_JOB_SLUG } from "@/lib/time";
 import { getProcoreConnectionView } from "@/lib/procoreStatus";
 import { requireAppSession } from "@/lib/session.server";
 import { notFound } from "next/navigation";
@@ -34,6 +36,15 @@ export default async function JobPage({ params, searchParams }: Props) {
         procoreLinked={canPull}
       />
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-4 px-4 py-8 sm:px-6">
+        {job.slug === TIME_JOB_SLUG ? (
+          <p className="text-base text-paper">
+            On site?{" "}
+            <Link href="/time" className="font-semibold text-accent underline">
+              Punch in
+            </Link>{" "}
+            for this job, then open the room pack.
+          </p>
+        ) : null}
         {view.role === "puller" && !view.connected ? (
           <ProcoreConnectCard view={view} compact />
         ) : null}

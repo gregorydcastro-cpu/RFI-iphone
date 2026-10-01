@@ -3,6 +3,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { ProcoreConnectCard } from "@/components/ProcoreConnectCard";
 import { VoiceCommandBar } from "@/components/VoiceCommandBar";
 import { DEMO_JOBS } from "@/lib/jobs";
+import { TIME_JOB_SLUG } from "@/lib/time";
 import { getProcoreConnectionView, procoreErrorMessage } from "@/lib/procoreStatus";
 import { requireAppSession } from "@/lib/session.server";
 
@@ -34,9 +35,38 @@ export default async function JobsPage({ searchParams }: Props) {
         <h1 className="font-display mt-1 text-3xl tracking-wide text-paper">
           Field jobs
         </h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted">
-          Fictional demo jobs only. Pick a job, then {canPull ? "pull" : "open"} a
-          room pack.
+        <div className="mt-4 grid max-w-3xl gap-3 sm:grid-cols-2">
+          <Link
+            href="/time"
+            className="border-l-4 border-l-cta border-y border-r border-line bg-panel p-4 hover:border-cta"
+          >
+            <p className="text-xs font-semibold tracking-wide text-accent uppercase">
+              On site
+            </p>
+            <p className="font-display mt-1 text-2xl tracking-wide text-paper">
+              Punch in
+            </p>
+            <p className="mt-1 text-base text-muted">
+              Punch in or out for Maple Point.
+            </p>
+          </Link>
+          <a
+            href="#jobs"
+            className="border border-line bg-panel p-4 hover:border-accent"
+          >
+            <p className="text-xs font-semibold tracking-wide text-muted uppercase">
+              Then
+            </p>
+            <p className="font-display mt-1 text-2xl tracking-wide text-paper">
+              Open a job
+            </p>
+            <p className="mt-1 text-base text-muted">
+              Pick a job below for the room pack.
+            </p>
+          </a>
+        </div>
+        <p className="mt-4 max-w-2xl text-sm text-muted">
+          Fictional demo jobs only.
           {view.role === "puller"
             ? view.connected
               ? " Procore is connected for this puller."
@@ -63,12 +93,12 @@ export default async function JobsPage({ searchParams }: Props) {
             procoreLinked={canPull}
           />
         </div>
-        <ul className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2">
+        <ul id="jobs" className="mt-8 grid scroll-mt-4 grid-cols-1 gap-4 sm:grid-cols-2">
           {DEMO_JOBS.map((job) => (
-            <li key={job.slug}>
+            <li key={job.slug} className="flex flex-col border border-line bg-panel">
               <Link
                 href={`/jobs/${job.slug}`}
-                className="block border border-line bg-panel p-4 transition hover:border-accent"
+                className="block flex-1 p-4 transition hover:border-accent"
               >
                 <p className="font-display text-lg tracking-wide text-paper">
                   {job.name}
@@ -77,7 +107,18 @@ export default async function JobsPage({ searchParams }: Props) {
                   {job.city} · {job.phase}
                 </p>
                 <p className="mt-3 font-mono text-xs text-metal">{job.roomsHint}</p>
+                <p className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold tracking-wide text-paper uppercase">
+                  Open job
+                </p>
               </Link>
+              {job.slug === TIME_JOB_SLUG ? (
+                <Link
+                  href="/time"
+                  className="inline-flex min-h-12 items-center border-t border-line px-4 text-sm font-semibold tracking-wide text-accent uppercase hover:text-cta"
+                >
+                  Punch in
+                </Link>
+              ) : null}
             </li>
           ))}
         </ul>
