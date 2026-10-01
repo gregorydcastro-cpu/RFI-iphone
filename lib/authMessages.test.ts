@@ -3,11 +3,14 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   authUnconfiguredMessage,
+  continuePlaceLabel,
   friendlyAuthError,
+  loginArrivalMessage,
   loginCallbackMessage,
   loginModeCopy,
   parseFieldAuthMode,
   safeNextPath,
+  signInContinuePath,
 } from "./authMessages.ts";
 
 const forbidden = /Brown|Rossi|Danoff|Suffolk|ILSB|EL107/i;
@@ -47,6 +50,27 @@ test("loginCallbackMessage maps Auth callback failures", () => {
   assert.match(loginCallbackMessage("error", "nope") ?? "", /expired or failed/i);
 });
 
+test("login arrival copy names the page and a dead session", () => {
+  assert.equal(loginArrivalMessage({ auth: "error", reason: "exchange_failed" }), null);
+  assert.equal(loginArrivalMessage({}), null);
+  assert.equal(loginArrivalMessage({ signedOut: "1" }), "You are signed out.");
+  assert.equal(
+    loginArrivalMessage({ reason: "session_ended", next: "/jobs/maple-point" }),
+    "Your sign-in ended. Sign in to go back to Maple Point.",
+  );
+  assert.equal(
+    loginArrivalMessage({ next: "/pack/maple-point/rfi/new?sheet=E-101" }),
+    "Sign in to go back to the RFI draft.",
+  );
+  assert.equal(continuePlaceLabel("/jobs/cedar-ridge"), "Cedar Ridge");
+  assert.equal(continuePlaceLabel("//evil.example"), null);
+  assert.equal(
+    signInContinuePath("/pack/maple-point/rfi/new?sheet=E-101", true),
+    "/?next=%2Fpack%2Fmaple-point%2Frfi%2Fnew%3Fsheet%3DE-101&reason=session_ended",
+  );
+  assert.equal(signInContinuePath("https://evil.example"), "/?next=%2Fjobs");
+});
+
 test("friendlyAuthError maps common Supabase failures", () => {
   assert.equal(
     friendlyAuthError("Invalid login credentials"),
@@ -70,12 +94,24 @@ test("friendlyAuthError maps common Supabase failures", () => {
     friendlyAuthError("Could not create an account."),
     "Could not create an account.",
   );
+  assert.match(friendlyAuthError("JWT expired"), /sign-in ended/i);
+  assert.equal(
+    friendlyAuthError("Invalid JSON"),
+    "Sign-in could not read that request. Try again.",
+  );
+  assert.equal(
+    friendlyAuthError("AuthApiError: jwt malformed"),
+    "Your sign-in ended. Sign in again.",
+  );
+  assert.doesNotMatch(friendlyAuthError("AuthApiError: something odd"), /authapierror/i);
 });
 
 test("login form keeps real /api/session Auth and no role picker", () => {
   const src = readFileSync(new URL("../components/LoginForm.tsx", import.meta.url), "utf8");
   assert.match(src, /\/api\/session/);
   assert.match(src, /mode === "otp"/);
+  assert.match(src, /loginArrivalMessage/);
+  assert.match(src, /next: returnPath/);
   assert.equal(
     /setRole|FieldRoleName|gcfieldlog_stub_user|stub login/i.test(src),
     false,
@@ -95,7 +131,10 @@ test("login copy stays Maple Point / fictional and has no fake auth path", () =>
     loginModeCopy("otp").helper,
     authUnconfiguredMessage(),
     friendlyAuthError("Invalid login credentials"),
+    friendlyAuthError("JWT expired"),
     loginCallbackMessage("error", "auth_unconfigured"),
+    loginArrivalMessage({ reason: "session_ended", next: "/jobs/maple-point" }) ?? "",
+    loginArrivalMessage({ signedOut: "1" }) ?? "",
   ].join("\n");
   assert.match(blob, /Maple Point/);
   assert.equal(forbidden.test(blob), false);

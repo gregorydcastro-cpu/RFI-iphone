@@ -58,4 +58,6 @@ export const FIELD_STT_KEYTERMS = [
   "E-101",
   "E-102",
   "foreman",
+  "title block",
+  "Cedar Ridge",
 ] as const;

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookieSecureFromRequest, procoreLinkedCookieOptions } from "@/lib/auth";
 import { authAppOrigin, authCallbackUrl } from "@/lib/authHosts";
+import { friendlyAuthError } from "@/lib/authMessages";
 import { fieldRoleFromInviteRole, normalizeInviteeEmail } from "@/lib/invites";
 import { redeemInvite } from "@/lib/inviteStore";
 import { applyProfileRole } from "@/lib/profiles";
@@ -47,7 +48,7 @@ export async function POST(request: Request, { params }: Props) {
   try {
     body = (await request.json()) as RedeemBody;
   } catch {
-    return json({ ok: false, error: "Invalid JSON" }, 400);
+    return json({ ok: false, error: friendlyAuthError("Invalid JSON") }, 400);
   }
 
   const email = normalizeInviteeEmail(body.email);
@@ -74,7 +75,13 @@ export async function POST(request: Request, { params }: Props) {
       },
     });
     if (error) {
-      return json({ ok: false, error: error.message || "Could not send a magic link." }, 400);
+      return json(
+        {
+          ok: false,
+          error: friendlyAuthError(error.message, "Could not send a magic link."),
+        },
+        400,
+      );
     }
     return json({
       ok: true,
@@ -108,7 +115,13 @@ export async function POST(request: Request, { params }: Props) {
         },
       });
       if (error) {
-        return json({ ok: false, error: error.message || "Could not create an account." }, 400);
+        return json(
+          {
+            ok: false,
+            error: friendlyAuthError(error.message, "Could not create an account."),
+          },
+          400,
+        );
       }
       if (!data.session || !data.user) {
         return json({

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { OfflinePackBanner } from "./OfflinePackBanner";
 import type { PackLiveMeta } from "./PackLiveReload";
@@ -19,8 +20,10 @@ import { layoutSheetId, resolveSheetPdf } from "@/lib/packNormalize";
 import { sheetKindLabel, splitPackSheets } from "@/lib/sheetOrder";
 import type { FieldRoleName } from "@/lib/auth";
 import { viewerSheetPdfSrc } from "@/lib/sheetPdfUrl";
+import { signInContinuePath } from "@/lib/authMessages";
 import { ActionPanel } from "./ActionPanel";
 import { AppHeader } from "./AppHeader";
+import { ReadAloudButton } from "./ReadAloudButton";
 import { PackLiveReload } from "./PackLiveReload";
 import { RfiList } from "./RfiList";
 import { SheetViewer } from "./SheetViewer";
@@ -36,6 +39,8 @@ type Props = {
   supabaseConfigured?: boolean;
   source?: "procore" | "supabase" | "local" | "offline" | "none";
   pull?: "procore" | "bot" | "none";
+  signedIn?: boolean;
+  sessionEnded?: boolean;
   procoreLinked?: boolean;
   readOnly?: boolean;
   role?: FieldRoleName | null;
@@ -51,6 +56,8 @@ export function RoomPackViewer({
   supabaseConfigured,
   source,
   pull,
+  signedIn = false,
+  sessionEnded = false,
   procoreLinked = false,
   readOnly = false,
   role = null,
@@ -126,10 +133,18 @@ export function RoomPackViewer({
   return (
     <div className="flex min-h-dvh flex-col bg-ink text-paper">
       <AppHeader
-        signedIn
-        role={role ?? (readOnly ? "viewer" : "puller")}
+        signedIn={signedIn}
+        role={role ?? (signedIn ? (readOnly ? "viewer" : "puller") : null)}
         procoreLinked={procoreLinked}
       />
+      {!signedIn ? (
+        <SignedOutPackNote
+          requestId={displayedRequest}
+          projectSlug={projectSlug}
+          room={requestedRoom}
+          sessionEnded={sessionEnded}
+        />
+      ) : null}
       <PackContextBar
         pack={displayedPack}
         sheet={primary}
@@ -426,6 +441,46 @@ function PackContextBar({
           })}
         />
       </div>
+    </div>
+  );
+}
+
+function SignedOutPackNote({
+  requestId,
+  projectSlug,
+  room,
+  sessionEnded,
+}: {
+  requestId: string;
+  projectSlug?: string;
+  room?: string;
+  sessionEnded: boolean;
+}) {
+  const params = new URLSearchParams();
+  if (projectSlug) params.set("job", projectSlug);
+  if (room) params.set("room", room);
+  const qs = params.toString();
+  const next = `/pack/${requestId}${qs ? `?${qs}` : ""}`;
+  const lead = sessionEnded ? "Your sign-in ended." : "You are signed out.";
+  const text = `${lead} Sign in to draft an RFI or order materials. You come back to this pack.`;
+  return (
+    <div className="border-b border-line bg-panel px-4 py-3">
+      <p className="text-base text-paper">
+        {lead}{" "}
+        <Link
+          href={signInContinuePath(next, sessionEnded)}
+          className="font-semibold text-accent underline"
+        >
+          Sign in
+        </Link>{" "}
+        to draft an RFI or order materials. You come back to this pack.
+      </p>
+      <ReadAloudButton
+        id={`pack-signed-out-${requestId}`}
+        text={text}
+        label="Hear this"
+        className="mt-3"
+      />
     </div>
   );
 }

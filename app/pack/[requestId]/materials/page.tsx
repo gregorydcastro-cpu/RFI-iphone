@@ -2,10 +2,10 @@ import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { OrderMaterialsForm } from "@/components/OrderMaterialsForm";
 import { getFieldRole } from "@/lib/auth.server";
+import { signInContinuePath } from "@/lib/authMessages";
 import { authorFromSessionEmail } from "@/lib/crew";
 import { loadPack } from "@/lib/loadPack";
 import { loadLiveRoomPack } from "@/lib/livePack";
-import { readAppSession } from "@/lib/session.server";
 import { notFound, redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,10 @@ type Props = {
 export default async function MaterialsPage({ params }: Props) {
   const { requestId } = await params;
   const role = await getFieldRole();
-  const session = await readAppSession();
+  const session = role.session;
+  if (!session) {
+    redirect(signInContinuePath(`/pack/${requestId}/materials`, role.sessionEnded));
+  }
   if (role.role === "viewer") {
     redirect(`/pack/${requestId}`);
   }
@@ -45,7 +48,11 @@ export default async function MaterialsPage({ params }: Props) {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <AppHeader signedIn procoreLinked={role.procoreLinked} />
+      <AppHeader
+        signedIn
+        role={session.role}
+        procoreLinked={role.procoreLinked}
+      />
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4 p-4 sm:p-6">
         <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
           Draft to foreman

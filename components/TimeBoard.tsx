@@ -120,8 +120,9 @@ export function TimeBoard({ initial, sessionEmail, signedIn }: Props) {
         {snapshot.storage === "supabase" ? "Supabase" : "demo memory"}.
       </p>
       {!signedIn ? (
-        <p className="mt-3 text-sm text-accent-2">
-          <Link href="/?next=/time" className="text-accent underline">
+        <p className="mt-3 text-base text-paper">
+          You are signed out.{" "}
+          <Link href="/?next=/time" className="font-semibold text-accent underline">
             Sign in
           </Link>{" "}
           to punch or edit.

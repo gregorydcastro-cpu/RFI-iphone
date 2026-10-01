@@ -25,55 +25,96 @@ const SEND_PHRASE_RE =
 const LOCATION_RE =
   /\b(?:in\s+|at\s+)?(?:location\s+(?:is\s+)?)?((?:electrical\s+)?closet\s+\d{2,4}[a-z]?|room\s+\d{2,4}[a-z]?)\b/i;
 
-const FIELD_LABELS = ["subject", "title", "question", "description", "location"];
+type FieldLabel = "subject" | "title" | "question" | "description" | "location";
 
-function labeledBlock(
-  text: string,
-  labels: string[],
-  stopLabels: string[],
-): string {
-  const label = labels.map(escapeRe).join("|");
-  const stop = stopLabels.map(escapeRe).join("|");
-  const re = new RegExp(
-    `\\b(?:${label})\\s*(?:[:\\-–.]|is)?\\s+(.+?)(?=\\b(?:${stop})\\s*(?:[:\\-–.]|is)?\\b|$)`,
-    "i",
+type LabelSpan = {
+  label: FieldLabel;
+  start: number;
+  contentStart: number;
+  end: number;
+};
+
+function cleanEnd(value: string): string {
+  return value.replace(/\s+/g, " ").trim().replace(/[.,;]+$/, "").trim();
+}
+
+/** Keep a short subject, but never slice through a word. */
+function clipWords(text: string, max: number): string {
+  const clean = cleanEnd(text);
+  if (clean.length <= max) return clean;
+  const slice = clean.slice(0, max);
+  const lastSpace = slice.lastIndexOf(" ");
+  const clipped = (lastSpace > 24 ? slice.slice(0, lastSpace) : slice).replace(
+    /[,;:\s]+$/,
+    "",
   );
-  const match = text.match(re);
-  return match?.[1]?.trim().replace(/[.,;]+$/, "") ?? "";
+  return clipped.trim();
 }
 
-function removeLabeledBlock(
-  text: string,
-  labels: string[],
-  stopLabels: string[],
-): string {
-  const label = labels.map(escapeRe).join("|");
-  const stop = stopLabels.map(escapeRe).join("|");
-  const re = new RegExp(
-    `\\b(?:${label})\\s*(?:[:\\-–.]|is)?\\s+.+?(?=\\b(?:${stop})\\s*(?:[:\\-–.]|is)?\\b|$)`,
-    "i",
-  );
-  return text.replace(re, " ").replace(/\s+/g, " ").trim();
+function isFieldLabel(label: FieldLabel, rest: string): boolean {
+  if (label === "title" && /^block\b/i.test(rest)) return false;
+  if (label === "location" && /^of\b/i.test(rest)) return false;
+  if (label === "subject" && /^to\b/i.test(rest)) return false;
+  return true;
 }
 
-function leftoverBody(text: string): string {
-  let leftover = removeLabeledBlock(text, ["subject", "title"], FIELD_LABELS);
-  leftover = removeLabeledBlock(leftover, ["location"], FIELD_LABELS);
-  leftover = leftover.replace(LOCATION_RE, " ").replace(/\s+/g, " ").trim();
-  return leftover.replace(/[.,;]+$/, "").trim();
+/**
+ * Field labels only count at the start of the utterance or after a sentence
+ * break. "title block" and "the question is" in the middle of a sentence
+ * are speech, not field stops.
+ */
+function findLabelSpans(text: string): LabelSpan[] {
+  const re =
+    /(?:^|[.!?]\s+)(subject|title|question|description|location)\b\s*(?:[:\-–.]|is)?\s+/gi;
+  const spans: LabelSpan[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text))) {
+    const label = match[1].toLowerCase() as FieldLabel;
+    const contentStart = match.index + match[0].length;
+    if (!isFieldLabel(label, text.slice(contentStart))) {
+      re.lastIndex = match.index + match[0].length;
+      continue;
+    }
+    spans.push({ label, start: match.index, contentStart, end: text.length });
+  }
+  for (let i = 0; i < spans.length; i++) {
+    const next = spans[i + 1];
+    if (next) spans[i].end = next.start;
+  }
+  return spans;
 }
 
-function escapeRe(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function spanText(text: string, spans: LabelSpan[], labels: FieldLabel[]): string {
+  const span = spans.find((item) => labels.includes(item.label));
+  if (!span) return "";
+  return cleanEnd(text.slice(span.contentStart, span.end));
+}
+
+function unlabeledRemainder(text: string, spans: LabelSpan[]): string {
+  if (!spans.length) return "";
+  const parts: string[] = [];
+  let cursor = 0;
+  for (const span of spans) {
+    parts.push(text.slice(cursor, span.start));
+    cursor = span.end;
+  }
+  parts.push(text.slice(cursor));
+  return cleanEnd(stripLeadIn(parts.join(" ")));
+}
+
+function mergeSpeechParts(question: string, description: string): string {
+  if (!question) return description;
+  if (!description) return question;
+  if (question === description) return question;
+  if (description.includes(question)) return description;
+  if (question.includes(description)) return question;
+  return `${question} ${description}`.replace(/\s+/g, " ").trim();
 }
 
 /** Spoken body for the Question / description field. Never drops the transcript. */
 export function rfiDescriptionFromSpeech(parsed: RfiSpeechFields): string {
-  return (
-    parsed.description.trim() ||
-    parsed.question.trim() ||
-    parsed.transcript.trim()
-  );
+  const body = mergeSpeechParts(parsed.question.trim(), parsed.description.trim());
+  return body || parsed.transcript.trim();
 }
 
 /** Map STT parse → Generate RFI inputs. Description/question always take the transcript. */
@@ -110,56 +151,63 @@ export function parseRfiDictation(raw: string): RfiSpeechFields {
   const transcript = raw.trim();
   const send = SEND_PHRASE_RE.test(transcript);
   SEND_PHRASE_RE.lastIndex = 0;
-  let text = transcript.replace(SEND_PHRASE_RE, " ").replace(/\s+/g, " ").trim();
+  const text = transcript.replace(SEND_PHRASE_RE, " ").replace(/\s+/g, " ").trim();
 
-  let location = labeledBlock(text, ["location"], FIELD_LABELS);
+  const spans = findLabelSpans(text);
+  let location = spanText(text, spans, ["location"]);
   if (!location) {
-    const locMatch = text.match(LOCATION_RE);
-    location = locMatch?.[1]?.trim() ?? "";
-    if (locMatch) {
-      text = `${text.slice(0, locMatch.index)} ${text.slice((locMatch.index ?? 0) + locMatch[0].length)}`
-        .replace(/\s+/g, " ")
-        .trim();
-    }
+    location = text.match(LOCATION_RE)?.[1]?.trim() ?? "";
   }
 
-  let subject = labeledBlock(text, ["subject", "title"], FIELD_LABELS);
-  let question = labeledBlock(text, ["question"], FIELD_LABELS);
-  let description = labeledBlock(text, ["description"], FIELD_LABELS);
+  let subject = spanText(text, spans, ["subject", "title"]);
+  let question = spanText(text, spans, ["question"]);
+  let description = spanText(text, spans, ["description"]);
 
-  if (!subject && !question && !description) {
+  if (!spans.length) {
     const cleaned = stripLeadIn(text);
     const split = firstSentence(cleaned);
     if (split.rest) {
-      subject = split.head.replace(/[.!?]+$/, "");
-      question = split.rest;
-      description = split.rest;
+      subject = split.head.replace(/[.!?]+$/, "").trim();
+      question = cleanEnd(split.rest);
+      description = question;
     } else if (cleaned.length <= 80) {
-      subject = cleaned.replace(/[.!?]+$/, "");
+      subject = cleaned.replace(/[.!?]+$/, "").trim();
       question = cleaned;
       description = cleaned;
     } else {
-      subject = cleaned.slice(0, 80).replace(/[,;:\s]+$/, "");
+      subject = clipWords(cleaned, 80);
       question = cleaned;
       description = cleaned;
     }
-  } else {
-    if (!description && question) description = question;
-    if (!question && description) question = description;
-    if (!question && !description) {
-      const leftover = leftoverBody(text);
-      question = leftover || stripLeadIn(text);
-      description = question;
-    }
-    if (!subject && (question || description)) {
-      subject = stripLeadIn(description || question).slice(0, 80);
+  } else if (subject) {
+    const split = firstSentence(subject);
+    if (split.rest) {
+      subject = split.head.replace(/[.!?]+$/, "").trim();
+      const extra = cleanEnd(split.rest);
+      if (extra) {
+        question = question ? `${extra} ${question}`.replace(/\s+/g, " ").trim() : extra;
+        description = description
+          ? `${extra} ${description}`.replace(/\s+/g, " ").trim()
+          : extra;
+      }
     }
   }
 
+  if (!description && question) description = question;
+  if (!question && description) question = description;
+  if (!question && !description) {
+    const body = unlabeledRemainder(text, spans) || subject || stripLeadIn(text) || text;
+    question = body;
+    description = body;
+  }
+  if (!subject && (question || description)) {
+    subject = clipWords(stripLeadIn(description || question), 80);
+  }
   if (!description && text) {
-    description = leftoverBody(text) || stripLeadIn(text);
+    description = stripLeadIn(text) || text;
     if (!question) question = description;
   }
+  if (!subject && description) subject = clipWords(description, 80);
 
   return {
     subject: subject.trim(),

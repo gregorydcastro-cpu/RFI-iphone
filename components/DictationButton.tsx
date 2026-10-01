@@ -20,11 +20,77 @@ import {
 
 type Props = {
   onTranscript: (text: string) => void | Promise<void>;
+  /** Called when the mic opens, before speech. */
+  onStart?: () => void;
   disabled?: boolean;
   label?: string;
   hint?: string;
   className?: string;
+  /**
+   * RFI dictate: stop after a pause so gloves don't have to tap again.
+   * Tap still stops early.
+   */
+  handsFree?: boolean;
 };
+
+const SPEECH_RMS = 0.02;
+const SILENCE_MS = 2800;
+const ARM_AFTER_MS = 500;
+const SPEECH_HOLD_MS = 400;
+const MAX_RECORD_MS = 90_000;
+const SILENCE_TICK_MS = 200;
+
+function watchDictationSilence(stream: MediaStream, onSilence: () => void): () => void {
+  const AudioCtx =
+    window.AudioContext ??
+    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioCtx) return () => {};
+  let audio: AudioContext;
+  try {
+    audio = new AudioCtx();
+  } catch {
+    return () => {};
+  }
+  const source = audio.createMediaStreamSource(stream);
+  const analyser = audio.createAnalyser();
+  analyser.fftSize = 2048;
+  source.connect(analyser);
+  const samples = new Uint8Array(analyser.fftSize);
+  let heardSpeech = false;
+  let speechMs = 0;
+  let silenceAt = 0;
+  const started = performance.now();
+  void audio.resume().catch(() => {});
+  const timer = window.setInterval(() => {
+    analyser.getByteTimeDomainData(samples);
+    let sum = 0;
+    for (let i = 0; i < samples.length; i++) {
+      const sample = (samples[i] - 128) / 128;
+      sum += sample * sample;
+    }
+    const rms = Math.sqrt(sum / samples.length);
+    const now = performance.now();
+    if (now - started >= ARM_AFTER_MS) {
+      if (rms >= SPEECH_RMS) {
+        speechMs += SILENCE_TICK_MS;
+        silenceAt = 0;
+        if (speechMs >= SPEECH_HOLD_MS) heardSpeech = true;
+      } else if (heardSpeech) {
+        if (!silenceAt) silenceAt = now;
+        if (now - silenceAt >= SILENCE_MS) {
+          onSilence();
+          return;
+        }
+      }
+    }
+    if (now - started >= MAX_RECORD_MS) onSilence();
+  }, SILENCE_TICK_MS);
+  return () => {
+    window.clearInterval(timer);
+    source.disconnect();
+    void audio.close().catch(() => {});
+  };
+}
 
 function pickMimeType(): string | undefined {
   if (typeof MediaRecorder === "undefined") return undefined;
@@ -60,10 +126,12 @@ function MicIcon({ recording }: { recording: boolean }) {
  */
 export function DictationButton({
   onTranscript,
+  onStart,
   disabled = false,
   label = "Dictate",
   hint,
   className = "",
+  handsFree = false,
 }: Props) {
   const voice = useSyncExternalStore(
     subscribeVoiceStatus,
@@ -79,16 +147,28 @@ export function DictationButton({
   const chunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const lastClipRef = useRef<{ blob: Blob; mimeType: string } | null>(null);
+  const silenceStopRef = useRef<(() => void) | null>(null);
+  const stoppingRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  function clearSilenceWatch() {
+    silenceStopRef.current?.();
+    silenceStopRef.current = null;
+  }
 
   useEffect(() => {
+    mountedRef.current = true;
     void loadVoiceStatus();
     return () => {
+      mountedRef.current = false;
+      clearSilenceWatch();
       recorderRef.current?.stop();
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
 
   function releaseStream() {
+    clearSilenceWatch();
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     recorderRef.current = null;
@@ -102,6 +182,7 @@ export function DictationButton({
   }
 
   async function transcribe(blob: Blob, mimeType: string) {
+    if (!mountedRef.current) return;
     setPending(true);
     lastClipRef.current = { blob, mimeType };
     try {
@@ -125,9 +206,9 @@ export function DictationButton({
       lastClipRef.current = null;
       await onTranscript(text);
     } catch {
-      showError("unreachable");
+      if (mountedRef.current) showError("unreachable");
     } finally {
-      setPending(false);
+      if (mountedRef.current) setPending(false);
     }
   }
 
@@ -170,8 +251,15 @@ export function DictationButton({
         setRecording(false);
       };
       recorderRef.current = recorder;
+      stoppingRef.current = false;
       recorder.start(250);
+      if (handsFree) {
+        silenceStopRef.current = watchDictationSilence(stream, () => {
+          stopRecording();
+        });
+      }
       setRecording(true);
+      onStart?.();
     } catch {
       releaseStream();
       showError("failed", "Microphone permission is required for dictation.");
@@ -179,13 +267,21 @@ export function DictationButton({
   }
 
   function stopRecording() {
+    if (stoppingRef.current) return;
+    stoppingRef.current = true;
+    clearSilenceWatch();
     const recorder = recorderRef.current;
-    if (recorder && recorder.state !== "inactive") {
+    if (recorder && recorder.state === "recording") {
+      try {
+        recorder.requestData();
+      } catch {
+        // requestData throws if the recorder already stopped.
+      }
       recorder.stop();
-    } else {
-      releaseStream();
-      setRecording(false);
+      return;
     }
+    releaseStream();
+    setRecording(false);
   }
 
   async function onClick() {
@@ -217,11 +313,7 @@ export function DictationButton({
   }
 
   const blocked = voiceStatusBlocksMic(voice);
-  const status = pending
-    ? "Transcribing…"
-    : recording
-      ? "Listening… tap to stop"
-      : label;
+  const status = pending ? "Saving" : recording ? "Listening" : label;
 
   return (
     <div className={className}>
@@ -243,9 +335,11 @@ export function DictationButton({
       {hint && !heard && !error && !recording && !pending && !blocked ? (
         <p className="mt-2 text-sm text-muted">{hint}</p>
       ) : null}
-      <p role="status" className="sr-only">
-        {status}
-      </p>
+      {recording || pending ? (
+        <p role="status" className="mt-2 text-base font-semibold text-paper">
+          {recording ? "Listening" : "Saving"}
+        </p>
+      ) : null}
       {heard ? (
         <p className="mt-2 text-base text-paper">
           Heard: <span className="text-muted">{heard}</span>

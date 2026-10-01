@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  hasSupabaseAuthCookie,
   isAuthUserId,
   isStubUserId,
   mergeAppMetadataRole,
@@ -60,6 +61,14 @@ test("invite role merge keeps existing app_metadata keys", () => {
   assert.equal(merged.role, "viewer");
   assert.equal(merged.provider, "email");
   assert.deepEqual(merged.providers, ["email"]);
+});
+
+test("supabase auth cookie detects a dead session, not the code verifier", () => {
+  assert.equal(hasSupabaseAuthCookie([]), false);
+  assert.equal(hasSupabaseAuthCookie(["sb-abc123-auth-token-code-verifier"]), false);
+  assert.equal(hasSupabaseAuthCookie(["sb-abc123-auth-token"]), true);
+  assert.equal(hasSupabaseAuthCookie(["sb-abc123-auth-token.0"]), true);
+  assert.equal(hasSupabaseAuthCookie(["gcfieldlog_procore_linked"]), false);
 });
 
 test("session helpers stay Maple Point / fictional only", () => {

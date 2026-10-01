@@ -256,8 +256,9 @@ export function SharePortal({
   if (!signedIn) {
     return (
       <section className="border border-line bg-panel p-5">
-        <p className="text-sm text-muted">
-          <Link href="/?next=/share" className="text-accent underline">
+        <p className="text-base text-paper">
+          You are signed out.{" "}
+          <Link href="/?next=/share" className="font-semibold text-accent underline">
             Sign in
           </Link>{" "}
           to create share folders and pin Maple Point sheets.

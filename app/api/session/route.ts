@@ -5,6 +5,7 @@ import {
   authUnconfiguredMessage,
   friendlyAuthError,
   parseFieldAuthMode,
+  safeNextPath,
 } from "@/lib/authMessages";
 import { applyProfileRole } from "@/lib/profiles";
 import {
@@ -27,6 +28,7 @@ type SessionBody = {
   email?: unknown;
   password?: unknown;
   mode?: unknown;
+  next?: unknown;
 };
 
 type AuthUser = {
@@ -108,7 +110,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as SessionBody;
   } catch {
-    return json({ ok: false, error: "Invalid JSON", stub: false }, 400);
+    return json({ ok: false, error: friendlyAuthError("Invalid JSON"), stub: false }, 400);
   }
 
   const email = asEmail(body.email);
@@ -117,6 +119,7 @@ export async function POST(request: Request) {
   }
 
   const mode = parseFieldAuthMode(body.mode);
+  const nextPath = safeNextPath(typeof body.next === "string" ? body.next : null);
   const scratch = NextResponse.next();
   const supabase = createSupabaseRouteClient(request, scratch);
   if (!supabase) {
@@ -127,7 +130,7 @@ export async function POST(request: Request) {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: authCallbackUrl(authAppOrigin(request)),
+        emailRedirectTo: authCallbackUrl(authAppOrigin(request), nextPath),
         shouldCreateUser: true,
       },
     });
@@ -162,7 +165,7 @@ export async function POST(request: Request) {
       email,
       password,
       options: {
-        emailRedirectTo: authCallbackUrl(authAppOrigin(request)),
+        emailRedirectTo: authCallbackUrl(authAppOrigin(request), nextPath),
       },
     });
     if (error) {

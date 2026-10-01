@@ -42,11 +42,12 @@ export default async function AccountPage({ searchParams }: Props) {
           Procore connection
         </h1>
         {!view.signedIn ? (
-          <p className="mt-4 text-sm text-muted">
-            <Link href="/" className="text-accent underline">
+          <p className="mt-4 text-base text-paper">
+            You are signed out.{" "}
+            <Link href="/?next=/account" className="font-semibold text-accent underline">
               Sign in
             </Link>{" "}
-            first, then connect Procore if you pull packs.
+            to open this account, then connect Procore if you pull packs.
           </p>
         ) : (
           <dl className="mt-4 space-y-1 text-sm text-muted">
