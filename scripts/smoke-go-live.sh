@@ -5,8 +5,10 @@
 #   bash scripts/smoke-go-live.sh
 #   BASE_URL=https://www.gcfieldlog.com bash scripts/smoke-go-live.sh
 #
-# Exits non-zero only on unexpected hard failures (e.g. GET /pricing not 200).
+# Exits non-zero on unexpected hard failures (pricing not 200, checkout not
+# 503-or-configured, webhook POST not 503-or-400, webhook GET not 405).
 # Live sheet-pdf may still return drive_auth_missing 503 until Drive keys are set.
+# This script never signs a Stripe event and never prints secret values.
 
 set -u
 
@@ -22,6 +24,15 @@ ok() { log "OK: $*"; }
 fail() { log "FAIL: $*"; failed=1; }
 note() { log "NOTE: $*"; }
 
+# Fail if a response body contains a live secret. Env names are fine.
+assert_no_secret() {
+  local file="$1"
+  local label="$2"
+  if grep -qE 'sk_(live|test)_[A-Za-z0-9]|whsec_[A-Za-z0-9]|rk_(live|test)_[A-Za-z0-9]|service_role' "$file"; then
+    fail "$label body looks like it leaked a secret"
+  fi
+}
+
 json_field() {
   local file="$1"
   local field="$2"
@@ -36,7 +47,10 @@ except Exception:
 val = data.get(field, "")
 if val is None:
     val = ""
-print(val)
+if isinstance(val, list):
+    print(",".join(str(item) for item in val))
+else:
+    print(val)
 PY
 }
 
@@ -83,9 +97,10 @@ checkout_code=$(
   fetch "$checkout_body" "$checkout_hdr" -X POST "$BASE_URL/api/stripe/checkout"
 ) || true
 checkout_err=$(json_field "$checkout_body" "error")
-checkout_msg=$(json_field "$checkout_body" "message")
+checkout_missing=$(json_field "$checkout_body" "missing")
+assert_no_secret "$checkout_body" "POST /api/stripe/checkout"
 if [[ "$checkout_code" == "503" && "$checkout_err" == "billing_unconfigured" ]]; then
-  ok "POST /api/stripe/checkout → 503 billing_unconfigured (Production env unset) ${checkout_msg:-}"
+  ok "POST /api/stripe/checkout → 503 billing_unconfigured missing=${checkout_missing:-} (Production env unset)"
 elif [[ "$checkout_code" =~ ^2 ]]; then
   ok "POST /api/stripe/checkout → $checkout_code (configured — STRIPE_SECRET_KEY and STRIPE_PRICE_ID landed)"
 elif [[ "$checkout_code" =~ ^3 ]]; then
@@ -100,21 +115,45 @@ fi
 
 # --- POST /api/stripe/webhook (no signature; does not call Stripe) ---
 # 503 billing_unconfigured: STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET unset.
-# 400 missing_signature: both set.
+# 400 missing_signature: both set. This script never signs.
 webhook_body="$tmpdir/webhook.body"
 webhook_hdr="$tmpdir/webhook.hdr"
 webhook_code=$(
   fetch "$webhook_body" "$webhook_hdr" -X POST "$BASE_URL/api/stripe/webhook"
 ) || true
 webhook_err=$(json_field "$webhook_body" "error")
-webhook_msg=$(json_field "$webhook_body" "message")
+webhook_missing=$(json_field "$webhook_body" "missing")
+assert_no_secret "$webhook_body" "POST /api/stripe/webhook"
 if [[ "$webhook_code" == "503" && "$webhook_err" == "billing_unconfigured" ]]; then
-  ok "POST /api/stripe/webhook → 503 billing_unconfigured (STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET unset) ${webhook_msg:-}"
+  ok "POST /api/stripe/webhook → 503 billing_unconfigured missing=${webhook_missing:-} (STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET unset)"
 elif [[ "$webhook_code" == "400" && "$webhook_err" == "missing_signature" ]]; then
-  ok "POST /api/stripe/webhook → 400 missing_signature (webhook keys present)"
+  ok "POST /api/stripe/webhook → 400 missing_signature (webhook keys present; unsigned on purpose)"
 else
-  note "POST /api/stripe/webhook → $webhook_code error=${webhook_err:-n/a} (expected 503 billing_unconfigured or 400 missing_signature)"
+  fail "POST /api/stripe/webhook → $webhook_code error=${webhook_err:-n/a} (expected 503 billing_unconfigured or 400 missing_signature)"
 fi
+
+# --- GET /api/stripe/webhook (wrong method; does not read Stripe keys) ---
+webhook_get_body="$tmpdir/webhook.get.body"
+webhook_get_hdr="$tmpdir/webhook.get.hdr"
+webhook_get_code=$(
+  fetch "$webhook_get_body" "$webhook_get_hdr" -X GET "$BASE_URL/api/stripe/webhook"
+) || true
+webhook_get_err=$(json_field "$webhook_get_body" "error")
+assert_no_secret "$webhook_get_body" "GET /api/stripe/webhook"
+if [[ "$webhook_get_code" == "405" && "$webhook_get_err" == "method_not_allowed" ]]; then
+  ok "GET /api/stripe/webhook → 405 method_not_allowed"
+else
+  fail "GET /api/stripe/webhook → $webhook_get_code error=${webhook_get_err:-n/a} (expected 405 method_not_allowed)"
+fi
+
+log ""
+log "Stripe webhook verify (this script never signs and never sends Stripe-Signature):"
+log "  POST 503 billing_unconfigured → STRIPE_SECRET_KEY and/or STRIPE_WEBHOOK_SECRET still unset on this host."
+log "  POST 400 missing_signature → both webhook env names are set. Unsigned on purpose."
+log "  GET 405 method_not_allowed → route is up; only POST is accepted."
+log "  Dashboard events: checkout.session.completed, customer.subscription.updated, customer.subscription.deleted, invoice.paid"
+log "  Production endpoint: https://www.gcfieldlog.com/api/stripe/webhook (www, not apex)."
+log "  Signed delivery is an operator check in the Stripe Dashboard (Send test event)."
 
 # --- GET /api/sheet-pdf (print status + JSON code; 503 is still expected) ---
 pdf_body="$tmpdir/sheet.pdf"

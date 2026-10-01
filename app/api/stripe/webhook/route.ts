@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import {
+  fetchBillingCustomerByStripeCustomerId,
   isBillingStorageConfigured,
   mapStripeSubscriptionStatus,
+  mergeBillingCustomer,
   upsertBillingCustomer,
+  type BillingCustomer,
   type BillingStatus,
 } from "@/lib/billingCustomers";
 import { billingUnconfiguredBody } from "@/lib/billingMessages";
@@ -14,22 +17,40 @@ import {
   missingStripeWebhookEnv,
   unixToIso,
 } from "@/lib/stripe";
+import {
+  checkoutSessionSubscriptionId,
+  createStripeEventMemory,
+  invoiceSubscriptionId,
+  isHandledStripeWebhookEvent,
+  shouldApplySubscriptionSnapshot,
+  statusAfterCheckout,
+  safeLogToken,
+  statusAfterInvoicePaid,
+  stripeWebhookHandlerCode,
+} from "@/lib/stripeWebhook";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const HANDLED_EVENTS = new Set([
-  "checkout.session.completed",
-  "customer.subscription.updated",
-  "invoice.paid",
-]);
+/**
+ * Best-effort dedupe for redelivery to this warm instance. Ids are recorded
+ * only after a successful response. The upsert is what makes a second
+ * delivery safe on another instance.
+ */
+const eventMemory = createStripeEventMemory();
 
 /**
- * Stripe webhook. Verifies the signature, then upserts billing_customers.
- * Does not send email yet.
+ * Stripe webhook. Verifies the signature against the raw body, then upserts
+ * billing_customers. Does not send email yet.
+ *
+ * Runtime stays nodejs so `request.text()` is the exact payload Stripe
+ * signed. Do not switch this route to the edge runtime.
  *
  * Dashboard endpoint URL (www, not apex — Stripe does not follow 308s):
  * https://www.gcfieldlog.com/api/stripe/webhook
+ *
+ * Events: checkout.session.completed, customer.subscription.updated,
+ * customer.subscription.deleted, invoice.paid.
  */
 export async function POST(request: Request) {
   const stripe = getStripe();
@@ -48,6 +69,7 @@ export async function POST(request: Request) {
     );
   }
 
+  // Raw body. Signature verification needs the exact bytes Stripe signed.
   const payload = await request.text();
 
   let event: Stripe.Event;
@@ -56,9 +78,9 @@ export async function POST(request: Request) {
   } catch (error) {
     const type =
       typeof error === "object" && error && "type" in error
-        ? String((error as { type?: unknown }).type)
+        ? safeLogToken((error as { type?: unknown }).type)
         : error instanceof Error
-          ? error.name
+          ? safeLogToken(error.name)
           : "unknown";
     console.error("[gcfieldlog] stripe webhook signature failed", { type });
     return NextResponse.json(
@@ -67,8 +89,24 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!HANDLED_EVENTS.has(event.type)) {
-    console.info("[gcfieldlog] stripe webhook ignored", { type: event.type });
+  if (event.id && eventMemory.has(event.id)) {
+    console.info("[gcfieldlog] stripe webhook duplicate", {
+      eventId: event.id,
+      eventType: event.type,
+    });
+    return NextResponse.json({
+      ok: true,
+      duplicate: true,
+      type: event.type,
+    });
+  }
+
+  if (!isHandledStripeWebhookEvent(event.type)) {
+    console.info("[gcfieldlog] stripe webhook ignored", {
+      eventId: event.id,
+      eventType: event.type,
+    });
+    if (event.id) eventMemory.add(event.id);
     return NextResponse.json({ ok: true, ignored: true });
   }
 
@@ -78,93 +116,174 @@ export async function POST(request: Request) {
         await handleCheckoutCompleted(
           stripe,
           event.data.object as Stripe.Checkout.Session,
+          event.id,
         );
         break;
       case "customer.subscription.updated":
-        await handleSubscriptionUpdated(
+        await handleSubscriptionSnapshot(
           stripe,
           event.data.object as Stripe.Subscription,
+          {
+            ended: false,
+            eventId: event.id,
+            eventType: event.type,
+          },
+        );
+        break;
+      case "customer.subscription.deleted":
+        await handleSubscriptionSnapshot(
+          stripe,
+          event.data.object as Stripe.Subscription,
+          {
+            ended: true,
+            eventId: event.id,
+            eventType: event.type,
+          },
         );
         break;
       case "invoice.paid":
-        await handleInvoicePaid(stripe, event.data.object as Stripe.Invoice);
+        await handleInvoicePaid(
+          stripe,
+          event.data.object as Stripe.Invoice,
+          event.id,
+        );
         break;
       default:
         break;
     }
   } catch (error) {
-    const type =
-      typeof error === "object" && error && "type" in error
-        ? String((error as { type?: unknown }).type)
-        : "handler_error";
     console.error("[gcfieldlog] stripe webhook handler failed", {
-      type,
-      event: event.type,
+      code: stripeWebhookHandlerCode(error),
+      eventId: event.id,
+      eventType: event.type,
     });
-    return NextResponse.json({ ok: false, error: "handler_failed" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: "handler_failed" },
+      { status: 500 },
+    );
   }
 
+  if (event.id) eventMemory.add(event.id);
   return NextResponse.json({ ok: true, type: event.type });
+}
+
+function methodNotAllowed() {
+  return NextResponse.json(
+    { ok: false, error: "method_not_allowed" },
+    { status: 405, headers: { Allow: "POST" } },
+  );
+}
+
+export function GET() {
+  return methodNotAllowed();
+}
+
+export function PUT() {
+  return methodNotAllowed();
+}
+
+export function PATCH() {
+  return methodNotAllowed();
+}
+
+export function DELETE() {
+  return methodNotAllowed();
+}
+
+export function HEAD() {
+  return methodNotAllowed();
 }
 
 async function handleCheckoutCompleted(
   stripe: Stripe,
   session: Stripe.Checkout.Session,
+  eventId: string,
 ): Promise<void> {
   const customerId = asStripeId(session.customer);
-  const subscriptionId = asStripeId(session.subscription);
+  const subscriptionId = checkoutSessionSubscriptionId(session);
   const email =
     session.customer_details?.email ?? session.customer_email ?? null;
 
   console.info("[gcfieldlog] stripe checkout.session.completed", {
+    eventId,
     customerId,
     subscriptionId,
   });
   // TODO: send trial-started email (not in this PR)
 
   if (!customerId) return;
+  const existing = await fetchBillingCustomerByStripeCustomerId(customerId);
   const fromSub = subscriptionId
     ? await loadSubscriptionFields(stripe, subscriptionId)
     : null;
-  await persistCustomer({
-    email,
-    stripeCustomerId: customerId,
-    stripeSubscriptionId: subscriptionId,
-    status: fromSub?.status ?? "trialing",
-    trialEnd: fromSub?.trialEnd ?? null,
-  });
+  await persistCustomer(
+    mergeBillingCustomer(existing, {
+      email,
+      stripeCustomerId: customerId,
+      stripeSubscriptionId: subscriptionId ?? fromSub?.subscriptionId ?? null,
+      status: statusAfterCheckout(existing, fromSub?.status ?? null),
+      trialEnd: fromSub?.trialEnd ?? null,
+    }),
+  );
 }
 
-async function handleSubscriptionUpdated(
+async function handleSubscriptionSnapshot(
   stripe: Stripe,
   subscription: Stripe.Subscription,
+  options: { ended: boolean; eventId: string; eventType: string },
 ): Promise<void> {
   const customerId = asStripeId(subscription.customer);
-  console.info("[gcfieldlog] stripe customer.subscription.updated", {
+  const status: BillingStatus = options.ended
+    ? "canceled"
+    : mapStripeSubscriptionStatus(subscription.status);
+  console.info("[gcfieldlog] stripe subscription snapshot", {
+    eventId: options.eventId,
+    eventType: options.eventType,
     customerId,
     subscriptionId: subscription.id,
-    status: subscription.status,
+    status,
   });
   // TODO: send status-change email (not in this PR)
 
   if (!customerId) return;
+  const existing = await fetchBillingCustomerByStripeCustomerId(customerId);
+  if (
+    !shouldApplySubscriptionSnapshot({
+      existingSubscriptionId: existing?.stripeSubscriptionId,
+      incomingSubscriptionId: subscription.id,
+      incomingStatus: status,
+      ended: options.ended,
+    })
+  ) {
+    console.info("[gcfieldlog] stripe subscription snapshot skipped", {
+      eventId: options.eventId,
+      eventType: options.eventType,
+      reason: "newer_subscription_on_file",
+    });
+    return;
+  }
+
   const email = await loadCustomerEmail(stripe, customerId);
-  await persistCustomer({
-    email,
-    stripeCustomerId: customerId,
-    stripeSubscriptionId: subscription.id,
-    status: mapStripeSubscriptionStatus(subscription.status),
-    trialEnd: unixToIso(subscription.trial_end),
-  });
+  await persistCustomer(
+    mergeBillingCustomer(existing, {
+      email,
+      stripeCustomerId: customerId,
+      stripeSubscriptionId: subscription.id,
+      status,
+      trialEnd: unixToIso(subscription.trial_end),
+    }),
+  );
 }
 
 async function handleInvoicePaid(
   stripe: Stripe,
   invoice: Stripe.Invoice,
+  eventId: string,
 ): Promise<void> {
   const customerId = asStripeId(invoice.customer);
   const subscriptionId = invoiceSubscriptionId(invoice);
   console.info("[gcfieldlog] stripe invoice.paid", {
+    eventId,
     customerId,
     subscriptionId,
     invoiceId: invoice.id,
@@ -172,29 +291,29 @@ async function handleInvoicePaid(
   // TODO: send receipt email (not in this PR)
 
   if (!customerId) return;
+  const existing = await fetchBillingCustomerByStripeCustomerId(customerId);
   const fromSub = subscriptionId
     ? await loadSubscriptionFields(stripe, subscriptionId)
     : null;
   const email =
     invoice.customer_email ?? (await loadCustomerEmail(stripe, customerId));
-  await persistCustomer({
-    email,
-    stripeCustomerId: customerId,
-    stripeSubscriptionId: subscriptionId ?? fromSub?.subscriptionId ?? null,
-    status: fromSub?.status ?? "active",
-    trialEnd: fromSub?.trialEnd ?? null,
-  });
+  await persistCustomer(
+    mergeBillingCustomer(existing, {
+      email,
+      stripeCustomerId: customerId,
+      stripeSubscriptionId: subscriptionId ?? fromSub?.subscriptionId ?? null,
+      status: statusAfterInvoicePaid({
+        existing,
+        subscriptionId,
+        fromSubscription: fromSub?.status ?? null,
+      }),
+      trialEnd: fromSub?.trialEnd ?? null,
+    }),
+  );
 }
 
-async function persistCustomer(input: {
-  email: string | null;
-  stripeCustomerId: string;
-  stripeSubscriptionId: string | null;
-  status: BillingStatus;
-  trialEnd: string | null;
-}): Promise<void> {
+async function persistCustomer(input: BillingCustomer): Promise<void> {
   if (!isBillingStorageConfigured()) {
-    console.error("[gcfieldlog] billing_customers storage unconfigured");
     throw new Error("storage_unconfigured");
   }
   const ok = await upsertBillingCustomer(input);
@@ -235,15 +354,4 @@ async function loadCustomerEmail(
   } catch {
     return null;
   }
-}
-
-function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
-  const fromParent = asStripeId(
-    invoice.parent?.subscription_details?.subscription,
-  );
-  if (fromParent) return fromParent;
-  const record = invoice as unknown as { subscription?: unknown };
-  return asStripeId(
-    record.subscription as string | { id: string } | null | undefined,
-  );
 }

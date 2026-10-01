@@ -5,7 +5,7 @@
  * this table to the browser. Webhooks are the source of status updates.
  */
 
-import { readEnvAlias } from "./env";
+import { readEnvAlias } from "./env.ts";
 
 export const BILLING_CUSTOMERS_TABLE = "billing_customers";
 
@@ -67,38 +67,80 @@ export function mapStripeSubscriptionStatus(
   }
 }
 
+/**
+ * Fill gaps from the stored row. A redelivered event often omits email,
+ * subscription id, or trial end — those must not clear a value already stored.
+ * Incoming status is the caller's decision (including a forced cancel).
+ */
+export function mergeBillingCustomer(
+  existing: BillingCustomer | null,
+  incoming: BillingCustomer,
+): BillingCustomer {
+  return {
+    email: cleanEmail(incoming.email) ?? existing?.email ?? null,
+    stripeCustomerId: incoming.stripeCustomerId,
+    stripeSubscriptionId:
+      incoming.stripeSubscriptionId ?? existing?.stripeSubscriptionId ?? null,
+    status: incoming.status,
+    trialEnd: incoming.trialEnd ?? existing?.trialEnd ?? null,
+  };
+}
+
+/**
+ * Columns sent to PostgREST. Null email, subscription id, and trial end are
+ * omitted so `resolution=merge-duplicates` does not write NULL over a stored
+ * value. `user_id` is never sent — webhook upserts must not clear it.
+ */
+export function billingCustomerUpsertRow(
+  input: BillingCustomer,
+  now: string,
+): Record<string, string> {
+  const row: Record<string, string> = {
+    stripe_customer_id: input.stripeCustomerId,
+    status: input.status,
+    updated_at: now,
+  };
+  const email = cleanEmail(input.email);
+  if (email) row.email = email;
+  if (input.stripeSubscriptionId) {
+    row.stripe_subscription_id = input.stripeSubscriptionId;
+  }
+  if (input.trialEnd) row.trial_end = input.trialEnd;
+  return row;
+}
+
 export async function fetchBillingCustomerByEmail(
   email: string,
 ): Promise<BillingCustomer | null> {
-  const config = getSupabaseServiceConfig();
-  if (!config) return null;
   const normalized = email.trim().toLowerCase();
   if (!normalized) return null;
-
   const params = new URLSearchParams();
   params.set("email", `eq.${normalized}`);
-  params.set(
-    "select",
-    "email,stripe_customer_id,stripe_subscription_id,status,trial_end",
-  );
-  params.set("limit", "1");
+  const result = await selectOneBillingCustomer(params, "email");
+  if (result.kind !== "row") return null;
+  return result.customer;
+}
 
-  const response = await restFetch(
-    config,
-    `${BILLING_CUSTOMERS_TABLE}?${params.toString()}`,
-    { method: "GET" },
-  );
-  if (!response || !response.ok) {
-    if (response && !response.ok) {
-      console.error("[gcfieldlog] billing_customers email read was not ok", {
-        status: response.status,
-      });
-    }
+/**
+ * Lookup by Stripe customer id. Returns null when storage is unconfigured or
+ * no row exists. Throws `lookup_failed` when storage is configured but the
+ * read failed — callers should return 500 so Stripe retries.
+ */
+export async function fetchBillingCustomerByStripeCustomerId(
+  stripeCustomerId: string,
+): Promise<BillingCustomer | null> {
+  if (!/^cus_[A-Za-z0-9]+$/.test(stripeCustomerId)) {
+    console.error("[gcfieldlog] billing_customers lookup skipped", {
+      reason: "unexpected_customer_id",
+    });
     return null;
   }
-  const json: unknown = await response.json().catch(() => null);
-  const row = Array.isArray(json) ? json[0] : null;
-  return parseBillingCustomer(row);
+  const params = new URLSearchParams();
+  params.set("stripe_customer_id", `eq.${stripeCustomerId}`);
+  const result = await selectOneBillingCustomer(params, "stripe_customer_id");
+  if (result.kind === "unconfigured") return null;
+  if (result.kind === "failed") throw new Error("lookup_failed");
+  return result.customer;
 }
 
 export async function upsertBillingCustomer(
@@ -107,15 +149,7 @@ export async function upsertBillingCustomer(
   const config = getSupabaseServiceConfig();
   if (!config) return false;
 
-  const now = new Date().toISOString();
-  const body = {
-    email: input.email?.trim().toLowerCase() || null,
-    stripe_customer_id: input.stripeCustomerId,
-    stripe_subscription_id: input.stripeSubscriptionId,
-    status: input.status,
-    trial_end: input.trialEnd,
-    updated_at: now,
-  };
+  const body = billingCustomerUpsertRow(input, new Date().toISOString());
 
   const response = await restFetch(
     config,
@@ -136,6 +170,42 @@ export async function upsertBillingCustomer(
     return false;
   }
   return true;
+}
+
+type BillingSelectResult =
+  | { kind: "unconfigured" }
+  | { kind: "failed" }
+  | { kind: "row"; customer: BillingCustomer | null };
+
+async function selectOneBillingCustomer(
+  params: URLSearchParams,
+  lookup: "email" | "stripe_customer_id",
+): Promise<BillingSelectResult> {
+  const config = getSupabaseServiceConfig();
+  if (!config) return { kind: "unconfigured" };
+  params.set(
+    "select",
+    "email,stripe_customer_id,stripe_subscription_id,status,trial_end",
+  );
+  params.set("limit", "1");
+
+  const response = await restFetch(
+    config,
+    `${BILLING_CUSTOMERS_TABLE}?${params.toString()}`,
+    { method: "GET" },
+  );
+  if (!response || !response.ok) {
+    if (response && !response.ok) {
+      console.error("[gcfieldlog] billing_customers read was not ok", {
+        lookup,
+        status: response.status,
+      });
+    }
+    return { kind: "failed" };
+  }
+  const json: unknown = await response.json().catch(() => null);
+  const row = Array.isArray(json) ? json[0] : null;
+  return { kind: "row", customer: parseBillingCustomer(row) };
 }
 
 function parseBillingCustomer(row: unknown): BillingCustomer | null {
@@ -198,4 +268,10 @@ async function restFetch(
 
 function asStringOrNull(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
+}
+
+function cleanEmail(email: string | null | undefined): string | null {
+  if (typeof email !== "string") return null;
+  const trimmed = email.trim().toLowerCase();
+  return trimmed.length > 0 ? trimmed : null;
 }

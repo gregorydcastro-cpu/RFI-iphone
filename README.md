@@ -320,14 +320,14 @@ No crypto or stablecoin code in this app. Later you can turn on Stripe’s crypt
 
 1. [Webhooks](https://dashboard.stripe.com/webhooks) → **Add endpoint**.
 2. Endpoint URL: **`https://www.gcfieldlog.com/api/stripe/webhook`** (www, not apex — Stripe does not follow a 308). Use the Preview URL + `/api/stripe/webhook` for Vercel previews.
-3. Events (at least): `checkout.session.completed`, `customer.subscription.updated`, `invoice.paid`.
+3. Events (at least): `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`.
 4. Copy the endpoint **Signing secret** into Vercel `STRIPE_WEBHOOK_SECRET`.
 5. Apply the SQL in `supabase/migrations/20260918120000_billing_customers.sql` on the gc-field-log Supabase project so the webhook can upsert rows.
 
 **App routes**
 
 - `POST /api/stripe/checkout` — creates a subscription Checkout Session (`trial_period_days: 60`, promotion codes allowed). Redirects the browser to Stripe-hosted Checkout. `success_url` / `cancel_url` return to `/pricing` on www.gcfieldlog.com (localhost and `*.vercel.app` use the request origin).
-- `POST /api/stripe/webhook` — verifies `Stripe-Signature`, logs the event, upserts `billing_customers`. Does **not** send email yet (TODO in the handler).
+- `POST /api/stripe/webhook` — verifies `Stripe-Signature` on the raw body (Node.js runtime), upserts `billing_customers`, and marks `customer.subscription.deleted` as `canceled`. Other methods return `method_not_allowed` (405). Does **not** send email yet (TODO in the handler). A missing signature is `missing_signature` (400) once webhook env is set, and `billing_unconfigured` (503) before that.
 - `/pricing` — Subscribe CTA.
 
 If Stripe env is missing on Vercel Production (`STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`), `/pricing` still renders a calm “Billing isn't live yet” notice and names those keys for operators. Checkout and the webhook return `billing_unconfigured` (503) with `missing` set to the unset key names. Clicking Subscribe shows that notice in place — nothing redirects and no charge starts. That is missing keys, not a host allowlist. Pack viewer and Procore OAuth are unchanged. One-pass paste → redeploy → www webhook → checkout check: **[STRIPE_GO_LIVE.md](STRIPE_GO_LIVE.md)**.
