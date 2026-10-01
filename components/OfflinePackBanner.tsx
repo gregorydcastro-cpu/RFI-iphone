@@ -7,22 +7,17 @@ type Props = {
 };
 
 /**
- * Gloves-readable strip when the pack viewer is serving the device cache
- * instead of a live Procore / room_packs re-pull.
+ * Phone strip when the pack viewer is serving the device cache.
+ * Tan status, one line — the red sheet card is a PDF failure, not this.
  */
 export function OfflinePackBanner({ snapshot }: Props) {
   return (
     <div
       role="status"
-      className="border-b border-cta/70 bg-ink px-3 py-2.5 sm:px-4"
+      className="border-b border-tan/80 bg-ink px-3 py-3 sm:px-4"
     >
-      <p className="text-sm font-semibold tracking-wide text-cta uppercase">
-        Offline
-      </p>
-      <p className="mt-0.5 text-sm text-paper">{offlineBannerText(snapshot)}</p>
-      <p className="mt-1 text-xs text-tan">
-        Live pulls need a connection. This is the last good snapshot from
-        today on this device — not a second Procore path.
+      <p className="text-base font-semibold leading-snug text-paper">
+        {offlineBannerText(snapshot)}
       </p>
     </div>
   );

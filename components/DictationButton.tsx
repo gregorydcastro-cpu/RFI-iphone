@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { VoiceEmptyState } from "@/components/VoiceEmptyState";
 import { VoiceFeedback } from "@/components/VoiceFeedback";
 import {
   canRetrySameAudio,
@@ -8,6 +9,12 @@ import {
   voiceErrorMessage,
   type VoiceErrorCode,
 } from "@/lib/voiceErrors";
+import {
+  voiceEmptyKindFromMicError,
+  voiceEmptyKindFromTranscript,
+  voiceEmptyMessage,
+  type VoiceEmptyKind,
+} from "@/lib/voiceEmpty";
 import {
   getVoiceStatusServerSnapshot,
   getVoiceStatusSnapshot,
@@ -143,6 +150,7 @@ export function DictationButton({
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<VoiceErrorCode | null>(null);
   const [heard, setHeard] = useState<string | null>(null);
+  const [emptyKind, setEmptyKind] = useState<VoiceEmptyKind>("idle");
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
@@ -196,11 +204,24 @@ export function DictationButton({
         data && typeof data === "object" && "text" in data && typeof data.text === "string"
           ? data.text.trim()
           : "";
-      if (!response.ok || !text) {
+      const silent = voiceEmptyKindFromTranscript({
+        httpOk: response.ok,
+        text,
+        code: parsed.code,
+      });
+      if (silent) {
+        setEmptyKind(silent);
+        setHeard(null);
+        setError(null);
+        setErrorCode(null);
+        return;
+      }
+      if (!response.ok) {
         showError(parsed.code, parsed.message);
         return;
       }
       setHeard(text);
+      setEmptyKind("idle");
       setError(null);
       setErrorCode(null);
       lastClipRef.current = null;
@@ -216,17 +237,18 @@ export function DictationButton({
     setError(null);
     setErrorCode(null);
     setHeard(null);
+    setEmptyKind("idle");
     if (voiceStatusBlocksMic(voice)) {
       showError("unconfigured");
       return;
     }
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      showError("failed", "Microphone is not available in this browser.");
+      setEmptyKind("missing");
       return;
     }
     const mimeType = pickMimeType();
     if (!mimeType || typeof MediaRecorder === "undefined") {
-      showError("failed", "Recording is not supported in this browser.");
+      setEmptyKind("missing");
       return;
     }
     try {
@@ -243,7 +265,9 @@ export function DictationButton({
         const blob = new Blob(chunksRef.current, { type: mimeType });
         releaseStream();
         if (blob.size < 1) {
-          showError("no_speech");
+          setEmptyKind("silent");
+          setError(null);
+          setErrorCode(null);
           setRecording(false);
           return;
         }
@@ -260,8 +284,15 @@ export function DictationButton({
       }
       setRecording(true);
       onStart?.();
-    } catch {
+    } catch (caught) {
       releaseStream();
+      const kind = voiceEmptyKindFromMicError(caught);
+      if (kind) {
+        setEmptyKind(kind);
+        setError(null);
+        setErrorCode(null);
+        return;
+      }
       showError("failed", "Microphone permission is required for dictation.");
     }
   }
@@ -332,8 +363,13 @@ export function DictationButton({
         <MicIcon recording={recording} />
         <span>{status}</span>
       </button>
-      {hint && !heard && !error && !recording && !pending && !blocked ? (
-        <p className="mt-2 text-sm text-muted">{hint}</p>
+      {!heard && !error && !recording && !pending && !blocked ? (
+        <>
+          <VoiceEmptyState className="mt-2" message={voiceEmptyMessage(emptyKind)} />
+          {emptyKind === "idle" && hint ? (
+            <p className="mt-1 text-base leading-snug text-muted">{hint}</p>
+          ) : null}
+        </>
       ) : null}
       {recording || pending ? (
         <p role="status" className="mt-2 text-base font-semibold text-paper">

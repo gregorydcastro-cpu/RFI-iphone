@@ -469,8 +469,8 @@ export function GenerateRfiForm({
           />
           <ReadAloudButton
             id={`rfi-form-${requestId}`}
-            text={draftSpeak}
-            disabled={!subject && !question}
+            text={subject.trim() || question.trim() ? draftSpeak : ""}
+            disabled={pending}
           />
         </div>
         <VoiceSetupNote />
