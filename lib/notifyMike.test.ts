@@ -7,7 +7,6 @@ import {
   notifyMailerConfigured,
   notifyMikeConfigured,
   notifyMikeOnBumps,
-  readNotifyMikeEmail,
 } from "./notifyMike.ts";
 import type { ShareRefreshBump } from "./shareRefresh.ts";
 
@@ -129,7 +128,7 @@ test("unchanged sheets do not notify even when mail env is set", async () => {
   assert.equal(result.bumps, 0);
 });
 
-test("Resend send uses the owner's notify_email, not NOTIFY_MIKE_EMAIL", async () => {
+test("Resend send uses the owner's notify_email", async () => {
   clearNotifyEnv();
   process.env.NOTIFY_MIKE_EMAIL = "mike@crew.example";
   process.env.RESEND_API_KEY = "re_test_key";
@@ -163,9 +162,10 @@ test("Resend send uses the owner's notify_email, not NOTIFY_MIKE_EMAIL", async (
   assert.equal(result.status, 200);
   assert.equal(result.bumps, 1);
   assert.equal(result.recipients, 1);
-  assert.equal(result.fallback_used, false);
+  assert.equal("fallback_used" in result, false);
   assert.equal(JSON.stringify(result).includes("re_test_key"), false);
   assert.equal(JSON.stringify(result).includes("foreman@crew.example"), false);
+  assert.equal(JSON.stringify(result).includes("mike@crew.example"), false);
 });
 
 test("unset notify_email skips that bump without failing refresh", async () => {
@@ -185,23 +185,22 @@ test("unset notify_email skips that bump without failing refresh", async () => {
   assert.match(result.note, /notify_email/);
 });
 
-test("NOTIFY_MIKE_EMAIL is a temporary fallback only when notify_email is unset", async () => {
+test("a global notify env does not send when notify_email is unset", async () => {
   clearNotifyEnv();
   process.env.NOTIFY_MIKE_EMAIL = "mike@crew.example";
   process.env.RESEND_API_KEY = "re_test_key";
-  let to: string[] = [];
   const result = await notifyMikeOnBumps([mapleBump], [], {
     lookupNotifyEmails: emails({ [mapleOwner]: null }),
-    fetch: async (_input, init) => {
-      const body = JSON.parse(String(init?.body)) as { to: string[] };
-      to = body.to;
-      return new Response(JSON.stringify({ id: "mock" }), { status: 200 });
+    fetch: async () => {
+      throw new Error("fetch should not run when notify_email is unset");
     },
   });
-  assert.deepEqual(to, ["mike@crew.example"]);
-  assert.equal(result.code, "sent");
-  assert.equal(result.fallback_used, true);
-  assert.equal(readNotifyMikeEmail(), "mike@crew.example");
+  assert.equal(result.code, "notify_email_unset");
+  assert.equal(result.sent, false);
+  assert.equal(result.skipped, true);
+  assert.equal(result.status, 200);
+  assert.equal(result.skipped_unset, 1);
+  assert.equal(JSON.stringify(result).includes("mike@crew.example"), false);
 });
 
 test("Gmail path sends to the per-user notify_email", async () => {

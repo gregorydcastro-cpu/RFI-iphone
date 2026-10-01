@@ -3,19 +3,18 @@
  *
  * Server-only. Destination is `procore_connections.notify_email` for the
  * owner_user_id on each persisted bump (pin → share_folders → connection).
- * NOTIFY_MIKE_EMAIL is a temporary fallback only when that column is unset.
- * Sender is RESEND_API_KEY (or Gmail SMTP). Never NEXT_PUBLIC_ these keys.
+ * There is no global recipient. Sender is RESEND_API_KEY (or Gmail SMTP).
+ * Never NEXT_PUBLIC_ these keys.
  *
- * Missing per-user email (and no fallback) is a structured skip
- * (notify_email_unset, status 200). Missing mailer env is
- * notify_unconfigured (503 on the notify object). Refresh callers must
- * not fail the persist when notify is skipped or send fails.
+ * Missing per-user email is a structured skip (notify_email_unset, status
+ * 200). Missing mailer env is notify_unconfigured (503 on the notify
+ * object). Refresh callers must not fail the persist when notify is
+ * skipped or send fails.
  */
 
 import type { GmailSmtpInput, GmailSmtpResult } from "./gmailSmtp";
 import type { ShareRefreshBump, ShareRefreshError } from "./shareRefresh";
 
-export const NOTIFY_MIKE_EMAIL_KEY = "NOTIFY_MIKE_EMAIL";
 export const NOTIFY_FROM_EMAIL_KEY = "NOTIFY_FROM_EMAIL";
 export const RESEND_API_KEY_NAME = "RESEND_API_KEY";
 export const RESEND_FROM_KEY = "RESEND_FROM";
@@ -47,7 +46,6 @@ export type NotifyMikeSummary = {
   to_configured: boolean;
   recipients: number;
   skipped_unset: number;
-  fallback_used: boolean;
   sms: { attempted: false; todo: true };
   note: string;
 };
@@ -93,7 +91,7 @@ export type NotifyEmailParse =
   | { ok: true; notify_email: string | null }
   | { ok: false; error: string };
 
-export type NotifyRecipientSource = "notify_email" | "fallback";
+export type NotifyRecipientSource = "notify_email";
 
 export type NotifyRecipientDelivery = {
   to: string;
@@ -141,15 +139,12 @@ export function normalizeNotifyEmail(
 
 /**
  * Group persisted bumps by folder owner, then attach notify_email.
- * Prefer the per-user column. Optional fallback (NOTIFY_MIKE_EMAIL) is
- * temporary migration cover only.
+ * Unset or blank addresses are skipped. No global recipient.
  */
 export function resolveBumpNotifyRecipients(
   bumps: ShareRefreshBump[],
   emailsByUserId: Map<string, string | null>,
-  fallbackEmail?: string | null,
 ): NotifyRecipientPlan {
-  const fallback = normalizeNotifyEmail(fallbackEmail);
   const byOwner = new Map<string | null, ShareRefreshBump[]>();
   for (const bump of bumps) {
     const owner = bump.owner_user_id?.trim() || null;
@@ -176,26 +171,10 @@ export function resolveBumpNotifyRecipients(
       });
       continue;
     }
-    if (fallback) {
-      deliveries.push({
-        to: fallback,
-        owner_user_id,
-        source: "fallback",
-        bumps: ownerBumps,
-      });
-      continue;
-    }
     skipped.push({ owner_user_id, reason: "unset", bumps: ownerBumps });
   }
 
   return { deliveries, skipped };
-}
-
-/** Temporary global fallback. Prefer procore_connections.notify_email. */
-export function readNotifyMikeEmail(): string | undefined {
-  const configured = readSecretEnv(NOTIFY_MIKE_EMAIL_KEY);
-  if (isNotifyEmail(configured)) return configured.toLowerCase();
-  return undefined;
 }
 
 export function readNotifyFromEmail(): string | undefined {
@@ -278,7 +257,6 @@ function summary(input: {
   toConfigured?: boolean;
   recipients?: number;
   skippedUnset?: number;
-  fallbackUsed?: boolean;
   note: string;
 }): NotifyMikeSummary {
   const sent = input.code === "sent";
@@ -305,7 +283,6 @@ function summary(input: {
     to_configured: Boolean(input.toConfigured),
     recipients: input.recipients ?? 0,
     skipped_unset: input.skippedUnset ?? 0,
-    fallback_used: Boolean(input.fallbackUsed),
     sms: { attempted: false, todo: true },
     note: input.note,
   };
@@ -411,13 +388,8 @@ export async function notifyMikeOnBumps(
     ),
   ];
   const emailsByUserId = await lookupEmails(ownerIds, deps);
-  const plan = resolveBumpNotifyRecipients(
-    eligible,
-    emailsByUserId,
-    readNotifyMikeEmail(),
-  );
+  const plan = resolveBumpNotifyRecipients(eligible, emailsByUserId);
   const skippedUnset = skippedUnsetCount(plan);
-  const fallbackUsed = plan.deliveries.some((item) => item.source === "fallback");
 
   if (plan.deliveries.length === 0) {
     const result = summary({
@@ -476,7 +448,6 @@ export async function notifyMikeOnBumps(
       toConfigured: true,
       recipients: sent.length,
       skippedUnset,
-      fallbackUsed,
       note: `Emailed ${sent.length} owner${sent.length === 1 ? "" : "s"} for persisted sheet bump(s) (${provider}). SMS is not sent.`,
     });
     console.info("[gcfieldlog] notify sent", {
@@ -484,7 +455,6 @@ export async function notifyMikeOnBumps(
       bumps: result.bumps,
       provider,
       recipients: result.recipients,
-      fallback_used: fallbackUsed,
       to: sent.map((item) => maskEmail(item.to)),
     });
     return result;
@@ -498,7 +468,6 @@ export async function notifyMikeOnBumps(
       toConfigured: true,
       recipients: sent.length,
       skippedUnset: skippedUnset + failed.reduce((sum, item) => sum + item.bumps.length, 0),
-      fallbackUsed,
       note: `Emailed ${sent.length} owner(s); ${failed.length} send(s) failed. Refresh still saved.`,
     });
     console.error("[gcfieldlog] notify partial failure", {
@@ -517,7 +486,6 @@ export async function notifyMikeOnBumps(
     toConfigured: true,
     recipients: 0,
     skippedUnset,
-    fallbackUsed,
     note: `Refresh still saved. Email to owner(s) failed (${failed[0]?.error ?? "send_failed"}).`,
   });
   console.error("[gcfieldlog] notify failed", {
