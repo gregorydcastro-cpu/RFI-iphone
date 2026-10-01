@@ -10,9 +10,155 @@ export function parseFieldAuthMode(value: unknown): FieldAuthMode {
   return "signin";
 }
 
+const RETURN_PATH_ORIGIN = "https://www.gcfieldlog.com";
+
+const AUTH_CALLBACK_REASONS = new Set([
+  "missing_code",
+  "exchange_failed",
+  "auth_unconfigured",
+]);
+
+function hasControlChars(value: string): boolean {
+  return /[\u0000-\u001F\u007F]/.test(value);
+}
+
+function isAllowedAppPath(pathname: string): boolean {
+  if (!pathname.startsWith("/") || pathname.startsWith("//")) return false;
+  if (pathname.includes("//") || pathname.includes("\\")) return false;
+  if (pathname === "/jobs" || pathname.startsWith("/jobs/")) return true;
+  if (pathname === "/time" || pathname.startsWith("/time/")) return true;
+  if (pathname === "/share" || pathname.startsWith("/share/")) return true;
+  if (pathname === "/account" || pathname.startsWith("/account/")) return true;
+  if (pathname === "/pricing" || pathname.startsWith("/pricing/")) return true;
+  if (pathname.startsWith("/pack/") && pathname.length > "/pack/".length) return true;
+  if (pathname.startsWith("/invite/") && pathname.length > "/invite/".length) return true;
+  return false;
+}
+
+/**
+ * Same-site return path after sign-in, invite accept, or share handoff.
+ * Rejects protocol-relative, backslash, and login/callback targets so a
+ * crafted `next` cannot leave the app or loop on `/`.
+ */
 export function safeNextPath(value: string | null | undefined): string {
-  if (value && value.startsWith("/") && !value.startsWith("//")) return value;
-  return "/jobs";
+  const fallback = "/jobs";
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim();
+  if (!trimmed || !trimmed.startsWith("/") || trimmed.startsWith("//")) return fallback;
+  if (trimmed.includes("\\") || hasControlChars(trimmed)) return fallback;
+  let decoded = trimmed;
+  try {
+    decoded = decodeURIComponent(trimmed);
+  } catch {
+    return fallback;
+  }
+  if (
+    !decoded.startsWith("/") ||
+    decoded.startsWith("//") ||
+    decoded.includes("\\") ||
+    hasControlChars(decoded)
+  ) {
+    return fallback;
+  }
+  let url: URL;
+  try {
+    url = new URL(decoded, RETURN_PATH_ORIGIN);
+  } catch {
+    return fallback;
+  }
+  if (url.origin !== RETURN_PATH_ORIGIN) return fallback;
+  if (!isAllowedAppPath(url.pathname)) return fallback;
+  if (url.search.includes("\\") || hasControlChars(url.search)) return fallback;
+  return `${url.pathname}${url.search}`;
+}
+
+/** Invite landing path. Unsafe tokens fall back to jobs. */
+export function inviteAcceptPath(token: string): string {
+  const trimmed = token.trim();
+  if (!trimmed || trimmed.length > 256) return "/jobs";
+  if (/[\\/?#%\s]/.test(trimmed) || trimmed.includes("..")) return "/jobs";
+  return safeNextPath(`/invite/${encodeURIComponent(trimmed)}`);
+}
+
+export function isAuthCallbackReason(reason: string | null | undefined): boolean {
+  return typeof reason === "string" && AUTH_CALLBACK_REASONS.has(reason);
+}
+
+/**
+ * Where `/auth/callback` sends the crew.
+ * Failures always land on login with `next` preserved — never on the
+ * destination page, where the error would be dropped.
+ */
+export function authCallbackLocation(
+  origin: string,
+  next: string | null | undefined,
+  outcome: "session" | "missing_code" | "exchange_failed" | "auth_unconfigured",
+): string {
+  const base = origin.replace(/\/$/, "") || RETURN_PATH_ORIGIN;
+  const safe = safeNextPath(next);
+  if (outcome === "session") return new URL(safe, base).toString();
+  const login = new URL("/", base);
+  login.searchParams.set("auth", "error");
+  login.searchParams.set("reason", outcome);
+  login.searchParams.set("next", safe);
+  return login.toString();
+}
+
+/**
+ * After sign-out or a dead auth cookie is cleared.
+ * `cleared=1` stops login from sending the crew through logout again.
+ */
+export function sessionExitLocation(input: {
+  origin: string;
+  next?: string | null;
+  reason?: string | null;
+  auth?: string | null;
+}): string {
+  const base = input.origin.replace(/\/$/, "") || RETURN_PATH_ORIGIN;
+  const login = new URL("/", base);
+  const callbackReason =
+    input.auth === "error" && isAuthCallbackReason(input.reason) ? input.reason : null;
+  if (callbackReason) {
+    login.searchParams.set("auth", "error");
+    login.searchParams.set("reason", callbackReason);
+    login.searchParams.set("cleared", "1");
+    login.searchParams.set("next", safeNextPath(input.next));
+    return login.toString();
+  }
+  if (input.reason === "session_ended") {
+    login.searchParams.set("reason", "session_ended");
+    login.searchParams.set("cleared", "1");
+    login.searchParams.set("next", safeNextPath(input.next));
+    return login.toString();
+  }
+  login.searchParams.set("signedOut", "1");
+  if (typeof input.next === "string" && input.next.trim()) {
+    login.searchParams.set("next", safeNextPath(input.next));
+  }
+  return login.toString();
+}
+
+/** Login → logout hop that drops a leftover auth cookie, then returns here. */
+export function staleSessionClearPath(input: {
+  next?: string | null;
+  auth?: string | null;
+  reason?: string | null;
+}): string {
+  const params = new URLSearchParams();
+  if (input.auth === "error" && isAuthCallbackReason(input.reason)) {
+    params.set("auth", "error");
+    params.set("reason", input.reason ?? "");
+  } else {
+    params.set("reason", "session_ended");
+  }
+  params.set("next", safeNextPath(input.next));
+  return `/api/session/logout?${params.toString()}`;
+}
+
+export function inviteSwitchAccountHref(token: string): string {
+  const params = new URLSearchParams();
+  params.set("next", inviteAcceptPath(token));
+  return `/api/session/logout?${params.toString()}`;
 }
 
 export function authUnconfiguredMessage(): string {
@@ -45,7 +191,7 @@ const JOB_PLACE_LABELS: Record<string, string> = {
 
 /** Short spoken name for a same-site return path. Null when there is no next. */
 export function continuePlaceLabel(next: string | null | undefined): string | null {
-  if (!next || !next.startsWith("/") || next.startsWith("//")) return null;
+  if (!next || safeNextPath(next) !== next.trim()) return null;
   const pathname = (next.split("?")[0] ?? next).replace(/\/+$/, "") || "/";
   if (pathname === "/jobs") return "jobs";
   if (pathname.startsWith("/jobs/")) {
@@ -54,6 +200,7 @@ export function continuePlaceLabel(next: string | null | undefined): string | nu
   }
   if (pathname === "/time" || pathname.startsWith("/time/")) return "time";
   if (pathname === "/share" || pathname.startsWith("/share/")) return "share";
+  if (pathname.startsWith("/invite/")) return "the invite";
   if (pathname === "/account" || pathname.startsWith("/account/")) return "account";
   if (pathname.includes("/rfi/new")) return "the RFI draft";
   if (pathname.includes("/materials")) return "materials";
@@ -90,12 +237,134 @@ export function loginArrivalMessage(query: {
 
 /** Login URL that returns the crew to a same-site page after sign-in. */
 export function signInContinuePath(nextPath: string, sessionEnded = false): string {
-  const next =
-    nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/jobs";
   const params = new URLSearchParams();
-  params.set("next", next);
+  params.set("next", safeNextPath(nextPath));
   if (sessionEnded) params.set("reason", "session_ended");
   return `/?${params.toString()}`;
+}
+
+export function sessionGateLead(sessionEnded: boolean): string {
+  return sessionEnded ? "Your sign-in ended." : "You are signed out.";
+}
+
+/** Signed-out / dead-session banner for share, time, and account. */
+export function signedOutGate(input: {
+  next: string;
+  sessionEnded?: boolean;
+  detail: string;
+}): { lead: string; href: string; text: string } {
+  const ended = Boolean(input.sessionEnded);
+  const lead = sessionGateLead(ended);
+  const href = signInContinuePath(input.next, ended);
+  return { lead, href, text: `${lead} Sign in ${input.detail}` };
+}
+
+export type InviteLanding =
+  | { kind: "form" }
+  | {
+      kind: "blocked";
+      title: string;
+      body: string;
+      action: "signin" | "jobs" | "switch";
+    };
+
+export function inviteEmailsConflict(
+  inviteeEmail: string | null | undefined,
+  sessionEmail: string | null | undefined,
+): boolean {
+  if (!inviteeEmail || !sessionEmail) return false;
+  return inviteeEmail.trim().toLowerCase() !== sessionEmail.trim().toLowerCase();
+}
+
+/** What the invite page shows before the accept form. Success after redeem is separate. */
+export function inviteLanding(input: {
+  status: "valid" | "expired" | "used" | "not_found";
+  signedIn: boolean;
+  inviteeEmail?: string | null;
+  sessionEmail?: string | null;
+}): InviteLanding {
+  if (input.status === "not_found") {
+    return {
+      kind: "blocked",
+      title: "Invite not found",
+      body: "This link is not a valid crew invite.",
+      action: "signin",
+    };
+  }
+  if (input.status === "expired") {
+    return {
+      kind: "blocked",
+      title: "Invite expired",
+      body: "Ask the GC or foreman for a new link.",
+      action: "signin",
+    };
+  }
+  if (input.status === "used") {
+    return input.signedIn
+      ? {
+          kind: "blocked",
+          title: "Invite already used",
+          body: "This link is single-use and already on an account. Open jobs to continue. The invited role stays on the account that accepted it.",
+          action: "jobs",
+        }
+      : {
+          kind: "blocked",
+          title: "Invite already used",
+          body: "This link is single-use. Sign in with the email that accepted it. The invited role stays on that account.",
+          action: "signin",
+        };
+  }
+  if (
+    input.signedIn &&
+    inviteEmailsConflict(input.inviteeEmail, input.sessionEmail)
+  ) {
+    return {
+      kind: "blocked",
+      title: "Different email",
+      body: "This invite is for a different email. Sign out, then accept it with the invited address.",
+      action: "switch",
+    };
+  }
+  return { kind: "form" };
+}
+
+export function inviteFormHelper(input: {
+  signedIn: boolean;
+  role: "viewer" | "full" | null;
+  sessionEmail?: string | null;
+}): string {
+  const next =
+    input.role === "full"
+      ? "Then connect your own Procore."
+      : "Then open packs read-only.";
+  if (input.signedIn) {
+    const who = input.sessionEmail ? ` as ${input.sessionEmail}` : "";
+    return `Signed in${who}. Tap accept to store this invite on your account. ${next} Role is baked into this link.`;
+  }
+  return `Sign in or create an account with this email. The invite role is stored on that account. ${next} Role is baked into this link.`;
+}
+
+export function inviteConfirmMessage(mode: "otp" | "signup"): string {
+  if (mode === "otp") {
+    return "Check your email for a sign-in link. It brings you back to this invite. Then tap Accept.";
+  }
+  return "Check your email to confirm this account. The link brings you back to this invite. Then tap Accept.";
+}
+
+export function inviteAcceptedMessage(role: "viewer" | "full"): {
+  title: string;
+  body: string;
+} {
+  if (role === "full") {
+    return {
+      title: "You are in as full crew",
+      body: "Connect your own Procore next. Access stays full crew. Connecting does not change the invite role.",
+    };
+  }
+  return {
+    title: "You are in as view only",
+    body: "View-only session. Sheets and red boxes only. Connecting Procore will not upgrade this account.",
+  };
 }
 
 const AUTH_ERROR_MAP: Array<[RegExp, string]> = [

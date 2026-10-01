@@ -49,13 +49,60 @@ export function isStubUserId(userId: string | null | undefined): boolean {
   return typeof userId === "string" && userId.startsWith("stub:");
 }
 
+/** Real session cookie, including chunked `sb-<ref>-auth-token.0`. Not the code verifier. */
+export function isSupabaseAuthSessionCookieName(name: string): boolean {
+  return /^sb-[a-z0-9]+-auth-token(?:\.\d+)?$/i.test(name);
+}
+
+/** Session chunks plus the PKCE verifier. Cleared on sign-out and failed callbacks. */
+export function isSupabaseAuthRelatedCookieName(name: string): boolean {
+  return /^sb-[a-z0-9]+-auth-token(?:\.\d+|-code-verifier)?$/i.test(name);
+}
+
 /**
  * True when a Supabase Auth cookie is still on the request.
  * A code-verifier cookie alone is not a session.
  * Chunked cookies look like `sb-<ref>-auth-token.0`.
  */
 export function hasSupabaseAuthCookie(names: readonly string[]): boolean {
-  return names.some((name) => /^sb-[a-z0-9]+-auth-token(?:\.\d+)?$/i.test(name));
+  return names.some((name) => isSupabaseAuthSessionCookieName(name));
+}
+
+export function supabaseAuthCookieNamesFromHeader(
+  cookieHeader: string | null | undefined,
+): string[] {
+  if (!cookieHeader) return [];
+  const names: string[] = [];
+  for (const part of cookieHeader.split(";")) {
+    const raw = part.trim();
+    if (!raw) continue;
+    const eq = raw.indexOf("=");
+    const name = (eq === -1 ? raw : raw.slice(0, eq)).trim();
+    if (isSupabaseAuthRelatedCookieName(name)) names.push(name);
+  }
+  return names;
+}
+
+export function expireNamedCookie(name: string, secure: boolean) {
+  return {
+    name,
+    value: "",
+    httpOnly: true,
+    path: "/",
+    sameSite: "lax" as const,
+    maxAge: 0,
+    secure,
+  };
+}
+
+/** Drop leftover Supabase auth cookies so a dead session cannot look signed in. */
+export function expireSupabaseAuthCookies(
+  cookieHeader: string | null | undefined,
+  secure: boolean,
+) {
+  return supabaseAuthCookieNamesFromHeader(cookieHeader).map((name) =>
+    expireNamedCookie(name, secure),
+  );
 }
 
 export async function resolveSessionRole(

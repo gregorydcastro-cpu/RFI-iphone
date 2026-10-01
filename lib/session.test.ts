@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  expireSupabaseAuthCookies,
   hasSupabaseAuthCookie,
   isAuthUserId,
   isStubUserId,
@@ -8,6 +9,7 @@ import {
   optionalFieldRole,
   resolveSessionRole,
   roleFromAppMetadata,
+  supabaseAuthCookieNamesFromHeader,
 } from "./session.ts";
 
 const forbidden = /Brown|Rossi|Danoff|Suffolk|ILSB|EL107/i;
@@ -69,6 +71,22 @@ test("supabase auth cookie detects a dead session, not the code verifier", () =>
   assert.equal(hasSupabaseAuthCookie(["sb-abc123-auth-token"]), true);
   assert.equal(hasSupabaseAuthCookie(["sb-abc123-auth-token.0"]), true);
   assert.equal(hasSupabaseAuthCookie(["gcfieldlog_procore_linked"]), false);
+});
+
+test("dead auth cookies are named for expiry, including chunks", () => {
+  const header =
+    "sb-abc123-auth-token.0=aaa; sb-abc123-auth-token.1=bbb; sb-abc123-auth-token-code-verifier=ccc; gcfieldlog_procore_linked=1";
+  assert.deepEqual(supabaseAuthCookieNamesFromHeader(header), [
+    "sb-abc123-auth-token.0",
+    "sb-abc123-auth-token.1",
+    "sb-abc123-auth-token-code-verifier",
+  ]);
+  const expired = expireSupabaseAuthCookies(header, true);
+  assert.equal(expired.length, 3);
+  assert.equal(expired[0]?.maxAge, 0);
+  assert.equal(expired[0]?.value, "");
+  assert.equal(expired[0]?.httpOnly, true);
+  assert.equal(expired.every((cookie) => cookie.name.startsWith("sb-")), true);
 });
 
 test("session helpers stay Maple Point / fictional only", () => {

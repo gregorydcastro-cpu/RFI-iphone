@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
+import { ReadAloudButton } from "@/components/ReadAloudButton";
+import { signedOutGate } from "@/lib/authMessages";
 import {
   MAPLE_POINT_REQUEST_ID,
   packHrefForSheet,
@@ -47,6 +49,7 @@ function pinMarkClass(mark: ShareRefreshPinMark | undefined): string {
 
 type Props = {
   signedIn: boolean;
+  sessionEnded?: boolean;
   canRefresh: boolean;
   procoreConnected: boolean;
   roleLabel: string;
@@ -57,6 +60,7 @@ type Props = {
 
 export function SharePortal({
   signedIn,
+  sessionEnded = false,
   canRefresh,
   procoreConnected,
   roleLabel,
@@ -254,15 +258,26 @@ export function SharePortal({
   }
 
   if (!signedIn) {
+    const gate = signedOutGate({
+      next: "/share",
+      sessionEnded,
+      detail: "to create share folders and pin Maple Point sheets.",
+    });
     return (
       <section className="border border-line bg-panel p-5">
         <p className="text-base text-paper">
-          You are signed out.{" "}
-          <Link href="/?next=/share" className="font-semibold text-accent underline">
+          {gate.lead}{" "}
+          <Link href={gate.href} className="font-semibold text-accent underline">
             Sign in
           </Link>{" "}
           to create share folders and pin Maple Point sheets.
         </p>
+        <ReadAloudButton
+          id="share-signed-out"
+          text={gate.text}
+          label="Hear this"
+          className="mt-3"
+        />
       </section>
     );
   }

@@ -1,3 +1,5 @@
+import { safeNextPath } from "./authMessages.ts";
+
 /**
  * Production Auth hosts for GC Field Log.
  *
@@ -93,7 +95,7 @@ export function authAppOrigin(request: Request): string {
 
 export function authCallbackUrl(origin: string, nextPath = "/jobs"): string {
   const base = origin.replace(/\/$/, "") || DEFAULT_AUTH_ORIGIN;
-  const next = nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/jobs";
+  const next = safeNextPath(nextPath);
   return `${base}${AUTH_CALLBACK_PATH}?next=${encodeURIComponent(next)}`;
 }
 

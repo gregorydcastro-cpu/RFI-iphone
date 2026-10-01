@@ -122,6 +122,14 @@ test("authCallbackUrl stays on-site", () => {
     authCallbackUrl("https://www.gcfieldlog.com", "https://evil.example"),
     "https://www.gcfieldlog.com/auth/callback?next=%2Fjobs",
   );
+  assert.equal(
+    authCallbackUrl("https://www.gcfieldlog.com", "/\\evil.example"),
+    "https://www.gcfieldlog.com/auth/callback?next=%2Fjobs",
+  );
+  assert.equal(
+    authCallbackUrl("https://www.gcfieldlog.com", "/invite/tok_demo"),
+    "https://www.gcfieldlog.com/auth/callback?next=%2Finvite%2Ftok_demo",
+  );
   assert.equal(AUTH_CALLBACK_PATH, "/auth/callback");
 });
 

@@ -3,7 +3,7 @@ import { SharePortal } from "@/components/SharePortal";
 import { SHARE_CATALOG } from "@/lib/shareCatalog";
 import { listSharePortal } from "@/lib/shareStore";
 import { getProcoreConnectionView } from "@/lib/procoreStatus";
-import { readAppSession } from "@/lib/session.server";
+import { readAppSession, supabaseSessionCookiePresent } from "@/lib/session.server";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -17,6 +17,7 @@ export const metadata: Metadata = {
 
 export default async function SharePage() {
   const session = await readAppSession();
+  const sessionEnded = !session && (await supabaseSessionCookiePresent());
   const view = await getProcoreConnectionView(session);
   const canRefresh = view.role === "puller";
   const snapshot = session ? await listSharePortal(session.userId) : null;
@@ -48,6 +49,7 @@ export default async function SharePage() {
         <div className="mt-6">
           <SharePortal
             signedIn={view.signedIn}
+            sessionEnded={sessionEnded}
             canRefresh={canRefresh}
             procoreConnected={view.connected}
             roleLabel={

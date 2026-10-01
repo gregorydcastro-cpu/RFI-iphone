@@ -11,6 +11,7 @@ import {
   type Worker,
 } from "@/lib/time";
 import { ReadAloudButton } from "@/components/ReadAloudButton";
+import { sessionGateLead } from "@/lib/authMessages";
 import { LOCATION_ENABLE_HINT, useSiteGeofence } from "@/components/useSiteGeofence";
 import { useState } from "react";
 
@@ -24,6 +25,7 @@ type Props = {
   workerId: string;
   pin: string;
   signedIn: boolean;
+  sessionEnded?: boolean;
   sessionEmail: string | null;
   pending: boolean;
   error: string | null;
@@ -45,6 +47,7 @@ export function WorkerPunchCard({
   workerId,
   pin,
   signedIn,
+  sessionEnded = false,
   sessionEmail,
   pending,
   error,
@@ -73,7 +76,10 @@ export function WorkerPunchCard({
     : last?.punch_type === "out"
       ? "Punched out. You are off the clock."
       : "Not punched in. You are off the clock.";
-  const spoken = notice ?? error ?? hint ?? statusLine;
+  const gateLine = signedIn
+    ? null
+    : `${sessionGateLead(sessionEnded)} Sign in before punching.`;
+  const spoken = notice ?? error ?? hint ?? gateLine ?? statusLine;
 
   async function punch(type: "in" | "out") {
     setHint(null);
@@ -170,9 +176,9 @@ export function WorkerPunchCard({
         )}
       </p>
 
-      {!signedIn ? (
+      {!signedIn && gateLine ? (
         <p className="mt-3 text-base text-cta" role="status">
-          You are signed out. Sign in before punching.
+          {gateLine}
         </p>
       ) : null}
       {hint ? (

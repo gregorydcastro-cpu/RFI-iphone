@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookieSecureFromRequest, procoreLinkedCookieOptions } from "@/lib/auth";
 import { authAppOrigin, authCallbackUrl } from "@/lib/authHosts";
-import { friendlyAuthError } from "@/lib/authMessages";
+import { friendlyAuthError, inviteAcceptPath } from "@/lib/authMessages";
 import { fieldRoleFromInviteRole, normalizeInviteeEmail } from "@/lib/invites";
 import { redeemInvite } from "@/lib/inviteStore";
 import { applyProfileRole } from "@/lib/profiles";
@@ -69,7 +69,7 @@ export async function POST(request: Request, { params }: Props) {
       options: {
         emailRedirectTo: authCallbackUrl(
           authAppOrigin(request),
-          `/invite/${trimmed}`,
+          inviteAcceptPath(trimmed),
         ),
         shouldCreateUser: true,
       },
@@ -110,7 +110,7 @@ export async function POST(request: Request, { params }: Props) {
         options: {
           emailRedirectTo: authCallbackUrl(
             authAppOrigin(request),
-            `/invite/${trimmed}`,
+            inviteAcceptPath(trimmed),
           ),
         },
       });
@@ -143,7 +143,13 @@ export async function POST(request: Request, { params }: Props) {
       });
       if (error || !data.user || !data.session) {
         return json(
-          { ok: false, error: error?.message || "Email or password is incorrect." },
+          {
+            ok: false,
+            error: friendlyAuthError(
+              error?.message,
+              "Email or password is incorrect.",
+            ),
+          },
           401,
         );
       }

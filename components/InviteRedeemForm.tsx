@@ -7,7 +7,16 @@ import {
   FieldAuthModeSwitch,
   FIELD_AUTH_INPUT_CLASS,
 } from "@/components/FieldAuthModeSwitch";
-import { friendlyAuthError, type FieldAuthMode } from "@/lib/authMessages";
+import { ReadAloudButton } from "@/components/ReadAloudButton";
+import {
+  friendlyAuthError,
+  inviteAcceptedMessage,
+  inviteConfirmMessage,
+  inviteFormHelper,
+  inviteLanding,
+  inviteSwitchAccountHref,
+  type FieldAuthMode,
+} from "@/lib/authMessages";
 import type { InviteRole, InviteStatus } from "@/lib/invites";
 
 type Props = {
@@ -38,7 +47,9 @@ export function InviteRedeemForm({
   signedIn,
 }: Props) {
   const router = useRouter();
-  const [email, setEmail] = useState(inviteeEmail ?? sessionEmail ?? "");
+  const [email, setEmail] = useState(
+    signedIn ? (sessionEmail ?? inviteeEmail ?? "") : (inviteeEmail ?? ""),
+  );
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<FieldAuthMode>("signin");
   const [error, setError] = useState<string | null>(null);
@@ -46,8 +57,13 @@ export function InviteRedeemForm({
   const [pending, setPending] = useState(false);
   const [redeemedRole, setRedeemedRole] = useState<InviteRole | null>(null);
 
-  const lockedEmail = Boolean(inviteeEmail);
+  const lockedEmail = signedIn || Boolean(inviteeEmail);
   const roleLabel = role === "full" ? "full crew" : "view only";
+  const helper = inviteFormHelper({
+    signedIn,
+    role,
+    sessionEmail,
+  });
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -73,14 +89,10 @@ export function InviteRedeemForm({
         return;
       }
       if (data.needsEmailConfirm) {
-        setInfo(
-          mode === "otp"
-            ? "Check your email for a sign-in link, then reopen this invite."
-            : "Check your email to confirm this account, then reopen this invite.",
-        );
+        setInfo(inviteConfirmMessage(mode === "otp" ? "otp" : "signup"));
         return;
       }
-      setRedeemedRole(data.invite_role ?? role);
+      setRedeemedRole(data.invite_role ?? role ?? "viewer");
       router.refresh();
     } catch {
       setError("Could not reach the invite service. Try again.");
@@ -89,48 +101,22 @@ export function InviteRedeemForm({
     }
   }
 
-  if (status === "not_found") {
-    return (
-      <StatusCard
-        title="Invite not found"
-        body="This link is not a valid crew invite."
-      />
-    );
-  }
-  if (status === "expired") {
-    return (
-      <StatusCard
-        title="Invite expired"
-        body="Ask the GC or foreman for a new link."
-      />
-    );
-  }
-  if (status === "used") {
-    return (
-      <StatusCard
-        title="Invite already used"
-        body="This link is single-use. Sign in with the email that accepted it — the invited role stays on that account."
-      />
-    );
-  }
-
+  // Keep the success card ahead of the refreshed "used" status so a
+  // single-use redeem does not flip into a failure.
   if (redeemedRole) {
-    const full = redeemedRole === "full";
+    const accepted = inviteAcceptedMessage(redeemedRole === "full" ? "full" : "viewer");
+    const spoken = `${accepted.title}. ${accepted.body}`;
     return (
       <section className="w-full max-w-lg space-y-4 border border-line bg-panel p-5">
         <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
           Invite
         </p>
         <h1 className="font-display text-2xl tracking-wide text-paper">
-          You are in as {full ? "full crew" : "view only"}
+          {accepted.title}
         </h1>
-        <p className="text-sm text-muted">
-          {full
-            ? "Connect your own Procore next. Access stays full crew — connecting does not change the invite role."
-            : "View-only session. Sheets and red boxes only. Connecting Procore will not upgrade this account."}
-        </p>
+        <p className="text-sm text-muted">{accepted.body}</p>
         <div className="flex flex-wrap gap-3">
-          {full ? (
+          {redeemedRole === "full" ? (
             <a
               href="/api/procore/connect"
               className="bg-cta px-5 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover"
@@ -145,9 +131,35 @@ export function InviteRedeemForm({
             Open jobs
           </Link>
         </div>
+        <ReadAloudButton id="invite-accepted" text={spoken} label="Hear this" />
       </section>
     );
   }
+
+  const landing = inviteLanding({
+    status,
+    signedIn,
+    inviteeEmail,
+    sessionEmail,
+  });
+  if (landing.kind === "blocked") {
+    const action =
+      landing.action === "jobs"
+        ? { href: "/jobs", label: "Open jobs" }
+        : landing.action === "switch"
+          ? { href: inviteSwitchAccountHref(token), label: "Sign out" }
+          : { href: "/", label: "Sign in" };
+    return (
+      <StatusCard
+        title={landing.title}
+        body={landing.body}
+        actionHref={action.href}
+        actionLabel={action.label}
+      />
+    );
+  }
+
+  const spoken = error ?? info ?? helper;
 
   return (
     <form
@@ -161,13 +173,7 @@ export function InviteRedeemForm({
         <h1 className="font-display mt-1 text-2xl tracking-wide text-paper sm:text-3xl">
           Join as {roleLabel}
         </h1>
-        <p className="mt-2 text-sm text-muted">
-          {signedIn
-            ? "This accepts the invite on your signed-in account."
-            : "Sign in or create an account with this email, then the invite role is stored on that account."}{" "}
-          {role === "full" ? "Then connect your own Procore." : "Open packs read-only."}{" "}
-          Role is baked into this link and cannot be changed here.
-        </p>
+        <p className="mt-2 text-sm text-muted">{helper}</p>
         {expiresAt ? (
           <p className="mt-2 text-xs text-tan">
             Expires {new Date(expiresAt).toLocaleString()}. Single-use.
@@ -219,6 +225,7 @@ export function InviteRedeemForm({
           {info}
         </p>
       ) : null}
+      <ReadAloudButton id="invite-status" text={spoken} label="Hear this" />
       <button
         type="submit"
         disabled={pending}
@@ -230,7 +237,17 @@ export function InviteRedeemForm({
   );
 }
 
-function StatusCard({ title, body }: { title: string; body: string }) {
+function StatusCard({
+  title,
+  body,
+  actionHref,
+  actionLabel,
+}: {
+  title: string;
+  body: string;
+  actionHref: string;
+  actionLabel: string;
+}) {
   return (
     <section className="w-full max-w-lg space-y-3 border border-line bg-panel p-5">
       <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
@@ -238,9 +255,20 @@ function StatusCard({ title, body }: { title: string; body: string }) {
       </p>
       <h1 className="font-display text-2xl tracking-wide text-paper">{title}</h1>
       <p className="text-sm text-muted">{body}</p>
-      <Link href="/" className="inline-block text-sm text-accent underline">
-        Sign in
-      </Link>
+      {actionHref.startsWith("/api/") ? (
+        <a href={actionHref} className="inline-block text-sm text-accent underline">
+          {actionLabel}
+        </a>
+      ) : (
+        <Link href={actionHref} className="inline-block text-sm text-accent underline">
+          {actionLabel}
+        </Link>
+      )}
+      <ReadAloudButton
+        id="invite-blocked"
+        text={`${title}. ${body}`}
+        label="Hear this"
+      />
     </section>
   );
 }
