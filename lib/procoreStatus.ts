@@ -1,4 +1,5 @@
 import type { FieldRoleName } from "./auth";
+import { procoreReconnectNeeded } from "./procoreAuthHealth";
 import {
   diagnoseSupabaseServiceRoleKey,
   fetchProcoreConnectionStatus,
@@ -7,6 +8,8 @@ import {
   type ProcoreConnectionStatus,
 } from "./procoreConnections";
 import { isProcoreOAuthConfigured } from "./procoreOAuth";
+import { resolveProcoreAccess } from "./procoreToken";
+import { accessTokenNeedsRefresh } from "./procoreTokenExpiry";
 import type { AppSession } from "./session.server";
 
 export type ProcoreConnectionView = {
@@ -14,7 +17,12 @@ export type ProcoreConnectionView = {
   role: FieldRoleName | null;
   email: string | null;
   userId: string | null;
+  /** False when there is no row, or the refresh token can no longer sign in. */
   connected: boolean;
+  /** Stored row exists, but Procore needs the same Connect flow again. */
+  reconnectNeeded: boolean;
+  /** Token was due for refresh and Procore did not answer. Still connected. */
+  refreshDeferred: boolean;
   companyId: string | null;
   expiresAt: string | null;
   oauthConfigured: boolean;
@@ -27,6 +35,7 @@ export type ProcoreConnectionView = {
 
 export async function getProcoreConnectionView(
   session: AppSession | null,
+  options?: { probe?: boolean },
 ): Promise<ProcoreConnectionView> {
   const oauthConfigured = isProcoreOAuthConfigured();
   const storageConfigured = isProcoreTokenStorageConfigured();
@@ -41,6 +50,8 @@ export async function getProcoreConnectionView(
       email: null,
       userId: null,
       connected: false,
+      reconnectNeeded: false,
+      refreshDeferred: false,
       companyId: null,
       expiresAt: null,
       oauthConfigured,
@@ -51,17 +62,47 @@ export async function getProcoreConnectionView(
     };
   }
 
-  const connection =
+  let connection =
     storageConfigured && storageKeyValid
       ? await fetchProcoreConnectionStatus(session.userId)
       : null;
+  let refreshDeferred = false;
+  let reconnectForced = false;
+
+  if (
+    options?.probe &&
+    connection &&
+    connection.hasRefreshToken &&
+    accessTokenNeedsRefresh(connection.expiresAt)
+  ) {
+    const resolved = await resolveProcoreAccess(session.userId);
+    if (resolved.ok || resolved.reason === "reconnect_needed") {
+      connection =
+        (await fetchProcoreConnectionStatus(session.userId)) ?? connection;
+    }
+    if (!resolved.ok && resolved.reason === "reconnect_needed") {
+      reconnectForced = true;
+    } else if (!resolved.ok && resolved.reason === "refresh_unavailable") {
+      refreshDeferred = true;
+    }
+  }
+
+  const reconnectNeeded = connection
+    ? reconnectForced ||
+      procoreReconnectNeeded({
+        expiresAt: connection.expiresAt,
+        hasRefreshToken: connection.hasRefreshToken,
+      })
+    : false;
 
   return {
     signedIn: true,
     role: session.role,
     email: session.email,
     userId: session.userId,
-    connected: Boolean(connection),
+    connected: Boolean(connection) && !reconnectNeeded,
+    reconnectNeeded,
+    refreshDeferred: refreshDeferred && !reconnectNeeded,
     companyId: connection?.companyId ?? null,
     expiresAt: connection?.expiresAt ?? null,
     oauthConfigured,

@@ -7,13 +7,17 @@ import {
   isSupabaseServiceRoleKeyValid,
   upsertProcoreConnection,
 } from "@/lib/procoreConnections";
+import { procoreReturnFromCookie, safeProcoreReturnPath } from "@/lib/procoreAuthHealth";
 import {
+  PROCORE_OAUTH_NEXT_COOKIE,
   PROCORE_OAUTH_REDIRECT_COOKIE,
   PROCORE_OAUTH_STATE_COOKIE,
   exchangeAuthorizationCode,
   expiresAtFromToken,
   fetchProcoreAccount,
   getProcoreOAuthConfig,
+  oauthCookieDomainFromRequest,
+  oauthNextCookieOptions,
   procoreOAuthCookies,
   redirectUriForTokenExchange,
 } from "@/lib/procoreOAuth";
@@ -40,6 +44,22 @@ function clearOAuthCookies(
   for (const cookie of procoreOAuthCookies(null, secure, request)) {
     response.cookies.set(cookie);
   }
+  response.cookies.set(
+    oauthNextCookieOptions(null, secure, oauthCookieDomainFromRequest(request)),
+  );
+}
+
+function redirectAfterConnect(
+  request: Request,
+  nextPath: string | null,
+  params: Record<string, string>,
+): NextResponse {
+  const target = safeProcoreReturnPath(nextPath) ?? "/account";
+  const url = new URL(target, request.url);
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.set(key, value);
+  }
+  return NextResponse.redirect(url);
 }
 
 /**
@@ -158,7 +178,12 @@ export async function GET(request: Request) {
     return response;
   }
 
-  const response = redirectAccount(request, { procore: "connected" });
+  const nextPath = procoreReturnFromCookie(
+    jar.get(PROCORE_OAUTH_NEXT_COOKIE)?.value,
+  );
+  const response = redirectAfterConnect(request, nextPath, {
+    procore: "connected",
+  });
   clearOAuthCookies(response, secure, request);
   response.cookies.set(procoreLinkedCookieOptions(true, secure));
   return response;

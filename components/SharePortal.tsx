@@ -20,6 +20,7 @@ import {
   type ShareRefreshOutcome,
   type ShareRefreshPinMark,
 } from "@/lib/shareRefreshStatus";
+import { SHARE_REFRESH_CLIENT_MS } from "@/lib/procoreAuthHealth";
 import type { ShareFolderWithPins } from "@/lib/shareStore";
 
 type RefreshPayload = {
@@ -52,6 +53,7 @@ type Props = {
   sessionEnded?: boolean;
   canRefresh: boolean;
   procoreConnected: boolean;
+  reconnectNeeded?: boolean;
   roleLabel: string;
   catalog: ShareCatalog;
   initialFolders: ShareFolderWithPins[];
@@ -63,6 +65,7 @@ export function SharePortal({
   sessionEnded = false,
   canRefresh,
   procoreConnected,
+  reconnectNeeded = false,
   roleLabel,
   catalog,
   initialFolders,
@@ -91,7 +94,11 @@ export function SharePortal({
     () => folders.reduce((sum, folder) => sum + folder.pins.length, 0),
     [folders],
   );
-  const refreshNote = shareRefreshBlockedMessage({ canRefresh, procoreConnected });
+  const refreshNote = shareRefreshBlockedMessage({
+    canRefresh,
+    procoreConnected,
+    reconnectNeeded,
+  });
 
   async function reload() {
     const response = await fetch("/api/share/folders", { cache: "no-store" });
@@ -220,7 +227,12 @@ export function SharePortal({
     setStatus(null);
     setOutcome(null);
     try {
-      const response = await fetch("/api/share/refresh-all", { method: "POST" });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), SHARE_REFRESH_CLIENT_MS);
+      const response = await fetch("/api/share/refresh-all", {
+        method: "POST",
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timer));
       let data: RefreshPayload;
       try {
         data = (await response.json()) as RefreshPayload;
@@ -245,10 +257,13 @@ export function SharePortal({
     } catch (caught) {
       const message =
         caught instanceof Error ? caught.message : "Refresh all did not finish. Try again.";
+      const aborted = caught instanceof Error && caught.name === "AbortError";
       setRefreshError(
-        message === "Failed to fetch"
-          ? "Refresh all did not finish. Check the connection and try again."
-          : message,
+        aborted
+          ? shareRefreshFailureMessage({ status: 0 })
+          : message === "Failed to fetch"
+            ? "Refresh all did not finish. Check the connection and try again."
+            : message,
       );
     } finally {
       lock.current = false;
@@ -329,9 +344,15 @@ export function SharePortal({
           ) : (
             <>
               {refreshError ? (
-                <p role="alert" className="text-sm text-cta">
-                  {refreshError}
-                </p>
+                <div role="status">
+                  <p className="text-sm text-paper">{refreshError}</p>
+                  <ReadAloudButton
+                    id="share-refresh-status"
+                    text={refreshError}
+                    label="Hear this"
+                    className="mt-2"
+                  />
+                </div>
               ) : null}
               {outcome ? (
                 <div
@@ -378,8 +399,18 @@ export function SharePortal({
                   ) : null}
                 </div>
               ) : null}
-              {!refreshError && !outcome && refreshNote ? (
-                <p className="text-sm text-tan">{refreshNote}</p>
+              {refreshNote ? (
+                <div>
+                  <p className="text-sm text-tan">{refreshNote}</p>
+                  {reconnectNeeded ? (
+                    <ReadAloudButton
+                      id="share-procore-reconnect"
+                      text={refreshNote}
+                      label="Hear this"
+                      className="mt-2"
+                    />
+                  ) : null}
+                </div>
               ) : null}
             </>
           )}

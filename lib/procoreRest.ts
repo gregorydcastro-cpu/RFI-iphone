@@ -6,8 +6,12 @@
  * (foreman only). Exact Procore project name, or optional
  * PROCORE_PROJECT_ALLOWLIST. DEMO_JOBS is not the REST gate.
  *
- * On missing tokens, expired refresh, empty sandbox companies, or API
- * errors, callers fall back to the Procore bot + cached room_packs.
+ * On missing tokens, a rejected refresh, empty sandbox companies, or API
+ * errors, callers fall back to the cached room pack. A rejected refresh
+ * is token_refresh_failed (reconnect). A timeout or 5xx is
+ * procore_unreachable (retry). Neither is reported as a missing job.
+ * The whole pull stops at PACK_REST_BUDGET_MS so a down Procore
+ * cannot walk companies until the function times out.
  */
 
 import type { DemoJob } from "./jobs";
@@ -22,13 +26,21 @@ import {
   mergeCachedLayout,
   restRoomPackFields,
 } from "./procorePackMap";
-import { resolveProjectForName } from "./procoreCompany";
 import {
-  getProcoreOAuthConfig,
+  isResolvableProjectName,
+  pickResolvedProject,
+  readProcoreId,
+  type ResolvedProcoreProject,
+} from "./procoreProjectMatch";
+import { readProjectAllowlist } from "./procoreAllowlist";
+import {
   procoreApiRequest,
 } from "./procoreOAuth";
 import {
-  getValidProcoreAccess,
+  markProcoreReconnectNeeded,
+} from "./procoreConnections";
+import {
+  resolveProcoreAccess,
   refreshStoredProcoreAccess,
   type ValidProcoreAccess,
 } from "./procoreToken";
@@ -42,13 +54,17 @@ export {
 const PAGE_SIZE = 100;
 const MAX_PAGES = 8;
 
+/** Cap for one room-pack REST walk, including token refresh. */
+export const PACK_REST_BUDGET_MS = 20_000;
+
 export type ProcoreRestPullReason =
   | "ok"
   | "missing_oauth"
   | "missing_tokens"
   | "token_refresh_failed"
   | "project_not_found"
-  | "api_error";
+  | "api_error"
+  | "procore_unreachable";
 
 export type ProcoreRestPull =
   | {
@@ -98,52 +114,193 @@ export function buildRestRoomPack(input: {
   );
 }
 
+type AuthedKind = "ok" | "reconnect" | "unreachable" | "error";
+
+type AuthedGet = {
+  access: ValidProcoreAccess;
+  body: unknown;
+  ok: boolean;
+  kind: AuthedKind;
+};
+
+function remainingMs(deadline: number): number {
+  return deadline - Date.now();
+}
+
 async function authedGet(
   access: ValidProcoreAccess,
   path: string,
-  extraHeaders?: Record<string, string>,
-): Promise<{ access: ValidProcoreAccess; body: unknown; ok: boolean }> {
+  extraHeaders: Record<string, string> | undefined,
+  deadline: number,
+): Promise<AuthedGet> {
+  if (remainingMs(deadline) < 500) {
+    return { access, body: null, ok: false, kind: "unreachable" };
+  }
   let current = access;
   let result = await procoreApiRequest(
     current.config,
     current.accessToken,
     path,
     extraHeaders,
+    remainingMs(deadline),
   );
   if (result.status === 401) {
-    const refreshed = await refreshStoredProcoreAccess(current.config, current.secrets);
-    if (!refreshed) {
-      return { access: current, body: null, ok: false };
+    if (remainingMs(deadline) < 500) {
+      return { access: current, body: null, ok: false, kind: "unreachable" };
     }
-    current = refreshed;
+    const refreshed = await refreshStoredProcoreAccess(current.config, current.secrets);
+    if (!refreshed.ok) {
+      return {
+        access: current,
+        body: null,
+        ok: false,
+        kind: refreshed.reason === "reconnect_needed" ? "reconnect" : "unreachable",
+      };
+    }
+    current = refreshed.access;
+    if (remainingMs(deadline) < 500) {
+      return { access: current, body: null, ok: false, kind: "unreachable" };
+    }
     result = await procoreApiRequest(
       current.config,
       current.accessToken,
       path,
       extraHeaders,
+      remainingMs(deadline),
     );
+    if (result.status === 401) {
+      await markProcoreReconnectNeeded(current.secrets.userId);
+      return { access: current, body: null, ok: false, kind: "reconnect" };
+    }
   }
-  return { access: current, body: result.body, ok: result.ok };
+  if (result.ok) return { access: current, body: result.body, ok: true, kind: "ok" };
+  if (result.status === 0 || result.status >= 500) {
+    return { access: current, body: result.body, ok: false, kind: "unreachable" };
+  }
+  return { access: current, body: result.body, ok: false, kind: "error" };
+}
+
+function reasonFromKind(
+  kind: AuthedKind,
+): "token_refresh_failed" | "procore_unreachable" | "api_error" {
+  if (kind === "reconnect") return "token_refresh_failed";
+  if (kind === "unreachable") return "procore_unreachable";
+  return "api_error";
 }
 
 async function listAll(
   access: ValidProcoreAccess,
   path: string,
-  extraHeaders?: Record<string, string>,
-): Promise<{ access: ValidProcoreAccess; items: unknown[]; ok: boolean }> {
+  extraHeaders: Record<string, string> | undefined,
+  deadline: number,
+): Promise<{
+  access: ValidProcoreAccess;
+  items: unknown[];
+  ok: boolean;
+  reason: ProcoreRestPullReason;
+}> {
   const items: unknown[] = [];
   let current = access;
   const joiner = path.includes("?") ? "&" : "?";
   for (let page = 1; page <= MAX_PAGES; page += 1) {
+    if (remainingMs(deadline) < 500) {
+      if (page === 1) {
+        return { access: current, items, ok: false, reason: "procore_unreachable" };
+      }
+      break;
+    }
     const paged = `${path}${joiner}per_page=${PAGE_SIZE}&page=${page}`;
-    const result = await authedGet(current, paged, extraHeaders);
+    const result = await authedGet(current, paged, extraHeaders, deadline);
     current = result.access;
-    if (!result.ok) return { access: current, items, ok: page === 1 ? false : true };
+    if (!result.ok) {
+      if (page === 1) {
+        return {
+          access: current,
+          items,
+          ok: false,
+          reason: reasonFromKind(result.kind),
+        };
+      }
+      break;
+    }
     const chunk = listFromBody(result.body);
     items.push(...chunk);
     if (chunk.length < PAGE_SIZE) break;
   }
-  return { access: current, items, ok: true };
+  return { access: current, items, ok: true, reason: "ok" };
+}
+
+/**
+ * Company + project lookup on the same authed client as the pack lists.
+ * A 401 refreshes once. It is not treated as "project not found".
+ */
+async function resolveProjectAuthed(
+  access: ValidProcoreAccess,
+  projectName: string,
+  deadline: number,
+): Promise<
+  | { ok: true; access: ValidProcoreAccess; project: ResolvedProcoreProject }
+  | {
+      ok: false;
+      access: ValidProcoreAccess;
+      reason: "token_refresh_failed" | "procore_unreachable" | "project_not_found" | "api_error";
+    }
+> {
+  const allowlist = readProjectAllowlist();
+  if (!isResolvableProjectName(projectName, allowlist)) {
+    return { ok: false, access, reason: "project_not_found" };
+  }
+
+  const companiesResult = await authedGet(
+    access,
+    "/rest/v1.0/companies",
+    undefined,
+    deadline,
+  );
+  if (!companiesResult.ok) {
+    return {
+      ok: false,
+      access: companiesResult.access,
+      reason: reasonFromKind(companiesResult.kind),
+    };
+  }
+  if (!Array.isArray(companiesResult.body)) {
+    return { ok: false, access: companiesResult.access, reason: "project_not_found" };
+  }
+
+  let current = companiesResult.access;
+  const projectsByCompany: Array<{ companyId: string; projects: unknown }> = [];
+  for (const company of companiesResult.body) {
+    const companyId = readProcoreId(company);
+    if (!companyId) continue;
+    if (remainingMs(deadline) < 500) {
+      return { ok: false, access: current, reason: "procore_unreachable" };
+    }
+    const projectsResult = await authedGet(
+      current,
+      `/rest/v1.0/projects?company_id=${encodeURIComponent(companyId)}`,
+      { "Procore-Company-Id": companyId },
+      deadline,
+    );
+    current = projectsResult.access;
+    if (!projectsResult.ok) {
+      const reason = reasonFromKind(projectsResult.kind);
+      if (reason === "token_refresh_failed" || reason === "procore_unreachable") {
+        return { ok: false, access: current, reason };
+      }
+      continue;
+    }
+    projectsByCompany.push({ companyId, projects: projectsResult.body });
+  }
+
+  const project = pickResolvedProject(
+    companiesResult.body,
+    projectsByCompany,
+    projectName,
+    allowlist,
+  );
+  if (!project) return { ok: false, access: current, reason: "project_not_found" };
+  return { ok: true, access: current, project };
 }
 
 export async function pullProcoreRoomPack(input: {
@@ -153,40 +310,57 @@ export async function pullProcoreRoomPack(input: {
   requestId: string;
   cached?: RoomPack | null;
 }): Promise<ProcoreRestPull> {
-  const access = await getValidProcoreAccess(input.userId);
-  if (!access) {
+  const deadline = Date.now() + PACK_REST_BUDGET_MS;
+  const resolvedAccess = await resolveProcoreAccess(input.userId);
+  if (!resolvedAccess.ok) {
+    const reason = resolvedAccess.reason;
     return {
       ok: false,
-      reason: getProcoreOAuthConfig() ? "missing_tokens" : "missing_oauth",
+      reason:
+        reason === "missing_oauth"
+          ? "missing_oauth"
+          : reason === "missing_tokens"
+            ? "missing_tokens"
+            : reason === "reconnect_needed"
+              ? "token_refresh_failed"
+              : "procore_unreachable",
     };
   }
 
-  const resolved = await resolveProjectForName(
-    access.config,
-    access.accessToken,
+  const resolved = await resolveProjectAuthed(
+    resolvedAccess.access,
     input.job.name,
+    deadline,
   );
-  if (!resolved) {
-    return { ok: false, reason: "project_not_found" };
+  if (!resolved.ok) {
+    return { ok: false, reason: resolved.reason };
   }
 
-  const headers = companyHeaders(resolved.companyId);
+  const headers = companyHeaders(resolved.project.companyId);
   const drawings = await listAll(
-    access,
-    `/rest/v1.0/projects/${encodeURIComponent(resolved.projectId)}/drawing_revisions?drawing_set_id=current_set`,
+    resolved.access,
+    `/rest/v1.0/projects/${encodeURIComponent(resolved.project.projectId)}/drawing_revisions?drawing_set_id=current_set`,
     headers,
+    deadline,
   );
   if (!drawings.ok) {
-    return { ok: false, reason: "api_error" };
+    return {
+      ok: false,
+      reason: drawings.reason === "ok" ? "api_error" : drawings.reason,
+    };
   }
 
   const rfis = await listAll(
     drawings.access,
-    `/rest/v1.0/projects/${encodeURIComponent(resolved.projectId)}/rfis`,
+    `/rest/v1.0/projects/${encodeURIComponent(resolved.project.projectId)}/rfis`,
     headers,
+    deadline,
   );
   if (!rfis.ok) {
-    return { ok: false, reason: "api_error" };
+    return {
+      ok: false,
+      reason: rfis.reason === "ok" ? "api_error" : rfis.reason,
+    };
   }
 
   const sheets = drawings.items
@@ -200,7 +374,7 @@ export async function pullProcoreRoomPack(input: {
     job: input.job,
     room: input.room,
     requestId: input.requestId,
-    projectId: resolved.projectId,
+    projectId: resolved.project.projectId,
     sheets,
     rfis: mappedRfis,
   });
@@ -208,19 +382,21 @@ export async function pullProcoreRoomPack(input: {
 
   console.info("[gcfieldlog] procore rest pull", {
     request_id: input.requestId,
-    company_id: resolved.companyId,
-    project_id: resolved.projectId,
+    company_id: resolved.project.companyId,
+    project_id: resolved.project.projectId,
     sheets: pack.sheets.length,
     rfis: pack.rfis.length,
-    token_refreshed: access.refreshed || drawings.access.refreshed,
+    token_refreshed:
+      resolvedAccess.access.refreshed || drawings.access.refreshed,
   });
 
   return {
     ok: true,
     reason: "ok",
     pack,
-    companyId: resolved.companyId,
-    projectId: resolved.projectId,
-    refreshedToken: access.refreshed || drawings.access.refreshed,
+    companyId: resolved.project.companyId,
+    projectId: resolved.project.projectId,
+    refreshedToken:
+      resolvedAccess.access.refreshed || drawings.access.refreshed,
   };
 }

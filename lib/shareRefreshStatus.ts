@@ -6,6 +6,10 @@
  * result into progress, success, and "could not refresh" lines.
  */
 
+import {
+  SHARE_RECONNECT_NOTE,
+  SHARE_REFRESH_TIMEOUT,
+} from "./procoreAuthHealth.ts";
 import type { ShareRefreshError, ShareRefreshItem } from "./shareRefresh";
 
 export const SHARE_REFRESH_PROGRESS_LABEL = "Checking pinned sheet revisions…";
@@ -224,8 +228,10 @@ export function describeShareRefreshOutcome(
 export function shareRefreshBlockedMessage(input: {
   canRefresh: boolean;
   procoreConnected: boolean;
+  reconnectNeeded?: boolean;
 }): string | null {
   if (!input.canRefresh) return PULLER_ONLY;
+  if (input.reconnectNeeded) return SHARE_RECONNECT_NOTE;
   if (!input.procoreConnected) return PROCORE_METADATA_ONLY;
   return null;
 }
@@ -234,6 +240,7 @@ export function shareRefreshFailureMessage(input: {
   status: number;
   error?: string;
 }): string {
+  if (input.status === 0) return SHARE_REFRESH_TIMEOUT;
   if (input.status === 401) return "Sign in to refresh pinned sheets.";
   if (input.status === 403) return PULLER_ONLY;
   const error = input.error?.trim() ?? "";

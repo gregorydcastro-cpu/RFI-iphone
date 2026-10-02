@@ -1,9 +1,12 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { cookieSecureFromRequest } from "@/lib/auth";
+import { safeProcoreReturnPath } from "@/lib/procoreAuthHealth";
 import {
   buildAuthorizeUrl,
   getProcoreOAuthConfig,
+  oauthCookieDomainFromRequest,
+  oauthNextCookieOptions,
   procoreConnectBounceUrl,
   procoreOAuthCookies,
   resolveProcoreRedirectUriFromRequest,
@@ -30,9 +33,13 @@ function redirectWithError(request: Request, reason: string): NextResponse {
  */
 export async function GET(request: Request) {
   const redirectUri = resolveProcoreRedirectUriFromRequest(request);
+  const nextPath = safeProcoreReturnPath(new URL(request.url).searchParams.get("next"));
   const bounce = procoreConnectBounceUrl(request, redirectUri);
   if (bounce) {
-    return NextResponse.redirect(bounce);
+    if (!nextPath) return NextResponse.redirect(bounce);
+    const bounced = new URL(bounce);
+    bounced.searchParams.set("next", nextPath);
+    return NextResponse.redirect(bounced);
   }
 
   const session = await readAppSession();
@@ -51,13 +58,21 @@ export async function GET(request: Request) {
   }
 
   const state = randomBytes(24).toString("hex");
+  const secure = cookieSecureFromRequest(request);
   const response = NextResponse.redirect(buildAuthorizeUrl(config, state));
   for (const cookie of procoreOAuthCookies(
     { state, redirectUri: config.redirectUri },
-    cookieSecureFromRequest(request),
+    secure,
     request,
   )) {
     response.cookies.set(cookie);
   }
+  response.cookies.set(
+    oauthNextCookieOptions(
+      nextPath,
+      secure,
+      oauthCookieDomainFromRequest(request),
+    ),
+  );
   return response;
 }

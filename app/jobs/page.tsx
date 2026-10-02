@@ -16,7 +16,7 @@ type Props = {
 export default async function JobsPage({ searchParams }: Props) {
   const query = await searchParams;
   const session = await requireAppSession("/jobs");
-  const view = await getProcoreConnectionView(session);
+  const view = await getProcoreConnectionView(session, { probe: true });
   const error = query.procore === "error" ? procoreErrorMessage(query.reason) : null;
   const canPull = view.role === "puller" && view.connected;
 
@@ -27,6 +27,7 @@ export default async function JobsPage({ searchParams }: Props) {
         role={view.role}
         procoreConnected={view.connected}
         procoreLinked={canPull}
+        procoreReconnect={view.reconnectNeeded}
       />
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
         <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
@@ -68,9 +69,11 @@ export default async function JobsPage({ searchParams }: Props) {
         <p className="mt-4 max-w-2xl text-sm text-muted">
           Fictional demo jobs only.
           {view.role === "puller"
-            ? view.connected
-              ? " Procore is connected for this puller."
-              : " Pullers must Connect Procore to pull with their own account."
+            ? view.reconnectNeeded
+              ? " Procore needs a reconnect before the next live pull."
+              : view.connected
+                ? " Procore is connected for this puller."
+                : " Pullers must Connect Procore to pull with their own account."
             : view.role === "full"
               ? " Full crew can open packs. Pull stays with a connected puller."
               : " This session is view only — it cannot trigger a Procore pull."}
@@ -86,7 +89,7 @@ export default async function JobsPage({ searchParams }: Props) {
           </p>
         ) : null}
         <div className="mt-6 max-w-lg space-y-4">
-          <ProcoreConnectCard view={view} compact />
+          <ProcoreConnectCard view={view} compact returnPath="/jobs" />
           <VoiceCommandBar
             mode="jobs"
             jobs={DEMO_JOBS}

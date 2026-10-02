@@ -10,6 +10,7 @@
  */
 
 import { readEnvAlias } from "./env.ts";
+import { PROCORE_RECONNECT_EXPIRES_AT } from "./procoreAuthHealth.ts";
 import {
   checkSupabaseServiceRoleKey,
   expectedSupabaseProjectRefFromEnv,
@@ -26,6 +27,8 @@ export type ProcoreConnectionStatus = {
   companyId: string | null;
   expiresAt: string | null;
   updatedAt: string | null;
+  /** True when a refresh token is stored. The token itself is never returned. */
+  hasRefreshToken: boolean;
   connected: true;
 };
 
@@ -155,7 +158,11 @@ export async function fetchProcoreConnectionStatus(
 
   const params = new URLSearchParams();
   params.set("user_id", `eq.${userId}`);
-  params.set("select", "user_id,email,company_id,expires_at,updated_at");
+  // refresh_token is read only to set hasRefreshToken. It is not returned.
+  params.set(
+    "select",
+    "user_id,email,company_id,expires_at,updated_at,refresh_token",
+  );
   params.set("limit", "1");
 
   const response = await restFetch(
@@ -173,17 +180,62 @@ export async function fetchProcoreConnectionStatus(
   }
   const json: unknown = await response.json().catch(() => null);
   const row = Array.isArray(json) ? json[0] : null;
+  return connectionStatusFromRow(row);
+}
+
+/**
+ * Map one status row. Drops access_token and refresh_token if they appear.
+ */
+export function connectionStatusFromRow(
+  row: unknown,
+): ProcoreConnectionStatus | null {
   if (!row || typeof row !== "object") return null;
   const record = row as Record<string, unknown>;
   if (typeof record.user_id !== "string") return null;
+  const refresh = record.refresh_token;
   return {
     userId: record.user_id,
     email: asStringOrNull(record.email),
     companyId: asStringOrNull(record.company_id),
     expiresAt: asStringOrNull(record.expires_at),
     updatedAt: asStringOrNull(record.updated_at),
+    hasRefreshToken: typeof refresh === "string" && refresh.trim().length > 0,
     connected: true,
   };
+}
+
+/**
+ * Refresh grant was rejected. Keep the row (notify_email stays) but
+ * clear the refresh token and expire the access token so the next
+ * status read says reconnect instead of signed in.
+ */
+export async function markProcoreReconnectNeeded(userId: string): Promise<boolean> {
+  const config = getSupabaseServiceConfig();
+  if (!config) return false;
+
+  const params = new URLSearchParams();
+  params.set("user_id", `eq.${userId}`);
+  const response = await restFetch(
+    config,
+    `${PROCORE_CONNECTIONS_TABLE}?${params.toString()}`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({
+        refresh_token: null,
+        expires_at: PROCORE_RECONNECT_EXPIRES_AT,
+        updated_at: new Date().toISOString(),
+      }),
+    },
+  );
+  if (!response) return false;
+  if (!response.ok) {
+    console.error("[gcfieldlog] procore reconnect mark was not ok", {
+      status: response.status,
+    });
+    return false;
+  }
+  return true;
 }
 
 export async function fetchProcoreConnectionSecrets(

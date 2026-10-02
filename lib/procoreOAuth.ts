@@ -8,6 +8,7 @@
  */
 
 import { readEnvAlias } from "./env";
+import { classifyProcoreTokenFailure } from "./procoreAuthHealth";
 import { readProcoreId } from "./procoreProjectMatch";
 import {
   isTrustedProcoreRedirectUri,
@@ -40,6 +41,7 @@ export {
 
 export const PROCORE_OAUTH_STATE_COOKIE = "gcfieldlog_procore_oauth_state";
 export const PROCORE_OAUTH_REDIRECT_COOKIE = "gcfieldlog_procore_oauth_redirect";
+export const PROCORE_OAUTH_NEXT_COOKIE = "gcfieldlog_procore_oauth_next";
 
 export type ProcoreOAuthConfigOptions = {
   request?: Request;
@@ -62,6 +64,11 @@ export type ProcoreTokenResponse = {
   refresh_token?: string;
   created_at?: number;
 };
+
+/** Refresh grant. Rejected means reconnect. Transient keeps stored tokens. */
+export type ProcoreTokenGrant =
+  | { ok: true; token: ProcoreTokenResponse }
+  | { ok: false; reason: "rejected" | "transient" };
 
 const TOKEN_TIMEOUT_MS = 12_000;
 
@@ -170,6 +177,24 @@ export function oauthRedirectCookieOptions(
   };
 }
 
+/** Same-site return path after authorize. Cleared with null. Query is encoded. */
+export function oauthNextCookieOptions(
+  nextPath: string | null,
+  secure: boolean,
+  domain?: string,
+): ProcoreOAuthCookie {
+  return {
+    name: PROCORE_OAUTH_NEXT_COOKIE,
+    value: nextPath ? encodeURIComponent(nextPath) : "",
+    httpOnly: true,
+    path: "/",
+    sameSite: "lax",
+    maxAge: nextPath ? 60 * 10 : 0,
+    secure,
+    ...(domain ? { domain } : {}),
+  };
+}
+
 /** State + the exact redirect_uri sent to /oauth/authorize. Clear with null. */
 export function procoreOAuthCookies(
   payload: { state: string; redirectUri: string } | null,
@@ -187,19 +212,20 @@ export async function exchangeAuthorizationCode(
   config: ProcoreOAuthConfig,
   code: string,
 ): Promise<ProcoreTokenResponse | null> {
-  return postToken(config, {
+  const grant = await postToken(config, {
     grant_type: "authorization_code",
     client_id: config.clientId,
     client_secret: config.clientSecret,
     code,
     redirect_uri: config.redirectUri,
   });
+  return grant.ok ? grant.token : null;
 }
 
 export async function refreshAccessToken(
   config: ProcoreOAuthConfig,
   refreshToken: string,
-): Promise<ProcoreTokenResponse | null> {
+): Promise<ProcoreTokenGrant> {
   return postToken(config, {
     grant_type: "refresh_token",
     client_id: config.clientId,
@@ -279,7 +305,7 @@ function stripSlash(value: string): string {
 async function postToken(
   config: ProcoreOAuthConfig,
   body: Record<string, string>,
-): Promise<ProcoreTokenResponse | null> {
+): Promise<ProcoreTokenGrant> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TOKEN_TIMEOUT_MS);
   try {
@@ -294,34 +320,41 @@ async function postToken(
       signal: controller.signal,
     });
     if (!response.ok) {
+      const reason = classifyProcoreTokenFailure(response.status);
       console.error("[gcfieldlog] procore token request was not ok", {
         status: response.status,
+        reason,
       });
-      return null;
+      return { ok: false, reason };
     }
     const json: unknown = await response.json().catch(() => null);
-    if (!json || typeof json !== "object") return null;
+    if (!json || typeof json !== "object") {
+      return { ok: false, reason: "transient" };
+    }
     const record = json as Record<string, unknown>;
     if (typeof record.access_token !== "string" || !record.access_token) {
-      return null;
+      return { ok: false, reason: "transient" };
     }
     return {
-      access_token: record.access_token,
-      token_type:
-        typeof record.token_type === "string" ? record.token_type : undefined,
-      expires_in:
-        typeof record.expires_in === "number" ? record.expires_in : undefined,
-      refresh_token:
-        typeof record.refresh_token === "string"
-          ? record.refresh_token
-          : undefined,
-      created_at:
-        typeof record.created_at === "number" ? record.created_at : undefined,
+      ok: true,
+      token: {
+        access_token: record.access_token,
+        token_type:
+          typeof record.token_type === "string" ? record.token_type : undefined,
+        expires_in:
+          typeof record.expires_in === "number" ? record.expires_in : undefined,
+        refresh_token:
+          typeof record.refresh_token === "string"
+            ? record.refresh_token
+            : undefined,
+        created_at:
+          typeof record.created_at === "number" ? record.created_at : undefined,
+      },
     };
   } catch (error) {
     const aborted = error instanceof Error && error.name === "AbortError";
     console.error("[gcfieldlog] procore token request failed", { aborted });
-    return null;
+    return { ok: false, reason: "transient" };
   } finally {
     clearTimeout(timer);
   }
@@ -338,9 +371,13 @@ export async function procoreApiRequest(
   accessToken: string,
   path: string,
   extraHeaders?: Record<string, string>,
+  timeoutMs: number = TOKEN_TIMEOUT_MS,
 ): Promise<ProcoreApiResult> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TOKEN_TIMEOUT_MS);
+  const timer = setTimeout(
+    () => controller.abort(),
+    Math.max(1, timeoutMs),
+  );
   try {
     const response = await fetch(`${config.apiBase}${path}`, {
       method: "GET",

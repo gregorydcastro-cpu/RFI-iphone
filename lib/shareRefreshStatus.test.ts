@@ -270,6 +270,14 @@ test("viewer and disconnected puller copy is honest", () => {
     shareRefreshBlockedMessage({ canRefresh: true, procoreConnected: true }),
     null,
   );
+  assert.equal(
+    shareRefreshBlockedMessage({
+      canRefresh: true,
+      procoreConnected: false,
+      reconnectNeeded: true,
+    }),
+    "Procore needs a reconnect. Refresh all still checks saved revisions. Reconnect before a live pack pull.",
+  );
   assert.equal(forbidden.test(PROCORE_AND_VIEWER), false);
 });
 
@@ -303,4 +311,8 @@ test("failed refresh hides cookie and table jargon", () => {
     "Could not load folders",
   );
   assert.equal(shareRefreshFailureMessage({ status: 500 }), "Refresh all did not finish. Try again.");
+  assert.equal(
+    shareRefreshFailureMessage({ status: 0 }),
+    "Refresh all didn't finish. Saved pins stay put. Retry.",
+  );
 });
