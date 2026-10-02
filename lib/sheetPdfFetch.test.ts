@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  EmptyPdfBodyError,
   fetchWithBoundedRetry,
   parseRetryAfterMs,
   readLimitedBytes,
@@ -205,6 +206,53 @@ test("a dropped PDF body retries, including a short Content-Length", async () =>
   assert.equal(short.ok, true);
   if (short.ok) assert.equal(short.body?.byteLength, 4);
   assert.equal(calls, 2);
+});
+
+test("an empty PDF body retries once, then stays empty", async () => {
+  let calls = 0;
+  const recovered = await fetchWithBoundedRetry(
+    () => ({ url: "https://www.googleapis.com/drive/v3/files/abc", init: {} }),
+    {
+      fetchImpl: async () => {
+        calls += 1;
+        if (calls === 1) {
+          return new Response(new Uint8Array(), {
+            status: 200,
+            headers: { "content-length": "0" },
+          });
+        }
+        return new Response(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]), {
+          status: 200,
+          headers: { "content-length": "5" },
+        });
+      },
+      consumeBody: (response) => readLimitedBytes(response),
+      sleep: async () => {},
+    },
+  );
+  assert.equal(recovered.ok, true);
+  if (recovered.ok) assert.equal(recovered.body?.byteLength, 5);
+  assert.equal(calls, 2);
+
+  calls = 0;
+  const exhausted = await fetchWithBoundedRetry(
+    () => ({ url: "https://www.googleapis.com/drive/v3/files/abc", init: {} }),
+    {
+      fetchImpl: async () => {
+        calls += 1;
+        return new Response(new Uint8Array(), { status: 200 });
+      },
+      consumeBody: (response) => readLimitedBytes(response),
+      sleep: async () => {},
+    },
+  );
+  assert.deepEqual(exhausted, { ok: false, kind: "empty", attempts: 2 });
+  assert.equal(calls, 2);
+
+  await assert.rejects(
+    () => readLimitedBytes(new Response(new Uint8Array(), { status: 200 })),
+    (error: unknown) => error instanceof EmptyPdfBodyError,
+  );
 });
 
 function shortPdfStream(declared: number): ReadableStream<Uint8Array> {

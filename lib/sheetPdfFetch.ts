@@ -28,7 +28,7 @@ export type FetchRetryOptions<T> = {
 
 export type FetchRetryResult<T> =
   | { ok: true; response: Response; body: T | undefined; attempts: number }
-  | { ok: false; kind: "timeout" | "unreachable"; attempts: number };
+  | { ok: false; kind: "timeout" | "unreachable" | "empty"; attempts: number };
 
 export function parseRetryAfterMs(
   header: string | null,
@@ -69,6 +69,33 @@ export class IncompleteDownloadError extends Error {
     super("incomplete download");
     this.name = "IncompleteDownloadError";
   }
+}
+
+/** A finished 2xx body with no bytes. Retried once, then a field error. */
+export class EmptyPdfBodyError extends Error {
+  constructor() {
+    super("empty pdf body");
+    this.name = "EmptyPdfBodyError";
+  }
+}
+
+function failureKind(error: unknown): "timeout" | "empty" | "unreachable" {
+  if (isTimeoutError(error)) return "timeout";
+  if (error instanceof EmptyPdfBodyError) return "empty";
+  return "unreachable";
+}
+
+function assertPdfBodyComplete(
+  byteLength: number,
+  contentLength: string | null,
+  contentEncoding: string | null,
+): void {
+  if (
+    isShortPdfDownload(byteLength, contentLength, contentEncoding)
+  ) {
+    throw new IncompleteDownloadError();
+  }
+  if (byteLength === 0) throw new EmptyPdfBodyError();
 }
 
 function defaultSleep(ms: number): Promise<void> {
@@ -124,11 +151,10 @@ export async function fetchWithBoundedRetry<T>(
         } catch (error) {
           clear();
           await cancelBody(response);
-          const timedOut = isTimeoutError(error);
           if (last) {
             return {
               ok: false,
-              kind: timedOut ? "timeout" : "unreachable",
+              kind: failureKind(error),
               attempts: i + 1,
             };
           }
@@ -142,11 +168,10 @@ export async function fetchWithBoundedRetry<T>(
       return { ok: true, response, body: undefined, attempts: i + 1 };
     } catch (error) {
       clear();
-      const timedOut = isTimeoutError(error);
       if (i === attempts - 1) {
         return {
           ok: false,
-          kind: timedOut ? "timeout" : "unreachable",
+          kind: failureKind(error),
           attempts: i + 1,
         };
       }
@@ -169,15 +194,11 @@ export async function readLimitedBytes(
   if (!response.body) {
     const buf = new Uint8Array(await response.arrayBuffer());
     if (buf.byteLength > maxBytes) return "too_large";
-    if (
-      isShortPdfDownload(
-        buf.byteLength,
-        lengthHeader,
-        response.headers.get("content-encoding"),
-      )
-    ) {
-      throw new IncompleteDownloadError();
-    }
+    assertPdfBodyComplete(
+      buf.byteLength,
+      lengthHeader,
+      response.headers.get("content-encoding"),
+    );
     return buf;
   }
   const reader = response.body.getReader();
@@ -194,9 +215,11 @@ export async function readLimitedBytes(
     }
     chunks.push(value);
   }
-  if (isShortPdfDownload(total, lengthHeader, response.headers.get("content-encoding"))) {
-    throw new IncompleteDownloadError();
-  }
+  assertPdfBodyComplete(
+    total,
+    lengthHeader,
+    response.headers.get("content-encoding"),
+  );
   const out = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) {
