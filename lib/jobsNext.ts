@@ -6,6 +6,10 @@
 export const JOBS_SHAKY_NEXT =
   "Shaky signal? Open a job or punch. Then tap Retry.";
 
+/** What the punch screen will say. The shaky line above stays the action. */
+export const JOBS_PUNCH_RESULT_NEXT =
+  "On Punch: Saved, Did not save, or Not punched in.";
+
 export const JOBS_OPEN_FAILED = "That did not open. Tap Retry.";
 
 export const JOBS_OPEN_FORBIDDEN = "This login cannot pull. Open a job below.";

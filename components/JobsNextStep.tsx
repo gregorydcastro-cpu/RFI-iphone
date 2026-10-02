@@ -1,7 +1,7 @@
 "use client";
 
 import { ReadAloudButton } from "@/components/ReadAloudButton";
-import { JOBS_SHAKY_NEXT } from "@/lib/jobsNext";
+import { JOBS_PUNCH_RESULT_NEXT, JOBS_SHAKY_NEXT } from "@/lib/jobsNext";
 
 /**
  * Standing next step on the jobs list.
@@ -16,6 +16,9 @@ export function JobsNextStep() {
       <p className="text-base font-semibold leading-snug text-paper">
         {JOBS_SHAKY_NEXT}
       </p>
+      <p className="mt-2 text-base leading-snug text-paper">
+        {JOBS_PUNCH_RESULT_NEXT}
+      </p>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <button
           type="button"
@@ -26,7 +29,7 @@ export function JobsNextStep() {
         </button>
         <ReadAloudButton
           id="jobs-shaky-next"
-          text={JOBS_SHAKY_NEXT}
+          text={`${JOBS_SHAKY_NEXT} ${JOBS_PUNCH_RESULT_NEXT}`}
           label="Hear this"
         />
       </div>

@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   JOBS_OPEN_FAILED,
   JOBS_OPEN_FORBIDDEN,
+  JOBS_PUNCH_RESULT_NEXT,
   JOBS_SHAKY_NEXT,
   jobsFailureFromUnknown,
   jobsOpenFailure,
@@ -16,7 +17,16 @@ test("shaky-network next step names open, punch, and retry", () => {
   assert.match(JOBS_SHAKY_NEXT, /Retry/);
   assert.ok(JOBS_SHAKY_NEXT.length <= 64, JOBS_SHAKY_NEXT);
   assert.ok(JOBS_OPEN_FAILED.length <= 48, JOBS_OPEN_FAILED);
-  const blob = [JOBS_SHAKY_NEXT, JOBS_OPEN_FAILED, JOBS_OPEN_FORBIDDEN].join(" ");
+  assert.match(JOBS_PUNCH_RESULT_NEXT, /saved/i);
+  assert.match(JOBS_PUNCH_RESULT_NEXT, /did not save/i);
+  assert.match(JOBS_PUNCH_RESULT_NEXT, /not punched in/i);
+  assert.ok(JOBS_PUNCH_RESULT_NEXT.length <= 64, JOBS_PUNCH_RESULT_NEXT);
+  const blob = [
+    JOBS_SHAKY_NEXT,
+    JOBS_PUNCH_RESULT_NEXT,
+    JOBS_OPEN_FAILED,
+    JOBS_OPEN_FORBIDDEN,
+  ].join(" ");
   assert.doesNotMatch(blob, forbidden);
 });
 
