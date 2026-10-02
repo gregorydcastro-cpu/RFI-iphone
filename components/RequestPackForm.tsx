@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
+import { ReadAloudButton } from "@/components/ReadAloudButton";
 import { VoiceCommandBar } from "@/components/VoiceCommandBar";
 import { type DemoJob, makeRequestId } from "@/lib/jobs";
 import { jobsFailureFromUnknown, jobsOpenFailure, type JobsOpenFailure } from "@/lib/jobsNext";
@@ -158,18 +159,25 @@ export function RequestPackForm({
         />
       </label>
       {failure ? (
-        <div role="alert" className="border border-tan/80 bg-ink px-3 py-3">
-          <p className="text-base leading-snug text-paper">{failure.message}</p>
+        <div role="alert" className="border border-cta/70 bg-ink px-4 py-4">
+          <p className="text-lg font-semibold text-cta">Pack did not open</p>
+          <p className="mt-2 text-base leading-snug text-paper">{failure.message}</p>
           {failure.retry ? (
             <button
               type="button"
               disabled={pending}
               onClick={() => void openOrPull(room.trim())}
-              className="mt-3 inline-flex min-h-12 items-center justify-center bg-cta px-4 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
+              className="mt-4 flex min-h-12 w-full items-center justify-center bg-cta px-4 text-base font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
             >
               {pending ? "Opening…" : "Retry"}
             </button>
           ) : null}
+          <ReadAloudButton
+            id="pack-open-error"
+            text={failure.message}
+            label="Hear this"
+            className="mt-3"
+          />
         </div>
       ) : null}
       <button

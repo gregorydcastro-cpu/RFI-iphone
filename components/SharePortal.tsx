@@ -15,11 +15,15 @@ import {
   SHARE_REFRESH_BUSY_LABEL,
   SHARE_REFRESH_PROGRESS_LABEL,
   describeShareRefreshOutcome,
+  shareOutcomeSpeak,
   shareRefreshBlockedMessage,
-  shareRefreshFailureMessage,
+  shareRefreshFailureView,
+  shouldAutoRetryShareRefresh,
+  type ShareRefreshFailure,
   type ShareRefreshOutcome,
   type ShareRefreshPinMark,
 } from "@/lib/shareRefreshStatus";
+import { PACK_LOAD_BACKOFF_MS } from "@/lib/packLoadField";
 import { SHARE_REFRESH_CLIENT_MS } from "@/lib/procoreAuthHealth";
 import type { ShareFolderWithPins } from "@/lib/shareStore";
 
@@ -77,7 +81,9 @@ export function SharePortal({
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [refreshFailure, setRefreshFailure] = useState<ShareRefreshFailure | null>(
+    null,
+  );
   const [status, setStatus] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<ShareRefreshOutcome | null>(null);
   const lock = useRef(false);
@@ -120,7 +126,7 @@ export function SharePortal({
     lock.current = true;
     setBusy(true);
     setError(null);
-    setRefreshError(null);
+    setRefreshFailure(null);
     setStatus(null);
     setOutcome(null);
     try {
@@ -217,58 +223,105 @@ export function SharePortal({
     });
   }
 
+  function wait(ms: number) {
+    if (ms <= 0) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      setTimeout(resolve, ms);
+    });
+  }
+
   async function refreshAll() {
     if (lock.current || !canRefresh) return;
     lock.current = true;
     setBusy(true);
     setRefreshing(true);
     setError(null);
-    setRefreshError(null);
+    setRefreshFailure(null);
     setStatus(null);
     setOutcome(null);
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), SHARE_REFRESH_CLIENT_MS);
-      const response = await fetch("/api/share/refresh-all", {
-        method: "POST",
-        signal: controller.signal,
-      }).finally(() => clearTimeout(timer));
-      let data: RefreshPayload;
-      try {
-        data = (await response.json()) as RefreshPayload;
-      } catch {
-        throw new Error(shareRefreshFailureMessage({ status: response.status }));
-      }
-      if (!response.ok || !data.ok) {
-        throw new Error(
-          shareRefreshFailureMessage({ status: response.status, error: data.error }),
-        );
-      }
-      setOutcome(describeShareRefreshOutcome(data));
-      try {
-        await reload();
-      } catch (caught) {
-        setRefreshError(
-          caught instanceof Error
-            ? caught.message
-            : "Refresh saved, but the folder list did not reload.",
-        );
-      }
-    } catch (caught) {
-      const message =
-        caught instanceof Error ? caught.message : "Refresh all did not finish. Try again.";
-      const aborted = caught instanceof Error && caught.name === "AbortError";
-      setRefreshError(
-        aborted
-          ? shareRefreshFailureMessage({ status: 0 })
-          : message === "Failed to fetch"
-            ? "Refresh all did not finish. Check the connection and try again."
-            : message,
-      );
+      const failure = await postRefresh(0);
+      if (failure) setRefreshFailure(failure);
     } finally {
       lock.current = false;
       setBusy(false);
       setRefreshing(false);
+    }
+  }
+
+  async function postRefresh(attempt: number): Promise<ShareRefreshFailure | null> {
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, SHARE_REFRESH_CLIENT_MS);
+    try {
+      const response = await fetch("/api/share/refresh-all", {
+        method: "POST",
+        signal: controller.signal,
+      });
+      let data: RefreshPayload | null = null;
+      try {
+        data = (await response.json()) as RefreshPayload;
+      } catch {
+        data = null;
+      }
+      if (!data) {
+        if (
+          shouldAutoRetryShareRefresh({
+            attempt,
+            status: response.status,
+            emptyBody: true,
+          })
+        ) {
+          await wait(PACK_LOAD_BACKOFF_MS);
+          return postRefresh(attempt + 1);
+        }
+        return shareRefreshFailureView({
+          status: response.status,
+        });
+      }
+      if (!response.ok || !data.ok) {
+        if (
+          shouldAutoRetryShareRefresh({
+            attempt,
+            status: response.status,
+          })
+        ) {
+          await wait(PACK_LOAD_BACKOFF_MS);
+          return postRefresh(attempt + 1);
+        }
+        return shareRefreshFailureView({
+          status: response.status,
+          error: data.error,
+        });
+      }
+      setOutcome(describeShareRefreshOutcome(data));
+      try {
+        await reload();
+      } catch {
+        return {
+          title: "Refresh saved",
+          message: "The sheet check saved. The folder list did not reload. Tap Retry.",
+          speak:
+            "Refresh saved. The sheet check saved. The folder list did not reload. Tap Retry.",
+          retry: true,
+        };
+      }
+      return null;
+    } catch (caught) {
+      const aborted = caught instanceof Error && caught.name === "AbortError";
+      if (timedOut || aborted) {
+        return shareRefreshFailureView({ status: 0, timedOut: true });
+      }
+      if (shouldAutoRetryShareRefresh({ attempt, network: true, status: 0 })) {
+        await wait(PACK_LOAD_BACKOFF_MS);
+        return postRefresh(attempt + 1);
+      }
+      return shareRefreshFailureView({ status: 0, network: true });
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -331,7 +384,7 @@ export function SharePortal({
         </div>
         <div
           className={
-            refreshing || refreshError || outcome || refreshNote
+            refreshing || refreshFailure || outcome || refreshNote
               ? "mt-3 space-y-3"
               : undefined
           }
@@ -343,14 +396,31 @@ export function SharePortal({
             </p>
           ) : (
             <>
-              {refreshError ? (
-                <div role="status">
-                  <p className="text-sm text-paper">{refreshError}</p>
+              {refreshFailure ? (
+                <div
+                  role="alert"
+                  className="border border-cta/70 bg-ink px-4 py-4"
+                >
+                  <p className="text-lg font-semibold text-cta">
+                    {refreshFailure.title}
+                  </p>
+                  <p className="mt-2 text-base leading-snug text-paper">
+                    {refreshFailure.message}
+                  </p>
+                  {refreshFailure.retry ? (
+                    <button
+                      type="button"
+                      onClick={() => void refreshAll()}
+                      className="mt-4 flex min-h-12 w-full items-center justify-center border border-cta bg-cta px-5 text-base font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover"
+                    >
+                      Retry
+                    </button>
+                  ) : null}
                   <ReadAloudButton
                     id="share-refresh-status"
-                    text={refreshError}
+                    text={refreshFailure.speak}
                     label="Hear this"
-                    className="mt-2"
+                    className="mt-3"
                   />
                 </div>
               ) : null}
@@ -397,6 +467,12 @@ export function SharePortal({
                   {outcome.notifyLine ? (
                     <p className="mt-2 text-xs text-tan">{outcome.notifyLine}</p>
                   ) : null}
+                  <ReadAloudButton
+                    id="share-refresh-outcome"
+                    text={shareOutcomeSpeak(outcome)}
+                    label="Hear this"
+                    className="mt-3"
+                  />
                 </div>
               ) : null}
               {refreshNote ? (
