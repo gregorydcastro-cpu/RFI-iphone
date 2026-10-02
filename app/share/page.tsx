@@ -29,6 +29,7 @@ export default async function SharePage() {
         role={view.role}
         procoreConnected={view.connected}
         procoreLinked={view.role === "puller" && view.connected}
+        procoreReconnect={view.reconnectNeeded}
       />
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-8 sm:px-6">
         <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
@@ -52,11 +53,14 @@ export default async function SharePage() {
             sessionEnded={sessionEnded}
             canRefresh={canRefresh}
             procoreConnected={view.connected}
+            reconnectNeeded={view.reconnectNeeded}
             roleLabel={
               view.role === "puller"
-                ? view.connected
-                  ? "puller · Procore connected"
-                  : "puller · Procore not connected"
+                ? view.reconnectNeeded
+                  ? "puller · reconnect Procore"
+                  : view.connected
+                    ? "puller · Procore connected"
+                    : "puller · Procore not connected"
                 : view.signedIn
                   ? "view only"
                   : "signed out"

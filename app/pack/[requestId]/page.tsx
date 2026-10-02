@@ -2,6 +2,7 @@ import { getFieldRole } from "@/lib/auth.server";
 import { RoomPackViewer } from "@/components/RoomPackViewer";
 import { getJob } from "@/lib/jobs";
 import { loadLiveRoomPack } from "@/lib/livePack";
+import { getProcoreConnectionView } from "@/lib/procoreStatus";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,7 @@ export default async function PackPage({ params, searchParams }: Props) {
   const query = await searchParams;
   const role = await getFieldRole();
   const signedIn = Boolean(role.session);
+  const procore = await getProcoreConnectionView(role.session);
   const requestedJob = query.job ? getJob(query.job) : undefined;
   const live = await loadLiveRoomPack({
     requestId,
@@ -49,6 +51,7 @@ export default async function PackPage({ params, searchParams }: Props) {
       signedIn={signedIn}
       sessionEnded={role.sessionEnded}
       procoreLinked={signedIn && role.procoreLinked}
+      procoreReconnect={procore.reconnectNeeded}
       role={signedIn ? role.role : null}
       readOnly={!signedIn || role.role === "viewer"}
     />

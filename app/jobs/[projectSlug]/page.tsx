@@ -24,7 +24,7 @@ export default async function JobPage({ params, searchParams }: Props) {
     ? `/jobs/${projectSlug}?room=${encodeURIComponent(query.room)}`
     : `/jobs/${projectSlug}`;
   const session = await requireAppSession(next);
-  const view = await getProcoreConnectionView(session);
+  const view = await getProcoreConnectionView(session, { probe: true });
   const canPull = view.role === "puller" && view.connected;
 
   return (
@@ -34,6 +34,7 @@ export default async function JobPage({ params, searchParams }: Props) {
         role={view.role}
         procoreConnected={view.connected}
         procoreLinked={canPull}
+        procoreReconnect={view.reconnectNeeded}
       />
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-4 px-4 py-8 sm:px-6">
         {job.slug === TIME_JOB_SLUG ? (
@@ -46,7 +47,7 @@ export default async function JobPage({ params, searchParams }: Props) {
           </p>
         ) : null}
         {view.role === "puller" && !view.connected ? (
-          <ProcoreConnectCard view={view} compact />
+          <ProcoreConnectCard view={view} compact returnPath={next} />
         ) : null}
         <RequestPackForm
           job={job}

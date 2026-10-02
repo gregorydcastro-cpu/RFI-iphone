@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { useOfflinePackCache } from "@/components/useOfflinePackCache";
 import {
-  classifyPackRefresh,
   isOfflineFetchFailure,
   OFFLINE_STATUS_LINE,
   type OfflinePackSnapshot,
 } from "@/lib/offlinePackCache";
 import type { RoomPack } from "@/lib/pack";
 import { formatPulledAt, sheetRevisionLabel } from "@/lib/pack";
+import type { PackPullNotice } from "@/lib/procoreAuthHealth";
+import { requestPackRefresh } from "@/lib/procorePackRefresh";
 
 export type PackLiveMeta = {
   source?: string;
@@ -25,7 +26,9 @@ type Props = {
   procoreLinked: boolean;
   supabaseConfigured: boolean;
   demoFallback: boolean;
+  retryToken?: number;
   onPack: (pack: RoomPack, meta?: PackLiveMeta) => void;
+  onNotice?: (notice: PackPullNotice | null) => void;
 };
 
 type LivePayload = {
@@ -43,6 +46,7 @@ type LivePayload = {
 /**
  * On every website pack open: re-read latest room_packs (no-store).
  * Pullers POST a refresh that tries Procore REST first, then the bot.
+ * A dead Procore session keeps the pack and asks to reconnect.
  * Viewers never trigger a pull. No expiry poll loop.
  */
 export function PackLiveReload({
@@ -52,7 +56,9 @@ export function PackLiveReload({
   procoreLinked,
   supabaseConfigured,
   demoFallback,
+  retryToken = 0,
   onPack,
+  onNotice,
 }: Props) {
   const [message, setMessage] = useState<string>(
     supabaseConfigured
@@ -77,7 +83,6 @@ export function PackLiveReload({
         offline: false,
         snapshot: null,
       });
-      setMessage(statusLine(data, requestedRoom));
       await offline.remember(data.pack);
       return true;
     }
@@ -96,42 +101,49 @@ export function PackLiveReload({
       return true;
     }
 
-    async function load(triggerPull: boolean) {
+    async function load() {
       setBusy(true);
       let fetchFailed = false;
       try {
-        if (triggerPull && procoreLinked) {
-          try {
-            const refresh = await fetch("/api/room-pack/refresh", {
-              method: "POST",
-              cache: "no-store",
-              credentials: "include",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                projectSlug,
-                requestId,
-                room: requestedRoom,
-              }),
+        if (procoreLinked) {
+          const refresh = await requestPackRefresh({
+            projectSlug,
+            requestId,
+            room: requestedRoom,
+          });
+          if (cancelled) return;
+          onNotice?.(refresh.notice);
+          if (refresh.viewOnly) {
+            setMessage("View only — pulls are disabled for this session.");
+          } else if (refresh.pack) {
+            const accepted = await acceptLive({
+              ok: true,
+              pack: refresh.pack,
+              source: refresh.source,
+              pull: refresh.pull,
+              restReason: refresh.restReason,
             });
-            const data = (await refresh.json()) as LivePayload;
             if (cancelled) return;
-            const gate = classifyPackRefresh({
-              httpOk: refresh.ok,
-              status: refresh.status,
-              hasPack: Boolean(data.ok && data.pack),
-            });
-            if (gate === "accept") {
-              if (await acceptLive(data)) return;
-              if (cancelled) return;
-            } else if (gate === "view-only") {
-              setMessage("View only — pulls are disabled for this session.");
-            } else if (gate === "miss") {
-              fetchFailed = true;
+            if (accepted) {
+              setMessage(
+                refresh.notice?.strip ??
+                  statusLine(
+                    {
+                      pull: refresh.pull,
+                      source: refresh.source,
+                      restReason: refresh.restReason,
+                      pack: refresh.pack,
+                    },
+                    requestedRoom,
+                  ),
+              );
+              return;
             }
-          } catch {
-            // A dropped pull must not skip the live no-store read below.
-            if (cancelled) return;
+          } else if (refresh.offline) {
             fetchFailed = true;
+            if (refresh.notice) setMessage(refresh.notice.strip);
+          } else if (refresh.notice) {
+            setMessage(refresh.notice.strip);
           }
         }
 
@@ -145,7 +157,10 @@ export function PackLiveReload({
         });
         const data = (await live.json()) as LivePayload;
         if (cancelled) return;
-        if (live.ok && data.ok && (await acceptLive(data))) return;
+        if (live.ok && data.ok && (await acceptLive(data))) {
+          if (!fetchFailed) setMessage(statusLine(data, requestedRoom));
+          return;
+        }
         if (
           isOfflineFetchFailure({
             ok: live.ok,
@@ -171,11 +186,20 @@ export function PackLiveReload({
       }
     }
 
-    void load(true);
+    void load();
     return () => {
       cancelled = true;
     };
-  }, [offline, onPack, procoreLinked, projectSlug, requestId, requestedRoom]);
+  }, [
+    offline,
+    onNotice,
+    onPack,
+    procoreLinked,
+    projectSlug,
+    requestId,
+    requestedRoom,
+    retryToken,
+  ]);
 
   return (
     <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-tan">
@@ -188,35 +212,35 @@ export function PackLiveReload({
             setBusy(true);
             void (async () => {
               try {
-                const refresh = await fetch("/api/room-pack/refresh", {
-                  method: "POST",
-                  cache: "no-store",
-                  credentials: "include",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    projectSlug,
-                    requestId,
-                    room: requestedRoom,
-                  }),
+                const refresh = await requestPackRefresh({
+                  projectSlug,
+                  requestId,
+                  room: requestedRoom,
                 });
-                const data = (await refresh.json()) as LivePayload;
-                if (refresh.ok && data.ok && data.pack) {
-                  onPack(data.pack, {
-                    source: data.source,
-                    pull: data.pull,
+                onNotice?.(refresh.notice);
+                if (refresh.viewOnly) {
+                  setMessage("View only — pulls are disabled for this session.");
+                } else if (refresh.pack) {
+                  onPack(refresh.pack, {
+                    source: refresh.source,
+                    pull: refresh.pull,
                     offline: false,
                     snapshot: null,
                   });
-                  setMessage(statusLine(data, requestedRoom));
-                  await offline.remember(data.pack);
-                } else if (refresh.status === 403) {
-                  setMessage("View only — pulls are disabled for this session.");
-                } else if (
-                  isOfflineFetchFailure({
-                    ok: refresh.ok,
-                    status: refresh.status,
-                  })
-                ) {
+                  setMessage(
+                    refresh.notice?.strip ??
+                      statusLine(
+                        {
+                          pull: refresh.pull,
+                          source: refresh.source,
+                          restReason: refresh.restReason,
+                          pack: refresh.pack,
+                        },
+                        requestedRoom,
+                      ),
+                  );
+                  await offline.remember(refresh.pack);
+                } else if (refresh.offline) {
                   const snapshot = await offline.readFallback(false);
                   if (snapshot) {
                     onPack(snapshot.pack, {
@@ -225,8 +249,18 @@ export function PackLiveReload({
                       offline: true,
                       snapshot,
                     });
-                    setMessage(OFFLINE_STATUS_LINE);
+                    setMessage(refresh.notice?.strip ?? OFFLINE_STATUS_LINE);
+                  } else {
+                    setMessage(
+                      refresh.notice?.strip ??
+                        "Pull didn't finish. Maple Point demo stays on screen. Retry.",
+                    );
                   }
+                } else {
+                  setMessage(
+                    refresh.notice?.strip ??
+                      "Pull didn't finish. The saved pack stays on screen. Retry.",
+                  );
                 }
               } catch {
                 const snapshot = await offline.readFallback(false);

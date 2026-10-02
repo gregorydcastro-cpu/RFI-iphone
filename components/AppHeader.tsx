@@ -4,12 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { FieldRoleName } from "@/lib/auth";
 import { canInviteCrew } from "@/lib/inviteRole";
+import { procoreReconnectHref } from "@/lib/procoreAuthHealth";
 
 type Props = {
   signedIn?: boolean;
   role?: FieldRoleName | null;
   procoreLinked?: boolean;
   procoreConnected?: boolean;
+  procoreReconnect?: boolean;
+  procoreReconnectHref?: string;
 };
 
 export function AppHeader({
@@ -17,11 +20,24 @@ export function AppHeader({
   role = null,
   procoreLinked = false,
   procoreConnected = false,
+  procoreReconnect = false,
+  procoreReconnectHref: reconnectHref,
 }: Props) {
   const pathname = usePathname();
   const resolvedRole: FieldRoleName | null =
     role ?? (signedIn ? (procoreLinked ? "puller" : "viewer") : null);
-  const connected = procoreConnected || procoreLinked;
+  const connected = (procoreConnected || procoreLinked) && !procoreReconnect;
+  const reconnectTo =
+    reconnectHref ??
+    procoreReconnectHref(
+      pathname.startsWith("/pack/") ||
+        pathname.startsWith("/jobs") ||
+        pathname === "/share" ||
+        pathname === "/time" ||
+        pathname === "/account"
+        ? pathname
+        : "/account",
+    );
   const jobsActive = pathname === "/jobs" || pathname.startsWith("/jobs/");
   const timeActive = pathname === "/time" || pathname.startsWith("/time/");
   const shareActive = pathname === "/share" || pathname.startsWith("/share/");
@@ -100,21 +116,31 @@ export function AppHeader({
                   }
                   title={
                     resolvedRole === "puller"
-                      ? connected
-                        ? "Procore connected — can pull"
-                        : "Puller — connect Procore to pull"
+                      ? procoreReconnect
+                        ? "Procore needs a reconnect"
+                        : connected
+                          ? "Procore connected — can pull"
+                          : "Puller — connect Procore to pull"
                       : resolvedRole === "full"
                         ? "Full crew — markup and drafts, no Procore pull"
                         : "Read-only viewer — sheets and red room box only"
                   }
                 >
-                  {resolvedRole === "puller"
-                    ? connected
-                      ? "Procore connected"
-                      : "Puller"
-                    : resolvedRole === "full"
-                      ? "Full"
-                      : "View only"}
+                  {resolvedRole === "puller" ? (
+                    procoreReconnect ? (
+                      <a href={reconnectTo} className="text-paper">
+                        Reconnect
+                      </a>
+                    ) : connected ? (
+                      "Procore connected"
+                    ) : (
+                      "Puller"
+                    )
+                  ) : resolvedRole === "full" ? (
+                    "Full"
+                  ) : (
+                    "View only"
+                  )}
                 </span>
               ) : null}
               <a

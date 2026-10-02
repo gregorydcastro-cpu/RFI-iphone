@@ -28,6 +28,7 @@ export default async function TimePage() {
         role={view.role}
         procoreConnected={view.connected}
         procoreLinked={view.role === "puller" && view.connected}
+        procoreReconnect={view.reconnectNeeded}
       />
       <TimeBoard
         initial={snapshot}

@@ -21,8 +21,11 @@ import { sheetKindLabel, splitPackSheets } from "@/lib/sheetOrder";
 import type { FieldRoleName } from "@/lib/auth";
 import { viewerSheetPdfSrc } from "@/lib/sheetPdfUrl";
 import { signInContinuePath } from "@/lib/authMessages";
+import { packPullNotice, procoreReconnectHref } from "@/lib/procoreAuthHealth";
+import type { PackPullNotice } from "@/lib/procoreAuthHealth";
 import { ActionPanel } from "./ActionPanel";
 import { AppHeader } from "./AppHeader";
+import { ProcoreReconnectBanner } from "./ProcoreReconnectBanner";
 import { ReadAloudButton } from "./ReadAloudButton";
 import { PackLiveReload } from "./PackLiveReload";
 import { RfiList } from "./RfiList";
@@ -42,6 +45,7 @@ type Props = {
   signedIn?: boolean;
   sessionEnded?: boolean;
   procoreLinked?: boolean;
+  procoreReconnect?: boolean;
   readOnly?: boolean;
   role?: FieldRoleName | null;
 };
@@ -59,6 +63,7 @@ export function RoomPackViewer({
   signedIn = false,
   sessionEnded = false,
   procoreLinked = false,
+  procoreReconnect = false,
   readOnly = false,
   role = null,
 }: Props) {
@@ -70,6 +75,18 @@ export function RoomPackViewer({
     useState<OfflinePackSnapshot | null>(null);
   const displayedPack = livePack ?? pack;
   const [toast, setToast] = useState<string | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
+  const [notice, setNotice] = useState<PackPullNotice | null>(
+    procoreReconnect ? packPullNotice({ reconnectNeeded: true }) : null,
+  );
+  const handleNotice = useCallback((next: PackPullNotice | null) => {
+    setNotice(next);
+  }, []);
+  const reconnecting = notice?.tone === "reconnect";
+  const packReturn = `/pack/${requestId ?? pack.request_id}${packReturnQuery({
+    projectSlug,
+    room: requestedRoom,
+  })}`;
   const { primary, rest } = useMemo(
     () =>
       splitPackSheets(
@@ -136,6 +153,8 @@ export function RoomPackViewer({
         signedIn={signedIn}
         role={role ?? (signedIn ? (readOnly ? "viewer" : "puller") : null)}
         procoreLinked={procoreLinked}
+        procoreReconnect={reconnecting}
+        procoreReconnectHref={procoreReconnectHref(packReturn)}
       />
       {!signedIn ? (
         <SignedOutPackNote
@@ -143,6 +162,18 @@ export function RoomPackViewer({
           projectSlug={projectSlug}
           room={requestedRoom}
           sessionEnded={sessionEnded}
+        />
+      ) : null}
+      {notice ? (
+        <ProcoreReconnectBanner
+          notice={notice}
+          reconnectHref={
+            notice.reconnect ? procoreReconnectHref(packReturn) : undefined
+          }
+          busy={false}
+          onRetry={
+            notice.retry ? () => setRetryToken((value) => value + 1) : undefined
+          }
         />
       ) : null}
       <PackContextBar
@@ -157,7 +188,9 @@ export function RoomPackViewer({
         source={liveSource}
         pull={livePull}
         procoreLinked={procoreLinked}
+        retryToken={retryToken}
         onPack={handleLivePack}
+        onNotice={handleNotice}
       />
       {offlineSnapshot ? <OfflinePackBanner snapshot={offlineSnapshot} /> : null}
       <JumpNav primary={primary} rest={rest} />
@@ -366,7 +399,9 @@ function PackContextBar({
   source,
   pull,
   procoreLinked,
+  retryToken,
   onPack,
+  onNotice,
 }: {
   pack: RoomPack;
   sheet: Sheet;
@@ -379,7 +414,9 @@ function PackContextBar({
   source?: "procore" | "supabase" | "local" | "offline" | "none";
   pull?: "procore" | "bot" | "none";
   procoreLinked: boolean;
+  retryToken: number;
   onPack: (pack: RoomPack, meta?: PackLiveMeta) => void;
+  onNotice: (notice: PackPullNotice | null) => void;
 }) {
   const stamp = sheetRevisionLabel(sheet);
   const pulled = formatPulledAt(pack.pulled_at);
@@ -408,7 +445,9 @@ function PackContextBar({
           procoreLinked={procoreLinked}
           supabaseConfigured={supabaseConfigured}
           demoFallback={Boolean(demoFallback)}
+          retryToken={retryToken}
           onPack={onPack}
+          onNotice={onNotice}
         />
         {requestedJobName && requestedJobName !== pack.project.name ? (
           <p className="mt-0.5 text-xs text-tan">
@@ -483,6 +522,17 @@ function SignedOutPackNote({
       />
     </div>
   );
+}
+
+function packReturnQuery(input: {
+  projectSlug?: string;
+  room?: string;
+}): string {
+  const params = new URLSearchParams();
+  if (input.projectSlug) params.set("job", input.projectSlug);
+  if (input.room) params.set("room", input.room);
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
 }
 
 function freshnessLabel(input: {

@@ -1,3 +1,5 @@
+import { ReadAloudButton } from "@/components/ReadAloudButton";
+import { procoreReconnectHref } from "@/lib/procoreAuthHealth";
 import {
   procoreErrorMessage,
   type ProcoreConnectionView,
@@ -6,9 +8,14 @@ import {
 type Props = {
   view: ProcoreConnectionView;
   compact?: boolean;
+  returnPath?: string;
 };
 
-export function ProcoreConnectCard({ view, compact = false }: Props) {
+export function ProcoreConnectCard({
+  view,
+  compact = false,
+  returnPath,
+}: Props) {
   if (!view.signedIn || view.role !== "puller") {
     if (compact) return null;
     if (view.role === "full") {
@@ -43,6 +50,34 @@ export function ProcoreConnectCard({ view, compact = false }: Props) {
     );
   }
 
+  if (view.reconnectNeeded) {
+    const spoken =
+      "Procore needs a reconnect. Use the same Procore login. Saved packs stay available.";
+    return (
+      <section className="border border-tan/60 bg-panel p-4" role="status">
+        <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
+          Procore
+        </p>
+        <h2 className="font-display mt-1 text-xl tracking-wide text-paper">
+          Reconnect Procore
+        </h2>
+        <p className="mt-2 text-sm text-paper">{spoken}</p>
+        <a
+          href={procoreReconnectHref(returnPath ?? "/account")}
+          className="mt-4 inline-flex min-h-11 items-center bg-cta px-5 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover"
+        >
+          Reconnect Procore
+        </a>
+        <ReadAloudButton
+          id="procore-reconnect"
+          text={spoken}
+          label="Hear this"
+          className="mt-3"
+        />
+      </section>
+    );
+  }
+
   if (view.connected) {
     return (
       <section className="border border-line bg-panel p-4">
@@ -52,8 +87,16 @@ export function ProcoreConnectCard({ view, compact = false }: Props) {
         <h2 className="font-display mt-1 text-xl tracking-wide text-paper">
           Connected
         </h2>
+        {view.refreshDeferred ? (
+          <p className="mt-2 text-sm text-paper">
+            Procore did not answer a refresh. Saved packs stay available. Try
+            the pull again in a moment.
+          </p>
+        ) : null}
         <p className="mt-2 text-sm text-muted">
-          Signed in with your Procore account. Tokens are stored per user
+          {view.refreshDeferred
+            ? "Tokens stay stored per user"
+            : "Signed in with your Procore account. Tokens are stored per user"}
           {view.email ? (
             <>
               {" "}

@@ -2,11 +2,14 @@
  * Server-only valid Procore access token for a stored connection.
  *
  * Access tokens last ~1.5 hours. Refresh with refresh_token before
- * expiry (2 minute skew) or after a 401. Tokens never go to the browser.
+ * expiry (2 minute skew) or after a 401. A rejected refresh marks the
+ * row for reconnect and does not keep using the dead access token.
+ * Tokens never go to the browser.
  */
 
 import {
   fetchProcoreConnectionSecrets,
+  markProcoreReconnectNeeded,
   upsertProcoreConnection,
   type ProcoreConnectionSecrets,
 } from "./procoreConnections";
@@ -30,37 +33,86 @@ export type ValidProcoreAccess = {
   refreshed: boolean;
 };
 
+export type ProcoreAccessFailure =
+  | "missing_oauth"
+  | "missing_tokens"
+  | "reconnect_needed"
+  | "refresh_unavailable";
+
+export type ProcoreAccessResult =
+  | { ok: true; access: ValidProcoreAccess }
+  | { ok: false; reason: ProcoreAccessFailure };
+
+export type StoredRefreshResult =
+  | { ok: true; access: ValidProcoreAccess }
+  | { ok: false; reason: "reconnect_needed" | "refresh_unavailable" };
+
 export async function getValidProcoreAccess(
   userId: string,
   options?: { forceRefresh?: boolean },
 ): Promise<ValidProcoreAccess | null> {
+  const resolved = await resolveProcoreAccess(userId, options);
+  return resolved.ok ? resolved.access : null;
+}
+
+export async function resolveProcoreAccess(
+  userId: string,
+  options?: { forceRefresh?: boolean },
+): Promise<ProcoreAccessResult> {
   const config = getProcoreOAuthConfig();
-  if (!config) return null;
+  if (!config) return { ok: false, reason: "missing_oauth" };
 
   const secrets = await fetchProcoreConnectionSecrets(userId);
-  if (!secrets?.accessToken) return null;
+  if (!secrets?.accessToken) return { ok: false, reason: "missing_tokens" };
 
   const shouldRefresh =
     Boolean(options?.forceRefresh) ||
     accessTokenNeedsRefresh(secrets.expiresAt);
 
   if (!shouldRefresh) {
-    return { config, accessToken: secrets.accessToken, secrets, refreshed: false };
+    return {
+      ok: true,
+      access: { config, accessToken: secrets.accessToken, secrets, refreshed: false },
+    };
+  }
+
+  if (!secrets.refreshToken) {
+    await markProcoreReconnectNeeded(userId);
+    return { ok: false, reason: "reconnect_needed" };
   }
 
   const refreshed = await refreshStoredProcoreAccess(config, secrets);
-  return refreshed;
+  if (!refreshed.ok) {
+    return {
+      ok: false,
+      reason:
+        refreshed.reason === "reconnect_needed"
+          ? "reconnect_needed"
+          : "refresh_unavailable",
+    };
+  }
+  return { ok: true, access: refreshed.access };
 }
 
 export async function refreshStoredProcoreAccess(
   config: ProcoreOAuthConfig,
   secrets: ProcoreConnectionSecrets,
-): Promise<ValidProcoreAccess | null> {
-  if (!secrets.refreshToken) return null;
+): Promise<StoredRefreshResult> {
+  if (!secrets.refreshToken) {
+    await markProcoreReconnectNeeded(secrets.userId);
+    return { ok: false, reason: "reconnect_needed" };
+  }
 
-  const tokens = await refreshAccessToken(config, secrets.refreshToken);
-  if (!tokens) return null;
+  const grant = await refreshAccessToken(config, secrets.refreshToken);
+  if (!grant.ok) {
+    if (grant.reason === "rejected") {
+      await markProcoreReconnectNeeded(secrets.userId);
+      return { ok: false, reason: "reconnect_needed" };
+    }
+    return { ok: false, reason: "refresh_unavailable" };
+  }
 
+  const tokens = grant.token;
   const next: ProcoreConnectionSecrets = {
     ...secrets,
     accessToken: tokens.access_token,
@@ -81,9 +133,12 @@ export async function refreshStoredProcoreAccess(
   }
 
   return {
-    config,
-    accessToken: next.accessToken,
-    secrets: next,
-    refreshed: true,
+    ok: true,
+    access: {
+      config,
+      accessToken: next.accessToken,
+      secrets: next,
+      refreshed: true,
+    },
   };
 }

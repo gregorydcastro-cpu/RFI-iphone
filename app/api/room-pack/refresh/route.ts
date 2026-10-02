@@ -1,4 +1,5 @@
 import { makeRequestId, resolvePullJob } from "@/lib/jobs";
+import { restNeedsReconnect } from "@/lib/procoreAuthHealth";
 import { loadLiveRoomPack, refreshLiveRoomPack } from "@/lib/livePack";
 import { stampRoomPack, type RoomPack } from "@/lib/pack";
 import { isRoomPackShape, requestBelongsToJob } from "@/lib/packStatus";
@@ -7,6 +8,7 @@ import { fieldRoleForRequest } from "@/lib/session.server";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 const NO_STORE = { "Cache-Control": "no-store" };
 const PACK_ID = /^[a-zA-Z0-9._-]+$/;
@@ -133,6 +135,7 @@ export async function POST(request: Request) {
     source: live.source,
     pull: live.pull,
     restReason: live.restReason,
+    reconnectNeeded: restNeedsReconnect(live.restReason),
     demoFallback: live.demoFallback,
     requestId: resolvedRequestId,
     job: job.slug,

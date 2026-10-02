@@ -23,7 +23,7 @@ export default async function AccountPage({ searchParams }: Props) {
   const query = await searchParams;
   const session = await readAppSession();
   const sessionEnded = !session && (await supabaseSessionCookiePresent());
-  const view = await getProcoreConnectionView(session);
+  const view = await getProcoreConnectionView(session, { probe: true });
   const signedOut = signedOutGate({
     next: "/account",
     sessionEnded,
@@ -42,6 +42,7 @@ export default async function AccountPage({ searchParams }: Props) {
         signedIn={view.signedIn}
         role={view.role}
         procoreConnected={view.connected}
+        procoreReconnect={view.reconnectNeeded}
       />
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-8 sm:px-6">
         <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
