@@ -3,7 +3,11 @@ import { canWriteFieldLog } from "@/lib/invites";
 import { rfiCreateOutcome } from "@/lib/rfiCreate";
 import { isRfiDraftStatus } from "@/lib/rfiSchema";
 import { fieldRoleForRequest } from "@/lib/session.server";
-import { insertRfiDraftRow, isRfiTableWriteConfigured } from "@/lib/supabaseRfis";
+import {
+  insertRfiDraftRow,
+  isRfiTableWriteConfigured,
+  listRfiDraftRows,
+} from "@/lib/supabaseRfis";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +42,38 @@ function asUuid(value: unknown): string | null {
 
 function newUuid(): string {
   return crypto.randomUUID();
+}
+
+/**
+ * List this user's draft rows for the pack inbox.
+ * A missed read is 503 — not an empty inbox. No Procore call.
+ */
+export async function GET(request: Request) {
+  const { session } = await fieldRoleForRequest(request);
+  if (!session) {
+    return json({ ok: false, error: "Sign in first." }, 401);
+  }
+  if (!isRfiTableWriteConfigured()) {
+    return json({ ok: true, rows: [], storage: "unconfigured" });
+  }
+  const rows = await listRfiDraftRows(session.userId);
+  if (!rows) {
+    return json(
+      { ok: false, error: "Drafts did not load.", code: "load_failed" },
+      503,
+    );
+  }
+  return json({
+    ok: true,
+    storage: "supabase",
+    rows: rows.map((row) => ({
+      id: row.id,
+      subject: row.subject,
+      status: row.status,
+      sheet_id: row.sheet_id,
+      location: row.location,
+    })),
+  });
 }
 
 /**

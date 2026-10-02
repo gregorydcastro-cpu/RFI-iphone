@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { VoiceCommandBar } from "@/components/VoiceCommandBar";
 import { type DemoJob, makeRequestId } from "@/lib/jobs";
+import { jobsFailureFromUnknown, jobsOpenFailure, type JobsOpenFailure } from "@/lib/jobsNext";
 
 type Props = {
   job: DemoJob;
@@ -33,12 +34,12 @@ export function RequestPackForm({
   const router = useRouter();
   const [room, setRoom] = useState(initialRoom?.trim() || "733");
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<JobsOpenFailure | null>(null);
 
   async function openOrPull(roomValue: string) {
     if (pending) return;
     setPending(true);
-    setError(null);
+    setFailure(null);
 
     try {
       if (!procoreLinked) {
@@ -59,13 +60,18 @@ export function RequestPackForm({
         body: JSON.stringify({ projectSlug: job.slug, room: roomValue }),
       });
 
-      const data = (await response.json()) as RoomPackApiOk | RoomPackApiErr;
-      if (!response.ok || !data.ok) {
-        const message =
-          !data.ok && data.error
-            ? data.error
-            : "Room pack request was not accepted";
-        setError(message);
+      const data = (await response.json().catch(() => null)) as
+        | RoomPackApiOk
+        | RoomPackApiErr
+        | null;
+      if (!response.ok || !data?.ok) {
+        setFailure(
+          jobsOpenFailure({
+            status: response.status,
+            error: data && !data.ok ? data.error : null,
+            offline: typeof navigator !== "undefined" && navigator.onLine === false,
+          }),
+        );
         return;
       }
 
@@ -83,8 +89,8 @@ export function RequestPackForm({
       });
 
       router.push(`/pack/${data.requestId}?${params.toString()}`);
-    } catch {
-      setError("Could not reach the room pack service. Try again.");
+    } catch (caught) {
+      setFailure(jobsFailureFromUnknown(caught));
     } finally {
       setPending(false);
     }
@@ -94,7 +100,7 @@ export function RequestPackForm({
     event.preventDefault();
     const roomValue = room.trim();
     if (!roomValue) {
-      setError("Room is required.");
+      setFailure({ message: "Add a room.", retry: false });
       return;
     }
     await openOrPull(roomValue);
@@ -151,10 +157,20 @@ export function RequestPackForm({
           placeholder="733"
         />
       </label>
-      {error ? (
-        <p role="alert" className="text-sm text-cta">
-          {error}
-        </p>
+      {failure ? (
+        <div role="alert" className="border border-tan/80 bg-ink px-3 py-3">
+          <p className="text-base leading-snug text-paper">{failure.message}</p>
+          {failure.retry ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => void openOrPull(room.trim())}
+              className="mt-3 inline-flex min-h-12 items-center justify-center bg-cta px-4 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
+            >
+              {pending ? "Opening…" : "Retry"}
+            </button>
+          ) : null}
+        </div>
       ) : null}
       <button
         type="submit"
