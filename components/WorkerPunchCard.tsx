@@ -13,6 +13,16 @@ import {
 import { ReadAloudButton } from "@/components/ReadAloudButton";
 import { sessionGateLead } from "@/lib/authMessages";
 import { LOCATION_ENABLE_HINT, useSiteGeofence } from "@/components/useSiteGeofence";
+import {
+  PUNCH_SAVED_TITLE,
+  punchClockCopy,
+  punchClockSpeak,
+  punchClockState,
+  punchFailureSpeak,
+  punchSuccessSpeak,
+  type PunchFailureView,
+} from "@/lib/punchResult";
+import Link from "next/link";
 import { useState } from "react";
 
 const inputClass =
@@ -28,10 +38,12 @@ type Props = {
   sessionEnded?: boolean;
   sessionEmail: string | null;
   pending: boolean;
-  error: string | null;
+  failure: PunchFailureView | null;
   notice: string | null;
   onWorkerId: (id: string) => void;
   onPin: (pin: string) => void;
+  onClearResult: () => void;
+  onRetry: () => void;
   onPunch: (input: {
     punchType: "in" | "out";
     lat: number | null;
@@ -50,10 +62,12 @@ export function WorkerPunchCard({
   sessionEnded = false,
   sessionEmail,
   pending,
-  error,
+  failure,
   notice,
   onWorkerId,
   onPin,
+  onClearResult,
+  onRetry,
   onPunch,
 }: Props) {
   const { geo, retry } = useSiteGeofence(site);
@@ -66,23 +80,23 @@ export function WorkerPunchCard({
   const punchInLocked = !inside || onClock || pending || !signedIn || !pinOk;
   const punchOutLocked = !onClock || pending || !signedIn || !pinOk;
   const [hint, setHint] = useState<string | null>(null);
-  const clockTitle = onClock
-    ? "Punched in"
-    : last?.punch_type === "out"
-      ? "Punched out"
-      : "Not punched in";
-  const statusLine = onClock
-    ? "Punched in. You are on the clock."
-    : last?.punch_type === "out"
-      ? "Punched out. You are off the clock."
-      : "Not punched in. You are off the clock.";
+  const clockState = punchClockState({
+    onClock,
+    lastType: last?.punch_type ?? null,
+  });
+  const clock = punchClockCopy(clockState);
   const gateLine = signedIn
     ? null
     : `${sessionGateLead(sessionEnded)} Sign in before punching.`;
-  const spoken = notice ?? error ?? hint ?? gateLine ?? statusLine;
+  const spoken = notice
+    ? punchSuccessSpeak(notice)
+    : failure
+      ? punchFailureSpeak(failure)
+      : (hint ?? gateLine ?? punchClockSpeak(clockState));
 
   async function punch(type: "in" | "out") {
     setHint(null);
+    onClearResult();
     if (type === "in" && geo.status !== "ready") {
       setHint(LOCATION_ENABLE_HINT);
       return;
@@ -162,18 +176,16 @@ export function WorkerPunchCard({
         role="status"
       >
         <span className="font-display block text-2xl tracking-wide text-paper">
-          {clockTitle}
+          {clock.title}
         </span>
-        <span className="mt-1 block text-base text-paper">{statusLine}</span>
+        <span className="mt-1 block text-base text-paper">{clock.line}</span>
         {last ? (
           <span className="mt-1 block text-sm text-muted">
             Last {last.punch_type === "in" ? "in" : "out"}{" "}
             {formatPunchStamp(last.punched_at)}
             {last.edited_by_foreman ? " · foreman edit" : ""}
           </span>
-        ) : (
-          <span className="mt-1 block text-sm text-muted">No punches yet this week.</span>
-        )}
+        ) : null}
       </p>
 
       {!signedIn && gateLine ? (
@@ -187,17 +199,36 @@ export function WorkerPunchCard({
         </p>
       ) : null}
       {notice ? (
-        <p
-          className="mt-3 border border-accent-2/50 bg-panel-2 px-3 py-3 text-base text-paper"
+        <div
+          className="mt-3 border border-accent-2/50 bg-panel-2 px-3 py-3"
           role="status"
         >
-          {notice}
-        </p>
+          <p className="text-lg font-semibold text-paper">{PUNCH_SAVED_TITLE}</p>
+          <p className="mt-1 text-base text-paper">{notice}</p>
+          <p className="mt-2 text-base text-paper">
+            Next,{" "}
+            <Link href="/jobs" className="font-semibold text-accent underline">
+              open a job
+            </Link>
+            .
+          </p>
+        </div>
       ) : null}
-      {error ? (
-        <p className="mt-3 border border-cta/50 bg-cta/10 px-3 py-3 text-base text-cta" role="alert">
-          {error}
-        </p>
+      {failure ? (
+        <div role="alert" className="mt-3 border border-cta/60 bg-ink px-3 py-3">
+          <p className="text-lg font-semibold text-cta">{failure.title}</p>
+          <p className="mt-1 text-base leading-snug text-paper">{failure.next}</p>
+          {failure.retry ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={onRetry}
+              className="mt-3 inline-flex min-h-12 items-center justify-center bg-cta px-4 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
+            >
+              {pending ? "Saving…" : "Retry"}
+            </button>
+          ) : null}
+        </div>
       ) : null}
       <ReadAloudButton id="punch-status" text={spoken} label="Hear this" className="mt-3" />
 

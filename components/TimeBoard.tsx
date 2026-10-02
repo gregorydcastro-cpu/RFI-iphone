@@ -18,8 +18,9 @@ import {
 } from "@/lib/time";
 import { ReadAloudButton } from "@/components/ReadAloudButton";
 import { signedOutGate } from "@/lib/authMessages";
+import { punchFailureView, type PunchFailureView } from "@/lib/punchResult";
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 type Mode = "punch" | "crew";
 
@@ -44,8 +45,15 @@ export function TimeBoard({
   const [pin, setPin] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<PunchFailureView | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
+  const lastWorkerPunch = useRef<{
+    punchType: "in" | "out";
+    lat: number | null;
+    lng: number | null;
+    accuracy_m: number | null;
+  } | null>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 30_000);
@@ -72,17 +80,24 @@ export function TimeBoard({
     });
   }
 
+  function clearResult() {
+    setError(null);
+    setFailure(null);
+    setNotice(null);
+  }
+
   async function postPunch(body: Record<string, unknown>) {
     setPending(true);
     setError(null);
     setNotice(null);
+    const workerAttempt = body.foreman !== true;
     try {
       const response = await fetch("/api/time/punches", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = (await response.json()) as {
+      let data: {
         ok?: boolean;
         error?: string;
         code?: string;
@@ -92,8 +107,27 @@ export function TimeBoard({
         distance_m?: number;
         radius_m?: number;
       };
+      try {
+        data = (await response.json()) as typeof data;
+      } catch {
+        if (workerAttempt) setFailure(punchFailureView({ thrown: true }));
+        else setError("Could not reach time. Check the connection and try again.");
+        return;
+      }
       if (!response.ok || !punchWriteAccepted(data)) {
-        if (data.code === "off_site") {
+        if (workerAttempt) {
+          setFailure(
+            punchFailureView({
+              status: response.status,
+              code: data.code,
+              error: data.error,
+              storage: data.storage,
+              distance_m: data.distance_m,
+              radius_m: data.radius_m ?? snapshot.site.radius_m,
+              offline: typeof navigator !== "undefined" && navigator.onLine === false,
+            }),
+          );
+        } else if (data.code === "off_site") {
           setError(
             `Off site — punch-in locked (${Math.round(data.distance_m ?? 0)} m away, fence ${data.radius_m ?? snapshot.site.radius_m} m).`,
           );
@@ -111,6 +145,7 @@ export function TimeBoard({
           punches: mergePunches(prev.punches, incoming),
         }));
       }
+      setFailure(null);
       if (body.foreman === true) {
         setNotice(foremanPunchNotice(typeof body.punchId === "string" ? "edit" : "add"));
       } else if (body.punchType === "in" || body.punchType === "out") {
@@ -118,27 +153,51 @@ export function TimeBoard({
       } else {
         setNotice("Saved.");
       }
-      await reload(
-        body.foreman === true ? snapshot.weekStart : mondayOfWeek(todayYmd()),
-      );
+      try {
+        await reload(
+          body.foreman === true ? snapshot.weekStart : mondayOfWeek(todayYmd()),
+        );
+      } catch {
+        // The punch already landed. A dropped refresh is not a failed punch.
+      }
     } catch {
-      setError("Could not reach time. Check the connection and try again.");
+      if (workerAttempt) {
+        setFailure(
+          punchFailureView({
+            thrown: true,
+            offline: typeof navigator !== "undefined" && navigator.onLine === false,
+          }),
+        );
+      } else {
+        setError("Could not reach time. Check the connection and try again.");
+      }
     } finally {
       setPending(false);
     }
   }
 
+  function retryWorkerPunch() {
+    const last = lastWorkerPunch.current;
+    if (!last) return;
+    void postPunch({
+      workerId,
+      pin,
+      punchType: last.punchType,
+      lat: last.lat,
+      lng: last.lng,
+      accuracy_m: last.accuracy_m,
+    });
+  }
+
   function pickWorker(id: string) {
     setWorkerId(id);
     setPin("");
-    setNotice(null);
-    setError(null);
+    clearResult();
   }
 
   function pickMode(next: Mode) {
     setMode(next);
-    setError(null);
-    setNotice(null);
+    clearResult();
     if (next === "punch") void reload(mondayOfWeek(todayYmd()));
   }
 
@@ -183,20 +242,23 @@ export function TimeBoard({
             sessionEnded={sessionEnded}
             sessionEmail={sessionEmail}
             pending={pending}
-            error={error}
+            failure={failure}
             notice={notice}
             onWorkerId={pickWorker}
             onPin={setPin}
-            onPunch={(input) =>
-              postPunch({
+            onClearResult={clearResult}
+            onRetry={retryWorkerPunch}
+            onPunch={(input) => {
+              lastWorkerPunch.current = input;
+              return postPunch({
                 workerId,
                 pin,
                 punchType: input.punchType,
                 lat: input.lat,
                 lng: input.lng,
                 accuracy_m: input.accuracy_m,
-              })
-            }
+              });
+            }}
           />
         ) : (
           <ForemanWeekGrid
