@@ -265,7 +265,11 @@ export function RoomPackViewer({
           id="rfis"
           className="grid gap-5 border-t border-line pt-4 pb-8 lg:grid-cols-2"
         >
-          <RfiList rfis={displayedPack.rfis} />
+          <RfiList
+            rfis={displayedPack.rfis}
+            requestId={displayedRequest}
+            sheetIds={displayedPack.sheets.map((sheet) => sheet.id)}
+          />
           <div className="flex flex-col gap-5">
             <ActionPanel
               actions={actions}

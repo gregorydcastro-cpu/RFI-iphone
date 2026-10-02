@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
+import { JobsNextStep } from "@/components/JobsNextStep";
 import { ProcoreConnectCard } from "@/components/ProcoreConnectCard";
 import { VoiceCommandBar } from "@/components/VoiceCommandBar";
 import { DEMO_JOBS } from "@/lib/jobs";
@@ -66,6 +67,7 @@ export default async function JobsPage({ searchParams }: Props) {
             </p>
           </a>
         </div>
+        <JobsNextStep />
         <p className="mt-4 max-w-2xl text-sm text-muted">
           Fictional demo jobs only.
           {view.role === "puller"

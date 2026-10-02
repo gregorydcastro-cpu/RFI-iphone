@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { DictationButton } from "@/components/DictationButton";
 import { VoiceSetupNote } from "@/components/VoiceSetupNote";
 import type { DemoJob } from "@/lib/jobs";
+import { jobsFailureFromUnknown, type JobsOpenFailure } from "@/lib/jobsNext";
 import { packHrefForCommand, parseVoiceCommand } from "@/lib/voiceCommands";
 
 type JobsProps = {
@@ -25,22 +26,31 @@ type RequestProps = {
 type Props = JobsProps | RequestProps;
 
 async function pullThenOpen(job: DemoJob, room: string): Promise<string> {
-  const response = await fetch("/api/room-pack", {
-    method: "POST",
-    cache: "no-store",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ projectSlug: job.slug, room }),
-  });
-  const data = (await response.json()) as {
+  let response: Response;
+  try {
+    response = await fetch("/api/room-pack", {
+      method: "POST",
+      cache: "no-store",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectSlug: job.slug, room }),
+    });
+  } catch (caught) {
+    const error = new Error(caught instanceof Error ? caught.message : "Failed to fetch");
+    (error as Error & { status: number }).status = 0;
+    throw error;
+  }
+  const data = (await response.json().catch(() => null)) as {
     ok?: boolean;
     requestId?: string;
     job?: string;
     room?: string;
     error?: string;
-  };
-  if (!response.ok || !data.ok || !data.requestId) {
-    throw new Error(data.error ?? "Room pack request was not accepted");
+  } | null;
+  if (!response.ok || !data?.ok || !data.requestId) {
+    const error = new Error(data?.error ?? "");
+    (error as Error & { status: number }).status = response.status || 0;
+    throw error;
   }
   const params = new URLSearchParams({
     job: data.job ?? job.slug,
@@ -52,11 +62,15 @@ async function pullThenOpen(job: DemoJob, room: string): Promise<string> {
 export function VoiceCommandBar(props: Props) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<JobsOpenFailure | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const lastText = useRef("");
   const procoreLinked = Boolean(props.procoreLinked);
 
   async function onTranscript(text: string) {
+    lastText.current = text;
     setError(null);
+    setFailure(null);
     setStatus(null);
     const jobs = props.mode === "jobs" ? props.jobs : [props.job];
     const command = parseVoiceCommand(text, jobs);
@@ -109,11 +123,7 @@ export function VoiceCommandBar(props: Props) {
       setStatus(`Opening ${command.job.name} room ${command.room}…`);
       router.push(href);
     } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "Could not open that pack. Try the form.",
-      );
+      setFailure(jobsFailureFromUnknown(caught));
     }
   }
 
@@ -137,6 +147,22 @@ export function VoiceCommandBar(props: Props) {
         <p role="status" className="text-sm text-paper">
           {status}
         </p>
+      ) : null}
+      {failure ? (
+        <div role="alert" className="border border-tan/80 bg-ink px-3 py-3">
+          <p className="text-base leading-snug text-paper">{failure.message}</p>
+          {failure.retry ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (lastText.current) void onTranscript(lastText.current);
+              }}
+              className="mt-3 inline-flex min-h-12 items-center justify-center bg-cta px-4 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover"
+            >
+              Retry
+            </button>
+          ) : null}
+        </div>
       ) : null}
       {error ? (
         <p role="alert" className="text-sm text-cta">

@@ -1,8 +1,8 @@
 /**
- * Server insert for `public.rfis`.
+ * Server read/insert for `public.rfis`.
  *
- * Writes use SUPABASE_SERVICE_ROLE_KEY. user_id is auth.uid()::text.
- * Anon has no grants.
+ * Writes and the inbox list use SUPABASE_SERVICE_ROLE_KEY.
+ * user_id is auth.uid()::text. Anon has no grants.
  * Optional `markup_id` references `public.markup_overlays`.
  * Never call Procore from here.
  */
@@ -32,6 +32,44 @@ export type InsertRfiDraftInput = {
 
 export function isRfiTableWriteConfigured(): boolean {
   return getSupabaseServiceConfig() !== null;
+}
+
+/** This user's draft rows. Null means the read did not land. */
+export async function listRfiDraftRows(
+  userId: string,
+): Promise<RfiDraftRow[] | null> {
+  const config = getSupabaseServiceConfig();
+  if (!config) return [];
+  const id = userId.trim();
+  if (!id) return [];
+
+  const params = new URLSearchParams();
+  params.set("user_id", `eq.${id}`);
+  params.set(
+    "select",
+    "id,user_id,subject,description,location,sheet_id,markup_id,status,created_at,updated_at",
+  );
+  params.set("order", "created_at.desc");
+  params.set("limit", "40");
+
+  const response = await restFetch(config, `${RFIS_TABLE}?${params.toString()}`, {
+    method: "GET",
+  });
+  if (!response) return null;
+  if (!response.ok) {
+    console.error("[gcfieldlog] rfis list was not ok", {
+      status: response.status,
+    });
+    return null;
+  }
+  const json: unknown = await response.json().catch(() => null);
+  if (!Array.isArray(json)) return null;
+  const rows: RfiDraftRow[] = [];
+  for (const item of json) {
+    const row = asRfiDraftRow(item);
+    if (row) rows.push(row);
+  }
+  return rows;
 }
 
 export async function insertRfiDraftRow(
