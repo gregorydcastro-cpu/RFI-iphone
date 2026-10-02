@@ -14,6 +14,7 @@ export const SHEET_PDF_ERROR_CODES = [
   "drive_forbidden",
   "timeout",
   "upstream_failed",
+  "empty_body",
   "too_large",
   "not_pdf",
   "too_many_redirects",
@@ -41,6 +42,7 @@ export const SHEET_PDF_MESSAGES: Record<SheetPdfErrorCode, string> = {
     "Drive file is not shared with the service account. Share the Room Packs folder with the service account as Viewer.",
   timeout: "Timed out fetching the sheet PDF.",
   upstream_failed: "Could not reach Google Drive.",
+  empty_body: "Sheet PDF body was empty.",
   too_large: "Sheet PDF is larger than 45 MB.",
   not_pdf: "Sheet file was not a PDF.",
   too_many_redirects: "Sheet PDF had too many redirects.",
@@ -165,7 +167,7 @@ const FIELD_COPY: Record<SheetPdfErrorCode, { title: string; message: string }> 
   },
   pdf_missing: {
     title: "No PDF attached",
-    message: "No PDF attached for this sheet.",
+    message: "This sheet has no PDF yet.",
   },
   not_found: {
     title: "Sheet not found",
@@ -188,12 +190,16 @@ const FIELD_COPY: Record<SheetPdfErrorCode, { title: string; message: string }> 
       "This sheet is not shared with the Drive account. Share the Room Packs folder, then tap Retry.",
   },
   timeout: {
-    title: "Sheet timed out",
-    message: "The sheet PDF timed out. Tap Retry.",
+    title: "Sheet did not load",
+    message: "The sheet timed out. Tap Retry.",
   },
   upstream_failed: {
-    title: "Can't reach Drive",
-    message: "Could not reach Google Drive. Check the connection and tap Retry.",
+    title: "Sheet did not load",
+    message: "Could not reach Google Drive. Tap Retry.",
+  },
+  empty_body: {
+    title: "Sheet did not load",
+    message: "The sheet came back empty. Tap Retry.",
   },
   too_large: {
     title: "Sheet PDF too large",
@@ -223,14 +229,14 @@ const FIELD_COPY: Record<SheetPdfErrorCode, { title: string; message: string }> 
 };
 
 const NETWORK_BANNER: SheetPdfBanner = {
-  title: "Can't reach the sheet",
-  message: "Could not reach the sheet. Check the connection and tap Retry.",
+  title: "Sheet did not load",
+  message: "Shaky signal. Tap Retry.",
   retryable: true,
 };
 
 const INTERRUPTED_BANNER: SheetPdfBanner = {
-  title: "Sheet download stopped",
-  message: "The sheet PDF stopped before it finished. Tap Retry.",
+  title: "Sheet did not load",
+  message: "The sheet PDF stopped early. Tap Retry.",
   retryable: true,
 };
 
@@ -258,10 +264,66 @@ export function sheetPdfBanner(input: {
   if (status === 503) return sheetPdfBanner({ code: "drive_auth_missing" });
   if (status === 0) return NETWORK_BANNER;
   return {
-    title: "Sheet PDF failed",
+    title: "Sheet did not load",
     message: "Could not load this sheet. Tap Retry.",
     retryable: true,
   };
+}
+
+export function sheetPdfEmptySpeak(): string {
+  const banner = sheetPdfBanner({ code: "pdf_missing" });
+  return `${banner.title}. ${banner.message}`;
+}
+
+export function sheetPdfErrorSpeak(
+  banner: Pick<SheetPdfBanner, "title" | "message">,
+): string {
+  return `${banner.title}. ${banner.message}`;
+}
+
+export type SheetPdfSurface =
+  | { kind: "loading" }
+  | { kind: "sheet" }
+  | { kind: "empty"; title: string; message: string; speak: string }
+  | {
+      kind: "error";
+      title: string;
+      message: string;
+      retryable: boolean;
+      speak: string;
+    };
+
+/**
+ * No PDF on the sheet is a status. A failed Drive load is an alert with Retry.
+ * A cached sheet that already painted stays on screen.
+ */
+export function sheetPdfSurface(input: {
+  hasPdfUrl: boolean;
+  ready: boolean;
+  error: SheetPdfBanner | null;
+}): SheetPdfSurface {
+  const missing = !input.hasPdfUrl || input.error?.code === "pdf_missing";
+  if (missing) {
+    if (input.ready && input.hasPdfUrl) return { kind: "sheet" };
+    const banner = sheetPdfBanner({ code: "pdf_missing" });
+    return {
+      kind: "empty",
+      title: banner.title,
+      message: banner.message,
+      speak: sheetPdfEmptySpeak(),
+    };
+  }
+  if (input.error) {
+    return {
+      kind: "error",
+      title: input.error.title,
+      message: input.error.message,
+      retryable: input.error.retryable,
+      speak: sheetPdfErrorSpeak(input.error),
+    };
+  }
+  if (!input.ready) return { kind: "loading" };
+  return { kind: "sheet" };
 }
 
 export function bannerFromSheetPdfBody(

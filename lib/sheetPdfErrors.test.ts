@@ -8,6 +8,9 @@ import {
   readSheetPdfBanner,
   SHEET_PDF_MESSAGES,
   sheetPdfBanner,
+  sheetPdfEmptySpeak,
+  sheetPdfErrorSpeak,
+  sheetPdfSurface,
 } from "./sheetPdfErrors.ts";
 
 const SECRET_MARKERS = [
@@ -93,15 +96,21 @@ test("field banners differ for missing account, share, and network", () => {
   assert.equal(missing.retryable, true);
   assert.equal(shared.retryable, true);
   assert.equal(offline.retryable, true);
-  assert.equal(timedOut.title, "Sheet timed out");
+  assert.equal(timedOut.title, "Sheet did not load");
+  assert.match(timedOut.message, /timed out/);
   assert.match(missing.message, /service account/i);
   assert.match(shared.message, /not shared/i);
-  assert.match(offline.message, /connection/i);
+  assert.match(offline.message, /Shaky signal/);
+  assert.match(offline.message, /Retry/);
   assert.equal(sheetPdfBanner({ code: "pdf_missing" }).retryable, false);
   const stopped = sheetPdfBanner({ interrupted: true });
-  assert.equal(stopped.title, "Sheet download stopped");
+  assert.equal(stopped.title, "Sheet did not load");
   assert.match(stopped.message, /Tap Retry/);
   assert.equal(stopped.retryable, true);
+  const emptyBody = sheetPdfBanner({ code: "empty_body" });
+  assert.equal(emptyBody.title, "Sheet did not load");
+  assert.match(emptyBody.message, /empty/);
+  assert.equal(emptyBody.retryable, true);
   assert.equal(stopped.code, undefined);
   assert.equal(sheetPdfBanner({ code: "timeout" }).code, "timeout");
 });
@@ -124,8 +133,67 @@ test("banner uses the code and ignores a poisoned error string", async () => {
       headers: { "content-type": "application/json" },
     }),
   );
-  assert.equal(fromResponse.title, "Sheet timed out");
+  assert.equal(fromResponse.title, "Sheet did not load");
+  assert.match(fromResponse.message, /timed out/);
   assert.equal(fromResponse.message.includes("eyJ"), false);
+});
+
+test("empty sheet is a status and a failed load is a retry", () => {
+  const empty = sheetPdfSurface({
+    hasPdfUrl: false,
+    ready: false,
+    error: null,
+  });
+  const missing = sheetPdfSurface({
+    hasPdfUrl: true,
+    ready: false,
+    error: sheetPdfBanner({ code: "pdf_missing" }),
+  });
+  const failed = sheetPdfSurface({
+    hasPdfUrl: true,
+    ready: false,
+    error: sheetPdfBanner({ network: true }),
+  });
+  const blank = sheetPdfSurface({
+    hasPdfUrl: true,
+    ready: false,
+    error: sheetPdfBanner({ code: "empty_body" }),
+  });
+  const painted = sheetPdfSurface({
+    hasPdfUrl: true,
+    ready: true,
+    error: null,
+  });
+  assert.equal(empty.kind, "empty");
+  assert.equal(missing.kind, "empty");
+  assert.equal(failed.kind, "error");
+  assert.equal(blank.kind, "error");
+  assert.equal(painted.kind, "sheet");
+  if (empty.kind === "empty" && failed.kind === "error" && blank.kind === "error") {
+    assert.equal(empty.title, "No PDF attached");
+    assert.equal(empty.message.includes("Retry"), false);
+    assert.match(sheetPdfEmptySpeak(), /No PDF attached/);
+    assert.equal(sheetPdfEmptySpeak().includes("Retry"), false);
+    assert.equal(failed.retryable, true);
+    assert.match(failed.message, /Shaky signal/);
+    assert.match(sheetPdfErrorSpeak(failed), /Retry/);
+    assert.match(blank.message, /empty/);
+    assert.equal(blank.retryable, true);
+    assert.notEqual(empty.title, failed.title);
+    assert.notEqual(empty.message, blank.message);
+  }
+  assert.equal(
+    sheetPdfSurface({
+      hasPdfUrl: true,
+      ready: true,
+      error: sheetPdfBanner({ code: "pdf_missing" }),
+    }).kind,
+    "sheet",
+  );
+  assert.equal(
+    sheetPdfSurface({ hasPdfUrl: true, ready: false, error: null }).kind,
+    "loading",
+  );
 });
 
 test("canonical messages do not contain secret material", () => {

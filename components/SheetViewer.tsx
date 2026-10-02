@@ -34,19 +34,24 @@ import {
 import {
   readSheetPdfBanner,
   sheetPdfBanner,
+  sheetPdfSurface,
   type SheetPdfBanner,
 } from "@/lib/sheetPdfErrors";
 import {
   isOfflinePdfResponse,
+  isSheetPaintTimeout,
   isShortPdfDownload,
   SHEET_PDF_CLIENT_ATTEMPTS,
   SHEET_PDF_CLIENT_BACKOFF_MS,
+  SHEET_PDF_CLIENT_TIMEOUT_MS,
+  SHEET_PDF_PAINT_TIMEOUT_MS,
+  sheetPdfFetchCatch,
   shouldAutoRetrySheetPdf,
 } from "@/lib/sheetPdfLoad";
 import { isPdfMagic } from "@/lib/sheetPdfUrl";
 import { MarkupOverlay } from "./MarkupOverlay";
 import { MarkupToolbar } from "./MarkupToolbar";
-import { SheetPdfErrorBanner } from "./SheetPdfErrorBanner";
+import { SheetPdfEmptyState, SheetPdfErrorBanner } from "./SheetPdfErrorBanner";
 import { useMarkupOverlay } from "./useMarkupOverlay";
 
 type Props = {
@@ -104,6 +109,11 @@ export function SheetViewer({
     const canvas = canvasRef.current;
     if (!pdfUrl || !canvas) return;
     const abort = new AbortController();
+    let timedOut = false;
+    const deadline = setTimeout(() => {
+      timedOut = true;
+      abort.abort();
+    }, SHEET_PDF_CLIENT_TIMEOUT_MS);
 
     async function tryCachedPdf(): Promise<Uint8Array | null> {
       const cached = await matchCachedPdf(pdfUrl);
@@ -116,7 +126,12 @@ export function SheetViewer({
       return bytes;
     }
 
-    async function paintPdf(bytes: Uint8Array) {
+    function paintFailure(err: unknown): SheetPdfBanner {
+      if (isSheetPaintTimeout(err)) return sheetPdfBanner({ code: "timeout" });
+      return sheetPdfBanner({ interrupted: true });
+    }
+
+    async function paintPdfNow(bytes: Uint8Array) {
       const pdfjs = await import("pdfjs-dist");
       pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
       const loadingTask = pdfjs.getDocument({ data: bytes });
@@ -134,6 +149,22 @@ export function SheetViewer({
       if (!cancelled) {
         setReady(true);
         transformRef.current?.resetTransform();
+      }
+    }
+
+    async function paintPdf(bytes: Uint8Array) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const deadline = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          const error = new Error("sheet paint timed out");
+          error.name = "TimeoutError";
+          reject(error);
+        }, SHEET_PDF_PAINT_TIMEOUT_MS);
+      });
+      try {
+        await Promise.race([paintPdfNow(bytes), deadline]);
+      } finally {
+        if (timer) clearTimeout(timer);
       }
     }
 
@@ -169,9 +200,12 @@ export function SheetViewer({
           return;
         }
       } catch (err: unknown) {
-        if (cancelled || isAbort(err)) return;
+        if (cancelled) return;
+        if (isAbort(err) && !timedOut) return;
       }
-      if (!cancelled) setError(banner);
+      if (!cancelled) {
+        setError(timedOut ? sheetPdfBanner({ code: "timeout" }) : banner);
+      }
     }
 
     async function render() {
@@ -181,7 +215,11 @@ export function SheetViewer({
       let banner: SheetPdfBanner = sheetPdfBanner({ network: true });
 
       for (let attempt = 0; attempt < SHEET_PDF_CLIENT_ATTEMPTS; attempt++) {
-        if (cancelled || abort.signal.aborted) return;
+        if (cancelled) return;
+        if (timedOut) {
+          await showCachedOrBanner(sheetPdfBanner({ code: "timeout" }));
+          return;
+        }
         let response: Response;
         try {
           response = await fetch(pdfUrl, {
@@ -189,9 +227,19 @@ export function SheetViewer({
             credentials: "same-origin",
           });
         } catch (err: unknown) {
-          if (cancelled || isAbort(err)) return;
+          const decision = sheetPdfFetchCatch({
+            cancelled,
+            timedOut,
+            aborted: isAbort(err),
+            attempt,
+          });
+          if (decision === "ignore") return;
+          if (decision === "timeout") {
+            await showCachedOrBanner(sheetPdfBanner({ code: "timeout" }));
+            return;
+          }
           banner = sheetPdfBanner({ network: true });
-          if (shouldAutoRetrySheetPdf({ attempt, network: true })) {
+          if (decision === "retry") {
             await pause(SHEET_PDF_CLIENT_BACKOFF_MS);
             continue;
           }
@@ -211,8 +259,11 @@ export function SheetViewer({
             setOfflineCopy(true);
             await paintPdf(bytes);
           } catch (err: unknown) {
-            if (cancelled || isAbort(err)) return;
-            await showCachedOrBanner(sheetPdfBanner({ interrupted: true }));
+            if (cancelled) return;
+            if (isAbort(err) && !timedOut) return;
+            await showCachedOrBanner(
+              timedOut ? sheetPdfBanner({ code: "timeout" }) : paintFailure(err),
+            );
           }
           return;
         }
@@ -227,7 +278,12 @@ export function SheetViewer({
         try {
           bytes = new Uint8Array(await response.arrayBuffer());
         } catch (err: unknown) {
-          if (cancelled || isAbort(err)) return;
+          if (cancelled) return;
+          if (timedOut) {
+            await showCachedOrBanner(sheetPdfBanner({ code: "timeout" }));
+            return;
+          }
+          if (isAbort(err)) return;
           banner = sheetPdfBanner({ interrupted: true });
           if (shouldAutoRetrySheetPdf({ attempt, interrupted: true })) {
             await pause(SHEET_PDF_CLIENT_BACKOFF_MS);
@@ -237,6 +293,16 @@ export function SheetViewer({
           return;
         }
         if (cancelled) return;
+
+        if (bytes.byteLength === 0) {
+          banner = sheetPdfBanner({ code: "empty_body" });
+          if (shouldAutoRetrySheetPdf({ attempt, interrupted: true })) {
+            await pause(SHEET_PDF_CLIENT_BACKOFF_MS);
+            continue;
+          }
+          await showCachedOrBanner(banner);
+          return;
+        }
 
         if (
           isShortPdfDownload(
@@ -265,8 +331,11 @@ export function SheetViewer({
         try {
           await paintPdf(bytes);
         } catch (err: unknown) {
-          if (cancelled || isAbort(err)) return;
-          await showCachedOrBanner(sheetPdfBanner({ interrupted: true }));
+          if (cancelled) return;
+          if (isAbort(err) && !timedOut) return;
+          await showCachedOrBanner(
+            timedOut ? sheetPdfBanner({ code: "timeout" }) : paintFailure(err),
+          );
           return;
         }
         return;
@@ -276,18 +345,32 @@ export function SheetViewer({
     }
 
     void render().catch(async (err: unknown) => {
-      if (cancelled || isAbort(err)) return;
-      await showCachedOrBanner(sheetPdfBanner({ interrupted: true }));
+      const decision = sheetPdfFetchCatch({
+        cancelled,
+        timedOut,
+        aborted: isAbort(err),
+        attempt: SHEET_PDF_CLIENT_ATTEMPTS,
+      });
+      if (decision === "ignore") return;
+      await showCachedOrBanner(
+        timedOut
+          ? sheetPdfBanner({ code: "timeout" })
+          : sheetPdfBanner({ interrupted: true }),
+      );
     });
 
     return () => {
       cancelled = true;
+      clearTimeout(deadline);
       abort.abort();
     };
   }, [loadAttempt, pdfUrl]);
 
-  const missingPdf = !pdfUrl;
-  const failure = missingPdf ? sheetPdfBanner({ code: "pdf_missing" }) : error;
+  const surface = sheetPdfSurface({
+    hasPdfUrl: Boolean(pdfUrl),
+    ready,
+    error,
+  });
   const selected: MarkupVector | null =
     markup.items.find((item) => item.id === selectedId) ?? null;
   const drawing = tool !== "pan";
@@ -363,7 +446,7 @@ export function SheetViewer({
     }
   }
 
-  const showOfflineNote = offlineCopy && ready && !failure;
+  const showOfflineNote = offlineCopy && surface.kind === "sheet";
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-charcoal">
@@ -494,21 +577,33 @@ export function SheetViewer({
                   ? "Markup selected · Create RFI sends a draft to the foreman"
                   : "Pinch or +/− to zoom · drag to pan · tap a note to edit"}
         </p>
-        {!ready && !failure ? (
+        {surface.kind === "loading" ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-charcoal/80 text-sm text-muted">
             Loading sheet…
           </div>
         ) : null}
-        {failure ? (
+        {surface.kind === "error" ? (
           <div className="absolute inset-0 z-30 flex items-start justify-center overflow-y-auto bg-charcoal/85 px-3 pt-16 pb-16 sm:items-center sm:pt-4">
             <SheetPdfErrorBanner
-              title={failure.title}
-              message={failure.message}
+              title={surface.title}
+              message={surface.message}
+              speak={surface.speak}
+              speakId={`sheet-pdf-error-${sheetId ?? "sheet"}`}
               onRetry={
-                failure.retryable
+                surface.retryable
                   ? () => setLoadAttempt((current) => current + 1)
                   : undefined
               }
+            />
+          </div>
+        ) : null}
+        {surface.kind === "empty" ? (
+          <div className="absolute inset-0 z-30 flex items-start justify-center overflow-y-auto bg-charcoal/85 px-3 pt-16 pb-16 sm:items-center sm:pt-4">
+            <SheetPdfEmptyState
+              title={surface.title}
+              message={surface.message}
+              speak={surface.speak}
+              speakId={`sheet-pdf-empty-${sheetId ?? "sheet"}`}
             />
           </div>
         ) : null}
