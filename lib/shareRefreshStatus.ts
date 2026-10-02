@@ -10,6 +10,7 @@ import {
   SHARE_RECONNECT_NOTE,
   SHARE_REFRESH_TIMEOUT,
 } from "./procoreAuthHealth.ts";
+import { isTransientPackStatus } from "./packLoadField.ts";
 import type { ShareRefreshError, ShareRefreshItem } from "./shareRefresh";
 
 export const SHARE_REFRESH_PROGRESS_LABEL = "Checking pinned sheet revisions…";
@@ -239,18 +240,100 @@ export function shareRefreshBlockedMessage(input: {
 export function shareRefreshFailureMessage(input: {
   status: number;
   error?: string;
+  network?: boolean;
+  timedOut?: boolean;
 }): string {
-  if (input.status === 0) return SHARE_REFRESH_TIMEOUT;
-  if (input.status === 401) return "Sign in to refresh pinned sheets.";
-  if (input.status === 403) return PULLER_ONLY;
-  const error = input.error?.trim() ?? "";
-  if (
-    error.length === 0 ||
-    /cookie|header|sheet_revision_cache|pinned_sheets|notify_email|procoreLinked/i.test(
-      error,
-    )
-  ) {
-    return "Refresh all did not finish. Try again.";
+  return shareRefreshFailureView(input).message;
+}
+
+export type ShareRefreshFailure = {
+  title: string;
+  message: string;
+  speak: string;
+  retry: boolean;
+};
+
+const SHARE_REFRESH_FAIL_TITLE = "Refresh did not finish";
+const SHARE_REFRESH_FAIL_RETRY = "Refresh all did not finish. Tap Retry.";
+const SHARE_REFRESH_NETWORK = "Shaky signal. Saved pins stay put. Tap Retry.";
+
+/**
+ * Hard failure of Refresh all. Never echoes upstream or table text.
+ * Empty (no pins) and a partial check are outcomes, not this card.
+ */
+export function shareRefreshFailureView(input: {
+  status: number;
+  error?: string;
+  network?: boolean;
+  timedOut?: boolean;
+}): ShareRefreshFailure {
+  if (input.timedOut) {
+    const message = SHARE_REFRESH_TIMEOUT;
+    return {
+      title: SHARE_REFRESH_FAIL_TITLE,
+      message,
+      speak: `${SHARE_REFRESH_FAIL_TITLE}. ${message}`,
+      retry: true,
+    };
   }
-  return error;
+  if (input.network || input.status === 0) {
+    const message = input.network ? SHARE_REFRESH_NETWORK : SHARE_REFRESH_TIMEOUT;
+    return {
+      title: SHARE_REFRESH_FAIL_TITLE,
+      message,
+      speak: `${SHARE_REFRESH_FAIL_TITLE}. ${message}`,
+      retry: true,
+    };
+  }
+  if (input.status === 401) {
+    const message = "Sign in to refresh pinned sheets.";
+    return {
+      title: "Sign in to refresh",
+      message,
+      speak: message,
+      retry: false,
+    };
+  }
+  if (input.status === 403) {
+    return {
+      title: "Pullers only",
+      message: PULLER_ONLY,
+      speak: PULLER_ONLY,
+      retry: false,
+    };
+  }
+  const retry = isTransientPackStatus(input.status);
+  const message = SHARE_REFRESH_FAIL_RETRY;
+  return {
+    title: SHARE_REFRESH_FAIL_TITLE,
+    message,
+    speak: `${SHARE_REFRESH_FAIL_TITLE}. ${message}`,
+    retry,
+  };
+}
+
+export function shareOutcomeSpeak(outcome: ShareRefreshOutcome): string {
+  return [outcome.headline, ...outcome.lines.map((line) => line.text), outcome.notifyLine]
+    .filter((line): line is string => Boolean(line && line.trim()))
+    .join(" ");
+}
+
+/** One retry for a fast drop, a 5xx, or an unreadable body. A timeout does not start another wait. */
+export function shouldAutoRetryShareRefresh(input: {
+  attempt: number;
+  attempts?: number;
+  status?: number;
+  network?: boolean;
+  emptyBody?: boolean;
+  timedOut?: boolean;
+}): boolean {
+  const attempts = input.attempts ?? 2;
+  if (input.attempt >= attempts - 1) return false;
+  if (input.timedOut) return false;
+  const status = input.status ?? 0;
+  if (status === 401 || status === 403 || status === 400 || status === 404) {
+    return false;
+  }
+  if (input.network || input.emptyBody) return true;
+  return isTransientPackStatus(status);
 }

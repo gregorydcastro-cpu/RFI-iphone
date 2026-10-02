@@ -145,7 +145,11 @@ test("pack refresh keeps the pack on a dead Procore session and does not hang", 
         pull: "none",
         restReason: "token_refresh_failed",
         reconnectNeeded: true,
-        pack: { project: { name: "Maple Point Medical Office" } },
+        pack: {
+          project: { name: "Maple Point Medical Office" },
+          room: { name: "101" },
+          sheets: [{ id: "A-101", rev: "A", pdf: "" }],
+        },
       }),
       { status: 200, headers: { "content-type": "application/json" } },
     );

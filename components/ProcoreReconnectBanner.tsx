@@ -1,6 +1,11 @@
 "use client";
 
-import { ReadAloudButton } from "@/components/ReadAloudButton";
+import { PackFieldBanner } from "@/components/PackFieldBanner";
+import {
+  packFieldAlert,
+  packFieldSpeak,
+  packFieldTitle,
+} from "@/lib/packLoadField";
 import type { PackPullNotice } from "@/lib/procoreAuthHealth";
 
 type Props = {
@@ -13,6 +18,7 @@ type Props = {
 /**
  * Soft status under the pack header. The saved pack stays on screen.
  * Reconnect uses the same /api/procore/connect flow.
+ * A failed pull uses the same Retry + Hear this card as a sheet miss.
  */
 export function ProcoreReconnectBanner({
   notice,
@@ -20,34 +26,22 @@ export function ProcoreReconnectBanner({
   onRetry,
   busy = false,
 }: Props) {
+  const retry = notice.retry && onRetry ? onRetry : undefined;
   return (
-    <div className="border-b border-tan/60 bg-panel px-4 py-3" role="status">
-      <p className="text-base text-paper">{notice.text}</p>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {notice.reconnect && reconnectHref ? (
-          <a
-            href={reconnectHref}
-            className="inline-flex min-h-11 items-center bg-cta px-4 py-2 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover"
-          >
-            Reconnect
-          </a>
-        ) : null}
-        {notice.retry && onRetry ? (
-          <button
-            type="button"
-            onClick={onRetry}
-            disabled={busy}
-            className="inline-flex min-h-11 items-center border border-line px-4 py-2 text-sm font-semibold tracking-wide text-paper uppercase hover:border-cta disabled:opacity-60"
-          >
-            Retry
-          </button>
-        ) : null}
-        <ReadAloudButton
-          id="pack-procore-status"
-          text={notice.text}
-          label="Hear this"
-        />
-      </div>
+    <div className="border-b border-line bg-ink px-4 py-3">
+      <PackFieldBanner
+        title={packFieldTitle(notice)}
+        message={notice.text}
+        speak={packFieldSpeak(notice)}
+        speakId="pack-procore-status"
+        alert={packFieldAlert(notice)}
+        reconnectHref={notice.reconnect ? reconnectHref : undefined}
+        reconnectLabel="Reconnect"
+        onRetry={retry}
+        retryDisabled={busy}
+        retryLabel="Retry"
+        hearLabel="Hear this"
+      />
     </div>
   );
 }

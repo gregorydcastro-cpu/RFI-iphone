@@ -5,8 +5,11 @@ import {
   SHARE_REFRESH_BUSY_LABEL,
   SHARE_REFRESH_PROGRESS_LABEL,
   describeShareRefreshOutcome,
+  shareOutcomeSpeak,
   shareRefreshBlockedMessage,
   shareRefreshFailureMessage,
+  shareRefreshFailureView,
+  shouldAutoRetryShareRefresh,
 } from "./shareRefreshStatus.ts";
 
 const forbidden = /Brown|Rossi|Danoff|Suffolk|ILSB|EL107/i;
@@ -304,15 +307,41 @@ test("failed refresh hides cookie and table jargon", () => {
       status: 500,
       error: "sheet_revision_cache upsert failed",
     }),
-    "Refresh all did not finish. Try again.",
+    "Refresh all did not finish. Tap Retry.",
   );
   assert.equal(
     shareRefreshFailureMessage({ status: 500, error: "Could not load folders" }),
-    "Could not load folders",
+    "Refresh all did not finish. Tap Retry.",
   );
-  assert.equal(shareRefreshFailureMessage({ status: 500 }), "Refresh all did not finish. Try again.");
+  assert.equal(
+    shareRefreshFailureMessage({ status: 500 }),
+    "Refresh all did not finish. Tap Retry.",
+  );
   assert.equal(
     shareRefreshFailureMessage({ status: 0 }),
     "Refresh all didn't finish. Saved pins stay put. Retry.",
   );
+  assert.equal(
+    shareRefreshFailureMessage({ status: 0, error: "TypeError: Failed to fetch" }).includes(
+      "Failed to fetch",
+    ),
+    false,
+  );
+  const failed = shareRefreshFailureView({
+    status: 503,
+    error: "sheet_revision_cache upsert failed",
+  });
+  assert.equal(failed.retry, true);
+  assert.equal(failed.title, "Refresh did not finish");
+  assert.equal(shareRefreshFailureView({ status: 401 }).retry, false);
+  assert.equal(shareRefreshFailureView({ status: 403 }).retry, false);
+  assert.equal(shouldAutoRetryShareRefresh({ attempt: 0, status: 503 }), true);
+  assert.equal(shouldAutoRetryShareRefresh({ attempt: 1, status: 503 }), false);
+  assert.equal(shouldAutoRetryShareRefresh({ attempt: 0, network: true }), true);
+  assert.equal(shouldAutoRetryShareRefresh({ attempt: 0, timedOut: true, network: true }), false);
+  assert.equal(shouldAutoRetryShareRefresh({ attempt: 0, status: 401 }), false);
+  const empty = describeShareRefreshOutcome({ scanned: 0, items: [] });
+  assert.equal(empty.tone, "empty");
+  assert.match(shareOutcomeSpeak(empty), /No pinned sheets/);
+  assert.equal(forbidden.test(shareOutcomeSpeak(empty) + failed.speak), false);
 });

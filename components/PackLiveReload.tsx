@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useOfflinePackCache } from "@/components/useOfflinePackCache";
 import {
   isOfflineFetchFailure,
@@ -9,7 +9,21 @@ import {
 } from "@/lib/offlinePackCache";
 import type { RoomPack } from "@/lib/pack";
 import { formatPulledAt, sheetRevisionLabel } from "@/lib/pack";
-import type { PackPullNotice } from "@/lib/procoreAuthHealth";
+import {
+  PACK_EMPTY_BODY_TEXT,
+  PACK_KEPT_TEXT,
+  PACK_LOAD_ATTEMPTS,
+  PACK_LOAD_BACKOFF_MS,
+  PACK_NONE_MESSAGE,
+  classifyPackHttp,
+  packPayloadState,
+  type PackHttpClass,
+} from "@/lib/packLoadField";
+import {
+  PACK_REFRESH_CLIENT_MS,
+  PACK_RECONNECT_STRIP,
+  type PackPullNotice,
+} from "@/lib/procoreAuthHealth";
 import { requestPackRefresh } from "@/lib/procorePackRefresh";
 
 export type PackLiveMeta = {
@@ -26,16 +40,19 @@ type Props = {
   procoreLinked: boolean;
   supabaseConfigured: boolean;
   demoFallback: boolean;
+  /** Sheets already on screen. An empty or partial pull must not wipe them. */
+  hasSheets?: boolean;
+  /** Page already knows Procore needs a reconnect. A blip must not clear that. */
+  sessionReconnect?: boolean;
   retryToken?: number;
   onPack: (pack: RoomPack, meta?: PackLiveMeta) => void;
   onNotice?: (notice: PackPullNotice | null) => void;
+  onBusy?: (busy: boolean) => void;
 };
 
 type LivePayload = {
-  ok?: boolean;
-  error?: string;
-  source?: string;
   pull?: string;
+  source?: string;
   restReason?: string;
   demoFallback?: boolean;
   pulled_at?: string;
@@ -47,6 +64,7 @@ type LivePayload = {
  * On every website pack open: re-read latest room_packs (no-store).
  * Pullers POST a refresh that tries Procore REST first, then the bot.
  * A dead Procore session keeps the pack and asks to reconnect.
+ * A dropped load shows Retry. An honest empty does not.
  * Viewers never trigger a pull. No expiry poll loop.
  */
 export function PackLiveReload({
@@ -56,9 +74,12 @@ export function PackLiveReload({
   procoreLinked,
   supabaseConfigured,
   demoFallback,
+  hasSheets = false,
+  sessionReconnect = false,
   retryToken = 0,
   onPack,
   onNotice,
+  onBusy,
 }: Props) {
   const [message, setMessage] = useState<string>(
     supabaseConfigured
@@ -72,24 +93,39 @@ export function PackLiveReload({
     roomId: requestedRoom,
   });
 
+  const publish = useCallback(
+    (next: PackPullNotice | null, healthy = false) => {
+      if (sessionReconnect && !healthy && next?.tone !== "reconnect") return;
+      onNotice?.(next);
+    },
+    [onNotice, sessionReconnect],
+  );
+
+  useEffect(() => {
+    onBusy?.(busy);
+  }, [busy, onBusy]);
+
   useEffect(() => {
     let cancelled = false;
 
-    async function acceptLive(data: LivePayload) {
-      if (!data.pack || cancelled) return false;
-      onPack(data.pack, {
-        source: data.source,
-        pull: data.pull,
-        offline: false,
-        snapshot: null,
+    function wait(ms: number) {
+      if (ms <= 0) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        setTimeout(resolve, ms);
       });
-      await offline.remember(data.pack);
+    }
+
+    async function acceptLive(pack: RoomPack, meta: PackLiveMeta) {
+      if (cancelled) return false;
+      if (hasSheets && packPayloadState(pack) !== "ready") return false;
+      onPack(pack, meta);
+      if (pack.sheets.length > 0) await offline.remember(pack);
       return true;
     }
 
-    async function serveOffline() {
+    async function serveOffline(notice: PackPullNotice | null) {
       const snapshot = await offline.readFallback(false);
-      if (cancelled) return Boolean(snapshot);
+      if (cancelled) return false;
       if (!snapshot) return false;
       onPack(snapshot.pack, {
         source: "offline",
@@ -97,12 +133,182 @@ export function PackLiveReload({
         offline: true,
         snapshot,
       });
-      setMessage(OFFLINE_STATUS_LINE);
+      if (notice?.tone === "reconnect") publish(notice);
+      else publish(null);
+      setMessage(
+        notice?.tone === "reconnect" || sessionReconnect
+          ? (notice?.strip ?? PACK_RECONNECT_STRIP)
+          : OFFLINE_STATUS_LINE,
+      );
       return true;
+    }
+
+    function holdNotice(notice: PackPullNotice | null) {
+      publish(notice);
+      if (notice && (!sessionReconnect || notice.tone === "reconnect")) {
+        setMessage(notice.strip);
+      }
+    }
+
+    async function readLive(attempt = 0): Promise<PackHttpClass> {
+      const controller = new AbortController();
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, PACK_REFRESH_CLIENT_MS);
+      try {
+        const params = new URLSearchParams({ requestId });
+        if (projectSlug) params.set("job", projectSlug);
+        if (requestedRoom) params.set("room", requestedRoom);
+        const live = await fetch(`/api/room-pack/live?${params.toString()}`, {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+          signal: controller.signal,
+        });
+        let text = "";
+        try {
+          text = await live.text();
+        } catch {
+          text = "";
+        }
+        let body: unknown = null;
+        let unreadable = text.trim().length === 0;
+        if (!unreadable) {
+          try {
+            body = JSON.parse(text) as unknown;
+          } catch {
+            body = null;
+            unreadable = true;
+          }
+        }
+        const classified = classifyPackHttp({
+          httpStatus: live.status,
+          ok: live.ok,
+          body,
+          unreadable,
+          attempt,
+        });
+        if (!cancelled && classified.autoRetry && attempt < PACK_LOAD_ATTEMPTS - 1) {
+          await wait(PACK_LOAD_BACKOFF_MS);
+          if (cancelled) return classified;
+          return readLive(attempt + 1);
+        }
+        return classified;
+      } catch {
+        if (cancelled) {
+          return classifyPackHttp({
+            httpStatus: 0,
+            ok: false,
+            body: null,
+            network: true,
+            attempt: PACK_LOAD_ATTEMPTS,
+          });
+        }
+        const classified = classifyPackHttp({
+          httpStatus: 0,
+          ok: false,
+          body: null,
+          timedOut,
+          network: !timedOut,
+          attempt,
+        });
+        if (classified.autoRetry && attempt < PACK_LOAD_ATTEMPTS - 1) {
+          await wait(PACK_LOAD_BACKOFF_MS);
+          if (cancelled) return classified;
+          return readLive(attempt + 1);
+        }
+        return classified;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    async function applyClassified(
+      classified: PackHttpClass,
+      pending: PackPullNotice | null,
+    ): Promise<"shown" | "empty" | "failed"> {
+      const notice =
+        pending?.tone === "reconnect" ? pending : (classified.notice ?? pending);
+        if (classified.viewOnly) {
+          publish(null, true);
+          setMessage("View only — pulls are disabled for this session.");
+          return "shown";
+        }
+        if (classified.pack && packPayloadState(classified.pack) === "ready") {
+          const accepted = await acceptLive(classified.pack, {
+            source: classified.source,
+            pull: classified.pull,
+            offline: false,
+            snapshot: null,
+          });
+          if (!accepted || cancelled) return "failed";
+          const healthy = classified.pull === "procore" && !classified.notice;
+          if (notice?.tone === "reconnect") publish(notice);
+          else if (healthy) publish(null, true);
+          else if (classified.notice) publish(classified.notice);
+        setMessage(
+          (notice?.tone === "reconnect" ? notice.strip : classified.notice?.strip) ??
+            statusLine(
+              {
+                pull: classified.pull,
+                source: classified.source,
+                restReason: classified.restReason,
+                pack: classified.pack,
+              },
+              requestedRoom,
+            ),
+        );
+        return "shown";
+      }
+      if (classified.empty && !classified.notice) {
+        if (hasSheets) {
+          if (pending && pending.tone !== "hint") holdNotice(pending);
+          else {
+            holdNotice({
+              tone: "hint",
+              text: PACK_KEPT_TEXT,
+              strip: PACK_KEPT_TEXT,
+              reconnect: false,
+              retry: false,
+            });
+          }
+          return "empty";
+        }
+        if (classified.pack && packPayloadState(classified.pack) === "empty") {
+          await acceptLive(classified.pack, {
+            source: classified.source,
+            pull: classified.pull,
+            offline: false,
+            snapshot: null,
+          });
+        }
+        if (pending?.tone === "reconnect") publish(pending);
+        setMessage(PACK_NONE_MESSAGE);
+        return "empty";
+      }
+      if (
+        classified.pack &&
+        packPayloadState(classified.pack) === "empty" &&
+        hasSheets
+      ) {
+        holdNotice({
+          tone: "retry",
+          text: PACK_EMPTY_BODY_TEXT,
+          strip: "Saved pack · pull did not finish.",
+          reconnect: false,
+          retry: true,
+        });
+        return "failed";
+      }
+      holdNotice(notice);
+      return "failed";
     }
 
     async function load() {
       setBusy(true);
+      let pending: PackPullNotice | null = null;
       let fetchFailed = false;
       try {
         if (procoreLinked) {
@@ -112,75 +318,63 @@ export function PackLiveReload({
             room: requestedRoom,
           });
           if (cancelled) return;
-          onNotice?.(refresh.notice);
           if (refresh.viewOnly) {
+            publish(null, true);
             setMessage("View only — pulls are disabled for this session.");
-          } else if (refresh.pack) {
-            const accepted = await acceptLive({
-              ok: true,
+            return;
+          }
+          const applied = await applyClassified(
+            {
               pack: refresh.pack,
               source: refresh.source,
               pull: refresh.pull,
               restReason: refresh.restReason,
-            });
-            if (cancelled) return;
-            if (accepted) {
-              setMessage(
-                refresh.notice?.strip ??
-                  statusLine(
-                    {
-                      pull: refresh.pull,
-                      source: refresh.source,
-                      restReason: refresh.restReason,
-                      pack: refresh.pack,
-                    },
-                    requestedRoom,
-                  ),
-              );
-              return;
-            }
-          } else if (refresh.offline) {
-            fetchFailed = true;
-            if (refresh.notice) setMessage(refresh.notice.strip);
-          } else if (refresh.notice) {
-            setMessage(refresh.notice.strip);
-          }
+              notice: refresh.notice,
+              viewOnly: false,
+              offline: refresh.offline,
+              empty: refresh.empty,
+              httpStatus: refresh.httpStatus,
+              autoRetry: false,
+            },
+            null,
+          );
+          if (cancelled) return;
+          if (applied === "shown") return;
+          pending = refresh.notice;
+          fetchFailed = refresh.offline || refresh.notice?.tone === "retry";
         }
 
-        const params = new URLSearchParams({ requestId });
-        if (projectSlug) params.set("job", projectSlug);
-        if (requestedRoom) params.set("room", requestedRoom);
-        const live = await fetch(`/api/room-pack/live?${params.toString()}`, {
-          method: "GET",
-          cache: "no-store",
-          credentials: "include",
-        });
-        const data = (await live.json()) as LivePayload;
+        const live = await readLive();
         if (cancelled) return;
-        if (live.ok && data.ok && (await acceptLive(data))) {
-          if (!fetchFailed) setMessage(statusLine(data, requestedRoom));
-          return;
-        }
         if (
+          live.offline ||
+          live.notice?.tone === "retry" ||
           isOfflineFetchFailure({
-            ok: live.ok,
-            status: live.status,
+            ok: live.httpStatus >= 200 && live.httpStatus < 300 && !live.notice,
+            status: live.httpStatus,
           })
         ) {
           fetchFailed = true;
         }
-        if (fetchFailed && (await serveOffline())) return;
-        setMessage(
-          data.error ??
-            "Could not load a live pack. Maple Point demo stays on screen.",
-        );
+        const applied = await applyClassified(live, pending);
+        if (cancelled) return;
+        if (applied === "shown") return;
+        if (fetchFailed && (await serveOffline(pending))) return;
+        if (applied === "empty") return;
+        if (!pending && !live.notice) {
+          setMessage(hasSheets ? PACK_KEPT_TEXT : PACK_NONE_MESSAGE);
+        }
       } catch {
         fetchFailed = true;
         if (cancelled) return;
-        if (await serveOffline()) return;
-        setMessage(
-          "Could not reach the pack service. Maple Point demo stays on screen.",
-        );
+        if (await serveOffline(pending)) return;
+        holdNotice({
+          tone: "retry",
+          text: "Shaky signal. This pack stays on screen. Tap Retry.",
+          strip: "Saved pack · pull did not finish.",
+          reconnect: false,
+          retry: true,
+        });
       } finally {
         if (!cancelled) setBusy(false);
       }
@@ -191,14 +385,16 @@ export function PackLiveReload({
       cancelled = true;
     };
   }, [
+    hasSheets,
     offline,
-    onNotice,
     onPack,
     procoreLinked,
+    publish,
     projectSlug,
     requestId,
     requestedRoom,
     retryToken,
+    sessionReconnect,
   ]);
 
   return (
@@ -217,16 +413,25 @@ export function PackLiveReload({
                   requestId,
                   room: requestedRoom,
                 });
-                onNotice?.(refresh.notice);
                 if (refresh.viewOnly) {
+                  publish(null, true);
                   setMessage("View only — pulls are disabled for this session.");
-                } else if (refresh.pack) {
+                  return;
+                }
+                if (
+                  refresh.pack &&
+                  packPayloadState(refresh.pack) === "ready"
+                ) {
                   onPack(refresh.pack, {
                     source: refresh.source,
                     pull: refresh.pull,
                     offline: false,
                     snapshot: null,
                   });
+                  const healthy = refresh.pull === "procore" && !refresh.notice;
+                  if (refresh.notice?.tone === "reconnect") publish(refresh.notice);
+                  else if (healthy) publish(null, true);
+                  else publish(refresh.notice);
                   setMessage(
                     refresh.notice?.strip ??
                       statusLine(
@@ -240,7 +445,9 @@ export function PackLiveReload({
                       ),
                   );
                   await offline.remember(refresh.pack);
-                } else if (refresh.offline) {
+                  return;
+                }
+                if (refresh.offline || refresh.notice?.tone === "retry") {
                   const snapshot = await offline.readFallback(false);
                   if (snapshot) {
                     onPack(snapshot.pack, {
@@ -249,19 +456,52 @@ export function PackLiveReload({
                       offline: true,
                       snapshot,
                     });
-                    setMessage(refresh.notice?.strip ?? OFFLINE_STATUS_LINE);
-                  } else {
+                    if (refresh.notice?.tone === "reconnect") publish(refresh.notice);
+                    else publish(null);
                     setMessage(
-                      refresh.notice?.strip ??
-                        "Pull didn't finish. Maple Point demo stays on screen. Retry.",
+                      refresh.notice?.tone === "reconnect" || sessionReconnect
+                        ? (refresh.notice?.strip ??
+                          PACK_RECONNECT_STRIP)
+                        : OFFLINE_STATUS_LINE,
                     );
+                    return;
                   }
-                } else {
-                  setMessage(
-                    refresh.notice?.strip ??
-                      "Pull didn't finish. The saved pack stays on screen. Retry.",
-                  );
                 }
+                if (
+                  refresh.pack &&
+                  packPayloadState(refresh.pack) === "empty" &&
+                  hasSheets
+                ) {
+                  publish({
+                    tone: "retry",
+                    text: PACK_EMPTY_BODY_TEXT,
+                    strip: "Saved pack · pull did not finish.",
+                    reconnect: false,
+                    retry: true,
+                  });
+                  setMessage("Saved pack · pull did not finish.");
+                  return;
+                }
+                if (refresh.empty && !refresh.notice) {
+                  publish(
+                    hasSheets
+                      ? {
+                          tone: "hint",
+                          text: PACK_KEPT_TEXT,
+                          strip: PACK_KEPT_TEXT,
+                          reconnect: false,
+                          retry: false,
+                        }
+                      : null,
+                  );
+                  setMessage(hasSheets ? PACK_KEPT_TEXT : PACK_NONE_MESSAGE);
+                  return;
+                }
+                publish(refresh.notice);
+                setMessage(
+                  refresh.notice?.strip ??
+                    (hasSheets ? PACK_KEPT_TEXT : PACK_NONE_MESSAGE),
+                );
               } catch {
                 const snapshot = await offline.readFallback(false);
                 if (snapshot) {
@@ -271,12 +511,18 @@ export function PackLiveReload({
                     offline: true,
                     snapshot,
                   });
+                  publish(null);
                   setMessage(OFFLINE_STATUS_LINE);
-                } else {
-                  setMessage(
-                    "Could not reach the pack service. Maple Point demo stays on screen.",
-                  );
+                  return;
                 }
+                publish({
+                  tone: "retry",
+                  text: "Shaky signal. This pack stays on screen. Tap Retry.",
+                  strip: "Saved pack · pull did not finish.",
+                  reconnect: false,
+                  retry: true,
+                });
+                setMessage("Saved pack · pull did not finish.");
               } finally {
                 setBusy(false);
               }

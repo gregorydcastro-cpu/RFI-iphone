@@ -21,10 +21,19 @@ import { sheetKindLabel, splitPackSheets } from "@/lib/sheetOrder";
 import type { FieldRoleName } from "@/lib/auth";
 import { viewerSheetPdfSrc } from "@/lib/sheetPdfUrl";
 import { signInContinuePath } from "@/lib/authMessages";
+import {
+  PACK_EMPTY_MESSAGE,
+  PACK_EMPTY_TITLE,
+  PACK_NONE_MESSAGE,
+  PACK_NONE_TITLE,
+  packEmptySpeak,
+  packNoneSpeak,
+} from "@/lib/packLoadField";
 import { packPullNotice, procoreReconnectHref } from "@/lib/procoreAuthHealth";
 import type { PackPullNotice } from "@/lib/procoreAuthHealth";
 import { ActionPanel } from "./ActionPanel";
 import { AppHeader } from "./AppHeader";
+import { PackEmptyState } from "./PackFieldBanner";
 import { ProcoreReconnectBanner } from "./ProcoreReconnectBanner";
 import { ReadAloudButton } from "./ReadAloudButton";
 import { PackLiveReload } from "./PackLiveReload";
@@ -76,9 +85,13 @@ export function RoomPackViewer({
   const displayedPack = livePack ?? pack;
   const [toast, setToast] = useState<string | null>(null);
   const [retryToken, setRetryToken] = useState(0);
+  const [pulling, setPulling] = useState(false);
   const [notice, setNotice] = useState<PackPullNotice | null>(
     procoreReconnect ? packPullNotice({ reconnectNeeded: true }) : null,
   );
+  const handleBusy = useCallback((next: boolean) => {
+    setPulling(next);
+  }, []);
   const handleNotice = useCallback((next: PackPullNotice | null) => {
     setNotice(next);
   }, []);
@@ -140,9 +153,60 @@ export function RoomPackViewer({
   }
 
   if (!primary) {
+    const emptyTitle = displayedPack.sheets.length === 0 ? PACK_EMPTY_TITLE : PACK_NONE_TITLE;
+    const emptyMessage =
+      displayedPack.sheets.length === 0 ? PACK_EMPTY_MESSAGE : PACK_NONE_MESSAGE;
+    const emptySpeak =
+      displayedPack.sheets.length === 0 ? packEmptySpeak() : packNoneSpeak();
     return (
-      <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted">
-        This pack has no sheets.
+      <div className="flex min-h-dvh flex-col bg-ink text-paper">
+        <AppHeader
+          signedIn={signedIn}
+          role={role ?? (signedIn ? (readOnly ? "viewer" : "puller") : null)}
+          procoreLinked={procoreLinked}
+          procoreReconnect={reconnecting}
+          procoreReconnectHref={procoreReconnectHref(packReturn)}
+        />
+        {notice ? (
+          <ProcoreReconnectBanner
+            notice={notice}
+            reconnectHref={
+              notice.reconnect ? procoreReconnectHref(packReturn) : undefined
+            }
+            busy={pulling}
+            onRetry={
+              notice.retry
+                ? () => setRetryToken((value) => value + 1)
+                : undefined
+            }
+          />
+        ) : null}
+        {notice?.tone === "retry" ? null : (
+          <div className="flex flex-1 items-center justify-center p-6">
+            <PackEmptyState
+              title={emptyTitle}
+              message={emptyMessage}
+              speak={emptySpeak}
+              speakId={`pack-empty-${displayedRequest}`}
+            />
+          </div>
+        )}
+        <div className="px-4 py-3">
+          <PackLiveReload
+            requestId={displayedRequest}
+            projectSlug={projectSlug}
+            requestedRoom={requestedRoom}
+            procoreLinked={procoreLinked}
+            supabaseConfigured={Boolean(supabaseConfigured)}
+            demoFallback={Boolean(demoFallback)}
+            hasSheets={false}
+            sessionReconnect={procoreReconnect}
+            retryToken={retryToken}
+            onPack={handleLivePack}
+            onNotice={handleNotice}
+            onBusy={handleBusy}
+          />
+        </div>
       </div>
     );
   }
@@ -170,7 +234,7 @@ export function RoomPackViewer({
           reconnectHref={
             notice.reconnect ? procoreReconnectHref(packReturn) : undefined
           }
-          busy={false}
+          busy={pulling}
           onRetry={
             notice.retry ? () => setRetryToken((value) => value + 1) : undefined
           }
@@ -188,9 +252,12 @@ export function RoomPackViewer({
         source={liveSource}
         pull={livePull}
         procoreLinked={procoreLinked}
+        hasSheets={displayedPack.sheets.length > 0}
+        sessionReconnect={procoreReconnect}
         retryToken={retryToken}
         onPack={handleLivePack}
         onNotice={handleNotice}
+        onBusy={handleBusy}
       />
       {offlineSnapshot ? <OfflinePackBanner snapshot={offlineSnapshot} /> : null}
       <JumpNav primary={primary} rest={rest} />
@@ -403,9 +470,12 @@ function PackContextBar({
   source,
   pull,
   procoreLinked,
+  hasSheets,
+  sessionReconnect,
   retryToken,
   onPack,
   onNotice,
+  onBusy,
 }: {
   pack: RoomPack;
   sheet: Sheet;
@@ -418,9 +488,12 @@ function PackContextBar({
   source?: "procore" | "supabase" | "local" | "offline" | "none";
   pull?: "procore" | "bot" | "none";
   procoreLinked: boolean;
+  hasSheets: boolean;
+  sessionReconnect: boolean;
   retryToken: number;
   onPack: (pack: RoomPack, meta?: PackLiveMeta) => void;
   onNotice: (notice: PackPullNotice | null) => void;
+  onBusy: (busy: boolean) => void;
 }) {
   const stamp = sheetRevisionLabel(sheet);
   const pulled = formatPulledAt(pack.pulled_at);
@@ -449,9 +522,12 @@ function PackContextBar({
           procoreLinked={procoreLinked}
           supabaseConfigured={supabaseConfigured}
           demoFallback={Boolean(demoFallback)}
+          hasSheets={hasSheets}
+          sessionReconnect={sessionReconnect}
           retryToken={retryToken}
           onPack={onPack}
           onNotice={onNotice}
+          onBusy={onBusy}
         />
         {requestedJobName && requestedJobName !== pack.project.name ? (
           <p className="mt-0.5 text-xs text-tan">
