@@ -4,6 +4,7 @@ import {
   rfiCreateAccepted,
   rfiCreateFailure,
   rfiCreateOutcome,
+  rfiCreateSpeak,
   rfiCreateSuccessCopy,
   RFI_SAVE_FAILED_MESSAGE,
 } from "./rfiCreate.ts";
@@ -57,8 +58,14 @@ test("phone failure copy offers retry except view-only and empty fields", () => 
     message: "No connection. Tap Retry.",
     retry: true,
   });
-  assert.equal(rfiCreateFailure({ status: 403 }).retry, false);
-  assert.match(rfiCreateFailure({ status: 403 }).message, /view-only/i);
+  const offline = rfiCreateFailure({ status: 0 });
+  assert.equal(offline.retry, true);
+  assert.equal(rfiCreateSpeak(offline), "Draft did not send. No connection. Tap Retry.");
+  const viewOnly = rfiCreateFailure({ status: 403 });
+  assert.equal(viewOnly.retry, false);
+  assert.match(viewOnly.message, /view-only/i);
+  assert.equal(rfiCreateSpeak(viewOnly), "Draft did not send. This login is view-only.");
+  assert.equal(rfiCreateSpeak(viewOnly).includes("Tap Retry"), false);
   assert.equal(rfiCreateFailure({ status: 400 }).retry, false);
   const generic = rfiCreateFailure({ status: 503, error: RFI_SAVE_FAILED_MESSAGE });
   assert.equal(generic.message, "It is not with the crew. Tap Retry.");
