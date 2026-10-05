@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { type ChangeEvent, type FormEvent, useMemo, useState, useSyncExternalStore } from "react";
+import { type ChangeEvent, type FormEvent, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { DictationButton } from "@/components/DictationButton";
 import { DraftToForemanSuccess } from "@/components/DraftToForemanSuccess";
 import { MarkupSaveChip } from "@/components/MarkupSaveChip";
 import { ReadAloudButton } from "@/components/ReadAloudButton";
+import { RfiFieldBanner, RfiFieldEmptyState } from "@/components/RfiFieldBanner";
 import { VoiceSetupNote } from "@/components/VoiceSetupNote";
 import { DEMO_FOREMAN, DEMO_JOURNEYMAN } from "@/lib/crew";
 import {
@@ -25,8 +26,16 @@ import {
   subscribeMarkupRfiPrefill,
 } from "@/lib/markup";
 import {
+  PHOTO_ATTACH_MAX_BYTES,
+  photoAttachBatchOutcome,
+  photoAttachFromFile,
+  photoAttachSurface,
+  type PhotoAttachNotice,
+} from "@/lib/photoAttachField";
+import {
   rfiCreateAccepted,
   rfiCreateFailure,
+  rfiCreateSpeak,
   rfiCreateSuccessCopy,
   type RfiCreateFailure,
 } from "@/lib/rfiCreate";
@@ -39,8 +48,6 @@ import {
 
 const inputClass =
   "mt-1 w-full border border-line bg-ink px-3 py-3 text-base text-paper outline-none focus:border-cta";
-
-const MAX_PHOTO_BYTES = 3_500_000;
 
 type Props = {
   pack: RoomPack;
@@ -104,7 +111,11 @@ export function GenerateRfiForm({
   const location = locationDraft ?? (seeded.location || roomFallback);
   const [sheetId, setSheetId] = useState(initialSheet?.id ?? "");
   const [photos, setPhotos] = useState<DraftPhoto[]>([]);
-  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [photoPending, setPhotoPending] = useState(false);
+  const [photoNotice, setPhotoNotice] = useState<PhotoAttachNotice | null>(null);
+  const choosePhotoRef = useRef<HTMLInputElement>(null);
+  const photoRetryRef = useRef<File[]>([]);
+  const photoLockRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [createFailure, setCreateFailure] = useState<RfiCreateFailure | null>(null);
   const [pending, setPending] = useState(false);
@@ -134,28 +145,69 @@ export function GenerateRfiForm({
     location: location || undefined,
     draftToForeman: true,
   });
+  const photoSurface = photoAttachSurface({
+    pending: photoPending,
+    notice: photoNotice,
+  });
 
-  function onPhotos(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
-    event.target.value = "";
-    if (!files.length) return;
-    setPhotoError(null);
-    void (async () => {
-      const added: DraftPhoto[] = [];
+  async function attachPhotos(files: File[]) {
+    if (photoLockRef.current) return;
+    photoLockRef.current = true;
+    const counts = {
+      fileCount: files.length,
+      emptyCount: 0,
+      tooLargeCount: 0,
+      readFailCount: 0,
+      attachedCount: 0,
+    };
+    if (!files.length) {
+      photoRetryRef.current = [];
+      setPhotoNotice("empty");
+      photoLockRef.current = false;
+      return;
+    }
+    setPhotoPending(true);
+    setPhotoNotice(null);
+    const added: DraftPhoto[] = [];
+    const failed: File[] = [];
+    try {
       for (const file of files) {
-        if (file.size > MAX_PHOTO_BYTES) {
-          setPhotoError("Photo is too large for this draft (max ~3.5 MB).");
+        const kind = photoAttachFromFile({
+          size: file.size,
+          maxBytes: PHOTO_ATTACH_MAX_BYTES,
+        });
+        if (kind === "empty") {
+          counts.emptyCount += 1;
           continue;
         }
-        const dataUrl = await readFileDataUrl(file);
-        added.push({
-          name: file.name || "phone-photo.jpg",
-          size: file.size,
-          mime: file.type,
-          dataUrl,
-        });
+        if (kind === "too_large") {
+          counts.tooLargeCount += 1;
+          continue;
+        }
+        try {
+          const dataUrl = await readFileDataUrl(file);
+          if (!dataUrl) {
+            counts.readFailCount += 1;
+            failed.push(file);
+            continue;
+          }
+          added.push({
+            name: file.name || "phone-photo.jpg",
+            size: file.size,
+            mime: file.type,
+            dataUrl,
+          });
+          counts.attachedCount += 1;
+        } catch {
+          counts.readFailCount += 1;
+          failed.push(file);
+        }
       }
-      if (!added.length) return;
+    } finally {
+      photoLockRef.current = false;
+      setPhotoPending(false);
+    }
+    if (added.length) {
       setPhotos((current) => {
         const next = [...current];
         for (const photo of added) {
@@ -166,7 +218,25 @@ export function GenerateRfiForm({
         }
         return next.slice(0, 8);
       });
-    })();
+    }
+    photoRetryRef.current = failed;
+    const outcome = photoAttachBatchOutcome(counts);
+    setPhotoNotice(outcome === "idle" ? null : outcome);
+  }
+
+  function onPhotos(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    void attachPhotos(files);
+  }
+
+  function onPhotoRetry() {
+    const files = photoRetryRef.current;
+    if (!files.length) {
+      setPhotoNotice("empty");
+      return;
+    }
+    void attachPhotos(files);
   }
 
   async function submitDraft(fields: {
@@ -566,6 +636,7 @@ export function GenerateRfiForm({
           <label className="flex min-h-12 cursor-pointer items-center justify-center border border-line bg-panel-2 px-3 text-center text-xs font-semibold tracking-wide text-paper uppercase">
             Choose photo
             <input
+              ref={choosePhotoRef}
               type="file"
               accept="image/*"
               multiple
@@ -574,10 +645,36 @@ export function GenerateRfiForm({
             />
           </label>
         </div>
-        {photoError ? (
-          <p role="alert" className="mt-1 text-sm text-cta">
-            {photoError}
+        {photoSurface.kind === "reading" ? (
+          <p role="status" className="mt-2 text-base font-semibold text-paper">
+            Attaching photo…
           </p>
+        ) : null}
+        {photoSurface.kind === "error" ? (
+          <div className="mt-3">
+            <RfiFieldBanner
+              title={photoSurface.title}
+              message={photoSurface.message}
+              speak={photoSurface.speak}
+              speakId="rfi-photo-error"
+              onRetry={
+                photoSurface.action === "retry"
+                  ? onPhotoRetry
+                  : () => choosePhotoRef.current?.click()
+              }
+              retryLabel={photoSurface.action === "pick" ? "Pick again" : "Retry"}
+            />
+          </div>
+        ) : null}
+        {photoSurface.kind === "empty" ? (
+          <div className="mt-3">
+            <RfiFieldEmptyState
+              title={photoSurface.title}
+              message={photoSurface.message}
+              speak={photoSurface.speak}
+              speakId="rfi-photo-empty"
+            />
+          </div>
         ) : null}
         {photos.length ? (
           <ul className="mt-2 space-y-2 text-sm text-metal">
@@ -612,11 +709,11 @@ export function GenerateRfiForm({
               </li>
             ))}
           </ul>
-        ) : (
+        ) : photoSurface.kind === "idle" ? (
           <p className="mt-1 text-xs text-muted">
             Photo stays on this draft as a data URL. Not uploaded to Procore.
           </p>
-        )}
+        ) : null}
       </div>
 
       {error ? (
@@ -625,22 +722,20 @@ export function GenerateRfiForm({
         </p>
       ) : null}
       {createFailure ? (
-        <div role="alert" className="border border-cta/70 bg-ink px-4 py-4">
-          <p className="text-lg font-semibold text-cta">{createFailure.title}</p>
-          <p className="mt-2 text-base leading-snug text-paper">{createFailure.message}</p>
-          {createFailure.retry ? (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => {
-                void submitDraft({ subject, question, location });
-              }}
-              className="mt-4 flex min-h-12 w-full items-center justify-center bg-cta px-4 text-base font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
-            >
-              {pending ? "Sending draft…" : "Retry"}
-            </button>
-          ) : null}
-        </div>
+        <RfiFieldBanner
+          title={createFailure.title}
+          message={createFailure.message}
+          speak={rfiCreateSpeak(createFailure)}
+          speakId="rfi-submit-error"
+          onRetry={
+            createFailure.retry
+              ? () => {
+                  void submitDraft({ subject, question, location });
+                }
+              : undefined
+          }
+          retryDisabled={pending}
+        />
       ) : null}
 
       {createFailure?.retry ? null : (

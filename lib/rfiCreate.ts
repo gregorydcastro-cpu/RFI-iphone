@@ -61,6 +61,13 @@ export type RfiCreateFailure = {
   retry: boolean;
 };
 
+/** Spoken line for the send-failure card. Same words as the screen. */
+export function rfiCreateSpeak(
+  failure: Pick<RfiCreateFailure, "title" | "message">,
+): string {
+  return `${failure.title}. ${failure.message}`;
+}
+
 /** Phone-sized failure copy. Short lines. Retry only when another tap can work. */
 export function rfiCreateFailure(input: {
   status: number;
