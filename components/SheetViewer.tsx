@@ -33,6 +33,7 @@ import {
 } from "@/lib/offlinePackStore";
 import {
   readSheetPdfBanner,
+  SHEET_LOADING,
   sheetPdfBanner,
   sheetPdfSurface,
   type SheetPdfBanner,
@@ -106,13 +107,16 @@ export function SheetViewer({
 
   useEffect(() => {
     let cancelled = false;
-    const canvas = canvasRef.current;
-    if (!pdfUrl || !canvas) return;
+    if (!pdfUrl) return;
+    let canvas = canvasRef.current;
     const abort = new AbortController();
     let timedOut = false;
+    const painted = { current: false };
     const deadline = setTimeout(() => {
+      if (cancelled || painted.current) return;
       timedOut = true;
       abort.abort();
+      setError(sheetPdfBanner({ code: "timeout" }));
     }, SHEET_PDF_CLIENT_TIMEOUT_MS);
 
     async function tryCachedPdf(): Promise<Uint8Array | null> {
@@ -147,6 +151,8 @@ export function SheetViewer({
       setAspect(viewport.width / viewport.height);
       await page.render({ canvas, viewport }).promise;
       if (!cancelled) {
+        painted.current = true;
+        setError(null);
         setReady(true);
         transformRef.current?.resetTransform();
       }
@@ -344,23 +350,34 @@ export function SheetViewer({
       if (!cancelled) await showCachedOrBanner(banner);
     }
 
-    void render().catch(async (err: unknown) => {
-      const decision = sheetPdfFetchCatch({
-        cancelled,
-        timedOut,
-        aborted: isAbort(err),
-        attempt: SHEET_PDF_CLIENT_ATTEMPTS,
+    let raf = 0;
+    function begin() {
+      if (cancelled || timedOut) return;
+      canvas = canvasRef.current;
+      if (!canvas) {
+        raf = requestAnimationFrame(begin);
+        return;
+      }
+      void render().catch(async (err: unknown) => {
+        const decision = sheetPdfFetchCatch({
+          cancelled,
+          timedOut,
+          aborted: isAbort(err),
+          attempt: SHEET_PDF_CLIENT_ATTEMPTS,
+        });
+        if (decision === "ignore") return;
+        await showCachedOrBanner(
+          timedOut
+            ? sheetPdfBanner({ code: "timeout" })
+            : sheetPdfBanner({ interrupted: true }),
+        );
       });
-      if (decision === "ignore") return;
-      await showCachedOrBanner(
-        timedOut
-          ? sheetPdfBanner({ code: "timeout" })
-          : sheetPdfBanner({ interrupted: true }),
-      );
-    });
+    }
+    begin();
 
     return () => {
       cancelled = true;
+      if (raf) cancelAnimationFrame(raf);
       clearTimeout(deadline);
       abort.abort();
     };
@@ -585,7 +602,7 @@ export function SheetViewer({
         </p>
         {surface.kind === "loading" ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-charcoal/80 text-sm text-muted">
-            Loading sheet…
+            {SHEET_LOADING}
           </div>
         ) : null}
         {surface.kind === "error" ? (
