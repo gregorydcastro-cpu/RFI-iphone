@@ -254,6 +254,23 @@ test("markup RFI query drops a description that would be cut from the URL", () =
   assert.match(short, /question=/);
   assert.match(short, /markupSave=failed/);
   assert.doesNotMatch(short, forbidden);
+  const network = markupRfiQuery(
+    {
+      requestId: "maple-point",
+      overlayId: "11111111-1111-4111-8111-111111111111",
+      itemId: "box-1",
+      sheetId: "A-101",
+      sheetRev: "A",
+      kind: "box",
+      subject: "Box on A-101 Rev A — Electrical Closet 101",
+      question: "Field markup (box) on A-101 Rev A.",
+      location: "Electrical Closet 101",
+      vectors: { items: [] },
+    },
+    "network",
+  );
+  assert.match(network, /markupSave=network/);
+  assert.doesNotMatch(network, forbidden);
 });
 
 test("undoLastMarkup drops the newest vector and clearAllMarkups wipes the sheet", () => {
@@ -321,13 +338,10 @@ test("markupSaveChip maps storage and in-flight persist", () => {
     label: "Local only",
     tone: "local",
   });
-  assert.deepEqual(markupSaveChip({ storage: "unavailable", saving: false }), {
-    label: "Couldn't save",
-    tone: "failed",
-  });
-  assert.deepEqual(
+  assert.equal(markupSaveChip({ storage: "unavailable", saving: false }), null);
+  assert.equal(
     markupSaveChip({ storage: "local", saving: false, persistFailed: true }),
-    { label: "Couldn't save", tone: "failed" },
+    null,
   );
   assert.equal(
     foremanDraftStillAllowed({ selected: true, persistFailed: true }),

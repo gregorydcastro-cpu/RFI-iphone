@@ -94,7 +94,7 @@ export default async function NewRfiPage({ params, searchParams }: Props) {
           initialQuestion={query.question}
           initialLocation={query.location}
           markupKindQuery={query.kind}
-          markupSaveFailed={query.markupSave === "failed"}
+          markupSave={query.markupSave}
           authorName={author.name}
           authorEmail={author.email}
         />

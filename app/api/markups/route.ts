@@ -97,7 +97,7 @@ export async function PUT(request: Request) {
   const userId = session.userId;
   const vectors = parseVectors(body.vectors);
   const configured = isMarkupTableWriteConfigured();
-  const row = configured
+  const written = configured
     ? await upsertMarkupOverlay({
         id: overlayId && isMarkupUuid(overlayId) ? overlayId : undefined,
         userId,
@@ -105,7 +105,8 @@ export async function PUT(request: Request) {
         sheetId,
         vectors,
       })
-    : null;
+    : { row: null, fail: null };
+  const row = written.row;
 
   const now = new Date().toISOString();
   const packet = row ?? {
@@ -122,6 +123,7 @@ export async function PUT(request: Request) {
     ok: true,
     persisted: Boolean(row),
     storage: row ? "supabase" : configured ? "unavailable" : "unconfigured",
+    ...(written.fail ? { fail: written.fail } : {}),
     row: packet,
   });
 }

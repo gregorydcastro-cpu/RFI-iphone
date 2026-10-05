@@ -11,18 +11,23 @@ import {
   type MarkupVector,
   type MarkupVectorsJson,
 } from "@/lib/markup";
-
-type ApiResponse = {
-  ok?: boolean;
-  persisted?: boolean;
-  storage?: MarkupStorageKind;
-  row?: MarkupOverlayRecord | null;
-};
+import {
+  putMarkupOverlay,
+  type MarkupSaveFail,
+} from "@/lib/markupSaveField";
 
 export type MarkupPersistOutcome = {
   record: MarkupOverlayRecord;
   storage: MarkupStorageKind;
   persistFailed: boolean;
+  fail: MarkupSaveFail | null;
+  retryable: boolean;
+};
+
+type MarkupLoadResponse = {
+  ok?: boolean;
+  storage?: MarkupStorageKind;
+  row?: MarkupOverlayRecord | null;
 };
 
 function emptyRecord(requestId: string, sheetId: string): MarkupOverlayRecord {
@@ -66,9 +71,14 @@ export function useMarkupOverlay(
   const [settledKey, setSettledKey] = useState("");
   const [savingCount, setSavingCount] = useState(0);
   const [persistFailed, setPersistFailed] = useState(false);
+  const [saveFail, setSaveFail] = useState<MarkupSaveFail | null>(null);
+  const [saveRetryable, setSaveRetryable] = useState(true);
+  const [saveEmpty, setSaveEmpty] = useState(false);
   const recordRef = useRef<MarkupOverlayRecord>(emptyRecord(requestId, sheetId));
   const storageRef = useRef<MarkupStorageKind>("unconfigured");
   const failedRef = useRef(false);
+  const failRef = useRef<MarkupSaveFail | null>(null);
+  const retryableRef = useRef(true);
   const revisionRef = useRef(0);
   const sessionRef = useRef(0);
   const chainRef = useRef<Promise<void>>(Promise.resolve());
@@ -80,7 +90,10 @@ export function useMarkupOverlay(
       failed: boolean,
       revision: number,
       session: number,
+      fail: MarkupSaveFail | null = null,
+      retryable = failed,
     ): MarkupPersistOutcome => {
+      const reason = failed ? fail ?? "server" : null;
       const currentSession = session === sessionRef.current;
       const latest = currentSession && revision === revisionRef.current;
       const recordToStore = latest
@@ -94,14 +107,21 @@ export function useMarkupOverlay(
         recordRef.current = recordToStore;
         storageRef.current = nextStorage;
         failedRef.current = failed;
+        failRef.current = reason;
+        retryableRef.current = failed ? retryable : false;
         setRecord(recordToStore);
         setStorage(nextStorage);
         setPersistFailed(failed);
+        setSaveFail(reason);
+        setSaveRetryable(failed ? retryable : false);
+        setSaveEmpty(!failed && recordToStore.vectors.items.length === 0 && revision > 0);
       }
       return {
         record: currentSession ? recordToStore : next,
         storage: nextStorage,
         persistFailed: failed,
+        fail: reason,
+        retryable: failed ? retryable : false,
       };
     },
     [],
@@ -118,39 +138,40 @@ export function useMarkupOverlay(
           record: next,
           storage: storageRef.current,
           persistFailed: false,
+          fail: null,
+          retryable: false,
         };
       }
-      try {
-        const response = await fetch("/api/markups", {
-          method: "PUT",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: next.id,
-            request_id: next.request_id,
-            sheet_id: next.sheet_id,
-            vectors: next.vectors,
-          }),
-        });
-        const data = (await response.json()) as ApiResponse;
-        if (response.ok && data.ok && data.row?.id) {
-          const saved = applyRow(next.request_id, next.sheet_id, next.id, data.row);
-          const kind = data.storage ?? "unconfigured";
-          if (kind === "supabase") {
-            return publish(saved, "supabase", false, revision, session);
-          }
-          saveLocalOverlay(saved);
-          if (kind === "unavailable") {
-            return publish(saved, "unavailable", true, revision, session);
-          }
-          const localKind: MarkupStorageKind = kind === "local" ? "local" : "unconfigured";
-          return publish(saved, localKind, false, revision, session);
-        }
-      } catch {
-        // local copy below — Create RFI still proceeds
+      const result = await putMarkupOverlay({
+        id: next.id,
+        requestId: next.request_id,
+        sheetId: next.sheet_id,
+        vectors: next.vectors,
+      });
+      if (result.storage === "supabase" && result.row && !result.fail) {
+        const saved = applyRow(next.request_id, next.sheet_id, next.id, result.row);
+        return publish(saved, "supabase", false, revision, session, null, false);
       }
-      saveLocalOverlay(next);
-      return publish(next, "local", true, revision, session);
+      const saved = result.row
+        ? applyRow(next.request_id, next.sheet_id, next.id, result.row)
+        : next;
+      saveLocalOverlay(saved);
+      if (result.fail) {
+        const storage: MarkupStorageKind =
+          result.storage === "unavailable" ? "unavailable" : "local";
+        return publish(
+          saved,
+          storage,
+          true,
+          revision,
+          session,
+          result.fail,
+          result.retryable,
+        );
+      }
+      const localKind: MarkupStorageKind =
+        result.storage === "local" ? "local" : "unconfigured";
+      return publish(saved, localKind, false, revision, session, null, false);
     },
     [publish, readOnly],
   );
@@ -180,12 +201,17 @@ export function useMarkupOverlay(
     let cancelled = false;
     revisionRef.current = 0;
     failedRef.current = false;
+    failRef.current = null;
+    retryableRef.current = true;
     recordRef.current = emptyRecord(requestId, sheetId);
 
     async function load() {
       await Promise.resolve();
       if (cancelled || session !== sessionRef.current) return;
       setPersistFailed(false);
+      setSaveFail(null);
+      setSaveRetryable(true);
+      setSaveEmpty(false);
       setSavingCount(0);
       if (!requestId || !sheetId) {
         setSettledKey(sheetKey);
@@ -204,7 +230,7 @@ export function useMarkupOverlay(
           credentials: "include",
           cache: "no-store",
         });
-        const data = (await response.json()) as ApiResponse;
+        const data = (await response.json()) as MarkupLoadResponse;
         if (cancelled || session !== sessionRef.current) return;
         if (revisionRef.current > 0) {
           setSettledKey(sheetKey);
@@ -298,12 +324,16 @@ export function useMarkupOverlay(
         record: recordRef.current,
         storage: storageRef.current,
         persistFailed: false,
+        fail: null,
+        retryable: false,
       };
     }
     let outcome: MarkupPersistOutcome = {
       record: recordRef.current,
       storage: storageRef.current,
       persistFailed: failedRef.current,
+      fail: failRef.current,
+      retryable: retryableRef.current,
     };
     for (let attempt = 0; attempt < 6; attempt += 1) {
       const revision = revisionRef.current;
@@ -316,6 +346,8 @@ export function useMarkupOverlay(
       record: recordRef.current,
       storage: storageRef.current,
       persistFailed: failedRef.current,
+      fail: failRef.current,
+      retryable: retryableRef.current,
     };
   }, [enqueue, readOnly]);
 
@@ -330,6 +362,9 @@ export function useMarkupOverlay(
     storage,
     saving: savingCount > 0,
     persistFailed,
+    saveFail,
+    saveRetryable,
+    saveEmpty,
     ready: ready && settledKey === `${requestId}\0${sheetId}`,
     setItems,
     flush,

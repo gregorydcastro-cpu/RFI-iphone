@@ -435,7 +435,7 @@ export function SheetViewer({
         vectors: outcome.record.vectors,
       });
       writeMarkupRfiPrefill(prefill);
-      const query = markupRfiQuery(prefill, outcome.persistFailed);
+      const query = markupRfiQuery(prefill, outcome.fail ?? outcome.persistFailed);
       router.push(`/pack/${requestId}/rfi/new?${query}`);
       window.setTimeout(() => {
         creatingRef.current = false;
@@ -486,6 +486,12 @@ export function SheetViewer({
             storage={markup.storage}
             saving={!markup.ready || markup.saving}
             persistFailed={markup.ready && markup.persistFailed}
+            saveFail={markup.ready ? markup.saveFail : null}
+            saveRetryable={markup.saveRetryable}
+            saveEmpty={markup.ready && markup.saveEmpty}
+            onRetrySave={() => {
+              void markup.flush();
+            }}
             onCreateRfi={() => {
               void handleCreateRfi();
             }}

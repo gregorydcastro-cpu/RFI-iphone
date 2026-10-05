@@ -30,6 +30,13 @@ export function isMarkupTableWriteConfigured(): boolean {
   return getSupabaseServiceConfig() !== null;
 }
 
+export type MarkupCloudFail = "network" | "server" | "abort";
+
+export type MarkupUpsertResult = {
+  row: MarkupOverlayRecord | null;
+  fail: MarkupCloudFail | null;
+};
+
 export async function selectMarkupOverlay(input: {
   userId: string;
   requestId: string;
@@ -45,22 +52,22 @@ export async function selectMarkupOverlay(input: {
   params.set("select", "id,request_id,sheet_id,vectors,user_id,created_at,updated_at");
   params.set("limit", "1");
 
-  const response = await restFetch(
+  const result = await restFetch(
     config,
     `${MARKUP_OVERLAYS_TABLE}?${params.toString()}`,
     { method: "GET" },
   );
-  if (!response || !response.ok) return null;
-  const json: unknown = await response.json().catch(() => null);
+  if (!result.response || !result.response.ok) return null;
+  const json: unknown = await result.response.json().catch(() => null);
   const row = Array.isArray(json) ? json[0] : json;
   return asOverlayRecord(row, input.requestId, input.sheetId);
 }
 
 export async function upsertMarkupOverlay(
   input: UpsertMarkupOverlayInput,
-): Promise<MarkupOverlayRecord | null> {
+): Promise<MarkupUpsertResult> {
   const config = getSupabaseServiceConfig();
-  if (!config) return null;
+  if (!config) return { row: null, fail: null };
 
   const now = new Date().toISOString();
   const body: Record<string, unknown> = {
@@ -72,7 +79,7 @@ export async function upsertMarkupOverlay(
   };
   if (input.id) body.id = input.id;
 
-  const response = await restFetch(
+  const result = await restFetch(
     config,
     `${MARKUP_OVERLAYS_TABLE}?on_conflict=request_id,sheet_id,user_id`,
     {
@@ -81,27 +88,37 @@ export async function upsertMarkupOverlay(
       body: JSON.stringify(body),
     },
   );
-  if (!response) return null;
-  if (!response.ok) {
+  if (!result.response) return { row: null, fail: result.fail };
+  if (!result.response.ok) {
     console.error("[gcfieldlog] markup_overlays upsert was not ok", {
-      status: response.status,
+      status: result.response.status,
     });
-    return null;
+    const fail: MarkupCloudFail =
+      result.response.status === 408 || result.response.status === 504
+        ? "abort"
+        : "server";
+    return { row: null, fail };
   }
-  const json: unknown = await response.json().catch(() => null);
-  const row = Array.isArray(json) ? json[0] : json;
-  return asOverlayRecord(row, input.requestId, input.sheetId);
+  const json: unknown = await result.response.json().catch(() => null);
+  if (json == null) return { row: null, fail: "abort" };
+  const raw = Array.isArray(json) ? json[0] : json;
+  const row = asOverlayRecord(raw, input.requestId, input.sheetId);
+  if (!row) return { row: null, fail: "server" };
+  return { row, fail: null };
 }
 
 async function restFetch(
   config: SupabaseServiceConfig,
   pathAndQuery: string,
   init?: RequestInit,
-): Promise<Response | null> {
+): Promise<
+  | { response: Response; fail: null }
+  | { response: null; fail: "network" | "abort" }
+> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    return await fetch(`${config.url}/rest/v1/${pathAndQuery}`, {
+    const response = await fetch(`${config.url}/rest/v1/${pathAndQuery}`, {
       ...init,
       headers: {
         apikey: config.serviceRoleKey,
@@ -113,10 +130,11 @@ async function restFetch(
       cache: "no-store",
       signal: controller.signal,
     });
+    return { response, fail: null };
   } catch (error) {
     const aborted = error instanceof Error && error.name === "AbortError";
     console.error("[gcfieldlog] markup_overlays request failed", { aborted });
-    return null;
+    return { response: null, fail: aborted ? "abort" : "network" };
   } finally {
     clearTimeout(timer);
   }
