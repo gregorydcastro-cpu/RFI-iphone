@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { OfflinePackBanner } from "./OfflinePackBanner";
@@ -57,6 +57,8 @@ type Props = {
   procoreReconnect?: boolean;
   readOnly?: boolean;
   role?: FieldRoleName | null;
+  /** Scroll to the sheet block. Set from `?section=sheets`. */
+  openSheets?: boolean;
 };
 
 export function RoomPackViewer({
@@ -75,6 +77,7 @@ export function RoomPackViewer({
   procoreReconnect = false,
   readOnly = false,
   role = null,
+  openSheets = false,
 }: Props) {
   const router = useRouter();
   const [livePack, setLivePack] = useState<RoomPack | null>(null);
@@ -132,6 +135,11 @@ export function RoomPackViewer({
       setLivePull(meta.pull as typeof livePull);
     }
   }, []);
+
+  useEffect(() => {
+    if (!openSheets) return;
+    document.getElementById("sheets")?.scrollIntoView({ block: "start" });
+  }, [openSheets, requestId]);
 
   function handleAction(action: PackAction) {
     if (readOnly) return;
@@ -265,6 +273,7 @@ export function RoomPackViewer({
       {offlineSnapshot ? <OfflinePackBanner snapshot={offlineSnapshot} /> : null}
       <JumpNav primary={primary} rest={rest} />
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-4 sm:px-4 lg:px-6">
+        <div id="sheets" className="flex flex-col gap-5">
         <section id="floor-plan" className="flex flex-col">
           <SheetSectionHeader
             kind={sheetKindLabel(primary, true)}
@@ -330,6 +339,7 @@ export function RoomPackViewer({
             ))}
           </section>
         ) : null}
+        </div>
 
         <div
           id="rfis"
