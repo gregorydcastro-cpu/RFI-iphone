@@ -1,12 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { DictateEmptyState, DictateFieldBanner } from "@/components/DictateFieldBanner";
 import { VoiceEmptyState } from "@/components/VoiceEmptyState";
-import { VoiceFeedback } from "@/components/VoiceFeedback";
 import {
-  canRetrySameAudio,
+  bindDictateDrop,
+  dictateDropFromStop,
+  dictateFieldSurface,
+  dictateNetworkFromVoice,
+  DICTATE_ATTEMPTS,
+  DICTATE_BACKOFF_MS,
+  shouldAutoRetryDictate,
+  type DictateDrop,
+  type DictatePermission,
+} from "@/lib/dictateField";
+import {
   parseVoiceErrorBody,
-  voiceErrorMessage,
   type VoiceErrorCode,
 } from "@/lib/voiceErrors";
 import {
@@ -46,6 +55,12 @@ const ARM_AFTER_MS = 500;
 const SPEECH_HOLD_MS = 400;
 const MAX_RECORD_MS = 90_000;
 const SILENCE_TICK_MS = 200;
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
 
 function watchDictationSilence(stream: MediaStream, onSilence: () => void): () => void {
   const AudioCtx =
@@ -110,6 +125,19 @@ function pickMimeType(): string | undefined {
   return candidates.find((type) => MediaRecorder.isTypeSupported(type));
 }
 
+async function readMicPermission(): Promise<DictatePermission | null> {
+  const permissions = navigator.permissions;
+  if (!permissions?.query) return null;
+  try {
+    const status = await permissions.query({
+      name: "microphone" as PermissionName,
+    });
+    return status;
+  } catch {
+    return null;
+  }
+}
+
 function MicIcon({ recording }: { recording: boolean }) {
   if (recording) {
     return (
@@ -130,6 +158,7 @@ function MicIcon({ recording }: { recording: boolean }) {
 /**
  * Composer mic for Grok batch STT. Tap to record, tap to stop and fill text.
  * Microphone icon is reserved for dictation (not voice-mode waveform).
+ * A mic or network drop mid-take uses the same Retry + Hear this card as a sheet miss.
  */
 export function DictationButton({
   onTranscript,
@@ -140,6 +169,7 @@ export function DictationButton({
   className = "",
   handsFree = false,
 }: Props) {
+  const speakSalt = useId();
   const voice = useSyncExternalStore(
     subscribeVoiceStatus,
     getVoiceStatusSnapshot,
@@ -147,8 +177,8 @@ export function DictationButton({
   );
   const [recording, setRecording] = useState(false);
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<VoiceErrorCode | null>(null);
+  const [drop, setDrop] = useState<DictateDrop | null>(null);
   const [heard, setHeard] = useState<string | null>(null);
   const [emptyKind, setEmptyKind] = useState<VoiceEmptyKind>("idle");
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -156,12 +186,22 @@ export function DictationButton({
   const streamRef = useRef<MediaStream | null>(null);
   const lastClipRef = useRef<{ blob: Blob; mimeType: string } | null>(null);
   const silenceStopRef = useRef<(() => void) | null>(null);
+  const dropUnbindRef = useRef<(() => void) | null>(null);
   const stoppingRef = useRef(false);
+  const userStopRef = useRef(false);
+  const dropRef = useRef<DictateDrop | null>(null);
+  const permissionStateRef = useRef<string | null>(null);
+  const recorderErrorRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
 
   function clearSilenceWatch() {
     silenceStopRef.current?.();
     silenceStopRef.current = null;
+  }
+
+  function clearDropWatch() {
+    dropUnbindRef.current?.();
+    dropUnbindRef.current = null;
   }
 
   useEffect(() => {
@@ -170,6 +210,7 @@ export function DictationButton({
     return () => {
       mountedRef.current = false;
       clearSilenceWatch();
+      clearDropWatch();
       recorderRef.current?.stop();
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
@@ -177,69 +218,166 @@ export function DictationButton({
 
   function releaseStream() {
     clearSilenceWatch();
+    clearDropWatch();
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     recorderRef.current = null;
     chunksRef.current = [];
   }
 
-  function showError(code: VoiceErrorCode, message?: string) {
+  function showVoiceError(code: VoiceErrorCode) {
     if (code === "unconfigured") markVoiceUnconfigured();
+    setDrop(null);
+    dropRef.current = null;
     setErrorCode(code);
-    setError(voiceErrorMessage(code, message));
+    setEmptyKind("idle");
+    setHeard(null);
+  }
+
+  function showDrop(next: DictateDrop, clip?: { blob: Blob; mimeType: string } | null) {
+    dropRef.current = next;
+    setDrop(next);
+    setErrorCode(null);
+    setEmptyKind("idle");
+    setHeard(null);
+    setRecording(false);
+    setPending(false);
+    if (next === "network" && clip && clip.blob.size > 0) {
+      lastClipRef.current = clip;
+    } else if (next !== "network") {
+      lastClipRef.current = null;
+    }
   }
 
   async function transcribe(blob: Blob, mimeType: string) {
     if (!mountedRef.current) return;
     setPending(true);
+    setDrop(null);
+    dropRef.current = null;
+    setErrorCode(null);
+    setEmptyKind("idle");
+    setHeard(null);
     lastClipRef.current = { blob, mimeType };
     try {
-      const body = new FormData();
-      const ext = mimeType.includes("mp4") ? "m4a" : mimeType.includes("ogg") ? "ogg" : "webm";
-      body.append("file", blob, `dictation.${ext}`);
-      const response = await fetch("/api/dictation", { method: "POST", body });
-      const data = await response.json().catch(() => null);
-      const parsed = parseVoiceErrorBody(data, response.status);
-      const text =
-        data && typeof data === "object" && "text" in data && typeof data.text === "string"
-          ? data.text.trim()
-          : "";
-      const silent = voiceEmptyKindFromTranscript({
-        httpOk: response.ok,
-        text,
-        code: parsed.code,
-      });
-      if (silent) {
-        setEmptyKind(silent);
-        setHeard(null);
-        setError(null);
+      for (let attempt = 0; attempt < DICTATE_ATTEMPTS; attempt++) {
+        if (!mountedRef.current) return;
+        const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+        if (offline) {
+          if (shouldAutoRetryDictate({ attempt, network: true })) {
+            await wait(DICTATE_BACKOFF_MS);
+            continue;
+          }
+          if (mountedRef.current) showDrop("network", { blob, mimeType });
+          return;
+        }
+
+        let response: Response;
+        try {
+          const body = new FormData();
+          const ext = mimeType.includes("mp4")
+            ? "m4a"
+            : mimeType.includes("ogg")
+              ? "ogg"
+              : "webm";
+          body.append("file", blob, `dictation.${ext}`);
+          response = await fetch("/api/dictation", { method: "POST", body });
+        } catch {
+          if (shouldAutoRetryDictate({ attempt, network: true })) {
+            await wait(DICTATE_BACKOFF_MS);
+            continue;
+          }
+          if (mountedRef.current) showDrop("network", { blob, mimeType });
+          return;
+        }
+
+        const data = await response.json().catch(() => null);
+        const parsed = parseVoiceErrorBody(data, response.status);
+        const text =
+          data && typeof data === "object" && "text" in data && typeof data.text === "string"
+            ? data.text.trim()
+            : "";
+        const silent = voiceEmptyKindFromTranscript({
+          httpOk: response.ok,
+          text,
+          code: parsed.code,
+        });
+        if (silent) {
+          if (!mountedRef.current) return;
+          setEmptyKind(silent);
+          setHeard(null);
+          setErrorCode(null);
+          setDrop(null);
+          dropRef.current = null;
+          lastClipRef.current = null;
+          return;
+        }
+        if (!response.ok) {
+          const network = dictateNetworkFromVoice({
+            code: parsed.code,
+            httpStatus: response.status,
+          });
+          if (network && shouldAutoRetryDictate({ attempt, network: true })) {
+            await wait(DICTATE_BACKOFF_MS);
+            continue;
+          }
+          if (!mountedRef.current) return;
+          if (network) showDrop("network", { blob, mimeType });
+          else showVoiceError(parsed.code);
+          return;
+        }
+        if (!mountedRef.current) return;
+        setHeard(text);
+        setEmptyKind("idle");
         setErrorCode(null);
+        setDrop(null);
+        dropRef.current = null;
+        lastClipRef.current = null;
+        try {
+          await onTranscript(text);
+        } catch {
+          // The clip was heard. Callers show their own failure.
+        }
         return;
       }
-      if (!response.ok) {
-        showError(parsed.code, parsed.message);
-        return;
-      }
-      setHeard(text);
-      setEmptyKind("idle");
-      setError(null);
-      setErrorCode(null);
-      lastClipRef.current = null;
-      await onTranscript(text);
-    } catch {
-      if (mountedRef.current) showError("unreachable");
     } finally {
       if (mountedRef.current) setPending(false);
     }
   }
 
+  function failLiveTake(next: DictateDrop) {
+    if (userStopRef.current) return;
+    if (dropRef.current === "permission" || dropRef.current === "network") return;
+    const first = dropRef.current == null;
+    if (next === "permission" || dropRef.current == null) dropRef.current = next;
+    if (!first) return;
+    stoppingRef.current = true;
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state === "recording") {
+      try {
+        recorder.stop();
+        return;
+      } catch {
+        // The recorder had already stopped.
+      }
+    }
+    const mimeType = recorder?.mimeType || "audio/webm";
+    const blob = new Blob(chunksRef.current, { type: mimeType });
+    releaseStream();
+    if (!mountedRef.current) return;
+    showDrop(next, { blob, mimeType });
+  }
+
   async function startRecording() {
-    setError(null);
     setErrorCode(null);
+    setDrop(null);
+    dropRef.current = null;
     setHeard(null);
     setEmptyKind("idle");
+    userStopRef.current = false;
+    permissionStateRef.current = null;
+    recorderErrorRef.current = null;
     if (voiceStatusBlocksMic(voice)) {
-      showError("unconfigured");
+      showVoiceError("unconfigured");
       return;
     }
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
@@ -262,18 +400,58 @@ export function DictationButton({
         if (event.data.size > 0) chunksRef.current.push(event.data);
       };
       recorder.onstop = () => {
+        const tracks = streamRef.current?.getAudioTracks() ?? [];
+        const trackEnded = tracks.some((track) => track.readyState === "ended");
         const blob = new Blob(chunksRef.current, { type: mimeType });
+        const ended = dictateDropFromStop({
+          userStop: userStopRef.current,
+          already: dropRef.current,
+          permissionState: permissionStateRef.current,
+          trackEnded,
+          recorderErrorName: recorderErrorRef.current,
+        });
         releaseStream();
+        if (!mountedRef.current) return;
+        if (ended) {
+          showDrop(ended, { blob, mimeType });
+          return;
+        }
         if (blob.size < 1) {
           setEmptyKind("silent");
-          setError(null);
           setErrorCode(null);
+          setDrop(null);
+          dropRef.current = null;
           setRecording(false);
           return;
         }
         void transcribe(blob, mimeType);
         setRecording(false);
       };
+      const permission = await readMicPermission();
+      if (!mountedRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      permissionStateRef.current = permission?.state ?? null;
+      if (permission?.state === "denied") {
+        releaseStream();
+        showDrop("permission");
+        return;
+      }
+      dropUnbindRef.current = bindDictateDrop({
+        tracks: stream.getAudioTracks(),
+        recorder,
+        permission,
+        onPermissionState: (state) => {
+          permissionStateRef.current = state;
+        },
+        onRecorderError: (name) => {
+          recorderErrorRef.current = name;
+        },
+        onDrop: (next) => {
+          failLiveTake(next);
+        },
+      });
       recorderRef.current = recorder;
       stoppingRef.current = false;
       recorder.start(250);
@@ -289,16 +467,18 @@ export function DictationButton({
       const kind = voiceEmptyKindFromMicError(caught);
       if (kind) {
         setEmptyKind(kind);
-        setError(null);
         setErrorCode(null);
+        setDrop(null);
+        dropRef.current = null;
         return;
       }
-      showError("failed", "Microphone permission is required for dictation.");
+      showVoiceError("failed");
     }
   }
 
   function stopRecording() {
     if (stoppingRef.current) return;
+    userStopRef.current = true;
     stoppingRef.current = true;
     clearSilenceWatch();
     const recorder = recorderRef.current;
@@ -328,23 +508,43 @@ export function DictationButton({
     if (errorCode === "unconfigured") {
       const next = await refreshVoiceStatus();
       if (voiceStatusBlocksMic(next)) return;
-      setError(null);
       setErrorCode(null);
+      setDrop(null);
+      dropRef.current = null;
       await startRecording();
       return;
     }
     const clip = lastClipRef.current;
-    if (clip && canRetrySameAudio(errorCode ?? undefined)) {
-      setError(null);
-      setErrorCode(null);
+    const surfaceNow = dictateFieldSurface({
+      drop,
+      errorCode,
+      emptyKind,
+      heard,
+    });
+    if (
+      clip &&
+      surfaceNow.kind === "error" &&
+      surfaceNow.retrySameAudio
+    ) {
       await transcribe(clip.blob, clip.mimeType);
       return;
     }
+    setErrorCode(null);
+    setDrop(null);
+    dropRef.current = null;
     await startRecording();
   }
 
   const blocked = voiceStatusBlocksMic(voice);
   const status = pending ? "Saving" : recording ? "Listening" : label;
+  const surface = dictateFieldSurface({
+    recording,
+    pending,
+    heard,
+    emptyKind,
+    drop,
+    errorCode,
+  });
 
   return (
     <div className={className}>
@@ -363,7 +563,7 @@ export function DictationButton({
         <MicIcon recording={recording} />
         <span>{status}</span>
       </button>
-      {!heard && !error && !recording && !pending && !blocked ? (
+      {surface.kind === "ready" && !blocked ? (
         <>
           <VoiceEmptyState className="mt-2" message={voiceEmptyMessage(emptyKind)} />
           {emptyKind === "idle" && hint ? (
@@ -371,26 +571,36 @@ export function DictationButton({
           ) : null}
         </>
       ) : null}
-      {recording || pending ? (
+      {surface.kind === "listening" || surface.kind === "saving" ? (
         <p role="status" className="mt-2 text-base font-semibold text-paper">
-          {recording ? "Listening" : "Saving"}
+          {surface.kind === "listening" ? "Listening" : "Saving"}
         </p>
       ) : null}
-      {heard ? (
+      {surface.kind === "heard" ? (
         <p className="mt-2 text-base text-paper">
-          Heard: <span className="text-muted">{heard}</span>
+          Heard: <span className="text-muted">{surface.text}</span>
         </p>
       ) : null}
-      {error ? (
-        <VoiceFeedback
-          className="mt-3"
-          title={errorCode === "unconfigured" ? "Voice is off" : "Dictation failed"}
-          message={error}
-          onRetry={() => void onRetry()}
-          retryLabel={
-            canRetrySameAudio(errorCode ?? undefined) ? "Retry" : "Dictate again"
-          }
-        />
+      {surface.kind === "empty" ? (
+        <div className="mt-3">
+          <DictateEmptyState
+            title={surface.title}
+            message={surface.message}
+            speak={surface.speak}
+            speakId={`dictate-empty-${speakSalt}`}
+          />
+        </div>
+      ) : null}
+      {surface.kind === "error" ? (
+        <div className="mt-3">
+          <DictateFieldBanner
+            title={surface.title}
+            message={surface.message}
+            speak={surface.speak}
+            speakId={`dictate-drop-${speakSalt}`}
+            onRetry={() => void onRetry()}
+          />
+        </div>
       ) : null}
     </div>
   );
