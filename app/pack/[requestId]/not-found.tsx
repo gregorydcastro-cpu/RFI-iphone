@@ -1,6 +1,6 @@
 import { FieldNotFoundPage } from "@/components/FieldNotFound";
 
-/** Any app URL that does not match a page. */
-export default async function NotFound() {
+/** A pack id that does not resolve. */
+export default async function PackNotFound() {
   return FieldNotFoundPage();
 }

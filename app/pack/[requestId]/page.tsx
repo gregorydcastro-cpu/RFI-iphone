@@ -3,6 +3,7 @@ import { RoomPackViewer } from "@/components/RoomPackViewer";
 import { getJob } from "@/lib/jobs";
 import { loadLiveRoomPack } from "@/lib/livePack";
 import { getProcoreConnectionView } from "@/lib/procoreStatus";
+import { opensSheetsSection } from "@/lib/fieldNotFound";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ type Props = {
   searchParams: Promise<{
     job?: string;
     room?: string;
+    section?: string | string[];
   }>;
 };
 
@@ -54,6 +56,7 @@ export default async function PackPage({ params, searchParams }: Props) {
       procoreReconnect={procore.reconnectNeeded}
       role={signedIn ? role.role : null}
       readOnly={!signedIn || role.role === "viewer"}
+      openSheets={opensSheetsSection(query.section)}
     />
   );
 }
