@@ -11,6 +11,7 @@ import {
   rfiInboxCrewStatus,
   rfiInboxEmptySpeak,
   rfiInboxErrorSpeak,
+  rfiInboxShowsLoading,
   rfiInboxView,
 } from "./rfiInbox.ts";
 
@@ -38,8 +39,10 @@ test("inbox copy stays short and plain", () => {
 
 test("a dropped drafts load is not an empty inbox", () => {
   assert.equal(rfiInboxCrewStatus({ thrown: true }), "error");
+  assert.equal(rfiInboxCrewStatus({ timedOut: true }), "error");
   assert.equal(rfiInboxCrewStatus({ httpStatus: 503, ok: false }), "error");
-  assert.equal(rfiInboxCrewStatus({ httpStatus: 401, ok: false }), "ok");
+  assert.equal(rfiInboxCrewStatus({ httpStatus: 401, ok: false }), "skipped");
+  assert.equal(rfiInboxCrewStatus({ httpStatus: 403, ok: false }), "skipped");
   assert.equal(rfiInboxCrewStatus({ httpStatus: 200, ok: true }), "ok");
 
   assert.deepEqual(
@@ -65,6 +68,23 @@ test("a dropped drafts load is not an empty inbox", () => {
   assert.deepEqual(
     rfiInboxView({ crew: "loading", itemCount: 1, draftCount: 0 }),
     { kind: "list", retry: false, pending: true, draftsEmpty: false },
+  );
+  assert.deepEqual(
+    rfiInboxView({ crew: "skipped", itemCount: 3, draftCount: 0 }),
+    { kind: "list", retry: false, pending: false, draftsEmpty: false },
+  );
+  assert.deepEqual(rfiInboxView({ crew: "skipped", itemCount: 0, draftCount: 0 }), {
+    kind: "idle",
+  });
+  assert.equal(
+    rfiInboxShowsLoading(rfiInboxView({ crew: "loading", itemCount: 1, draftCount: 0 })),
+    true,
+  );
+  assert.equal(
+    rfiInboxShowsLoading(
+      rfiInboxView({ crew: "skipped", itemCount: 3, draftCount: 0 }),
+    ),
+    false,
   );
 });
 

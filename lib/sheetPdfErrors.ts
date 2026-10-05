@@ -281,6 +281,8 @@ export function sheetPdfErrorSpeak(
   return `${banner.title}. ${banner.message}`;
 }
 
+export const SHEET_LOADING = "Loading sheet…";
+
 export type SheetPdfSurface =
   | { kind: "loading" }
   | { kind: "sheet" }

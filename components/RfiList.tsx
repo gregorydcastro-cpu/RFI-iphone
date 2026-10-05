@@ -11,6 +11,7 @@ import {
   RFI_INBOX_EMPTY_TITLE,
   RFI_INBOX_ERROR_NEXT,
   RFI_INBOX_ERROR_TITLE,
+  RFI_INBOX_CLIENT_TIMEOUT_MS,
   RFI_INBOX_LOADING,
   rfiInboxCrewStatus,
   rfiInboxEmptySpeak,
@@ -35,6 +36,8 @@ type Props = {
   rfis: Rfi[];
   requestId?: string;
   sheetIds?: string[];
+  /** Signed-out viewers do not have crew drafts. Skip that fetch. */
+  signedIn?: boolean;
 };
 
 function speakOne(item: RfiInboxItem): string {
@@ -86,19 +89,32 @@ function localDraftsServerSnapshot(): RfiInboxDraft[] {
   return EMPTY_DRAFTS;
 }
 
-export function RfiList({ rfis, requestId, sheetIds }: Props) {
+export function RfiList({ rfis, requestId, sheetIds, signedIn = true }: Props) {
   const localDrafts = useSyncExternalStore(
     subscribeLocalDrafts,
     readLocalDrafts,
     localDraftsServerSnapshot,
   );
   const [crewDrafts, setCrewDrafts] = useState<RfiInboxDraft[]>([]);
-  const [crew, setCrew] = useState<RfiInboxCrew>("loading");
+  const [crew, setCrew] = useState<RfiInboxCrew>(signedIn ? "loading" : "skipped");
   const [attempt, setAttempt] = useState(0);
+  const [authSeen, setAuthSeen] = useState(signedIn);
+  if (signedIn !== authSeen) {
+    setAuthSeen(signedIn);
+    setCrew(signedIn ? "loading" : "skipped");
+    if (!signedIn) setCrewDrafts([]);
+  }
 
   useEffect(() => {
+    if (!signedIn) return;
+
     const controller = new AbortController();
     let cancelled = false;
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, RFI_INBOX_CLIENT_TIMEOUT_MS);
 
     async function load() {
       try {
@@ -116,23 +132,26 @@ export function RfiList({ rfis, requestId, sheetIds }: Props) {
         const status = rfiInboxCrewStatus({
           httpStatus: response.status,
           ok: Boolean(data?.ok),
+          timedOut,
         });
         setCrew(status);
         setCrewDrafts(status === "ok" ? parseCrewDraftRows(data?.rows) : []);
-      } catch (caught) {
+      } catch {
         if (cancelled) return;
-        if (caught instanceof Error && caught.name === "AbortError") return;
-        setCrew("error");
+        setCrew(rfiInboxCrewStatus({ thrown: true, timedOut }));
         setCrewDrafts([]);
+      } finally {
+        clearTimeout(timer);
       }
     }
 
     void load();
     return () => {
       cancelled = true;
+      clearTimeout(timer);
       controller.abort();
     };
-  }, [attempt]);
+  }, [attempt, signedIn]);
 
   const items = useMemo(
     () =>

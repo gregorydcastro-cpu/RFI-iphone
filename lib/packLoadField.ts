@@ -5,7 +5,12 @@
  * No tokens, no raw fetch or status text.
  */
 
-import type { RoomPack, Sheet } from "./pack.ts";
+import {
+  formatPulledAt,
+  sheetRevisionLabel,
+  type RoomPack,
+  type Sheet,
+} from "./pack.ts";
 import {
   PACK_JOB_TEXT,
   PACK_RECONNECT_STRIP,
@@ -424,4 +429,87 @@ export function classifyPackHttp(input: {
     httpStatus: input.httpStatus,
     autoRetry: false,
   };
+}
+
+/** Shown only while a live read is actually in flight and nothing is on screen yet. */
+export const PACK_LIVE_LOADING = "Loading latest pack…";
+
+export const PACK_DEMO_UNSET_LINE =
+  "Demo pack (Maple Point). Supabase / Procore path is unset locally.";
+
+export const PACK_VIEW_ONLY_LINE =
+  "View only — pulls are disabled for this session.";
+
+export type PackLiveStamp = {
+  source?: string;
+  pull?: string;
+  demoFallback?: boolean;
+  pulled_at?: string;
+  revision_stamp?: { drawing: string; rev: string };
+  pack?: RoomPack;
+};
+
+/** Status under the pack title once a body has settled. Never the loading line. */
+export function packLiveStatusLine(data: PackLiveStamp, room?: string): string {
+  const stamp = data.revision_stamp
+    ? sheetRevisionLabel({
+        id: data.revision_stamp.drawing,
+        rev: data.revision_stamp.rev,
+      })
+    : data.pack?.revision_stamp
+      ? sheetRevisionLabel({
+          id: data.pack.revision_stamp.drawing,
+          rev: data.pack.revision_stamp.rev,
+        })
+      : null;
+  const pulled = formatPulledAt(data.pulled_at ?? data.pack?.pulled_at);
+  const roomLabel = room ? ` · room ${room}` : "";
+  const suffix = `${roomLabel}${stamp ? ` · ${stamp}` : ""}${
+    pulled ? ` · pulled ${pulled}` : ""
+  }.`;
+  if (data.pull === "procore" || data.source === "procore") {
+    return `Live (Procore REST)${suffix}`;
+  }
+  if (data.demoFallback || data.source === "local") {
+    return `Demo pack (Maple Point)${suffix}`;
+  }
+  if (data.pull === "bot") {
+    return `Cached pack (bot fallback)${suffix}`;
+  }
+  return `Cached pack${suffix}`;
+}
+
+/**
+ * First paint. A pack already in hand (the page render) is settled —
+ * signed-out Maple Point must not open on the loading line.
+ * Loading is only for a configured read that has no sheets yet.
+ */
+export function packLiveOpeningLine(input: {
+  supabaseConfigured: boolean;
+  demoFallback?: boolean;
+  source?: string;
+  pull?: string;
+  pack?: RoomPack | null;
+  room?: string;
+}): string {
+  if (!input.supabaseConfigured) return PACK_DEMO_UNSET_LINE;
+  if (input.pack && packPayloadState(input.pack) === "ready") {
+    return packLiveStatusLine(
+      {
+        source: input.source,
+        pull: input.pull,
+        demoFallback: input.demoFallback,
+        pack: input.pack,
+        pulled_at: input.pack.pulled_at,
+        revision_stamp: input.pack.revision_stamp,
+      },
+      input.room,
+    );
+  }
+  return PACK_LIVE_LOADING;
+}
+
+/** Last-resort copy when a read ends without a line of its own. */
+export function packLiveFallbackLine(hasSheets: boolean): string {
+  return hasSheets ? PACK_KEPT_TEXT : PACK_NONE_MESSAGE;
 }

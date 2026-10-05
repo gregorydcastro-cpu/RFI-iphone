@@ -35,10 +35,14 @@ export type RfiInboxItem = {
   url?: string | null;
 };
 
-export type RfiInboxCrew = "loading" | "ok" | "error";
+/** Phone wait for GET /api/rfis. A hung auth check must not leave the inbox spinning. */
+export const RFI_INBOX_CLIENT_TIMEOUT_MS = 12_000;
+
+export type RfiInboxCrew = "loading" | "ok" | "error" | "skipped";
 
 export type RfiInboxView =
   | { kind: "loading" }
+  | { kind: "idle" }
   | { kind: "empty" }
   | { kind: "error" }
   | { kind: "list"; retry: boolean; pending: boolean; draftsEmpty: boolean };
@@ -51,16 +55,25 @@ export function rfiInboxErrorSpeak(): string {
   return `${RFI_INBOX_ERROR_TITLE} ${RFI_INBOX_ERROR_NEXT}`;
 }
 
-/** 401 is signed out, not a dropped radio. Anything else that is not ok is a retry. */
+/**
+ * 401/403 is signed-out or view-only: drafts are not for this viewer.
+ * A timeout or any other miss is a retry. A 200 is the crew list.
+ */
 export function rfiInboxCrewStatus(input: {
   thrown?: boolean;
+  timedOut?: boolean;
   httpStatus?: number;
   ok?: boolean;
 }): Exclude<RfiInboxCrew, "loading"> {
-  if (input.thrown) return "error";
-  if (input.httpStatus === 401) return "ok";
+  if (input.httpStatus === 401 || input.httpStatus === 403) return "skipped";
+  if (input.thrown || input.timedOut) return "error";
   if (input.ok) return "ok";
   return "error";
+}
+
+export function rfiInboxShowsLoading(view: RfiInboxView): boolean {
+  if (view.kind === "loading") return true;
+  return view.kind === "list" && view.pending;
 }
 
 export function rfiInboxView(input: {
@@ -70,6 +83,7 @@ export function rfiInboxView(input: {
 }): RfiInboxView {
   if (input.crew === "loading" && input.itemCount === 0) return { kind: "loading" };
   if (input.crew === "error" && input.itemCount === 0) return { kind: "error" };
+  if (input.crew === "skipped" && input.itemCount === 0) return { kind: "idle" };
   if (input.itemCount === 0) return { kind: "empty" };
   return {
     kind: "list",

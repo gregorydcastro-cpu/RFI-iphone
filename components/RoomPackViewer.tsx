@@ -199,6 +199,9 @@ export function RoomPackViewer({
             procoreLinked={procoreLinked}
             supabaseConfigured={Boolean(supabaseConfigured)}
             demoFallback={Boolean(demoFallback)}
+            pack={displayedPack}
+            source={liveSource}
+            pull={livePull}
             hasSheets={false}
             sessionReconnect={procoreReconnect}
             retryToken={retryToken}
@@ -336,6 +339,7 @@ export function RoomPackViewer({
             rfis={displayedPack.rfis}
             requestId={displayedRequest}
             sheetIds={displayedPack.sheets.map((sheet) => sheet.id)}
+            signedIn={signedIn}
           />
           <div className="flex flex-col gap-5">
             <ActionPanel
@@ -522,6 +526,9 @@ function PackContextBar({
           procoreLinked={procoreLinked}
           supabaseConfigured={supabaseConfigured}
           demoFallback={Boolean(demoFallback)}
+          pack={pack}
+          source={source}
+          pull={pull}
           hasSheets={hasSheets}
           sessionReconnect={sessionReconnect}
           retryToken={retryToken}
