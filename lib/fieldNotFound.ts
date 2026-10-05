@@ -9,14 +9,80 @@ export const HOME_HREF = "/";
 export const FIELD_NOT_FOUND_TITLE = "Pack not found";
 export const FIELD_NOT_FOUND_MESSAGE =
   "This link may be old. Open the Maple Point demo or go home.";
+export const PAGE_NOT_FOUND_TITLE = "Page not found";
+export const PAGE_NOT_FOUND_MESSAGE =
+  "This page isn't here. Go home or open the Maple Point demo.";
 export const MAPLE_POINT_DEMO_LABEL = "Open Maple Point demo";
 export const HOME_LABEL = "Home";
 
 /** Query value and in-page id for the sheet block on a pack. */
 export const SHEETS_SECTION = "sheets";
 
-export function fieldNotFoundSpeak(): string {
-  return `${FIELD_NOT_FOUND_TITLE}. ${FIELD_NOT_FOUND_MESSAGE}`;
+export type FieldNotFoundVariant = "pack" | "page";
+
+export type FieldNotFoundAction = {
+  href: string;
+  label: string;
+};
+
+export type FieldNotFoundCopy = {
+  title: string;
+  message: string;
+  primary: FieldNotFoundAction;
+  secondary: FieldNotFoundAction;
+};
+
+/** Pack misses keep the pack card. Every other miss is a page card. */
+export function fieldNotFoundCopy(variant: FieldNotFoundVariant): FieldNotFoundCopy {
+  if (variant === "pack") {
+    return {
+      title: FIELD_NOT_FOUND_TITLE,
+      message: FIELD_NOT_FOUND_MESSAGE,
+      primary: { href: MAPLE_POINT_DEMO_HREF, label: MAPLE_POINT_DEMO_LABEL },
+      secondary: { href: HOME_HREF, label: HOME_LABEL },
+    };
+  }
+  return {
+    title: PAGE_NOT_FOUND_TITLE,
+    message: PAGE_NOT_FOUND_MESSAGE,
+    primary: { href: HOME_HREF, label: HOME_LABEL },
+    secondary: { href: MAPLE_POINT_DEMO_HREF, label: MAPLE_POINT_DEMO_LABEL },
+  };
+}
+
+export function fieldNotFoundSpeak(variant: FieldNotFoundVariant): string {
+  const copy = fieldNotFoundCopy(variant);
+  return `${copy.title}. ${copy.message}`;
+}
+
+/**
+ * Sign-in aliases. Next matches this source without case sensitivity
+ * and allows one trailing slash. Query values pass through to `/`.
+ */
+export const SIGN_IN_ALIAS_SOURCE = "/:alias(login|signin|sign-in)";
+
+const SIGN_IN_ALIAS_PATH = /^\/(?:login|signin|sign-in)\/?$/i;
+
+export function signInAliasRedirects(): Array<{
+  source: string;
+  destination: string;
+  permanent: boolean;
+}> {
+  return [
+    {
+      source: SIGN_IN_ALIAS_SOURCE,
+      destination: HOME_HREF,
+      permanent: false,
+    },
+  ];
+}
+
+/** Where a sign-in alias should land, or null when the path is not an alias. */
+export function signInAliasDestination(pathname: string, search = ""): string | null {
+  if (!SIGN_IN_ALIAS_PATH.test(pathname)) return null;
+  if (!search || search === "?") return HOME_HREF;
+  const query = search.startsWith("?") ? search : `?${search}`;
+  return `${HOME_HREF}${query}`;
 }
 
 export function opensSheetsSection(
