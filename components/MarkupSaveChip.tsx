@@ -6,7 +6,6 @@ const toneClass: Record<MarkupSaveChipState["tone"], string> = {
   saving: "border-cta bg-gline-ink text-paper",
   saved: "border-line bg-gline-ink text-paper",
   local: "border-tan/50 bg-gline-ink text-tan",
-  failed: "border-cta bg-gline-ink text-cta",
 };
 
 export function MarkupSaveChip({

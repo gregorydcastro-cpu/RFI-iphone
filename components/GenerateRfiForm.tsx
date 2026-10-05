@@ -4,7 +4,7 @@ import Link from "next/link";
 import { type ChangeEvent, type FormEvent, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { DictationButton } from "@/components/DictationButton";
 import { DraftToForemanSuccess } from "@/components/DraftToForemanSuccess";
-import { MarkupSaveChip } from "@/components/MarkupSaveChip";
+import { MarkupFieldBanner, MarkupFieldEmptyState } from "@/components/MarkupFieldBanner";
 import { ReadAloudButton } from "@/components/ReadAloudButton";
 import { RfiFieldBanner, RfiFieldEmptyState } from "@/components/RfiFieldBanner";
 import { VoiceSetupNote } from "@/components/VoiceSetupNote";
@@ -25,6 +25,15 @@ import {
   resolveMarkupRfiFields,
   subscribeMarkupRfiPrefill,
 } from "@/lib/markup";
+import {
+  markupSaveDraftBanner,
+  markupSaveEmptySpeak,
+  markupSaveFromQuery,
+  MARKUP_EMPTY_MESSAGE,
+  MARKUP_EMPTY_TITLE,
+  putMarkupOverlay,
+  type MarkupSaveFail,
+} from "@/lib/markupSaveField";
 import {
   PHOTO_ATTACH_MAX_BYTES,
   photoAttachBatchOutcome,
@@ -59,7 +68,7 @@ type Props = {
   initialQuestion?: string;
   initialLocation?: string;
   markupKindQuery?: string;
-  markupSaveFailed?: boolean;
+  markupSave?: string;
   authorName: string;
   authorEmail: string;
 };
@@ -74,7 +83,7 @@ export function GenerateRfiForm({
   initialQuestion,
   initialLocation,
   markupKindQuery,
-  markupSaveFailed = false,
+  markupSave,
   authorName,
   authorEmail,
 }: Props) {
@@ -122,6 +131,11 @@ export function GenerateRfiForm({
   const [saved, setSaved] = useState<RfiDraftPacket | null>(null);
   const [dictateNote, setDictateNote] = useState<string | null>(null);
   const [needsSignIn, setNeedsSignIn] = useState(false);
+  const openedMarkupSave = markupSaveFromQuery(markupSave);
+  const [markupFail, setMarkupFail] = useState<MarkupSaveFail | null>(openedMarkupSave.fail);
+  const [markupRetryable, setMarkupRetryable] = useState(openedMarkupSave.retryable);
+  const [markupRetrying, setMarkupRetrying] = useState(false);
+  const [markupEmpty, setMarkupEmpty] = useState(false);
 
   const fromMarkup = Boolean(markupQuery || markupKindQuery);
   const selectedSheet =
@@ -350,6 +364,37 @@ export function GenerateRfiForm({
     setPending(false);
   }
 
+  async function retryMarkupCloudSave() {
+    if (markupRetrying) return;
+    const local = sheetId ? loadLocalOverlay(requestId, sheetId) : null;
+    const vectors = local?.vectors ?? storedPrefill?.vectors ?? { items: [] };
+    const id = local?.id || storedPrefill?.overlayId || markupQuery || "";
+    if (!id || !sheetId || vectors.items.length === 0) {
+      setMarkupFail(null);
+      setMarkupEmpty(true);
+      return;
+    }
+    setMarkupRetrying(true);
+    try {
+      const result = await putMarkupOverlay({
+        id,
+        requestId,
+        sheetId,
+        vectors,
+      });
+      if (result.fail) {
+        setMarkupFail(result.fail);
+        setMarkupRetryable(result.retryable);
+        setMarkupEmpty(false);
+        return;
+      }
+      setMarkupFail(null);
+      setMarkupEmpty(false);
+    } finally {
+      setMarkupRetrying(false);
+    }
+  }
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await submitDraft({ subject, question, location });
@@ -463,6 +508,10 @@ export function GenerateRfiForm({
     );
   }
 
+  const markupBanner = markupFail
+    ? markupSaveDraftBanner(markupFail, markupRetryable)
+    : null;
+
   return (
     <form onSubmit={onSubmit} className="space-y-4 border border-line bg-panel p-4">
       <p className="text-sm text-muted">
@@ -497,14 +546,6 @@ export function GenerateRfiForm({
               ? "Subject and description are filled in below. The markup stays on this draft."
               : "Add a subject and a description, or dictate them."}
           </p>
-          {markupSaveFailed ? (
-            <div className="mt-2">
-              <MarkupSaveChip
-                chip={{ label: "Couldn't save", tone: "failed" }}
-                detail="Kept on this device. Draft still goes to the foreman."
-              />
-            </div>
-          ) : null}
           {photos.some((photo) => photo.dataUrl) ? (
             <ul className="mt-2 flex flex-wrap gap-2" aria-label="Photo preview">
               {photos.map((photo) =>
@@ -522,6 +563,32 @@ export function GenerateRfiForm({
             </ul>
           ) : null}
         </div>
+      ) : null}
+
+      {markupBanner ? (
+        <MarkupFieldBanner
+          title={markupBanner.title}
+          message={markupBanner.message}
+          speak={markupBanner.speak}
+          speakId="markup-save-error"
+          onRetry={
+            markupBanner.retry
+              ? () => {
+                  void retryMarkupCloudSave();
+                }
+              : undefined
+          }
+          retryDisabled={markupRetrying || pending}
+          retryLabel={markupRetrying ? "Saving…" : "Retry"}
+        />
+      ) : null}
+      {markupEmpty ? (
+        <MarkupFieldEmptyState
+          title={MARKUP_EMPTY_TITLE}
+          message={MARKUP_EMPTY_MESSAGE}
+          speak={markupSaveEmptySpeak()}
+          speakId="markup-save-empty"
+        />
       ) : null}
 
       <div className="space-y-2 border border-line bg-ink p-3">

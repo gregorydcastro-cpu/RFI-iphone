@@ -41,27 +41,26 @@ export type MarkupTool = "pan" | MarkupKind;
 /** Where the latest overlay write landed. Mirrors `/api/markups` `storage`. */
 export type MarkupStorageKind = "supabase" | "local" | "unconfigured" | "unavailable";
 
-export type MarkupSaveChipTone = "saving" | "saved" | "local" | "failed";
+export type MarkupSaveChipTone = "saving" | "saved" | "local";
 
 export type MarkupSaveChip = {
-  label: "Saving…" | "Saved" | "Local only" | "Couldn't save";
+  label: "Saving…" | "Saved" | "Local only";
   tone: MarkupSaveChipTone;
 };
 
 /**
- * Toolbar chip. In-flight wins. A failed cloud write (or `unavailable`)
- * is "Couldn't save" even when a local copy exists. Supabase success is
+ * Toolbar chip for an in-flight or landed write. A failed cloud save is not
+ * a chip — that card lives in `markupSaveSurface`. Supabase success is
  * "Saved". Missing service role / device fallback is "Local only".
+ * Returns null when the write failed so the chip cannot say "Couldn't save".
  */
 export function markupSaveChip(input: {
   storage: MarkupStorageKind;
   saving: boolean;
   persistFailed?: boolean;
-}): MarkupSaveChip {
+}): MarkupSaveChip | null {
   if (input.saving) return { label: "Saving…", tone: "saving" };
-  if (input.persistFailed || input.storage === "unavailable") {
-    return { label: "Couldn't save", tone: "failed" };
-  }
+  if (input.persistFailed || input.storage === "unavailable") return null;
   if (input.storage === "supabase") return { label: "Saved", tone: "saved" };
   return { label: "Local only", tone: "local" };
 }
@@ -644,7 +643,7 @@ function preferCompleteField(urlValue: string, storedValue: string): string {
 /** Short query for the draft page. Drops `question` when the URL would be cut. */
 export function markupRfiQuery(
   prefill: MarkupRfiPrefill,
-  markupSaveFailed = false,
+  markupSaveFailed: boolean | string | null = false,
 ): string {
   const params = new URLSearchParams({
     sheet: prefill.sheetId,
@@ -654,13 +653,29 @@ export function markupRfiQuery(
     location: prefill.location,
     kind: prefill.kind,
   });
-  if (markupSaveFailed) params.set("markupSave", "failed");
+  const saveFlag = markupSaveQueryFlag(markupSaveFailed);
+  if (saveFlag) params.set("markupSave", saveFlag);
   const withQuestion = new URLSearchParams(params);
   withQuestion.set("question", prefill.question);
   if (withQuestion.toString().length <= MARKUP_RFI_QUERY_MAX) {
     return withQuestion.toString();
   }
   return params.toString();
+}
+
+const MARKUP_SAVE_QUERY = new Set([
+  "failed",
+  "network",
+  "server",
+  "abort",
+  "view_only",
+  "signed_out",
+]);
+
+function markupSaveQueryFlag(value: boolean | string | null): string | null {
+  if (value === true) return "failed";
+  if (typeof value !== "string") return null;
+  return MARKUP_SAVE_QUERY.has(value) ? value : null;
 }
 
 export function buildMarkupRfiPrefill(input: {

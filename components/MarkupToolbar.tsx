@@ -3,12 +3,15 @@
 import { useEffect, useState } from "react";
 import {
   markupKindLabel,
-  markupSaveChip,
-  type MarkupSaveChip as MarkupSaveChipState,
   type MarkupStorageKind,
   type MarkupTool,
   type MarkupVector,
 } from "@/lib/markup";
+import {
+  markupSaveSurface,
+  type MarkupSaveFail,
+} from "@/lib/markupSaveField";
+import { MarkupFieldBanner, MarkupFieldEmptyState } from "./MarkupFieldBanner";
 import { MarkupSaveChip } from "./MarkupSaveChip";
 
 const tools: { id: MarkupTool; label: string }[] = [
@@ -27,6 +30,10 @@ type Props = {
   storage: MarkupStorageKind;
   saving: boolean;
   persistFailed: boolean;
+  saveFail?: MarkupSaveFail | null;
+  saveRetryable?: boolean;
+  saveEmpty?: boolean;
+  onRetrySave?: () => void;
   onCreateRfi: () => void;
   onDeleteSelected: () => void;
   onUndo: () => void;
@@ -42,6 +49,10 @@ export function MarkupToolbar({
   storage,
   saving,
   persistFailed,
+  saveFail = null,
+  saveRetryable = true,
+  saveEmpty = false,
+  onRetrySave,
   onCreateRfi,
   onDeleteSelected,
   onUndo,
@@ -49,10 +60,14 @@ export function MarkupToolbar({
   disabled = false,
 }: Props) {
   const [confirmClear, setConfirmClear] = useState(false);
-  const chip: MarkupSaveChipState = markupSaveChip({
-    storage,
+  const surface = markupSaveSurface({
     saving,
+    itemCount,
+    storage,
     persistFailed,
+    fail: saveFail,
+    retryable: saveRetryable,
+    settledEmpty: saveEmpty,
   });
   const createLabel = selected
     ? `Create RFI · ${markupKindLabel(selected.kind)}`
@@ -95,7 +110,11 @@ export function MarkupToolbar({
         })}
       </div>
       <div className="flex items-center gap-1.5 overflow-x-auto">
-        <MarkupSaveChip chip={chip} />
+        {surface.kind === "saving" ||
+        surface.kind === "saved" ||
+        surface.kind === "local" ? (
+          <MarkupSaveChip chip={{ label: surface.label, tone: surface.tone }} />
+        ) : null}
         {itemCount > 0 && confirmClear ? (
           <>
             <button
@@ -158,6 +177,25 @@ export function MarkupToolbar({
           {createLabel}
         </button>
       </div>
+      {surface.kind === "error" ? (
+        <MarkupFieldBanner
+          title={surface.title}
+          message={surface.message}
+          speak={surface.speak}
+          speakId="markup-save-error"
+          onRetry={surface.retry ? onRetrySave : undefined}
+          retryDisabled={saving}
+          retryLabel={saving ? "Saving…" : "Retry"}
+        />
+      ) : null}
+      {surface.kind === "empty" ? (
+        <MarkupFieldEmptyState
+          title={surface.title}
+          message={surface.message}
+          speak={surface.speak}
+          speakId="markup-save-empty"
+        />
+      ) : null}
     </div>
   );
 }
