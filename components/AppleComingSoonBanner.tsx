@@ -15,6 +15,7 @@ export function AppleComingSoonBanner() {
 
   return (
     <aside
+      data-site-banner=""
       role="status"
       aria-label="Apple and iPad app coming soon"
       className="border-b border-line bg-primary"

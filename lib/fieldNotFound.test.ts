@@ -8,11 +8,17 @@ import {
   HOME_LABEL,
   MAPLE_POINT_DEMO_HREF,
   MAPLE_POINT_DEMO_LABEL,
+  PAGE_NOT_FOUND_MESSAGE,
+  PAGE_NOT_FOUND_TITLE,
   SHEETS_SECTION,
+  SIGN_IN_ALIAS_SOURCE,
+  fieldNotFoundCopy,
   fieldNotFoundSpeak,
   opensSheetsSection,
   packSubpathDecision,
   packSubpathHref,
+  signInAliasDestination,
+  signInAliasRedirects,
 } from "./fieldNotFound.ts";
 import { logFieldNotFoundDevHint } from "./fieldNotFoundDev.ts";
 
@@ -97,7 +103,8 @@ test("unknown pack subpaths redirect only when the pack resolves", () => {
 });
 
 test("not-found copy has no developer paths", () => {
-  const speak = fieldNotFoundSpeak();
+  const packCopy = fieldNotFoundCopy("pack");
+  const speak = fieldNotFoundSpeak("pack");
   assert.equal(FIELD_NOT_FOUND_TITLE, "Pack not found");
   assert.equal(
     FIELD_NOT_FOUND_MESSAGE,
@@ -110,6 +117,13 @@ test("not-found copy has no developer paths", () => {
     speak,
     "Pack not found. This link may be old. Open the Maple Point demo or go home.",
   );
+  assert.equal(packCopy.title, FIELD_NOT_FOUND_TITLE);
+  assert.equal(packCopy.message, FIELD_NOT_FOUND_MESSAGE);
+  assert.deepEqual(packCopy.primary, {
+    href: MAPLE_POINT_DEMO_HREF,
+    label: MAPLE_POINT_DEMO_LABEL,
+  });
+  assert.deepEqual(packCopy.secondary, { href: HOME_HREF, label: HOME_LABEL });
 
   const copy = [
     FIELD_NOT_FOUND_TITLE,
@@ -139,7 +153,100 @@ test("not-found copy has no developer paths", () => {
   assert.match(card, /Hear this/);
   assert.match(card, /ReadAloudButton/);
   assert.match(card, /w-full/);
+  assert.match(card, /copy\.primary/);
+  assert.match(card, /fieldNotFoundSpeak\(variant\)/);
   assert.doesNotMatch(card, /"use client"/);
+});
+
+test("page not-found is a different card from a pack miss", () => {
+  const page = fieldNotFoundCopy("page");
+  const speak = fieldNotFoundSpeak("page");
+  assert.equal(page.title, "Page not found");
+  assert.equal(PAGE_NOT_FOUND_TITLE, "Page not found");
+  assert.equal(
+    page.message,
+    "This page isn't here. Go home or open the Maple Point demo.",
+  );
+  assert.equal(PAGE_NOT_FOUND_MESSAGE, page.message);
+  assert.deepEqual(page.primary, { href: "/", label: "Home" });
+  assert.deepEqual(page.secondary, {
+    href: "/pack/maple-point",
+    label: "Open Maple Point demo",
+  });
+  assert.equal(
+    speak,
+    "Page not found. This page isn't here. Go home or open the Maple Point demo.",
+  );
+
+  const rendered = [page.title, page.message, page.primary.label, page.secondary.label, speak].join(
+    "\n",
+  );
+  assert.doesNotMatch(rendered, /Pack/);
+  for (const pattern of FORBIDDEN) {
+    assert.doesNotMatch(rendered, pattern);
+  }
+
+  const root = readRepo("app/not-found.tsx");
+  const pack = readRepo("app/pack/[requestId]/not-found.tsx");
+  assert.match(root, /variant="page"/);
+  assert.match(pack, /variant="pack"/);
+  assert.doesNotMatch(root, /variant="pack"/);
+  assert.doesNotMatch(pack, /variant="page"/);
+
+  const css = readRepo("app/globals.css");
+  const banner = readRepo("components/AppleComingSoonBanner.tsx");
+  assert.match(css, /body:has\(\[data-field-not-found\]\) \[data-site-banner\]/);
+  assert.match(css, /display:\s*none/);
+  assert.match(banner, /data-site-banner/);
+  assert.match(readRepo("components/FieldNotFound.tsx"), /data-field-not-found/);
+});
+
+test("sign-in aliases redirect home and keep the query", () => {
+  assert.deepEqual(signInAliasRedirects(), [
+    {
+      source: SIGN_IN_ALIAS_SOURCE,
+      destination: "/",
+      permanent: false,
+    },
+  ]);
+  assert.equal(SIGN_IN_ALIAS_SOURCE, "/:alias(login|signin|sign-in)");
+
+  const config = readRepo("next.config.ts");
+  assert.match(config, /signInAliasRedirects\(\)/);
+
+  assert.equal(signInAliasDestination("/login"), "/");
+  assert.equal(signInAliasDestination("/login/"), "/");
+  assert.equal(signInAliasDestination("/LOGIN"), "/");
+  assert.equal(signInAliasDestination("/Login/"), "/");
+  assert.equal(signInAliasDestination("/signin"), "/");
+  assert.equal(signInAliasDestination("/SIGNIN/"), "/");
+  assert.equal(signInAliasDestination("/sign-in"), "/");
+  assert.equal(signInAliasDestination("/Sign-In/"), "/");
+  assert.equal(signInAliasDestination("/sIgN-iN"), "/");
+
+  const next = "?next=/jobs/cedar-ridge";
+  assert.equal(signInAliasDestination("/login", next), `/${next}`);
+  assert.equal(signInAliasDestination("/signin", next), `/${next}`);
+  assert.equal(signInAliasDestination("/sign-in", next), `/${next}`);
+  assert.equal(signInAliasDestination("/SIGN-IN/", next), `/${next}`);
+  assert.equal(
+    signInAliasDestination("/login/", "?next=/jobs/cedar-ridge&room=101"),
+    "/?next=/jobs/cedar-ridge&room=101",
+  );
+
+  assert.equal(signInAliasDestination("/help"), null);
+  assert.equal(signInAliasDestination("/login/extra"), null);
+  assert.equal(signInAliasDestination("/logins"), null);
+  assert.equal(signInAliasDestination("/demo"), null);
+  assert.equal(signInAliasDestination("/pack/maple-point"), null);
+  assert.equal(signInAliasDestination("/share/abc", next), null);
+
+  const home = readRepo("app/page.tsx");
+  assert.match(home, /safeNextPath\(query\.next\)/);
+  assert.match(home, /if \(session\) \{\s*redirect\(next\);/s);
+  const form = readRepo("components/LoginForm.tsx");
+  assert.match(form, /safeNextPath\(searchParams\.get\("next"\)\)/);
+  assert.match(form, /router\.push\(returnPath\)/);
 });
 
 test("missing-page hint is console-only and development-only", () => {

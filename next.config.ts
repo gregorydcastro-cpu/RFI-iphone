@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { signInAliasRedirects } from "./lib/fieldNotFound";
 
 const nextConfig: NextConfig = {
   agentRules: false,
@@ -10,6 +11,7 @@ const nextConfig: NextConfig = {
         destination: "/pack/maple-point",
         permanent: false,
       },
+      ...signInAliasRedirects(),
     ];
   },
 };

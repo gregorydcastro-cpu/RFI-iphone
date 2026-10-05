@@ -54,3 +54,8 @@ body {
 .font-display {
   font-family: var(--font-oswald), var(--font-geist-sans), sans-serif;
 }
+
+/* A missing-page card should not sit under the marketing banner. */
+body:has([data-field-not-found]) [data-site-banner] {
+  display: none;
+}
