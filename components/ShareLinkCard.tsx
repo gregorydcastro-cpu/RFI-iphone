@@ -5,24 +5,22 @@ import { FieldFailureCard, FieldFailureEmpty } from "@/components/FieldFailureCa
 import { ReadAloudButton } from "@/components/ReadAloudButton";
 import {
   CREW_SEND_JOBS,
-  INVITE_SENT_MESSAGE,
+  SHARE_LINK_PATH,
+  SHARE_SENT_MESSAGE,
   classifyCrewSendDraft,
+  crewSendBanner,
   postCrewSend,
   type CrewSendBanner,
   type CrewSendEmpty,
   type CrewSendRole,
 } from "@/lib/crewSendField";
-import {
-  INVITE_CREATE_PATH,
-  resolveInviteDisplayUrl,
-} from "@/lib/inviteRole";
 
 type Props = {
-  canInvite: boolean;
+  canSend: boolean;
 };
 
-export function InviteCrewCard({ canInvite }: Props) {
-  const [role, setRole] = useState<CrewSendRole>("full");
+export function ShareLinkCard({ canSend }: Props) {
+  const [role, setRole] = useState<CrewSendRole>("viewer");
   const [email, setEmail] = useState("");
   const [job, setJob] = useState(CREW_SEND_JOBS[0].slug);
   const [pending, setPending] = useState(false);
@@ -30,25 +28,23 @@ export function InviteCrewCard({ canInvite }: Props) {
   const [empty, setEmpty] = useState<CrewSendEmpty | null>(null);
   const [link, setLink] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [copyNote, setCopyNote] = useState<string | null>(null);
 
-  if (!canInvite) return null;
-
-  async function onGenerate() {
+  async function onSend() {
     if (pending) return;
+    setLink(null);
+    setSent(false);
+    if (!canSend) {
+      setEmpty(null);
+      setFailure(crewSendBanner("share", "forbidden"));
+      return;
+    }
     const draft = classifyCrewSendDraft({
-      kind: "invite",
+      kind: "share",
       recipient: email,
       role,
       job,
-      emailOptional: true,
     });
-    setCopied(false);
-    setCopyNote(null);
     if (!draft.ok) {
-      setLink(null);
-      setSent(false);
       if ("empty" in draft) {
         setEmpty(draft.empty);
         setFailure(null);
@@ -58,60 +54,45 @@ export function InviteCrewCard({ canInvite }: Props) {
       }
       return;
     }
+    if (!draft.recipient || !draft.job) {
+      setEmpty(null);
+      setFailure(crewSendBanner("share", "invalid"));
+      return;
+    }
 
     setPending(true);
     setFailure(null);
     setEmpty(null);
-    setLink(null);
-    setSent(false);
-
-    const body: Record<string, unknown> = { role: draft.role };
-    if (draft.job) body.job = draft.job.slug;
-    if (draft.recipient) body.invitee_email = draft.recipient;
-
     const result = await postCrewSend({
-      kind: "invite",
-      path: INVITE_CREATE_PATH,
-      body,
-      emailRequested: Boolean(draft.recipient),
+      kind: "share",
+      path: SHARE_LINK_PATH,
+      body: {
+        recipient: draft.recipient,
+        role: draft.role,
+        job: draft.job.slug,
+      },
+      emailRequested: true,
     });
     setPending(false);
     if (!result.ok) {
       setFailure(result.banner);
       return;
     }
-    setSent(result.sent);
-    if (result.url) {
-      const origin = typeof window !== "undefined" ? window.location.origin : "";
-      setLink(resolveInviteDisplayUrl(result.url, origin));
-    }
+    setSent(true);
+    setLink(result.url);
   }
-
-  async function onCopy() {
-    if (!link) return;
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopied(true);
-      setCopyNote(null);
-    } catch {
-      setCopied(false);
-      setCopyNote("Could not copy. Select the link and copy it.");
-    }
-  }
-
-  const emailRequested = email.trim().length > 0;
 
   return (
-    <section id="invite" className="max-w-lg border border-line bg-panel p-4">
+    <section className="border border-line bg-panel p-5">
       <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
-        Invite
+        Portal link
       </p>
       <h2 className="font-display mt-1 text-xl tracking-wide text-paper">
-        Invite crew
+        Send a share link
       </h2>
-      <p className="mt-2 text-sm text-muted">
-        Send a Maple Point or Cedar Ridge invite. Role is stored on the token
-        server-side — the URL path alone is not a role.
+      <p className="mt-2 max-w-2xl text-sm text-muted">
+        Email a Maple Point or Cedar Ridge portal link. The address and role
+        stay on this screen if the send does not go through.
       </p>
 
       <fieldset className="mt-4 space-y-2">
@@ -121,7 +102,7 @@ export function InviteCrewCard({ canInvite }: Props) {
         <label className="flex items-start gap-2 text-sm text-paper">
           <input
             type="radio"
-            name="invite-role"
+            name="share-link-role"
             value="full"
             checked={role === "full"}
             onChange={() => setRole("full")}
@@ -130,15 +111,14 @@ export function InviteCrewCard({ canInvite }: Props) {
           <span>
             <span className="font-medium">Full</span>
             <span className="mt-0.5 block text-xs text-muted">
-              Normal crew tools for this job — markup, drafts, order
-              materials.
+              Normal crew tools for this job.
             </span>
           </span>
         </label>
         <label className="flex items-start gap-2 text-sm text-paper">
           <input
             type="radio"
-            name="invite-role"
+            name="share-link-role"
             value="viewer"
             checked={role === "viewer"}
             onChange={() => setRole("viewer")}
@@ -147,7 +127,7 @@ export function InviteCrewCard({ canInvite }: Props) {
           <span>
             <span className="font-medium">Viewer</span>
             <span className="mt-0.5 block text-xs text-muted">
-              Sheets and the red room box only. No pull, print, or markup.
+              Sheets and the red room box only.
             </span>
           </span>
         </label>
@@ -158,7 +138,7 @@ export function InviteCrewCard({ canInvite }: Props) {
         <select
           value={job}
           onChange={(event) => setJob(event.target.value)}
-          className="mt-1 w-full border border-line bg-ink px-3 py-2 text-sm font-normal tracking-normal text-paper outline-none focus:border-cta"
+          className="mt-1 w-full max-w-md border border-line bg-ink px-3 py-2 text-sm font-normal tracking-normal text-paper outline-none focus:border-cta"
         >
           {CREW_SEND_JOBS.map((item) => (
             <option key={item.slug} value={item.slug}>
@@ -168,8 +148,8 @@ export function InviteCrewCard({ canInvite }: Props) {
         </select>
       </label>
 
-      <label className="mt-4 block text-xs font-semibold tracking-wide text-muted uppercase">
-        Email <span className="font-normal normal-case">(optional)</span>
+      <label className="mt-4 block max-w-md text-xs font-semibold tracking-wide text-muted uppercase">
+        Email
         <input
           type="email"
           autoComplete="off"
@@ -186,8 +166,8 @@ export function InviteCrewCard({ canInvite }: Props) {
             title={failure.title}
             message={failure.message}
             speak={failure.speak}
-            speakId="invite-send-error"
-            onRetry={failure.retry ? () => void onGenerate() : undefined}
+            speakId="share-link-error"
+            onRetry={failure.retry ? () => void onSend() : undefined}
             retryDisabled={pending}
           />
         </div>
@@ -198,7 +178,7 @@ export function InviteCrewCard({ canInvite }: Props) {
             title={empty.title}
             message={empty.message}
             speak={empty.speak}
-            speakId="invite-send-empty"
+            speakId="share-link-empty"
           />
         </div>
       ) : null}
@@ -206,44 +186,24 @@ export function InviteCrewCard({ canInvite }: Props) {
       <button
         type="button"
         disabled={pending}
-        onClick={() => void onGenerate()}
-        className="mt-4 w-full bg-cta px-4 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
+        onClick={() => void onSend()}
+        className="mt-4 w-full max-w-md bg-cta px-4 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover disabled:opacity-60"
       >
-        {pending
-          ? emailRequested
-            ? "Sending…"
-            : "Generating…"
-          : emailRequested
-            ? "Send invite"
-            : "Generate link"}
+        {pending ? "Sending…" : "Send link"}
       </button>
 
       {sent ? (
-        <div className="mt-4" role="status">
-          <p className="text-sm text-accent-2">{INVITE_SENT_MESSAGE}</p>
+        <div className="mt-4 max-w-md border border-line bg-ink p-3" role="status">
+          <p className="text-sm text-accent-2">{SHARE_SENT_MESSAGE}</p>
+          {link ? (
+            <p className="mt-2 break-all font-mono text-xs text-paper">{link}</p>
+          ) : null}
           <ReadAloudButton
-            id="invite-sent"
-            text={INVITE_SENT_MESSAGE}
+            id="share-link-sent"
+            text={SHARE_SENT_MESSAGE}
             label="Hear this"
             className="mt-3"
           />
-        </div>
-      ) : null}
-
-      {link ? (
-        <div className="mt-4 border border-line bg-ink p-3" role="status">
-          <p className="text-xs font-semibold tracking-wide text-muted uppercase">
-            Share this link
-          </p>
-          <p className="mt-2 break-all font-mono text-xs text-paper">{link}</p>
-          <button
-            type="button"
-            onClick={() => void onCopy()}
-            className="mt-3 border border-cta bg-cta px-4 py-2 text-xs font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover"
-          >
-            {copied ? "Copied" : "Copy link"}
-          </button>
-          {copyNote ? <p className="mt-2 text-sm text-tan">{copyNote}</p> : null}
         </div>
       ) : null}
     </section>
