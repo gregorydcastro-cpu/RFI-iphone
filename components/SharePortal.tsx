@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { ReadAloudButton } from "@/components/ReadAloudButton";
+import { ShareLinkCard } from "@/components/ShareLinkCard";
 import { signedOutGate } from "@/lib/authMessages";
 import {
   MAPLE_POINT_REQUEST_ID,
@@ -62,6 +63,7 @@ type Props = {
   catalog: ShareCatalog;
   initialFolders: ShareFolderWithPins[];
   initialStorage: string;
+  canSend?: boolean;
 };
 
 export function SharePortal({
@@ -74,6 +76,7 @@ export function SharePortal({
   catalog,
   initialFolders,
   initialStorage,
+  canSend = false,
 }: Props) {
   const [folders, setFolders] = useState(initialFolders);
   const [storage, setStorage] = useState(initialStorage);
@@ -352,6 +355,7 @@ export function SharePortal({
 
   return (
     <div className="space-y-6">
+      <ShareLinkCard canSend={canSend} />
       <section className="border border-line bg-panel p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

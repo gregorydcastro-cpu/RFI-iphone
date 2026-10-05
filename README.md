@@ -596,6 +596,8 @@ curl -s -X POST http://localhost:3000/api/share/weekly-refresh \
 | `/api/room-pack/status` | Alias of live read (no Drive poll, no webhook). |
 | `/api/sheet-pdf` | GET `?requestId=&sheetId=`. Streams a sheet PDF (Drive proxy or local `/packs`). Secrets stay on the server. |
 | `/api/share/folders` | GET/POST/DELETE signed-in share folders (service role or memory) |
+| `/api/share/link` | POST puller/full. Emails a share-portal link for Maple Point or Cedar Ridge. `{ ok:false, code }` on failure (`offline`, `timeout`, `email_failed`, `forbidden`, `invalid`). Missing `RESEND_API_KEY` is `email_failed`, not 200. |
+| `/api/invites` | POST puller/full. Mints a single-use invite. An invitee email is sent through the same Resend key; a mail failure is not 200. No email still returns the link only (`sent: false`). |
 | `/api/share/pins` | POST pin discipline or room pack; DELETE `?id=` unpin |
 | `/api/share/refresh-all` | Puller POST. Walks this owner's pins + updates `sheet_revision_cache`. Emails that owner's `notify_email` on a persisted bump. |
 | `/api/share/weekly-refresh` | Cron GET/POST. `CRON_SECRET` required. All pins, catalog + `room_packs`. Maple Point / `DEMO_JOBS` do not wake the bot. Live REST stays on pack routes. Emails each pin owner's `notify_email` on a persisted bump. |

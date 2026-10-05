@@ -68,6 +68,7 @@ export default async function SharePage() {
             catalog={SHARE_CATALOG}
             initialFolders={snapshot?.folders ?? []}
             initialStorage={snapshot?.storage ?? "memory"}
+            canSend={view.role === "puller" || view.role === "full"}
           />
         </div>
       </main>
