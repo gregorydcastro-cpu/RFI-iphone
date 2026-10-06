@@ -13,6 +13,7 @@ import {
   asStripeId,
   getStripe,
   getStripeWebhookSecret,
+  logStripeEnvGap,
   missingStripeWebhookEnv,
   stripeSoftFailBody,
   unixToIso,
@@ -56,7 +57,9 @@ export async function POST(request: Request) {
   const stripe = getStripe();
   const webhookSecret = getStripeWebhookSecret();
   if (!stripe || !webhookSecret) {
-    return NextResponse.json(stripeSoftFailBody(missingStripeWebhookEnv()), {
+    const missing = missingStripeWebhookEnv();
+    logStripeEnvGap("webhook", missing);
+    return NextResponse.json(stripeSoftFailBody(missing), {
       status: 503,
     });
   }

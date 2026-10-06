@@ -9,7 +9,9 @@
 
 import Stripe from "stripe";
 import {
+  billingEnvNames,
   billingUnconfiguredBody,
+  formatBillingUnconfigured,
   type BillingProductionEnvKey,
 } from "./billingMessages.ts";
 import { readEnv } from "./env.ts";
@@ -79,7 +81,8 @@ export function missingStripeWebhookEnv(): Array<
 }
 
 /**
- * Production env the pricing page should name when unset.
+ * Unset Production Stripe env names for status JSON and server logs.
+ * Public pages must not render these names.
  * Checkout can be ready while the webhook secret is still missing.
  */
 export function missingStripeProductionEnv(): Array<
@@ -140,6 +143,19 @@ export function stripeSoftFailBody(missing: readonly string[]) {
     checkoutConfigured: readiness.checkoutConfigured,
     webhookConfigured: readiness.webhookConfigured,
   };
+}
+
+/**
+ * Server log only. Names, never values.
+ * Public pages and non-admin UI must not print this line.
+ */
+export function logStripeEnvGap(where: string, missing: readonly string[]): void {
+  const names = billingEnvNames(missing);
+  if (names.length === 0) return;
+  console.error("[gcfieldlog] stripe production env missing", {
+    where,
+    message: formatBillingUnconfigured(names),
+  });
 }
 
 /** Lazy so Next.js can import this module during builds without a secret. */

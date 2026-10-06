@@ -4,14 +4,17 @@ import { ReadAloudButton } from "@/components/ReadAloudButton";
 import { InviteCrewCard } from "@/components/InviteCrewCard";
 import { NotifyEmailForm } from "@/components/NotifyEmailForm";
 import { ProcoreConnectCard } from "@/components/ProcoreConnectCard";
-import { formatBillingUnconfigured } from "@/lib/billingMessages";
+import {
+  BILLING_CHECKOUT_CAN_OPEN,
+  BILLING_OPENS_SOON,
+} from "@/lib/billingPublicCopy";
 import { loadAccountNotifyEmail } from "@/lib/accountNotifyEmail";
 import { canManageNotifyEmail } from "@/lib/accountRole";
 import { canInviteCrew, fieldRoleLabel } from "@/lib/inviteRole";
 import { signedOutGate } from "@/lib/authMessages";
 import { getProcoreConnectionView, procoreErrorMessage } from "@/lib/procoreStatus";
 import { readAppSession, supabaseSessionCookiePresent } from "@/lib/session.server";
-import { stripeReadiness } from "@/lib/stripe";
+import { logStripeEnvGap, stripeReadiness } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +38,9 @@ export default async function AccountPage({ searchParams }: Props) {
   const error =
     query.procore === "error" ? procoreErrorMessage(query.reason) : null;
   const billing = stripeReadiness();
+  if (billing.missing.length > 0) {
+    logStripeEnvGap("account", billing.missing);
+  }
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -150,8 +156,8 @@ export default async function AccountPage({ searchParams }: Props) {
             {billing.checkoutConfigured
               ? billing.webhookConfigured
                 ? "60-day free trial on Stripe-hosted Checkout, then monthly. Cards, Apple Pay, and PayPal when those methods are on in the Dashboard."
-                : "Checkout can open. STRIPE_WEBHOOK_SECRET is still unset on Vercel Production, so subscription updates wait until that name is set."
-              : `Billing isn't live yet. Pricing shows the crew plan until Checkout opens. ${formatBillingUnconfigured(billing.missing)}`}
+                : BILLING_CHECKOUT_CAN_OPEN
+              : BILLING_OPENS_SOON}
           </p>
           <Link
             href="/pricing"

@@ -288,7 +288,7 @@ Go-live operator checklist: **[STRIPE_GO_LIVE.md](STRIPE_GO_LIVE.md)**.
 
 60-day free trial that **auto-converts** to the monthly Price because Checkout collects a payment method (`payment_method_collection: always`). Hosted Checkout is used — no Stripe.js on the pricing page. Maple Point local demo does **not** need these keys.
 
-**Vercel Production env Greg must set (names only — never commit values):** `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`. After redeploy, `GET /api/stripe/status` reports `checkoutConfigured` and `webhookConfigured` as booleans and lists unset names in `missing`. It does not return values or key prefixes. `/pricing` repeats that with `data-billing-checkout` and `data-billing-webhook`.
+**Vercel Production env Greg must set (names only — never commit values):** `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`. After redeploy, `GET /api/stripe/status` reports `checkoutConfigured` and `webhookConfigured` as booleans and lists unset names in `missing`. It does not return values or key prefixes. `/pricing` repeats the booleans with `data-billing-checkout` and `data-billing-webhook`. The public page does not print env names.
 
 **Vercel env (Production / Preview as needed):**
 
@@ -334,7 +334,7 @@ No crypto or stablecoin code in this app. Later you can turn on Stripe’s crypt
 - `POST /api/stripe/webhook` — verifies `Stripe-Signature` on the raw body (Node.js runtime), upserts `billing_customers`, and marks `customer.subscription.deleted` as `canceled`. Other methods return `method_not_allowed` (405). Does **not** send email yet (TODO in the handler). A missing signature is `missing_signature` (400) once webhook env is set, and `billing_unconfigured` (503) with `webhookConfigured: false` before that.
 - `/pricing` — Subscribe CTA. `data-billing-checkout` and `data-billing-webhook` are `true` or `false`.
 
-If Stripe env is missing on Vercel Production (`STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`), `/pricing` still renders a calm “Billing isn't live yet” notice and names those keys for operators. Checkout and the webhook return `billing_unconfigured` (503) with `missing` set to the unset key names. Clicking Subscribe shows that notice in place — nothing redirects and no charge starts. That is missing keys, not a host allowlist. Pack viewer and Procore OAuth are unchanged. One-pass paste → redeploy → www webhook → checkout check: **[STRIPE_GO_LIVE.md](STRIPE_GO_LIVE.md)**.
+If Stripe env is missing on Vercel Production (`STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`), `/pricing` still renders a calm “Billing opens soon. Nothing is charged.” notice and does not name those keys. Server logs record the missing keys, not a host allowlist. Checkout and the webhook return `billing_unconfigured` (503) with `missing` set to the unset key names. Clicking Subscribe stays on the page — nothing redirects and no charge starts. Pack viewer and Procore OAuth are unchanged. One-pass paste → redeploy → www webhook → checkout check: **[STRIPE_GO_LIVE.md](STRIPE_GO_LIVE.md)**.
 
 #### Billing table (`public.billing_customers`)
 

@@ -13,6 +13,7 @@ import {
   STRIPE_WEBHOOK_PATH,
   checkoutReturnOrigin,
   getStripe,
+  logStripeEnvGap,
   getStripeCheckoutConfig,
   getStripePriceId,
   getStripePublishableKey,
@@ -104,12 +105,16 @@ test("checkout and webhook routes return billing_unconfigured 503 when keys are 
   const webhook = readRepo("app/api/stripe/webhook/route.ts");
   const status = readRepo("app/api/stripe/status/route.ts");
 
-  assert.match(checkout, /stripeSoftFailBody\(missingStripeCheckoutEnv\(\)\)/);
+  assert.match(checkout, /stripeSoftFailBody\(missing\)/);
+  assert.match(checkout, /missingStripeCheckoutEnv\(\)/);
+  assert.match(checkout, /logStripeEnvGap\("checkout"/);
   assert.match(checkout, /status:\s*503/);
   assert.match(checkout, /getStripeCheckoutConfig\(\)/);
   assert.match(checkout, /getStripe\(\)/);
 
-  assert.match(webhook, /stripeSoftFailBody\(missingStripeWebhookEnv\(\)\)/);
+  assert.match(webhook, /stripeSoftFailBody\(missing\)/);
+  assert.match(webhook, /missingStripeWebhookEnv\(\)/);
+  assert.match(webhook, /logStripeEnvGap\("webhook"/);
   assert.match(webhook, /status:\s*503/);
   assert.match(webhook, /getStripeWebhookSecret\(\)/);
   assert.match(webhook, /https:\/\/www\.gcfieldlog\.com\/api\/stripe\/webhook/);
@@ -251,27 +256,68 @@ test("SubscribeCta treats billing_unconfigured as coming soon, not a host allowl
   const cta = readRepo("components/SubscribeCta.tsx");
   const pricing = readRepo("app/pricing/page.tsx");
   const account = readRepo("app/account/page.tsx");
-  assert.match(cta, /Billing isn't live yet/);
-  assert.match(cta, /Checkout is coming soon/);
+  assert.match(cta, /BILLING_OPENS_SOON/);
   assert.match(cta, /Checkout stayed closed/);
   assert.match(cta, /case "billing_unconfigured":/);
   assert.match(cta, /kind: "held"/);
-  assert.match(cta, /formatBillingUnconfigured/);
   assert.match(cta, /not missing Production env/);
   assert.match(cta, /Checkout is ready/);
+  assert.doesNotMatch(cta, /formatBillingUnconfigured/);
   assert.doesNotMatch(cta, /disabled=\{!configured/);
   assert.doesNotMatch(cta, /not configured on this host/);
   assert.doesNotMatch(cta, /this host yet/);
-  assert.match(pricing, /Billing isn't live yet/);
+  assert.match(pricing, /BILLING_OPENS_SOON/);
   assert.match(pricing, /stripeReadiness/);
+  assert.match(pricing, /logStripeEnvGap\("pricing"/);
   assert.match(pricing, /data-billing-checkout/);
   assert.match(pricing, /data-billing-webhook/);
-  assert.match(pricing, /missing=\{missingStripeEnv\}/);
-  assert.match(account, /Billing isn't live yet/);
+  assert.doesNotMatch(pricing, /missing=\{/);
+  assert.match(account, /BILLING_OPENS_SOON/);
   assert.match(account, /data-billing-checkout/);
   assert.match(account, /data-billing-webhook/);
-  assert.match(account, /STRIPE_WEBHOOK_SECRET/);
-  assert.match(account, /formatBillingUnconfigured/);
+  assert.match(account, /logStripeEnvGap\("account"/);
+  assert.doesNotMatch(account, /formatBillingUnconfigured/);
+});
+
+test("public pricing HTML hides stripe setup diagnostics when env is missing", () => {
+  const publicHtml = [
+    "app/pricing/page.tsx",
+    "components/SubscribeCta.tsx",
+    "app/account/page.tsx",
+    "lib/billingPublicCopy.ts",
+  ]
+    .map((file) => readRepo(file))
+    .join("\n");
+  assert.match(publicHtml, /Billing opens soon\. Nothing is charged\./);
+  assert.match(publicHtml, /type="email"/);
+  assert.match(publicHtml, /"Subscribe"/);
+  assert.doesNotMatch(publicHtml, /STRIPE_SECRET_KEY/);
+  assert.doesNotMatch(publicHtml, /STRIPE_PRICE_ID/);
+  assert.doesNotMatch(publicHtml, /STRIPE_WEBHOOK_SECRET/);
+  assert.doesNotMatch(publicHtml, /host allowlist/);
+  assert.doesNotMatch(publicHtml, /Vercel/);
+  assert.doesNotMatch(publicHtml, /formatBillingUnconfigured/);
+
+  clearStripeEnv();
+  const lines: unknown[][] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => {
+    lines.push(args);
+  };
+  try {
+    logStripeEnvGap("pricing", missingStripeProductionEnv());
+    logStripeEnvGap("pricing", []);
+  } finally {
+    console.error = original;
+  }
+  assert.equal(lines.length, 1);
+  const logged = JSON.stringify(lines[0]);
+  assert.match(logged, /stripe production env missing/);
+  assert.match(logged, /STRIPE_SECRET_KEY/);
+  assert.match(logged, /STRIPE_PRICE_ID/);
+  assert.match(logged, /STRIPE_WEBHOOK_SECRET/);
+  assert.match(logged, /Not a host allowlist/);
+  assert.doesNotMatch(logged, inventedSecret);
 });
 
 test("go-live docs tell Greg to register the www webhook URL", () => {
@@ -329,7 +375,8 @@ test("webhook route stays on nodejs, rejects other methods, and handles subscrip
   assert.match(webhook, /stripeWebhookHandlerCode/);
   assert.match(webhook, /invoiceSubscriptionId/);
   assert.match(webhook, /duplicate/);
-  assert.match(webhook, /stripeSoftFailBody\(missingStripeWebhookEnv\(\)\)/);
+  assert.match(webhook, /stripeSoftFailBody\(missing\)/);
+  assert.match(webhook, /missingStripeWebhookEnv\(\)/);
   const unconfigured = webhook.indexOf("stripeSoftFailBody(");
   const verify = webhook.indexOf("constructEvent");
   assert.ok(unconfigured >= 0 && verify > unconfigured);

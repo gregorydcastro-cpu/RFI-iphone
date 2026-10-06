@@ -1,15 +1,10 @@
 "use client";
 
-import {
-  billingEnvNames,
-  formatBillingUnconfigured,
-} from "@/lib/billingMessages";
+import { BILLING_OPENS_SOON } from "@/lib/billingPublicCopy";
 import { type FormEvent, useId, useState } from "react";
 
 type Props = {
   configured: boolean;
-  /** Unset Production env key names. Values are never passed. */
-  missing?: readonly string[];
   defaultEmail?: string;
 };
 
@@ -20,20 +15,15 @@ type CheckoutPayload = {
   missing?: string[];
 };
 
-const BILLING_HELD_TITLE = "Billing isn't live yet";
-
 export function SubscribeCta({
   configured,
-  missing = [],
   defaultEmail = "",
 }: Props) {
   const [email, setEmail] = useState(defaultEmail);
   const [error, setError] = useState<string | null>(null);
   const [held, setHeld] = useState(false);
-  const [apiMissing, setApiMissing] = useState<readonly string[]>([]);
   const [pending, setPending] = useState(false);
   const statusId = useId();
-  const namedMissing = billingEnvNames([...missing, ...apiMissing]);
   const showHeld = !configured || held;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -53,7 +43,6 @@ export function SubscribeCta({
       const data = await readCheckoutJson(response);
       const feedback = checkoutFeedback(data.error);
       if (feedback.kind === "held") {
-        if (data.missing?.length) setApiMissing(data.missing);
         setHeld(true);
         return;
       }
@@ -73,15 +62,7 @@ export function SubscribeCta({
   return (
     <form onSubmit={onSubmit} className="mt-6 max-w-md space-y-4">
       {showHeld ? (
-        <BillingHeldNotice
-          id={statusId}
-          confirmed={held}
-          missing={namedMissing}
-        />
-      ) : namedMissing.length > 0 ? (
-        <p id={statusId} role="status" className="text-xs leading-relaxed text-tan">
-          {formatBillingUnconfigured(namedMissing)}
-        </p>
+        <BillingHeldNotice id={statusId} confirmed={held} />
       ) : (
         <p id={statusId} role="status" className="text-xs leading-relaxed text-muted">
           Checkout is ready. Stripe key values stay on the server.
@@ -122,29 +103,25 @@ export function SubscribeCta({
 function BillingHeldNotice({
   id,
   confirmed,
-  missing,
 }: {
   id: string;
   confirmed: boolean;
-  missing: readonly string[];
 }) {
   return (
-    <div id={id} role="status" aria-live="polite" className="border border-line bg-ink">
-      <div className="h-0.5 w-full bg-cta" aria-hidden />
-      <div className="px-3 py-3">
-        <p className="font-display text-base tracking-wide text-paper">
-          {BILLING_HELD_TITLE}
-        </p>
-        <p className="mt-1 text-sm leading-relaxed text-muted">
-          {confirmed
-            ? "Checkout stayed closed. Nothing was charged — it will open on this page when billing is turned on."
-            : "Checkout is coming soon. Nothing is charged from this page until billing opens."}
-        </p>
-        <p className="mt-2 text-xs leading-relaxed text-tan">
-          {formatBillingUnconfigured(missing)}
-        </p>
-      </div>
-    </div>
+    <p
+      id={id}
+      role="status"
+      aria-live="polite"
+      className={
+        confirmed
+          ? "text-sm leading-relaxed text-muted"
+          : "sr-only"
+      }
+    >
+      {confirmed
+        ? "Checkout stayed closed. Nothing was charged — it will open on this page when billing is turned on."
+        : BILLING_OPENS_SOON}
+    </p>
   );
 }
 

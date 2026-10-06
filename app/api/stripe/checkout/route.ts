@@ -8,6 +8,7 @@ import {
   checkoutReturnOrigin,
   getStripe,
   getStripeCheckoutConfig,
+  logStripeEnvGap,
   missingStripeCheckoutEnv,
   stripeSoftFailBody,
 } from "@/lib/stripe";
@@ -36,7 +37,9 @@ export async function POST(request: Request) {
   const config = getStripeCheckoutConfig();
   const stripe = getStripe();
   if (!config || !stripe) {
-    return NextResponse.json(stripeSoftFailBody(missingStripeCheckoutEnv()), {
+    const missing = missingStripeCheckoutEnv();
+    logStripeEnvGap("checkout", missing);
+    return NextResponse.json(stripeSoftFailBody(missing), {
       status: 503,
     });
   }
