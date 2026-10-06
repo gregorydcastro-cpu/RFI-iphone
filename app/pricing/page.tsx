@@ -1,4 +1,5 @@
 import { AppHeader } from "@/components/AppHeader";
+import { SiteFooter } from "@/components/SiteFooter";
 import { SubscribeCta } from "@/components/SubscribeCta";
 import { getProcoreConnectionView } from "@/lib/procoreStatus";
 import { STRIPE_TRIAL_PERIOD_DAYS, stripeReadiness } from "@/lib/stripe";
@@ -85,6 +86,7 @@ export default async function PricingPage({ searchParams }: Props) {
           />
         </section>
       </main>
+      <SiteFooter />
     </div>
   );
 }
