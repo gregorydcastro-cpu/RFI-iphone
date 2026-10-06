@@ -6,8 +6,11 @@ import { AppHeader } from "@/components/AppHeader";
 import { LoginForm } from "@/components/LoginForm";
 import { SiteFooter } from "@/components/SiteFooter";
 import { safeNextPath, staleSessionClearPath } from "@/lib/authMessages";
+import { publicPageMetadata } from "@/lib/siteMetadata";
 import { readAppSession, supabaseSessionCookiePresent } from "@/lib/session.server";
 import { isSupabaseAuthConfigured } from "@/lib/supabase/config";
+
+export const metadata = publicPageMetadata("/");
 
 export const dynamic = "force-dynamic";
 

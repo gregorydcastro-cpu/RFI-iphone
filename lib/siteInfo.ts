@@ -22,6 +22,9 @@ export const SITE_BACKGROUND_COLOR = "#111827";
 
 export const SITE_NAME = "GC Field Log";
 
+/** Production site. Same host as DEFAULT_APP_ORIGIN in lib/stripe.ts. */
+export const SITE_ORIGIN = "https://www.gcfieldlog.com";
+
 export const SITE_FOOTER_LINKS = [
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },

@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --experimental-strip-types --test lib/*.test.ts",
+    "check:metadata": "node --experimental-strip-types scripts/check-public-metadata.mjs",
     "generate-demo": "node scripts/generate-demo-sheets.mjs",
     "postinstall": "node scripts/copy-pdf-worker.mjs",
     "check:supabase-keys": "node --experimental-strip-types scripts/check-supabase-keys.mjs"

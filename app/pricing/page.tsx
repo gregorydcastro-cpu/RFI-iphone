@@ -2,8 +2,11 @@ import { AppHeader } from "@/components/AppHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SubscribeCta } from "@/components/SubscribeCta";
 import { getProcoreConnectionView } from "@/lib/procoreStatus";
+import { publicPageMetadata } from "@/lib/siteMetadata";
 import { STRIPE_TRIAL_PERIOD_DAYS, stripeReadiness } from "@/lib/stripe";
 import { readAppSession } from "@/lib/session.server";
+
+export const metadata = publicPageMetadata("/pricing");
 
 export const dynamic = "force-dynamic";
 

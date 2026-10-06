@@ -1,5 +1,6 @@
-import type { Metadata, Viewport } from "next";
+import type { Viewport } from "next";
 import { SITE_THEME_COLOR } from "@/lib/siteInfo";
+import { rootMetadata } from "@/lib/siteMetadata";
 import { Geist, Geist_Mono, Oswald } from "next/font/google";
 import { AppleComingSoonBanner } from "@/components/AppleComingSoonBanner";
 import { OfflinePackServiceWorker } from "@/components/OfflinePackServiceWorker";
@@ -20,11 +21,7 @@ const oswald = Oswald({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "GC Field Log",
-  description:
-    "Crew dashboard for gcfieldlog.com — job selection, room packs, zoomable sheets, and RFIs.",
-};
+export const metadata = rootMetadata();
 
 export const viewport: Viewport = {
   themeColor: SITE_THEME_COLOR,
