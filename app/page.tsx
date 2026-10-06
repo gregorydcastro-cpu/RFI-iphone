@@ -4,6 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { LoginForm } from "@/components/LoginForm";
+import { SiteFooter } from "@/components/SiteFooter";
 import { safeNextPath, staleSessionClearPath } from "@/lib/authMessages";
 import { readAppSession, supabaseSessionCookiePresent } from "@/lib/session.server";
 import { isSupabaseAuthConfigured } from "@/lib/supabase/config";
@@ -76,6 +77,7 @@ export default async function LoginPage({ searchParams }: Props) {
           Maple Point and the other jobs here are fictional.
         </p>
       </main>
+      <SiteFooter />
     </div>
   );
 }
