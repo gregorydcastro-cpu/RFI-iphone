@@ -176,6 +176,10 @@ test("web manifest names GC Field Log and uses the app theme color", () => {
   assert.ok(sizes.includes("180x180"));
   assert.ok(sizes.includes("32x32"));
   assert.ok(sizes.includes("16x16"));
+  assert.ok(sizes.includes("512x512"));
+  const icon512 = manifest.icons.find((icon) => icon.sizes === "512x512");
+  assert.equal(icon512?.src, "/icon-512.png");
+  assert.equal(icon512?.type, "image/png");
   assert.match(readRepo("app/manifest.ts"), /webManifest/);
   assert.match(readRepo("app/layout.tsx"), /themeColor: SITE_THEME_COLOR/);
 });
@@ -188,4 +192,5 @@ test("apple touch icon and favicon sizes come from the existing icon", () => {
   assert.deepEqual(pngSize("public/favicon-16.png"), { width: 16, height: 16 });
   assert.deepEqual(pngSize("public/icon-192.png"), { width: 192, height: 192 });
   assert.deepEqual(pngSize("app/icon.png"), { width: 192, height: 192 });
+  assert.deepEqual(pngSize("public/icon-512.png"), { width: 512, height: 512 });
 });

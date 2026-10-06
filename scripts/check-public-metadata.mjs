@@ -1,6 +1,6 @@
 /**
  * After `next build`, render the public pages and check social tags,
- * /opengraph-image, and /sitemap.xml.
+ * security headers, /icon-512.png, /opengraph-image, and /sitemap.xml.
  *
  * Social crawlers get blocking metadata. This uses Twitterbot so the
  * tags are in the HTML head the way a share preview reads them.
@@ -11,7 +11,8 @@ import { once } from "node:events";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
-import { PUBLIC_PAGE_PATHS, ROBOTS_DISALLOW, SITE_ORIGIN } from "../lib/siteInfo.ts";
+import { SECURITY_HEADERS } from "../lib/securityHeaders.ts";
+import { PUBLIC_PAGE_PATHS, ROBOTS_DISALLOW, SITE_ORIGIN, webManifest } from "../lib/siteInfo.ts";
 import {
   OG_IMAGE_HEIGHT,
   OG_IMAGE_WIDTH,
@@ -67,6 +68,19 @@ async function fetchText(urlPath, userAgent = crawler) {
   });
   const body = await response.text();
   return { response, body };
+}
+
+function assertSecurityHeaders(pathName, response) {
+  for (const header of SECURITY_HEADERS) {
+    const actual = response.headers.get(header.key);
+    if (actual !== header.value) {
+      fail(`${pathName} ${header.key}=${actual ?? "(missing)"}`);
+    }
+  }
+  const csp = response.headers.get("content-security-policy") ?? "";
+  if (/\b(script-src|default-src|connect-src|style-src|frame-src)\b/.test(csp)) {
+    fail(`${pathName} CSP is broader than frame-ancestors: ${csp}`);
+  }
 }
 
 function assertPage(pathName, html, status) {
@@ -157,6 +171,7 @@ try {
   for (const pathName of PUBLIC_PAGE_PATHS) {
     const { response, body } = await fetchText(pathName);
     assertPage(pathName, body, response.status);
+    assertSecurityHeaders(pathName, response);
   }
 
   const image = await fetch(`${base}/opengraph-image`, {
@@ -183,6 +198,36 @@ try {
     const hit = locs.find((loc) => loc === `${SITE_ORIGIN}${blocked}` || loc.startsWith(`${SITE_ORIGIN}${blocked}/`));
     if (hit) fail(`sitemap includes blocked ${hit}`);
   }
+
+  const manifestResponse = await fetch(`${base}/manifest.webmanifest`, {
+    signal: AbortSignal.timeout(20000),
+  });
+  if (manifestResponse.status !== 200) {
+    fail(`/manifest.webmanifest returned ${manifestResponse.status}`);
+  } else {
+    const manifest = await manifestResponse.json();
+    const expectedIcon = webManifest().icons.find((icon) => icon.src === "/icon-512.png");
+    const listed = (manifest.icons ?? []).find((icon) => icon.src === "/icon-512.png");
+    if (!listed || listed.sizes !== "512x512" || listed.type !== "image/png") {
+      fail(`manifest missing 512 icon ${JSON.stringify(manifest.icons)}`);
+    }
+    if (!expectedIcon || listed.sizes !== expectedIcon.sizes) {
+      fail("manifest 512 entry does not match webManifest()");
+    }
+  }
+
+  const icon = await fetch(`${base}/icon-512.png`, {
+    signal: AbortSignal.timeout(20000),
+  });
+  if (icon.status !== 200) fail(`/icon-512.png returned ${icon.status}`);
+  const iconType = icon.headers.get("content-type") ?? "";
+  if (!iconType.includes("image/png")) fail(`/icon-512.png content-type ${iconType}`);
+  const iconBytes = Buffer.from(await icon.arrayBuffer());
+  const iconSize = pngSize(iconBytes);
+  if (!iconSize || iconSize.width !== 512 || iconSize.height !== 512) {
+    fail(`/icon-512.png size ${JSON.stringify(iconSize)}`);
+  }
+  assertSecurityHeaders("/icon-512.png", icon);
 
   const pack = await fetchText("/pack/maple-point");
   if (pack.response.status !== 200) {
