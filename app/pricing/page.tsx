@@ -1,9 +1,14 @@
 import { AppHeader } from "@/components/AppHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SubscribeCta } from "@/components/SubscribeCta";
+import { BILLING_OPENS_SOON } from "@/lib/billingPublicCopy";
 import { getProcoreConnectionView } from "@/lib/procoreStatus";
 import { publicPageMetadata } from "@/lib/siteMetadata";
-import { STRIPE_TRIAL_PERIOD_DAYS, stripeReadiness } from "@/lib/stripe";
+import {
+  logStripeEnvGap,
+  STRIPE_TRIAL_PERIOD_DAYS,
+  stripeReadiness,
+} from "@/lib/stripe";
 import { readAppSession } from "@/lib/session.server";
 
 export const metadata = publicPageMetadata("/pricing");
@@ -20,7 +25,9 @@ export default async function PricingPage({ searchParams }: Props) {
   const view = await getProcoreConnectionView(session);
   const readiness = stripeReadiness();
   const configured = readiness.checkoutConfigured;
-  const missingStripeEnv = readiness.missing;
+  if (readiness.missing.length > 0) {
+    logStripeEnvGap("pricing", readiness.missing);
+  }
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -47,12 +54,7 @@ export default async function PricingPage({ searchParams }: Props) {
               Checkout.
             </>
           ) : (
-            <>
-              {"Billing isn't live yet. "}
-              The crew plan below is a preview — {STRIPE_TRIAL_PERIOD_DAYS}{" "}
-              days free, then monthly — and Checkout stays closed until billing
-              opens. Nothing is charged from this page.
-            </>
+            BILLING_OPENS_SOON
           )}
         </p>
         {query.checkout === "success" ? (
@@ -84,7 +86,6 @@ export default async function PricingPage({ searchParams }: Props) {
           </ul>
           <SubscribeCta
             configured={configured}
-            missing={missingStripeEnv}
             defaultEmail={session?.email ?? ""}
           />
         </section>

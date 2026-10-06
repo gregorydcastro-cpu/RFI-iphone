@@ -1,6 +1,7 @@
 /**
- * Client-safe Stripe billing copy. Names env keys only.
- * Never include secret values, key prefixes with payloads, or host allowlists.
+ * Operator Stripe billing copy for server logs and API 503 bodies.
+ * Names env keys only. Never include secret values or key prefixes.
+ * Do not render this on public pages.
  */
 
 export const BILLING_UNCONFIGURED_ERROR = "billing_unconfigured" as const;
@@ -29,7 +30,7 @@ export function billingEnvNames(missing?: readonly string[]): BillingProductionE
   return names;
 }
 
-/** Operator copy for /pricing and checkout errors. Lists known unset keys when present. */
+/** Operator copy for server logs and checkout 503 JSON. Lists known unset keys. */
 export function formatBillingUnconfigured(missing?: readonly string[]): string {
   const names = billingEnvNames(missing);
   if (names.length === 0) return BILLING_UNCONFIGURED_MESSAGE;
