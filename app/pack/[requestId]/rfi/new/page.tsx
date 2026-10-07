@@ -4,6 +4,7 @@ import { GenerateRfiForm } from "@/components/GenerateRfiForm";
 import { getFieldRole } from "@/lib/auth.server";
 import { signInContinuePath } from "@/lib/authMessages";
 import { authorFromSessionEmail } from "@/lib/crew";
+import { packPageFound } from "@/lib/packPageFound";
 import { loadLiveRoomPack } from "@/lib/livePack";
 import { notFound, redirect } from "next/navigation";
 
@@ -53,6 +54,8 @@ function rfiReturnPath(
 export default async function NewRfiPage({ params, searchParams }: Props) {
   const { requestId } = await params;
   const query = await searchParams;
+  const live = await loadLiveRoomPack({ requestId });
+  if (!packPageFound({ requestId, live }) || !live) notFound();
   const role = await getFieldRole();
   const session = role.session;
   if (!session) {
@@ -61,8 +64,6 @@ export default async function NewRfiPage({ params, searchParams }: Props) {
   if (role.role === "viewer") {
     redirect(`/pack/${requestId}`);
   }
-  const live = await loadLiveRoomPack({ requestId });
-  if (!live) notFound();
 
   const author = authorFromSessionEmail(session?.email);
 

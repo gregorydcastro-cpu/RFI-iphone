@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
-import { AppHeader } from "@/components/AppHeader";
+import { notFound, redirect } from "next/navigation";
+import { InviteChrome } from "@/components/InviteChrome";
 import { InviteRedeemForm } from "@/components/InviteRedeemForm";
 import { inviteAcceptPath, signInContinuePath } from "@/lib/authMessages";
 import { previewInvite } from "@/lib/inviteStore";
@@ -22,28 +22,21 @@ export default async function InviteLandingPage({ params }: Props) {
   if (!session && (await supabaseSessionCookiePresent())) {
     redirect(signInContinuePath(inviteAcceptPath(token), true));
   }
-  const view = await getProcoreConnectionView(session);
   const preview = await previewInvite(token);
+  if (preview.status === "not_found") notFound();
+  const view = await getProcoreConnectionView(session);
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <AppHeader
-        signedIn={view.signedIn}
-        role={view.role}
-        procoreConnected={view.connected}
-        procoreReconnect={view.reconnectNeeded}
+    <InviteChrome view={view}>
+      <InviteRedeemForm
+        token={token}
+        status={preview.status}
+        role={preview.role}
+        inviteeEmail={preview.inviteeEmail}
+        expiresAt={preview.expiresAt}
+        sessionEmail={session?.email ?? null}
+        signedIn={Boolean(session)}
       />
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center px-4 py-8 sm:px-6">
-        <InviteRedeemForm
-          token={token}
-          status={preview.status}
-          role={preview.role}
-          inviteeEmail={preview.inviteeEmail}
-          expiresAt={preview.expiresAt}
-          sessionEmail={session?.email ?? null}
-          signedIn={Boolean(session)}
-        />
-      </main>
-    </div>
+    </InviteChrome>
   );
 }

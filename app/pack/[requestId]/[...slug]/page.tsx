@@ -1,5 +1,6 @@
 import { loadLiveRoomPack } from "@/lib/livePack";
 import { packSubpathDecision, queryToSearchParams } from "@/lib/fieldNotFound";
+import { packPageFound } from "@/lib/packPageFound";
 import { notFound, redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +23,7 @@ export default async function PackUnknownSubpath({ params, searchParams }: Props
   const decision = packSubpathDecision({
     packId: requestId,
     slug,
-    packFound: Boolean(live),
+    packFound: packPageFound({ requestId, live }),
     search: queryToSearchParams(query),
   });
   if (decision.type === "not-found") notFound();

@@ -1,5 +1,5 @@
 const DEV_HINT =
-  "Demo packs live at public/packs/<requestId>.json. Unknown request IDs still open the Maple Point sample from a pack URL.";
+  "Demo packs live at public/packs/<requestId>.json. Demo job request ids still open the Maple Point sample from a pack URL. Any other unknown request id is Pack not found.";
 
 /** Server console only, and only while developing. Never render this. */
 export function logFieldNotFoundDevHint(): void {

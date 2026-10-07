@@ -4,6 +4,7 @@ import { getJob } from "@/lib/jobs";
 import { loadLiveRoomPack } from "@/lib/livePack";
 import { getProcoreConnectionView } from "@/lib/procoreStatus";
 import { opensSheetsSection } from "@/lib/fieldNotFound";
+import { packPageFound } from "@/lib/packPageFound";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -22,8 +23,8 @@ type Props = {
  * Primary room-pack route (website live view).
  * Always re-reads the latest `public.room_packs` row (no-store).
  * Pullers additionally POST a refresh that tries Procore REST first,
- * then the bot. Unknown IDs still fall back to the local Maple Point
- * pack when live data is missing.
+ * then the bot. Demo job ids still open the local Maple Point pack.
+ * Any other unknown id renders the Pack not found card.
  */
 export default async function PackPage({ params, searchParams }: Props) {
   const { requestId } = await params;
@@ -37,7 +38,7 @@ export default async function PackPage({ params, searchParams }: Props) {
     job: requestedJob,
     room: query.room,
   });
-  if (!live) notFound();
+  if (!packPageFound({ requestId, live }) || !live) notFound();
 
   return (
     <RoomPackViewer
