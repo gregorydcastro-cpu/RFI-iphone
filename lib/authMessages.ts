@@ -268,6 +268,17 @@ export type InviteLanding =
       action: "signin" | "jobs" | "switch";
     };
 
+export function inviteBlockedAction(
+  landing: Extract<InviteLanding, { kind: "blocked" }>,
+  token: string,
+): { href: string; label: string } {
+  if (landing.action === "jobs") return { href: "/jobs", label: "Open jobs" };
+  if (landing.action === "switch") {
+    return { href: inviteSwitchAccountHref(token), label: "Sign out" };
+  }
+  return { href: "/", label: "Sign in" };
+}
+
 export function inviteEmailsConflict(
   inviteeEmail: string | null | undefined,
   sessionEmail: string | null | undefined,

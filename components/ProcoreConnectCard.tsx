@@ -148,6 +148,8 @@ export function ProcoreConnectCard({
           anon key cannot store other users’ tokens.
         </p>
       ) : null}
+      {/* Full navigation to the Procore connect route handler. */}
+      {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
       <a
         href="/api/procore/connect"
         className="mt-4 inline-block bg-cta px-5 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover"

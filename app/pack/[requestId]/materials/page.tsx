@@ -5,6 +5,7 @@ import { getFieldRole } from "@/lib/auth.server";
 import { signInContinuePath } from "@/lib/authMessages";
 import { authorFromSessionEmail } from "@/lib/crew";
 import { loadPack } from "@/lib/loadPack";
+import { packPageFound } from "@/lib/packPageFound";
 import { loadLiveRoomPack } from "@/lib/livePack";
 import { notFound, redirect } from "next/navigation";
 
@@ -21,6 +22,8 @@ type Props = {
  */
 export default async function MaterialsPage({ params }: Props) {
   const { requestId } = await params;
+  const live = await loadLiveRoomPack({ requestId });
+  if (!packPageFound({ requestId, live }) || !live) notFound();
   const role = await getFieldRole();
   const session = role.session;
   if (!session) {
@@ -29,8 +32,6 @@ export default async function MaterialsPage({ params }: Props) {
   if (role.role === "viewer") {
     redirect(`/pack/${requestId}`);
   }
-  const live = await loadLiveRoomPack({ requestId });
-  if (!live) notFound();
 
   const author = authorFromSessionEmail(session?.email);
   let takeoff = live.pack.takeoff;
