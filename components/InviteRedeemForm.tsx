@@ -12,9 +12,9 @@ import {
   friendlyAuthError,
   inviteAcceptedMessage,
   inviteConfirmMessage,
+  inviteBlockedAction,
   inviteFormHelper,
   inviteLanding,
-  inviteSwitchAccountHref,
   type FieldAuthMode,
 } from "@/lib/authMessages";
 import type { InviteRole, InviteStatus } from "@/lib/invites";
@@ -117,6 +117,8 @@ export function InviteRedeemForm({
         <p className="text-sm text-muted">{accepted.body}</p>
         <div className="flex flex-wrap gap-3">
           {redeemedRole === "full" ? (
+            // Full navigation to the Procore connect route handler.
+            // eslint-disable-next-line @next/next/no-html-link-for-pages
             <a
               href="/api/procore/connect"
               className="bg-cta px-5 py-2.5 text-sm font-semibold tracking-wide text-secondary uppercase hover:bg-cta-hover"
@@ -143,14 +145,9 @@ export function InviteRedeemForm({
     sessionEmail,
   });
   if (landing.kind === "blocked") {
-    const action =
-      landing.action === "jobs"
-        ? { href: "/jobs", label: "Open jobs" }
-        : landing.action === "switch"
-          ? { href: inviteSwitchAccountHref(token), label: "Sign out" }
-          : { href: "/", label: "Sign in" };
+    const action = inviteBlockedAction(landing, token);
     return (
-      <StatusCard
+      <InviteBlockedCard
         title={landing.title}
         body={landing.body}
         actionHref={action.href}
@@ -237,7 +234,7 @@ export function InviteRedeemForm({
   );
 }
 
-function StatusCard({
+export function InviteBlockedCard({
   title,
   body,
   actionHref,

@@ -143,6 +143,8 @@ export function AppHeader({
                   )}
                 </span>
               ) : null}
+              {/* Full navigation to the logout route handler. */}
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
               <a
                 className="text-accent-2 hover:text-secondary"
                 href="/api/session/logout"

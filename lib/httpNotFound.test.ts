@@ -72,11 +72,13 @@ test("an invalid invite renders the existing card through notFound", () => {
   assert.doesNotMatch(page, /status === "expired"\) notFound/);
   assert.doesNotMatch(page, /status === "used"\) notFound/);
 
-  assert.match(missing, /InviteRedeemForm/);
-  assert.match(missing, /status="not_found"/);
+  assert.match(missing, /InviteBlockedCard/);
+  assert.match(missing, /status: "not_found"/);
   assert.match(missing, /InviteChrome/);
+  assert.match(missing, /inviteLanding/);
   assert.match(form, /Hear this/);
   assert.match(form, /invite-blocked/);
+  assert.match(form, /export function InviteBlockedCard/);
   assert.match(readRepo("lib/authMessages.ts"), /Invite not found/);
 });
 
