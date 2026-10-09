@@ -3,6 +3,12 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { deliverDueAlerts, runEscalationPass, type AlertContact } from "./fieldNoteAlerts.ts";
 import {
+  createFieldNote,
+  listFieldNotes,
+  listNotesForEscalation,
+} from "./fieldNotesStore.ts";
+import { isFieldNoteTableConfigured } from "./supabaseFieldNotes.ts";
+import {
   MITIGATED_REMINDER_MS,
   UNACKED_ESCALATE_MS,
   applyNotePatch,
@@ -609,4 +615,83 @@ test("migration defaults existing notes to routine and open and blocks a silent 
   assert.match(feed, /Hear this/);
   assert.doesNotMatch(feed, /flag_immediately|flag immediately/i);
   assert.doesNotMatch(feed, /assignee/i);
+});
+
+test("vercel cron stays once a day, like the existing weekly share cron", () => {
+  const vercel = JSON.parse(readFileSync("vercel.json", "utf8")) as {
+    crons: { path: string; schedule: string }[];
+  };
+  const weekly = vercel.crons.find((item) => item.path === "/api/share/weekly-refresh");
+  const safety = vercel.crons.find((item) => item.path === "/api/field-notes/escalate");
+  assert.equal(weekly?.schedule, "0 12 * * 1");
+  assert.equal(safety?.schedule, "0 12 * * *");
+  assert.equal(vercel.crons.length, 2);
+  for (const cron of vercel.crons) {
+    assert.match(cron.schedule, /^\d+ \d+ /);
+    assert.doesNotMatch(cron.schedule, /\*\//);
+  }
+});
+
+test("opening the feed or saving a note escalates due safety notes", async (t) => {
+  if (isFieldNoteTableConfigured()) {
+    t.skip("service role is set; this check stays off the live table");
+    return;
+  }
+  const start = new Date(Date.now() - 16 * 60 * 1000);
+  const maple = await createFieldNote({
+    raw: {
+      job_slug: "maple-point",
+      body: "Open trench at the east entry.",
+      severity: "safety",
+      hazard_type: "fall",
+    },
+    actor,
+    now: start,
+  });
+  assert.equal(maple.ok, true);
+  if (!maple.ok) return;
+  assert.equal(maple.note.unacked_realerted_at, null);
+
+  const feed = await listFieldNotes("maple-point");
+  assert.equal(feed.ok, true);
+  if (!feed.ok) return;
+  const mapleNote = feed.notes.find((item) => item.id === maple.note.id);
+  assert.ok(mapleNote?.unacked_realerted_at);
+  assert.ok(mapleNote?.gc_escalated_at);
+  const again = await listFieldNotes("maple-point");
+  assert.equal(again.ok, true);
+  if (!again.ok) return;
+  const mapleAgain = again.notes.find((item) => item.id === maple.note.id);
+  assert.equal(mapleAgain?.unacked_realerted_at, mapleNote?.unacked_realerted_at);
+  assert.equal(mapleAgain?.gc_escalated_at, mapleNote?.gc_escalated_at);
+
+  const cedar = await createFieldNote({
+    raw: {
+      job_slug: "cedar-ridge",
+      body: "Loose rail at stair B.",
+      severity: "safety",
+      hazard_type: "fall",
+    },
+    actor,
+    now: start,
+  });
+  assert.equal(cedar.ok, true);
+  if (!cedar.ok) return;
+  assert.equal(cedar.note.unacked_realerted_at, null);
+  const routine = await createFieldNote({
+    raw: {
+      job_slug: "cedar-ridge",
+      body: "Device boxes are up in waiting 200.",
+      severity: "routine",
+    },
+    actor,
+    now: new Date(),
+  });
+  assert.equal(routine.ok, true);
+  const saved = await listNotesForEscalation();
+  assert.equal(saved.ok, true);
+  if (!saved.ok) return;
+  const cedarNote = saved.notes.find((item) => item.id === cedar.note.id);
+  assert.ok(cedarNote?.unacked_realerted_at);
+  assert.ok(cedarNote?.gc_escalated_at);
 });

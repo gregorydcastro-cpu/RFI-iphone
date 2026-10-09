@@ -16,6 +16,12 @@ function json(data: unknown, status = 200) {
 /**
  * Safety-note timers. Vercel Cron sends GET with Authorization: Bearer
  * $CRON_SECRET (same secret as weekly share refresh). No new env vars.
+ * Schedule is once a day at 12:00 UTC, same hour as the weekly share cron.
+ * Hobby rejects a sub-daily expression, so this route is not every 5 minutes.
+ *
+ * The same idempotent pass also runs when a job's notes feed or banner
+ * loads and after a note is saved. A 15-minute escalation while nobody
+ * has the job open needs a Pro cron or an external pinger.
  *
  * 15 minutes still open: re-alert foreman and superintendent, escalate to GC.
  * 24 hours mitigated and not closed: reminder.

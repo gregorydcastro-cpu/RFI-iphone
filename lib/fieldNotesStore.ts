@@ -5,7 +5,11 @@
  * into a live table and are not walked by the escalation cron.
  */
 
-import { deliverDueAlerts, type SafetyAlertReport } from "./fieldNoteAlerts.ts";
+import {
+  deliverDueAlerts,
+  runEscalationPass,
+  type SafetyAlertReport,
+} from "./fieldNoteAlerts.ts";
 import {
   applyNotePatch,
   isFieldNoteJob,
@@ -66,10 +70,37 @@ function remember(note: FieldNote): void {
   else memoryNotes.push(cloneNote(note));
 }
 
+/**
+ * Idempotent safety timers for one job. Used when the feed or banner
+ * loads and after a note write. Failures stay off the page response.
+ * Demo examples are not included.
+ */
+export async function escalateSavedSafetyNotes(
+  jobSlug: string,
+  now = new Date(),
+): Promise<FieldNote[]> {
+  try {
+    const listed = await listNotesForEscalation();
+    if (!listed.ok) return [];
+    const notes = listed.notes.filter((note) => note.job_slug === jobSlug);
+    if (notes.length === 0) return [];
+    const pass = await runEscalationPass({ notes, nowMs: now.getTime() });
+    if (pass.updated.length === 0) return [];
+    await saveEscalationStamps(pass.updated);
+    return pass.updated;
+  } catch (error) {
+    console.error("[gcfieldlog] safety escalation skipped", {
+      message: error instanceof Error ? error.message : "error",
+    });
+    return [];
+  }
+}
+
 export async function listFieldNotes(jobSlug: string): Promise<FieldNoteListResult> {
   if (!isFieldNoteJob(jobSlug)) {
     return { ok: false, error: "Notes are on Maple Point and Cedar Ridge.", code: "load_failed" };
   }
+  await escalateSavedSafetyNotes(jobSlug);
   const examples = examplesFor(jobSlug);
   if (!isFieldNoteTableConfigured()) {
     const mine = memoryNotes.filter((note) => note.job_slug === jobSlug).map(cloneNote);
@@ -143,8 +174,11 @@ export async function createFieldNote(input: {
   const parsed = parseFieldNoteCreate(input.raw, input.actor, now.toISOString());
   if (!parsed.ok) return { ok: false, status: 400, error: parsed.error, code: parsed.code };
 
-  const storage: FieldNoteStorage = isFieldNoteTableConfigured() ? "supabase" : "memory";
-  const drafted = await saveNote(parsed.note, storage, true);
+  const drafted = await saveNote(
+    parsed.note,
+    isFieldNoteTableConfigured() ? "supabase" : "memory",
+    true,
+  );
   if (!drafted.ok) {
     return { ok: false, status: 503, error: "Note did not save. Tap Retry.", code: "save_failed" };
   }
@@ -158,14 +192,19 @@ export async function createFieldNote(input: {
     delivered.note.gc_escalated_at !== drafted.note.gc_escalated_at ||
     delivered.note.unacked_realerted_at !== drafted.note.unacked_realerted_at ||
     delivered.note.mitigated_reminded_at !== drafted.note.mitigated_reminded_at;
-  if (!stamped) {
-    return { ok: true, note: drafted.note, storage: drafted.storage, report: delivered.report };
-  }
-  const saved = await saveNote(delivered.note, drafted.storage, false);
-  if (!saved.ok) {
-    return { ok: true, note: drafted.note, storage: drafted.storage, report: delivered.report };
-  }
-  return { ok: true, note: saved.note, storage: saved.storage, report: delivered.report };
+  const pending = stamped
+    ? await saveNote(delivered.note, drafted.storage, false)
+    : { ok: true as const, note: drafted.note, storage: drafted.storage };
+  const note = pending.ok ? pending.note : drafted.note;
+  const savedStorage = pending.ok ? pending.storage : drafted.storage;
+  const updated = await escalateSavedSafetyNotes(note.job_slug, now);
+  const fresher = updated.find((item) => item.id === note.id);
+  return {
+    ok: true,
+    note: fresher ?? note,
+    storage: savedStorage,
+    report: delivered.report,
+  };
 }
 
 export async function updateFieldNote(input: {
@@ -195,14 +234,19 @@ export async function updateFieldNote(input: {
     delivered.note.gc_escalated_at !== drafted.note.gc_escalated_at ||
     delivered.note.unacked_realerted_at !== drafted.note.unacked_realerted_at ||
     delivered.note.mitigated_reminded_at !== drafted.note.mitigated_reminded_at;
-  if (!stamped) {
-    return { ok: true, note: drafted.note, storage: drafted.storage, report: delivered.report };
-  }
-  const saved = await saveNote(delivered.note, drafted.storage, false);
-  if (!saved.ok) {
-    return { ok: true, note: drafted.note, storage: drafted.storage, report: delivered.report };
-  }
-  return { ok: true, note: saved.note, storage: saved.storage, report: delivered.report };
+  const pending = stamped
+    ? await saveNote(delivered.note, drafted.storage, false)
+    : { ok: true as const, note: drafted.note, storage: drafted.storage };
+  const note = pending.ok ? pending.note : drafted.note;
+  const savedStorage = pending.ok ? pending.storage : drafted.storage;
+  const updated = await escalateSavedSafetyNotes(note.job_slug, now);
+  const fresher = updated.find((item) => item.id === note.id);
+  return {
+    ok: true,
+    note: fresher ?? note,
+    storage: savedStorage,
+    report: delivered.report,
+  };
 }
 
 /** Saved safety notes only. On-screen examples are not escalated. */

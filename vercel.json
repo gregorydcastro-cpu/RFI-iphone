@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/field-notes/escalate",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 12 * * *"
     }
   ]
 }

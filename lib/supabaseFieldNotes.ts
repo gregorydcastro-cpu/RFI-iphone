@@ -8,8 +8,8 @@
 import {
   getSupabaseServiceConfig,
   type SupabaseServiceConfig,
-} from "./procoreConnections";
-import { FIELD_NOTES_TABLE } from "./schema";
+} from "./procoreConnections.ts";
+import { FIELD_NOTES_TABLE } from "./schema.ts";
 import {
   isHazardType,
   isNoteSeverity,
