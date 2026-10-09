@@ -79,7 +79,9 @@ test("an invalid invite renders the existing card through notFound", () => {
   assert.match(form, /invite-blocked/);
   assert.match(form, /export function InviteBlockedCard/);
   assert.match(readRepo("lib/authMessages.ts"), /Invite not found/);
-  assert.match(readRepo("proxy.ts"), /\/_not-found/);
+  assert.match(readRepo("lib/fieldLinkResponse.ts"), /\/_not-found/);
+  assert.match(readRepo("lib/fieldLinkResponse.ts"), /LINK_MISS_STATUS = 404/);
+  assert.doesNotMatch(readRepo("proxy.ts"), /NextResponse\.rewrite\(/);
   assert.match(readRepo("lib/fieldLinkLookup.ts"), /status === "not_found"/);
 });
 
