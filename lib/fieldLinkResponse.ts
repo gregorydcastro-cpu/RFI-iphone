@@ -7,6 +7,8 @@ import {
   LINK_NOT_FOUND_TITLE,
   MAPLE_POINT_DEMO_HREF,
   MAPLE_POINT_DEMO_LABEL,
+  PAGE_NOT_FOUND_MESSAGE,
+  PAGE_NOT_FOUND_TITLE,
 } from "./fieldNotFound.ts";
 import { SECURITY_HEADERS } from "./securityHeaders.ts";
 
@@ -14,6 +16,8 @@ import { SECURITY_HEADERS } from "./securityHeaders.ts";
  * Internal fetch of the root not-found page. Only that render may keep
  * the link marker. A client cannot use this header to skip the 404 on
  * /invite or /pack — those paths never take the pass-through branch.
+ * The same header marks the internal page-card render so a direct
+ * /_not-found request does not fetch itself again.
  */
 export const LINK_MISS_RENDER_HEADER = "x-gc-link-miss-render";
 
@@ -54,7 +58,10 @@ const RESPONSE_HEADER_BLOCKLIST = new Set([
 ]);
 
 function normalizePath(pathname: string): string {
-  if (pathname.length > 1 && pathname.endsWith("/")) return pathname.slice(0, -1);
+  if (pathname.length > 1 && pathname.endsWith("/")) {
+    const stripped = pathname.replace(/\/+$/, "");
+    return stripped.length > 0 ? stripped : "/";
+  }
   return pathname;
 }
 
@@ -67,24 +74,51 @@ export function linkMissRenderUrl(requestUrl: string): string {
   return url.toString();
 }
 
+function isNotFoundDocumentPath(pathname: string): boolean {
+  return normalizePath(pathname) === "/_not-found";
+}
+
 export function isLinkMissRender(pathname: string, headers: Headers): boolean {
   return (
-    normalizePath(pathname) === "/_not-found" &&
+    isNotFoundDocumentPath(pathname) &&
     headers.get(LINK_MISS_RENDER_HEADER) === "1"
   );
 }
 
+/**
+ * A browser request for the not-found document itself.
+ * The internal render carries the render header and is not this request,
+ * so the proxy can pass that fetch through without calling it again.
+ */
+export function isDirectNotFoundRequest(pathname: string, headers: Headers): boolean {
+  return isNotFoundDocumentPath(pathname) && !isLinkMissRender(pathname, headers);
+}
+
+type NotFoundCard = "link" | "page";
+
 /** Headers for the internal document render. Forces HTML, keeps cookies. */
-export function linkMissRenderRequestHeaders(requestHeaders: Headers): Headers {
+function notFoundRenderRequestHeaders(
+  requestHeaders: Headers,
+  card: NotFoundCard,
+): Headers {
   const headers = new Headers(requestHeaders);
   for (const name of REQUEST_HEADER_BLOCKLIST) headers.delete(name);
   for (const name of DOCUMENT_HEADER_BLOCKLIST) headers.delete(name);
   headers.delete(FIELD_NOT_FOUND_HEADER);
   headers.delete(LINK_MISS_RENDER_HEADER);
-  headers.set(FIELD_NOT_FOUND_HEADER, FIELD_LINK_MISS);
+  if (card === "link") headers.set(FIELD_NOT_FOUND_HEADER, FIELD_LINK_MISS);
   headers.set(LINK_MISS_RENDER_HEADER, "1");
   headers.set("accept", "text/html");
   return headers;
+}
+
+export function linkMissRenderRequestHeaders(requestHeaders: Headers): Headers {
+  return notFoundRenderRequestHeaders(requestHeaders, "link");
+}
+
+/** Same internal render as a link miss, without the link marker. */
+export function pageNotFoundRenderRequestHeaders(requestHeaders: Headers): Headers {
+  return notFoundRenderRequestHeaders(requestHeaders, "page");
 }
 
 /**
@@ -108,15 +142,15 @@ export function stripFieldNotFoundHeader(requestHeaders: Headers): Headers {
   return headers;
 }
 
-export function linkMissFallbackHtml(): string {
+function brandedNotFoundHtml(title: string, message: string): string {
   return (
     `<!DOCTYPE html><html lang="en"><head>` +
     `<meta charset="utf-8">` +
     `<meta name="robots" content="noindex, nofollow">` +
-    `<title>${LINK_NOT_FOUND_TITLE}</title>` +
+    `<title>${title}</title>` +
     `</head><body><main>` +
-    `<h1>${LINK_NOT_FOUND_TITLE}</h1>` +
-    `<p>${LINK_NOT_FOUND_MESSAGE}</p>` +
+    `<h1>${title}</h1>` +
+    `<p>${message}</p>` +
     `<a href="${HOME_HREF}">${HOME_LABEL}</a>` +
     `<a href="${MAPLE_POINT_DEMO_HREF}">${MAPLE_POINT_DEMO_LABEL}</a>` +
     `<button type="button">Hear this</button>` +
@@ -124,17 +158,36 @@ export function linkMissFallbackHtml(): string {
   );
 }
 
-/** True when the raw HTML is the #97 link card, not the __next_error__ shell. */
-export function isBrandedLinkMissDocument(html: string): boolean {
+export function linkMissFallbackHtml(): string {
+  return brandedNotFoundHtml(LINK_NOT_FOUND_TITLE, LINK_NOT_FOUND_MESSAGE);
+}
+
+export function pageNotFoundFallbackHtml(): string {
+  return brandedNotFoundHtml(PAGE_NOT_FOUND_TITLE, PAGE_NOT_FOUND_MESSAGE);
+}
+
+/** True when the raw HTML is a branded card, not the __next_error__ shell. */
+function isBrandedNotFoundDocument(html: string, title: string, message: string): boolean {
   if (!html.includes("<html") || !html.includes('lang="en"')) return false;
-  if (!html.includes(LINK_NOT_FOUND_TITLE)) return false;
-  if (!html.includes(LINK_NOT_FOUND_MESSAGE)) return false;
+  if (!html.includes("<h1")) return false;
+  if (!html.includes(title)) return false;
+  if (!html.includes(message)) return false;
   if (!html.includes('href="/"')) return false;
   if (!html.includes(`href="${MAPLE_POINT_DEMO_HREF}"`)) return false;
   if (!html.includes("Hear this")) return false;
   if (!/noindex/i.test(html)) return false;
   if (html.includes("__next_error__")) return false;
   return true;
+}
+
+/** True when the raw HTML is the link card, not the __next_error__ shell. */
+export function isBrandedLinkMissDocument(html: string): boolean {
+  return isBrandedNotFoundDocument(html, LINK_NOT_FOUND_TITLE, LINK_NOT_FOUND_MESSAGE);
+}
+
+/** True when the raw HTML is the page card, not the link card or error shell. */
+export function isBrandedPageNotFoundDocument(html: string): boolean {
+  return isBrandedNotFoundDocument(html, PAGE_NOT_FOUND_TITLE, PAGE_NOT_FOUND_MESSAGE);
 }
 
 export function linkMissResponseHeaders(source: Headers): Headers {
@@ -161,40 +214,83 @@ export function linkMissResponseHeaders(source: Headers): Headers {
 
 type LinkMissFetch = (url: string, init?: RequestInit) => Promise<Response>;
 
+type NotFoundDocument = {
+  status: typeof LINK_MISS_STATUS;
+  body: string | null;
+  headers: Headers;
+};
+
 /**
  * Load the root not-found document and force HTTP 404.
  * A rewrite to /_not-found stays 200 on Vercel because that page render
  * is a successful match. The status has to be set on this finished response.
+ * The render header on the internal fetch is what stops the proxy from
+ * fetching /_not-found again.
  */
-export async function loadLinkMissDocument(input: {
+async function loadNotFoundDocument(input: {
   requestUrl: string;
   requestHeaders: Headers;
   method: string;
   fetchImpl?: LinkMissFetch;
-}): Promise<{ status: typeof LINK_MISS_STATUS; body: string | null; headers: Headers }> {
+  card: NotFoundCard;
+  fallback: string;
+  accept: (html: string) => boolean;
+  failureLog: string;
+}): Promise<NotFoundDocument> {
   const fetchImpl = input.fetchImpl ?? fetch;
   const url = linkMissRenderUrl(input.requestUrl);
-  let body = linkMissFallbackHtml();
+  let body = input.fallback;
   let source = new Headers({ "content-type": "text/html; charset=utf-8" });
   try {
     const rendered = await fetchImpl(url, {
       method: "GET",
-      headers: linkMissRenderRequestHeaders(input.requestHeaders),
+      headers: notFoundRenderRequestHeaders(input.requestHeaders, input.card),
       cache: "no-store",
       redirect: "manual",
       signal: AbortSignal.timeout(8_000),
     });
     const text = await rendered.text();
-    if (isBrandedLinkMissDocument(text)) {
+    if (input.accept(text)) {
       body = text;
       source = rendered.headers;
     }
   } catch {
-    console.error("[gcfieldlog] link card render failed");
+    console.error(input.failureLog);
   }
   return {
     status: LINK_MISS_STATUS,
     body: input.method === "HEAD" ? null : body,
     headers: linkMissResponseHeaders(source),
   };
+}
+
+export async function loadLinkMissDocument(input: {
+  requestUrl: string;
+  requestHeaders: Headers;
+  method: string;
+  fetchImpl?: LinkMissFetch;
+}): Promise<NotFoundDocument> {
+  return loadNotFoundDocument({
+    ...input,
+    card: "link",
+    fallback: linkMissFallbackHtml(),
+    accept: isBrandedLinkMissDocument,
+    failureLog: "[gcfieldlog] link card render failed",
+  });
+}
+
+/** Direct /_not-found. Same finished 404, with the page card instead of the link card. */
+export async function loadPageNotFoundDocument(input: {
+  requestUrl: string;
+  requestHeaders: Headers;
+  method: string;
+  fetchImpl?: LinkMissFetch;
+}): Promise<NotFoundDocument> {
+  return loadNotFoundDocument({
+    ...input,
+    card: "page",
+    fallback: pageNotFoundFallbackHtml(),
+    accept: isBrandedPageNotFoundDocument,
+    failureLog: "[gcfieldlog] page card render failed",
+  });
 }

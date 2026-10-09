@@ -4,6 +4,9 @@ import { SECURITY_HEADERS } from "./lib/securityHeaders";
 
 const nextConfig: NextConfig = {
   agentRules: false,
+  // /_not-found/ has to reach the proxy. Next's built-in slash trim would
+  // answer 308 first. Other slashed paths are handled in the proxy.
+  skipTrailingSlashRedirect: true,
   serverExternalPackages: ["pdfjs-dist", "stripe"],
   async headers() {
     return [

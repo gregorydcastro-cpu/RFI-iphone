@@ -1,13 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { missingFieldLink } from "@/lib/fieldLinkLookup";
 import {
+  isDirectNotFoundRequest,
   isLinkMissRender,
   linkMissPassThroughHeaders,
   loadLinkMissDocument,
+  loadPageNotFoundDocument,
   stripFieldNotFoundHeader,
 } from "@/lib/fieldLinkResponse";
 import { FIELD_NOT_FOUND_HEADER } from "@/lib/fieldNotFound";
 import { updateSession } from "@/lib/supabase/proxy";
+import { slashToCanonical } from "@/lib/slashPath";
 import {
   sendSignedOutToTimeShell,
   shouldSendTimeBoardBack,
@@ -24,18 +27,37 @@ function copyCookies(from: NextResponse, to: NextResponse) {
 /**
  * notFound() from a matched invite or pack page is an empty __next_error__
  * shell. The link card is the root not-found page (/_not-found) inside the
- * root layout.
+ * root layout. A direct request for that same path is the page card.
  *
  * Rewriting the request onto /_not-found keeps HTTP 200 on Vercel. That path is
  * a real page render (x-matched-path: /_not-found, x-vercel-cache: MISS), so
  * the platform does not apply the 404 it uses for an unmatched URL such as
  * /nope. next start still reports 404 when the final pathname is /_not-found.
  * This proxy renders that same document, then returns it as a finished
- * response with status 404. The missing-link path does not rewrite.
+ * response with status 404. The missing-link path and a direct /_not-found
+ * request do not rewrite.
+ *
+ * The document fetch sets the render header. That internal request is passed
+ * through here, so the proxy does not fetch /_not-found again.
  * A signed-in /time request is the one exception: timeBoardRewrite sends
  * it to the clock page so the public /time module stays free of the roster.
  */
+function finishedNotFound(
+  session: NextResponse,
+  document: { status: number; body: string | null; headers: Headers },
+) {
+  const response = new NextResponse(document.body, {
+    status: document.status,
+    headers: document.headers,
+  });
+  copyCookies(session, response);
+  return response;
+}
+
 export async function proxy(request: NextRequest) {
+  const canonical = slashToCanonical(request);
+  if (canonical) return canonical;
+
   const session = await updateSession(request);
 
   if (isLinkMissRender(request.nextUrl.pathname, request.headers)) {
@@ -44,6 +66,15 @@ export async function proxy(request: NextRequest) {
     });
     copyCookies(session, next);
     return next;
+  }
+
+  if (isDirectNotFoundRequest(request.nextUrl.pathname, request.headers)) {
+    const document = await loadPageNotFoundDocument({
+      requestUrl: request.nextUrl.toString(),
+      requestHeaders: request.headers,
+      method: request.method,
+    });
+    return finishedNotFound(session, document);
   }
 
   let miss = false;
@@ -81,12 +112,7 @@ export async function proxy(request: NextRequest) {
     requestHeaders: request.headers,
     method: request.method,
   });
-  const response = new NextResponse(document.body, {
-    status: document.status,
-    headers: document.headers,
-  });
-  copyCookies(session, response);
-  return response;
+  return finishedNotFound(session, document);
 }
 
 export const config = {
