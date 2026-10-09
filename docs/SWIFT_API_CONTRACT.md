@@ -108,9 +108,10 @@ On device, Swift can also use Speech framework for STT and skip `/api/dictation`
 ## 5. Time
 
 ### `GET /api/time?week=&job=`
-- Auth: none at route (snapshot for demo job)
+- Auth: session required. A signed-out call is 401 and does not include the roster or PINs.
 - Defaults: current week Monday, default time job slug
 - 200: `{ ok: true, ...snapshot }`
+- 401: `{ ok: false, error: "Sign in first." }`
 - 404: unknown job
 
 ### `POST /api/time/punches`
