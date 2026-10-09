@@ -1,41 +1,33 @@
-import { AppHeader } from "@/components/AppHeader";
-import { TimeBoard } from "@/components/TimeBoard";
-import { getProcoreConnectionView } from "@/lib/procoreStatus";
+import { TimeSignInShell } from "@/components/TimeSignInShell";
 import { readAppSession, supabaseSessionCookiePresent } from "@/lib/session.server";
-import { getTimeSnapshot } from "@/lib/timeStore";
+import { TIME_CLOCK_SIGN_IN_COPY, TIME_SIGNED_OUT_TITLE } from "@/lib/timeGate";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Time — GC Field Log",
-  description:
-    "Maple Point crew punch-in with GPS geofence, plus foreman week view.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const session = await readAppSession();
+  if (!session) {
+    return {
+      title: TIME_SIGNED_OUT_TITLE,
+      description: TIME_CLOCK_SIGN_IN_COPY,
+      robots: { index: false, follow: false },
+    };
+  }
+  return {
+    title: "Time — GC Field Log",
+    description:
+      "Maple Point crew punch-in with GPS geofence, plus foreman week view.",
+  };
+}
 
 export default async function TimePage() {
   const session = await readAppSession();
-  const sessionEnded = !session && (await supabaseSessionCookiePresent());
-  const view = await getProcoreConnectionView(session);
-  const snapshot = await getTimeSnapshot();
-  if (!snapshot) notFound();
+  if (!session) {
+    const sessionEnded = await supabaseSessionCookiePresent();
+    return <TimeSignInShell sessionEnded={sessionEnded} />;
+  }
 
-  return (
-    <div className="flex min-h-dvh flex-col">
-      <AppHeader
-        signedIn={Boolean(session)}
-        role={view.role}
-        procoreConnected={view.connected}
-        procoreLinked={view.role === "puller" && view.connected}
-        procoreReconnect={view.reconnectNeeded}
-      />
-      <TimeBoard
-        initial={snapshot}
-        sessionEmail={session?.email ?? null}
-        signedIn={Boolean(session)}
-        sessionEnded={sessionEnded}
-      />
-    </div>
-  );
+  const { SignedInTimePage } = await import("./SignedInTime");
+  return <SignedInTimePage session={session} />;
 }

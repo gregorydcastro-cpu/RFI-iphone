@@ -601,7 +601,7 @@ curl -s -X POST http://localhost:3000/api/share/weekly-refresh \
 | `/api/share/pins` | POST pin discipline or room pack; DELETE `?id=` unpin |
 | `/api/share/refresh-all` | Puller POST. Walks this owner's pins + updates `sheet_revision_cache`. Emails that owner's `notify_email` on a persisted bump. |
 | `/api/share/weekly-refresh` | Cron GET/POST. `CRON_SECRET` required. All pins, catalog + `room_packs`. Maple Point / `DEMO_JOBS` do not wake the bot. Live REST stays on pack routes. Emails each pin owner's `notify_email` on a persisted bump. |
-| `/api/time` | GET Maple Point site, workers, week punches (memory demo or service-role Supabase) |
+| `/api/time` | GET Maple Point site, workers, week punches after sign-in (memory demo or service-role Supabase). Signed out: 401, no roster |
 | `/api/time/punches` | POST worker punch (GPS + geofence) or `{ foreman: true }` missed-punch override |
 | `/api/voice/status` | GET. `{ ok, configured, provider, stt, tts }` for Grok Voice — never returns the key. `ok: false` + `code` if the check itself fails. |
 | `/api/dictation` | POST multipart `file`. Server-side Grok STT (`XAI_API_KEY`). Errors: `{ ok:false, code, error }` (`unconfigured` 503, `bad_input` 400, `too_large` 413, `no_speech` 422, `busy` 429, `timeout` 504, `unreachable`/`rejected`/`failed` 502). Safe retry on 429/5xx. |

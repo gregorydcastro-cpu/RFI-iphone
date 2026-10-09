@@ -321,16 +321,16 @@ else
   note "POST /api/dictation → $dict_code code=${dict_err:-n/a} (not a hard fail)"
 fi
 
-# --- GET /api/time?job=maple-point (must be 200) ---
+# --- GET /api/time without a session must not return the crew roster ---
 time_body="$tmpdir/time.body"
 time_hdr="$tmpdir/time.hdr"
 time_code=$(
   fetch "$time_body" "$time_hdr" -L "$BASE_URL/api/time?job=maple-point"
 ) || true
-if [[ "$time_code" == "200" ]]; then
-  ok "GET /api/time?job=maple-point → $time_code"
+if [[ "$time_code" == "401" ]] && ! grep -q 'pin_stub' "$time_body"; then
+  ok "GET /api/time?job=maple-point → 401 without a roster"
 else
-  fail "GET /api/time?job=maple-point → $time_code (expected 200)"
+  fail "GET /api/time?job=maple-point → $time_code (expected 401, no roster)"
 fi
 
 log ""
