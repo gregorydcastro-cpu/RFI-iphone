@@ -1,35 +1,6 @@
-import { InviteBlockedCard } from "@/components/InviteRedeemForm";
-import { InviteChrome } from "@/components/InviteChrome";
-import { inviteBlockedAction, inviteLanding } from "@/lib/authMessages";
-import { getProcoreConnectionView } from "@/lib/procoreStatus";
-import { readAppSession } from "@/lib/session.server";
+import { FieldNotFoundPage } from "@/components/FieldNotFound";
 
-export const dynamic = "force-dynamic";
-
-/**
- * Invalid invite token. Same blocked card as the landing page
- * (title, body, Sign in, Hear this) with HTTP 404.
- * Copy is rendered on the server so the card text is in the HTML.
- */
-export default async function InviteNotFound() {
-  const session = await readAppSession();
-  const view = await getProcoreConnectionView(session);
-  const landing = inviteLanding({
-    status: "not_found",
-    signedIn: Boolean(session),
-    sessionEmail: session?.email ?? null,
-  });
-  if (landing.kind !== "blocked") return null;
-  const action = inviteBlockedAction(landing, "");
-
-  return (
-    <InviteChrome view={view}>
-      <InviteBlockedCard
-        title={landing.title}
-        body={landing.body}
-        actionHref={action.href}
-        actionLabel={action.label}
-      />
-    </InviteChrome>
-  );
+/** Invalid invite token. Same link card as a bad pack, with HTTP 404. */
+export default function InviteNotFound() {
+  return <FieldNotFoundPage variant="link" />;
 }

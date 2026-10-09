@@ -14,11 +14,21 @@ export const PAGE_NOT_FOUND_MESSAGE =
   "This page isn't here. Go home or open the Maple Point demo.";
 export const MAPLE_POINT_DEMO_LABEL = "Open Maple Point demo";
 export const HOME_LABEL = "Home";
+export const LINK_NOT_FOUND_TITLE = "Link not found";
+export const LINK_NOT_FOUND_MESSAGE = "It may be old.";
+
+/**
+ * Set by the proxy when a matched invite or pack id does not resolve.
+ * The root not-found page reads it. Clients cannot keep a spoofed value:
+ * the proxy deletes this header unless it decided the link is missing.
+ */
+export const FIELD_NOT_FOUND_HEADER = "x-gc-field-not-found";
+export const FIELD_LINK_MISS = "link";
 
 /** Query value and in-page id for the sheet block on a pack. */
 export const SHEETS_SECTION = "sheets";
 
-export type FieldNotFoundVariant = "pack" | "page";
+export type FieldNotFoundVariant = "pack" | "page" | "link";
 
 export type FieldNotFoundAction = {
   href: string;
@@ -32,7 +42,7 @@ export type FieldNotFoundCopy = {
   secondary: FieldNotFoundAction;
 };
 
-/** Pack misses keep the pack card. Every other miss is a page card. */
+/** Pack, page, and bad-link cards. Bad invite and pack URLs use the link card. */
 export function fieldNotFoundCopy(variant: FieldNotFoundVariant): FieldNotFoundCopy {
   if (variant === "pack") {
     return {
@@ -40,6 +50,14 @@ export function fieldNotFoundCopy(variant: FieldNotFoundVariant): FieldNotFoundC
       message: FIELD_NOT_FOUND_MESSAGE,
       primary: { href: MAPLE_POINT_DEMO_HREF, label: MAPLE_POINT_DEMO_LABEL },
       secondary: { href: HOME_HREF, label: HOME_LABEL },
+    };
+  }
+  if (variant === "link") {
+    return {
+      title: LINK_NOT_FOUND_TITLE,
+      message: LINK_NOT_FOUND_MESSAGE,
+      primary: { href: HOME_HREF, label: HOME_LABEL },
+      secondary: { href: MAPLE_POINT_DEMO_HREF, label: MAPLE_POINT_DEMO_LABEL },
     };
   }
   return {

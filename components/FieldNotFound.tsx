@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { ReadAloudButton } from "@/components/ReadAloudButton";
 import { getFieldRole } from "@/lib/auth.server";
@@ -10,15 +9,15 @@ import {
 import { logFieldNotFoundDevHint } from "@/lib/fieldNotFoundDev";
 
 /**
- * Missing page or pack. Same calm card as a sheet miss:
- * short title, short line, one big action, Hear this.
+ * Missing page or link. Short title, short line, Home, the Maple Point
+ * demo, and Hear this. Anchors work with JavaScript off.
  */
 export async function FieldNotFoundPage({
   variant,
 }: {
   variant: FieldNotFoundVariant;
 }) {
-  if (variant === "pack") logFieldNotFoundDevHint();
+  if (variant === "pack" || variant === "link") logFieldNotFoundDevHint();
   const access = await getFieldRole();
   const session = access.session;
   const copy = fieldNotFoundCopy(variant);
@@ -35,18 +34,18 @@ export async function FieldNotFoundPage({
         <div role="status" className="w-full border border-line bg-ink px-4 py-5">
           <h1 className="text-2xl font-semibold text-paper">{copy.title}</h1>
           <p className="mt-2 text-lg leading-snug text-paper">{copy.message}</p>
-          <Link
+          <a
             href={copy.primary.href}
             className="mt-4 flex min-h-14 w-full items-center justify-center bg-cta px-5 text-center text-base font-semibold text-secondary hover:bg-cta-hover"
           >
             {copy.primary.label}
-          </Link>
-          <Link
+          </a>
+          <a
             href={copy.secondary.href}
             className="mt-3 inline-flex min-h-12 items-center text-base font-semibold text-accent underline"
           >
             {copy.secondary.label}
-          </Link>
+          </a>
           <ReadAloudButton
             id={`field-not-found-${variant}`}
             text={speak}
