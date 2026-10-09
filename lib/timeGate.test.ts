@@ -5,6 +5,8 @@ import test from "node:test";
 import {
   TIME_CLOCK_SIGN_IN_COPY,
   TIME_SIGNED_OUT_TITLE,
+  isTimeBoardPath,
+  isTimeClockPath,
   timeSignInGate,
 } from "./timeGate.ts";
 
@@ -54,22 +56,29 @@ test("signed-out time copy returns the crew to /time", () => {
   assert.equal(ended.text, "Your sign-in ended. Sign in to use the time clock.");
   assert.equal(ended.signInHref, "/?next=%2Ftime&reason=session_ended");
   assert.equal(ended.homeHref, "/");
+
+  assert.equal(isTimeClockPath("/time"), true);
+  assert.equal(isTimeClockPath("/time/"), true);
+  assert.equal(isTimeClockPath("/time/board"), false);
+  assert.equal(isTimeClockPath("/timeline"), false);
+  assert.equal(isTimeClockPath("/jobs"), false);
+  assert.equal(isTimeBoardPath("/time/board"), true);
+  assert.equal(isTimeBoardPath("/time/board/"), true);
+  assert.equal(isTimeBoardPath("/time"), false);
 });
 
 test("signed-out /time renders a sign-in shell and does not load the roster", () => {
   const page = readRepo("app/time/page.tsx");
   const shell = readRepo("components/TimeSignInShell.tsx");
   const signedIn = readRepo("app/time/SignedInTime.tsx");
+  const board = readRepo("app/time/board/page.tsx");
+  const proxy = readRepo("proxy.ts");
+  const route = readRepo("lib/timeRoute.ts");
 
-  assert.match(page, /if \(!session\)/);
   assert.match(page, /TimeSignInShell/);
   assert.match(page, /robots:\s*\{\s*index:\s*false,\s*follow:\s*false\s*\}/);
-  assert.match(page, /await import\("\.\/SignedInTime"\)/);
-  assert.doesNotMatch(page, /getTimeSnapshot|TimeBoard|timeDemo|timeStore|pin_stub/);
-
-  const gateAt = page.indexOf("if (!session)");
-  const importAt = page.indexOf('await import("./SignedInTime")');
-  assert.ok(gateAt >= 0 && importAt > gateAt);
+  assert.match(page, /if \(session\) redirect\("\/time\/board"\)/);
+  assert.doesNotMatch(page, /getTimeSnapshot|TimeBoard|timeDemo|timeStore|pin_stub|SignedInTime/);
 
   assert.match(shell, /timeSignInGate/);
   assert.match(shell, /gate\.signInHref/);
@@ -88,6 +97,24 @@ test("signed-out /time renders a sign-in shell and does not load the roster", ()
   assert.match(signedIn, /getTimeSnapshot/);
   assert.match(signedIn, /<TimeBoard/);
   assert.match(signedIn, /signedIn/);
+  assert.match(board, /await import\("\.\.\/SignedInTime"\)/);
+  assert.match(board, /if \(!session\) redirect\("\/time"\)/);
+  const redirectAt = board.indexOf('redirect("/time")');
+  const importAt = board.indexOf('await import("../SignedInTime")');
+  assert.ok(redirectAt >= 0 && importAt > redirectAt);
+  assert.doesNotMatch(board, /timeDemo|from "@\/app\/time\/SignedInTime"/);
+
+  assert.match(proxy, /shouldServeTimeBoard/);
+  assert.match(proxy, /shouldSendTimeBoardBack/);
+  assert.match(proxy, /timeBoardRewrite/);
+  assert.match(proxy, /sendSignedOutToTimeShell/);
+  assert.doesNotMatch(proxy, /NextResponse\.rewrite\(/);
+  assert.doesNotMatch(proxy, /redirect/);
+  assert.match(route, /NextResponse\.rewrite/);
+  assert.match(route, /NextResponse\.redirect/);
+  assert.match(route, /url\.pathname = "\/time\/board"/);
+  assert.match(route, /isTimeClockPath/);
+  assert.match(route, /isTimeBoardPath/);
 });
 
 test("GET /api/time checks the session before loading crew or punches", () => {

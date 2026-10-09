@@ -8,6 +8,12 @@ import {
 } from "@/lib/fieldLinkResponse";
 import { FIELD_NOT_FOUND_HEADER } from "@/lib/fieldNotFound";
 import { updateSession } from "@/lib/supabase/proxy";
+import {
+  sendSignedOutToTimeShell,
+  shouldSendTimeBoardBack,
+  shouldServeTimeBoard,
+  timeBoardRewrite,
+} from "@/lib/timeRoute";
 
 function copyCookies(from: NextResponse, to: NextResponse) {
   for (const cookie of from.cookies.getAll()) {
@@ -25,7 +31,9 @@ function copyCookies(from: NextResponse, to: NextResponse) {
  * the platform does not apply the 404 it uses for an unmatched URL such as
  * /nope. next start still reports 404 when the final pathname is /_not-found.
  * This proxy renders that same document, then returns it as a finished
- * response with status 404. It does not rewrite.
+ * response with status 404. The missing-link path does not rewrite.
+ * A signed-in /time request is the one exception: timeBoardRewrite sends
+ * it to the clock page so the public /time module stays free of the roster.
  */
 export async function proxy(request: NextRequest) {
   const session = await updateSession(request);
@@ -46,7 +54,19 @@ export async function proxy(request: NextRequest) {
   }
 
   const spoofed = request.headers.has(FIELD_NOT_FOUND_HEADER);
-  if (!miss && !spoofed) return session;
+  if (!miss && !spoofed) {
+    if (await shouldSendTimeBoardBack(request, session)) {
+      const sent = sendSignedOutToTimeShell(request);
+      copyCookies(session, sent);
+      return sent;
+    }
+    if (await shouldServeTimeBoard(request, session)) {
+      const rewritten = timeBoardRewrite(request);
+      copyCookies(session, rewritten);
+      return rewritten;
+    }
+    return session;
+  }
 
   if (!miss) {
     const next = NextResponse.next({
