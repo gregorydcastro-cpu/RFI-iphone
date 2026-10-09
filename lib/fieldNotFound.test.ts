@@ -6,6 +6,8 @@ import {
   FIELD_NOT_FOUND_TITLE,
   HOME_HREF,
   HOME_LABEL,
+  LINK_NOT_FOUND_MESSAGE,
+  LINK_NOT_FOUND_TITLE,
   MAPLE_POINT_DEMO_HREF,
   MAPLE_POINT_DEMO_LABEL,
   PAGE_NOT_FOUND_MESSAGE,
@@ -154,6 +156,10 @@ test("not-found copy has no developer paths", () => {
   assert.match(card, /ReadAloudButton/);
   assert.match(card, /w-full/);
   assert.match(card, /copy\.primary/);
+  assert.match(card, /href=\{copy\.primary\.href\}/);
+  assert.match(card, /href=\{copy\.secondary\.href\}/);
+  assert.match(card, /<a/);
+  assert.doesNotMatch(card, /next\/link/);
   assert.match(card, /fieldNotFoundSpeak\(variant\)/);
   assert.doesNotMatch(card, /"use client"/);
 });
@@ -188,8 +194,9 @@ test("page not-found is a different card from a pack miss", () => {
 
   const root = readRepo("app/not-found.tsx");
   const pack = readRepo("app/pack/[requestId]/not-found.tsx");
-  assert.match(root, /variant="page"/);
-  assert.match(pack, /variant="pack"/);
+  assert.match(root, /"page"/);
+  assert.match(root, /FIELD_LINK_MISS \? "link"/);
+  assert.match(pack, /variant="link"/);
   assert.doesNotMatch(root, /variant="pack"/);
   assert.doesNotMatch(pack, /variant="page"/);
 
@@ -199,6 +206,35 @@ test("page not-found is a different card from a pack miss", () => {
   assert.match(css, /display:\s*none/);
   assert.match(banner, /data-site-banner/);
   assert.match(readRepo("components/FieldNotFound.tsx"), /data-field-not-found/);
+});
+
+test("a bad invite or pack link uses a shorter card than a missing page", () => {
+  const link = fieldNotFoundCopy("link");
+  const speak = fieldNotFoundSpeak("link");
+  assert.equal(LINK_NOT_FOUND_TITLE, "Link not found");
+  assert.equal(LINK_NOT_FOUND_MESSAGE, "It may be old.");
+  assert.equal(link.title, LINK_NOT_FOUND_TITLE);
+  assert.equal(link.message, LINK_NOT_FOUND_MESSAGE);
+  assert.deepEqual(link.primary, { href: "/", label: "Home" });
+  assert.deepEqual(link.secondary, {
+    href: "/pack/maple-point",
+    label: "Open Maple Point demo",
+  });
+  assert.equal(speak, "Link not found. It may be old.");
+  assert.notEqual(link.title, fieldNotFoundCopy("page").title);
+  assert.notEqual(link.title, fieldNotFoundCopy("pack").title);
+
+  const rendered = [link.title, link.message, link.primary.label, link.secondary.label, speak].join(
+    "\n",
+  );
+  for (const pattern of FORBIDDEN) {
+    assert.doesNotMatch(rendered, pattern);
+  }
+
+  assert.match(readRepo("app/invite/[token]/not-found.tsx"), /variant="link"/);
+  assert.match(readRepo("app/pack/[requestId]/not-found.tsx"), /variant="link"/);
+  assert.match(readRepo("components/FieldNotFound.tsx"), /<a/);
+  assert.match(readRepo("components/FieldNotFound.tsx"), /Hear this/);
 });
 
 test("sign-in aliases redirect home and keep the query", () => {

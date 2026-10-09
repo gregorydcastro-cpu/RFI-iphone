@@ -72,14 +72,15 @@ test("an invalid invite renders the existing card through notFound", () => {
   assert.doesNotMatch(page, /status === "expired"\) notFound/);
   assert.doesNotMatch(page, /status === "used"\) notFound/);
 
-  assert.match(missing, /InviteBlockedCard/);
-  assert.match(missing, /status: "not_found"/);
-  assert.match(missing, /InviteChrome/);
-  assert.match(missing, /inviteLanding/);
+  assert.match(missing, /variant="link"/);
+  assert.match(missing, /FieldNotFoundPage/);
+  assert.doesNotMatch(missing, /InviteBlockedCard/);
   assert.match(form, /Hear this/);
   assert.match(form, /invite-blocked/);
   assert.match(form, /export function InviteBlockedCard/);
   assert.match(readRepo("lib/authMessages.ts"), /Invite not found/);
+  assert.match(readRepo("proxy.ts"), /\/_not-found/);
+  assert.match(readRepo("lib/fieldLinkLookup.ts"), /status === "not_found"/);
 });
 
 test("a substituted sample for a non-demo pack id is not found", () => {
@@ -122,8 +123,8 @@ test("a substituted sample for a non-demo pack id is not found", () => {
   }
 
   const card = readRepo("app/pack/[requestId]/not-found.tsx");
-  assert.match(card, /variant="pack"/);
+  assert.match(card, /variant="link"/);
   assert.match(readRepo("components/FieldNotFound.tsx"), /Hear this/);
   assert.match(readRepo("app/jobs/[projectSlug]/page.tsx"), /if \(!job\) notFound\(\)/);
-  assert.match(readRepo("app/not-found.tsx"), /variant="page"/);
+  assert.match(readRepo("app/not-found.tsx"), /"page"/);
 });
