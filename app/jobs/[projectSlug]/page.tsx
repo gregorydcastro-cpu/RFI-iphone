@@ -2,6 +2,9 @@ import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { ProcoreConnectCard } from "@/components/ProcoreConnectCard";
 import { RequestPackForm } from "@/components/RequestPackForm";
+import { SafetyNoteBanner } from "@/components/SafetyNoteBanner";
+import { isFieldNoteJob, openSafetyBanner } from "@/lib/fieldNotes";
+import { listFieldNotes } from "@/lib/fieldNotesStore";
 import { getJob } from "@/lib/jobs";
 import { TIME_JOB_SLUG } from "@/lib/time";
 import { getProcoreConnectionView } from "@/lib/procoreStatus";
@@ -26,6 +29,8 @@ export default async function JobPage({ params, searchParams }: Props) {
   const session = await requireAppSession(next);
   const view = await getProcoreConnectionView(session, { probe: true });
   const canPull = view.role === "puller" && view.connected;
+  const notes = isFieldNoteJob(job.slug) ? await listFieldNotes(job.slug) : null;
+  const safetyBanner = notes?.ok ? openSafetyBanner(notes.notes) : null;
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -48,6 +53,24 @@ export default async function JobPage({ params, searchParams }: Props) {
         ) : null}
         {view.role === "puller" && !view.connected ? (
           <ProcoreConnectCard view={view} compact returnPath={next} />
+        ) : null}
+        {isFieldNoteJob(job.slug) ? (
+          <div className="flex flex-col gap-3">
+            {safetyBanner ? (
+              <SafetyNoteBanner text={safetyBanner.text} speakId="job-safety-banner" />
+            ) : null}
+            {notes && !notes.ok ? (
+              <p className="text-base text-cta" role="alert">
+                Notes did not load.
+              </p>
+            ) : null}
+            <Link
+              href={`/jobs/${job.slug}/notes`}
+              className="inline-flex min-h-12 items-center justify-center border border-line bg-panel px-4 text-sm font-semibold tracking-wide text-paper uppercase"
+            >
+              Notes
+            </Link>
+          </div>
         ) : null}
         <RequestPackForm
           job={job}
