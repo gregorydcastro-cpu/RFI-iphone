@@ -48,14 +48,17 @@ test("a link is missing only when the lookup says so", async () => {
   assert.equal(await fieldLinkIsMissing("/api/procore/status", lookup), false);
 });
 
-test("the proxy rewrites a missing link onto the root not-found page", () => {
+test("the proxy renders a missing link as a finished HTTP 404", () => {
   const proxy = readRepo("proxy.ts");
   const lookup = readRepo("lib/fieldLinkLookup.ts");
   const root = readRepo("app/not-found.tsx");
+  const helper = readRepo("lib/fieldLinkResponse.ts");
   assert.match(proxy, /missingFieldLink/);
-  assert.match(proxy, /\/_not-found/);
-  assert.match(proxy, /FIELD_NOT_FOUND_HEADER/);
-  assert.match(proxy, /headers\.delete\(FIELD_NOT_FOUND_HEADER\)/);
+  assert.match(proxy, /loadLinkMissDocument/);
+  assert.match(proxy, /status:\s*document\.status/);
+  assert.doesNotMatch(proxy, /NextResponse\.rewrite\(/);
+  assert.match(helper, /\/_not-found/);
+  assert.match(helper, /LINK_MISS_STATUS = 404/);
   assert.match(lookup, /previewInvite/);
   assert.match(lookup, /status === "not_found"/);
   assert.match(lookup, /packPageFound/);
