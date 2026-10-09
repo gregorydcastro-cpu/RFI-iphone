@@ -10,6 +10,7 @@ import {
 } from "@/lib/fieldLinkResponse";
 import { FIELD_NOT_FOUND_HEADER } from "@/lib/fieldNotFound";
 import { updateSession } from "@/lib/supabase/proxy";
+import { slashToCanonical } from "@/lib/slashPath";
 import {
   sendSignedOutToTimeShell,
   shouldSendTimeBoardBack,
@@ -54,6 +55,9 @@ function finishedNotFound(
 }
 
 export async function proxy(request: NextRequest) {
+  const canonical = slashToCanonical(request);
+  if (canonical) return canonical;
+
   const session = await updateSession(request);
 
   if (isLinkMissRender(request.nextUrl.pathname, request.headers)) {
