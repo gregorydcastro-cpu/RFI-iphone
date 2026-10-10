@@ -1,0 +1,163 @@
+/**
+ * Fictional notes for Maple Point and Cedar Ridge.
+ * Display examples. Not inserted by the migration.
+ * Never Brown, Rossi, or a real job.
+ */
+
+import type { FieldNote } from "./fieldNotes.ts";
+
+const STAMPS = {
+  foreman_alerted_at: null,
+  gc_escalated_at: null,
+  unacked_realerted_at: null,
+  mitigated_at: null,
+  mitigated_reminded_at: null,
+  acknowledged_by: null,
+  acknowledged_at: null,
+  resolved_at: null,
+  resolution_note: null,
+  severity_changed_by: null,
+  severity_changed_at: null,
+  severity_change_reason: null,
+} as const;
+
+function demo(partial: Omit<FieldNote, keyof typeof STAMPS> & Partial<FieldNote>): FieldNote {
+  return { ...STAMPS, ...partial };
+}
+
+export const DEMO_FIELD_NOTES: FieldNote[] = [
+  demo({
+    id: "00000000-0000-4000-8000-000000000101",
+    job_slug: "maple-point",
+    room: "733",
+    location: "Corridor outside the paint tent",
+    body: "Painters are epoxy-coating inside a plastic tent. They have HEPA only, no carbon. Fumes gave other trades headaches.",
+    photos: ["tent-hepa.jpg"],
+    author_user_id: "demo:alex",
+    author_name: "Alex Rivera",
+    created_at: "2026-10-08T14:10:00.000Z",
+    updated_at: "2026-10-08T14:10:00.000Z",
+    severity: "safety",
+    hazard_type: "air_quality",
+    symptoms_reported: true,
+    stop_work: false,
+    status: "open",
+  }),
+  demo({
+    id: "00000000-0000-4000-8000-000000000102",
+    job_slug: "maple-point",
+    room: "102",
+    location: "Exam room 102",
+    body: "Light fixtures for room 102 are on site.",
+    photos: [],
+    author_user_id: "demo:alex",
+    author_name: "Alex Rivera",
+    created_at: "2026-10-09T16:00:00.000Z",
+    updated_at: "2026-10-09T16:00:00.000Z",
+    severity: "priority",
+    hazard_type: null,
+    symptoms_reported: false,
+    stop_work: false,
+    status: "open",
+  }),
+  demo({
+    id: "00000000-0000-4000-8000-000000000103",
+    job_slug: "maple-point",
+    room: "101",
+    location: "Corridor 101",
+    body: "Hung the corridor devices in 101.",
+    photos: [],
+    author_user_id: "demo:sam",
+    author_name: "Sam Ortiz",
+    created_at: "2026-10-09T17:00:00.000Z",
+    updated_at: "2026-10-09T17:00:00.000Z",
+    severity: "routine",
+    hazard_type: null,
+    symptoms_reported: false,
+    stop_work: false,
+    status: "open",
+  }),
+  demo({
+    id: "00000000-0000-4000-8000-000000000104",
+    job_slug: "maple-point",
+    room: "East entry",
+    location: "East entry",
+    body: "Wet floor by the east entry is dry now.",
+    photos: [],
+    author_user_id: "demo:pat",
+    author_name: "Pat Nguyen",
+    created_at: "2026-10-09T18:30:00.000Z",
+    updated_at: "2026-10-09T19:00:00.000Z",
+    severity: "safety",
+    hazard_type: "other",
+    symptoms_reported: false,
+    stop_work: false,
+    status: "closed",
+    resolved_at: "2026-10-09T19:00:00.000Z",
+    resolution_note: "Floor is dry. Crew is back in.",
+    foreman_alerted_at: "2026-10-09T18:31:00.000Z",
+  }),
+  demo({
+    id: "00000000-0000-4000-8000-000000000201",
+    job_slug: "cedar-ridge",
+    room: "Stair B",
+    location: "Stair B, level 2",
+    body: "Open stair, no rail yet.",
+    photos: [],
+    author_user_id: "demo:riley",
+    author_name: "Riley Cho",
+    created_at: "2026-10-09T18:00:00.000Z",
+    updated_at: "2026-10-09T18:00:00.000Z",
+    severity: "safety",
+    hazard_type: "fall",
+    symptoms_reported: false,
+    stop_work: false,
+    status: "open",
+  }),
+  demo({
+    id: "00000000-0000-4000-8000-000000000202",
+    job_slug: "cedar-ridge",
+    room: "Stair A",
+    location: "Stair A landing",
+    body: "Guardrail clip was missing at the stair. Foreman has seen it.",
+    photos: [],
+    author_user_id: "demo:riley",
+    author_name: "Riley Cho",
+    created_at: "2026-10-07T12:00:00.000Z",
+    updated_at: "2026-10-07T12:20:00.000Z",
+    severity: "safety",
+    hazard_type: "fall",
+    symptoms_reported: false,
+    stop_work: false,
+    status: "acknowledged",
+    acknowledged_by: "demo:foreman",
+    acknowledged_at: "2026-10-07T12:20:00.000Z",
+    foreman_alerted_at: "2026-10-07T12:01:00.000Z",
+  }),
+  demo({
+    id: "00000000-0000-4000-8000-000000000203",
+    job_slug: "cedar-ridge",
+    room: "200",
+    location: "Waiting 200",
+    body: "Device boxes are up in waiting 200.",
+    photos: [],
+    author_user_id: "demo:riley",
+    author_name: "Riley Cho",
+    created_at: "2026-10-09T11:00:00.000Z",
+    updated_at: "2026-10-09T11:00:00.000Z",
+    severity: "routine",
+    hazard_type: null,
+    symptoms_reported: false,
+    stop_work: false,
+    status: "open",
+  }),
+];
+
+export const DEMO_NOTE_IDS = new Set(DEMO_FIELD_NOTES.map((note) => note.id));
+
+export function demoNotesForJob(jobSlug: string): FieldNote[] {
+  return DEMO_FIELD_NOTES.filter((note) => note.job_slug === jobSlug).map((note) => ({
+    ...note,
+    photos: [...note.photos],
+  }));
+}
