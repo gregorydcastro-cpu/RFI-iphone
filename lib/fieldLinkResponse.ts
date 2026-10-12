@@ -7,6 +7,8 @@ import {
   LINK_NOT_FOUND_TITLE,
   MAPLE_POINT_DEMO_HREF,
   MAPLE_POINT_DEMO_LABEL,
+  PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION,
+  PAGE_NOT_FOUND_DOCUMENT_TITLE,
   PAGE_NOT_FOUND_MESSAGE,
   PAGE_NOT_FOUND_TITLE,
 } from "./fieldNotFound.ts";
@@ -142,14 +144,15 @@ export function stripFieldNotFoundHeader(requestHeaders: Headers): Headers {
   return headers;
 }
 
-function brandedNotFoundHtml(title: string, message: string): string {
+function brandedNotFoundHtml(heading: string, message: string): string {
   return (
     `<!DOCTYPE html><html lang="en"><head>` +
     `<meta charset="utf-8">` +
     `<meta name="robots" content="noindex, nofollow">` +
-    `<title>${title}</title>` +
+    `<meta name="description" content="${PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION}">` +
+    `<title>${PAGE_NOT_FOUND_DOCUMENT_TITLE}</title>` +
     `</head><body><main>` +
-    `<h1>${title}</h1>` +
+    `<h1>${heading}</h1>` +
     `<p>${message}</p>` +
     `<a href="${HOME_HREF}">${HOME_LABEL}</a>` +
     `<a href="${MAPLE_POINT_DEMO_HREF}">${MAPLE_POINT_DEMO_LABEL}</a>` +
@@ -166,12 +169,31 @@ export function pageNotFoundFallbackHtml(): string {
   return brandedNotFoundHtml(PAGE_NOT_FOUND_TITLE, PAGE_NOT_FOUND_MESSAGE);
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Next escapes apostrophes in text. The fallback card keeps the raw character. */
+function cardTextPattern(value: string): string {
+  const variants = new Set<string>([
+    value,
+    value.replaceAll("'", "&#x27;"),
+    value.replaceAll("'", "&apos;"),
+  ]);
+  return [...variants].map(escapeRegExp).join("|");
+}
+
+/** Card heading, not the document title. Class names on the tags are fine. */
+function hasCardCopy(html: string, title: string, message: string): boolean {
+  const heading = new RegExp(`<h1\\b[^>]*>${escapeRegExp(title)}</h1>`);
+  const body = new RegExp(`<p\\b[^>]*>(?:${cardTextPattern(message)})</p>`);
+  return heading.test(html) && body.test(html);
+}
+
 /** True when the raw HTML is a branded card, not the __next_error__ shell. */
 function isBrandedNotFoundDocument(html: string, title: string, message: string): boolean {
   if (!html.includes("<html") || !html.includes('lang="en"')) return false;
-  if (!html.includes("<h1")) return false;
-  if (!html.includes(title)) return false;
-  if (!html.includes(message)) return false;
+  if (!hasCardCopy(html, title, message)) return false;
   if (!html.includes('href="/"')) return false;
   if (!html.includes(`href="${MAPLE_POINT_DEMO_HREF}"`)) return false;
   if (!html.includes("Hear this")) return false;

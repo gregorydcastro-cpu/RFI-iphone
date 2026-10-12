@@ -9,6 +9,12 @@
 
 import { accessTokenNeedsRefresh } from "./procoreTokenExpiry.ts";
 
+export {
+  procoreReconnectHref,
+  procoreReturnFromCookie,
+  safeProcoreReturnPath,
+} from "./procoreReturnPath.ts";
+
 /** Past stamp written when a refresh grant is rejected. Not a secret. */
 export const PROCORE_RECONNECT_EXPIRES_AT = "1970-01-01T00:00:00.000Z";
 
@@ -39,43 +45,6 @@ export const SHARE_RECONNECT_NOTE =
 
 export const SHARE_REFRESH_TIMEOUT =
   "Refresh all didn't finish. Saved pins stay put. Retry.";
-
-const SAFE_RETURN =
-  /^\/(?:account|time|share|jobs(?:\/[A-Za-z0-9_-]+)?|pack\/[A-Za-z0-9._-]+)(?:\?[A-Za-z0-9._~%=&-]*)?$/;
-
-/**
- * Same-site return after Connect Procore. Pack, jobs, share, time, account.
- * Rejects open redirects and path tricks.
- */
-export function safeProcoreReturnPath(
-  value: string | null | undefined,
-): string | null {
-  if (!value) return null;
-  const trimmed = value.trim();
-  if (trimmed.length === 0 || trimmed.length > 200) return null;
-  if (trimmed.includes("..") || trimmed.includes("//") || trimmed.includes("\\")) {
-    return null;
-  }
-  if (!SAFE_RETURN.test(trimmed)) return null;
-  return trimmed;
-}
-
-export function procoreReturnFromCookie(
-  value: string | null | undefined,
-): string | null {
-  if (!value) return null;
-  try {
-    return safeProcoreReturnPath(decodeURIComponent(value));
-  } catch {
-    return safeProcoreReturnPath(value);
-  }
-}
-
-export function procoreReconnectHref(returnPath?: string | null): string {
-  const safe = safeProcoreReturnPath(returnPath);
-  if (!safe) return "/api/procore/connect";
-  return `/api/procore/connect?next=${encodeURIComponent(safe)}`;
-}
 
 /**
  * 400/401/403 on the token endpoint means the refresh token is dead.

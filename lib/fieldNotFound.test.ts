@@ -10,6 +10,8 @@ import {
   LINK_NOT_FOUND_TITLE,
   MAPLE_POINT_DEMO_HREF,
   MAPLE_POINT_DEMO_LABEL,
+  PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION,
+  PAGE_NOT_FOUND_DOCUMENT_TITLE,
   PAGE_NOT_FOUND_MESSAGE,
   PAGE_NOT_FOUND_TITLE,
   SHEETS_SECTION,
@@ -235,6 +237,31 @@ test("a bad invite or pack link uses a shorter card than a missing page", () => 
   assert.match(readRepo("app/pack/[requestId]/not-found.tsx"), /variant="link"/);
   assert.match(readRepo("components/FieldNotFound.tsx"), /<a/);
   assert.match(readRepo("components/FieldNotFound.tsx"), /Hear this/);
+});
+
+test("branded 404 document title names GC Field Log and keeps the card headings", () => {
+  assert.equal(PAGE_NOT_FOUND_DOCUMENT_TITLE, "Page not found — GC Field Log");
+  assert.equal(PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION, PAGE_NOT_FOUND_MESSAGE);
+  assert.equal(
+    PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION,
+    "This page isn't here. Go home or open the Maple Point demo.",
+  );
+  assert.equal(fieldNotFoundCopy("page").title, "Page not found");
+  assert.equal(fieldNotFoundCopy("link").title, "Link not found");
+  assert.notEqual(fieldNotFoundCopy("link").title, PAGE_NOT_FOUND_DOCUMENT_TITLE);
+
+  for (const file of [
+    "app/not-found.tsx",
+    "app/invite/[token]/not-found.tsx",
+    "app/pack/[requestId]/not-found.tsx",
+  ]) {
+    const text = readRepo(file);
+    assert.match(text, /PAGE_NOT_FOUND_DOCUMENT_TITLE/, file);
+    assert.match(text, /PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION/, file);
+    assert.match(text, /absolute: PAGE_NOT_FOUND_DOCUMENT_TITLE/, file);
+    assert.match(text, /index:\s*false/, file);
+    assert.match(text, /follow:\s*false/, file);
+  }
 });
 
 test("sign-in aliases redirect home and keep the query", () => {

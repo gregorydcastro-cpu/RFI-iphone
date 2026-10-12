@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { FieldRoleName } from "@/lib/auth";
 import { canInviteCrew } from "@/lib/inviteRole";
-import { procoreReconnectHref } from "@/lib/procoreAuthHealth";
+import { procoreReconnectHref } from "@/lib/procoreReturnPath";
 
 type Props = {
   signedIn?: boolean;

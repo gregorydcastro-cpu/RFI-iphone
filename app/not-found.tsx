@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { FieldNotFoundPage } from "@/components/FieldNotFound";
-import { FIELD_LINK_MISS, FIELD_NOT_FOUND_HEADER } from "@/lib/fieldNotFound";
+import {
+  FIELD_LINK_MISS,
+  FIELD_NOT_FOUND_HEADER,
+  PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION,
+  PAGE_NOT_FOUND_DOCUMENT_TITLE,
+} from "@/lib/fieldNotFound";
 
 export const metadata: Metadata = {
+  title: { absolute: PAGE_NOT_FOUND_DOCUMENT_TITLE },
+  description: PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION,
   robots: { index: false, follow: false },
 };
 

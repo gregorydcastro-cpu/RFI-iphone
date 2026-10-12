@@ -6,6 +6,8 @@ import {
   FIELD_NOT_FOUND_HEADER,
   LINK_NOT_FOUND_MESSAGE,
   LINK_NOT_FOUND_TITLE,
+  PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION,
+  PAGE_NOT_FOUND_DOCUMENT_TITLE,
   PAGE_NOT_FOUND_MESSAGE,
   PAGE_NOT_FOUND_TITLE,
 } from "./fieldNotFound.ts";
@@ -44,6 +46,13 @@ test("the link-miss fallback is the branded card at HTTP 404", () => {
   assert.match(BRANDED, /<a href="\/pack\/maple-point">Open Maple Point demo<\/a>/);
   assert.match(BRANDED, /Hear this/);
   assert.match(BRANDED, /noindex/);
+  assert.match(BRANDED, /<h1>Link not found<\/h1>/);
+  assert.match(
+    BRANDED,
+    /<title>Page not found — GC Field Log<\/title>/,
+  );
+  assert.ok(BRANDED.includes(`content="${PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION}"`));
+  assert.equal(PAGE_NOT_FOUND_DOCUMENT_TITLE, "Page not found — GC Field Log");
   assert.doesNotMatch(BRANDED, /__next_error__/);
   assert.equal(isBrandedLinkMissDocument('<html id="__next_error__"></html>'), false);
   assert.equal(isBrandedLinkMissDocument("<html><h1>Page not found</h1></html>"), false);
@@ -217,6 +226,8 @@ test("the page-not-found fallback is the branded page card at HTTP 404", () => {
   assert.equal(isBrandedPageNotFoundDocument(BRANDED), false);
   assert.match(PAGE, /<html lang="en">/);
   assert.match(PAGE, /<h1>Page not found<\/h1>/);
+  assert.match(PAGE, /<title>Page not found — GC Field Log<\/title>/);
+  assert.ok(PAGE.includes(`content="${PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION}"`));
   assert.ok(PAGE.includes(PAGE_NOT_FOUND_TITLE));
   assert.ok(PAGE.includes(PAGE_NOT_FOUND_MESSAGE));
   assert.match(PAGE, /<a href="\/">Home<\/a>/);
@@ -226,6 +237,24 @@ test("the page-not-found fallback is the branded page card at HTTP 404", () => {
   assert.doesNotMatch(PAGE, /__next_error__/);
   assert.doesNotMatch(PAGE, /Link not found/);
   assert.equal(isBrandedPageNotFoundDocument('<html id="__next_error__" lang="en"><h1>Page not found</h1></html>'), false);
+
+  const styledPage =
+    '<html lang="en"><h1 class="text-2xl font-semibold text-paper">Page not found</h1>' +
+    '<p class="mt-2 text-lg leading-snug text-paper">This page isn&#x27;t here. Go home or open the Maple Point demo.</p>' +
+    '<a href="/">Home</a><a href="/pack/maple-point">Open Maple Point demo</a>Hear this' +
+    '<meta name="robots" content="noindex, nofollow">';
+  assert.equal(isBrandedPageNotFoundDocument(styledPage), true);
+  assert.equal(isBrandedLinkMissDocument(styledPage), false);
+
+  const styledLink =
+    '<html lang="en"><title>Page not found — GC Field Log</title>' +
+    '<meta name="description" content="This page isn&#x27;t here. Go home or open the Maple Point demo.">' +
+    '<h1 class="text-2xl font-semibold text-paper">Link not found</h1>' +
+    '<p class="mt-2 text-lg leading-snug text-paper">It may be old.</p>' +
+    '<a href="/">Home</a><a href="/pack/maple-point">Open Maple Point demo</a>Hear this' +
+    '<meta name="robots" content="noindex, nofollow">';
+  assert.equal(isBrandedLinkMissDocument(styledLink), true);
+  assert.equal(isBrandedPageNotFoundDocument(styledLink), false);
 });
 
 test("a direct /_not-found render is returned as a finished HTTP 404", async () => {
