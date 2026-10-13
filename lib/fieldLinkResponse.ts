@@ -3,6 +3,8 @@ import {
   FIELD_NOT_FOUND_HEADER,
   HOME_HREF,
   HOME_LABEL,
+  LINK_NOT_FOUND_DOCUMENT_DESCRIPTION,
+  LINK_NOT_FOUND_DOCUMENT_TITLE,
   LINK_NOT_FOUND_MESSAGE,
   LINK_NOT_FOUND_TITLE,
   MAPLE_POINT_DEMO_HREF,
@@ -144,13 +146,18 @@ export function stripFieldNotFoundHeader(requestHeaders: Headers): Headers {
   return headers;
 }
 
-function brandedNotFoundHtml(heading: string, message: string): string {
+function brandedNotFoundHtml(
+  heading: string,
+  message: string,
+  documentTitle: string,
+  documentDescription: string,
+): string {
   return (
     `<!DOCTYPE html><html lang="en"><head>` +
     `<meta charset="utf-8">` +
     `<meta name="robots" content="noindex, nofollow">` +
-    `<meta name="description" content="${PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION}">` +
-    `<title>${PAGE_NOT_FOUND_DOCUMENT_TITLE}</title>` +
+    `<meta name="description" content="${documentDescription}">` +
+    `<title>${documentTitle}</title>` +
     `</head><body><main>` +
     `<h1>${heading}</h1>` +
     `<p>${message}</p>` +
@@ -162,11 +169,67 @@ function brandedNotFoundHtml(heading: string, message: string): string {
 }
 
 export function linkMissFallbackHtml(): string {
-  return brandedNotFoundHtml(LINK_NOT_FOUND_TITLE, LINK_NOT_FOUND_MESSAGE);
+  return brandedNotFoundHtml(
+    LINK_NOT_FOUND_TITLE,
+    LINK_NOT_FOUND_MESSAGE,
+    LINK_NOT_FOUND_DOCUMENT_TITLE,
+    LINK_NOT_FOUND_DOCUMENT_DESCRIPTION,
+  );
 }
 
 export function pageNotFoundFallbackHtml(): string {
-  return brandedNotFoundHtml(PAGE_NOT_FOUND_TITLE, PAGE_NOT_FOUND_MESSAGE);
+  return brandedNotFoundHtml(
+    PAGE_NOT_FOUND_TITLE,
+    PAGE_NOT_FOUND_MESSAGE,
+    PAGE_NOT_FOUND_DOCUMENT_TITLE,
+    PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION,
+  );
+}
+
+function decodeMetaText(value: string): string {
+  return value
+    .replaceAll("&amp;", "&")
+    .replaceAll("&#x27;", "'")
+    .replaceAll("&#39;", "'")
+    .replaceAll("&apos;", "'")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#x2014;", "—")
+    .replaceAll("&mdash;", "—")
+    .replaceAll("&#8212;", "—");
+}
+
+function descriptionTag(html: string): string | null {
+  const match = html.match(/<meta\b(?=[^>]*\bname\s*=\s*["']description["'])[^>]*>/i);
+  return match ? match[0] : null;
+}
+
+/**
+ * The finished invite/pack document and the generic 404 use different
+ * titles. A render that still carries the other card's title is corrected
+ * here. An already-correct tag is left byte-for-byte.
+ */
+function ensureDocumentMeta(html: string, title: string, description: string): string {
+  let next = html;
+  const titleMatch = next.match(/<title\b[^>]*>[\s\S]*?<\/title>/i);
+  const titleText = titleMatch
+    ? decodeMetaText(titleMatch[0].replace(/<\/?title\b[^>]*>/gi, ""))
+    : null;
+  if (titleText !== title) {
+    const tag = `<title>${title}</title>`;
+    next = titleMatch
+      ? next.replace(titleMatch[0], tag)
+      : next.replace(/<head\b[^>]*>/i, (open) => `${open}${tag}`);
+  }
+  const current = descriptionTag(next);
+  const content = current?.match(/\bcontent\s*=\s*("([^"]*)"|'([^']*)')/i);
+  const raw = content ? (content[2] ?? content[3] ?? "") : undefined;
+  if (raw === undefined || decodeMetaText(raw) !== description) {
+    const tag = `<meta name="description" content="${description}">`;
+    next = current
+      ? next.replace(current, tag)
+      : next.replace(/<head\b[^>]*>/i, (open) => `${open}${tag}`);
+  }
+  return next;
 }
 
 function escapeRegExp(value: string): string {
@@ -257,6 +320,8 @@ async function loadNotFoundDocument(input: {
   card: NotFoundCard;
   fallback: string;
   accept: (html: string) => boolean;
+  documentTitle: string;
+  documentDescription: string;
   failureLog: string;
 }): Promise<NotFoundDocument> {
   const fetchImpl = input.fetchImpl ?? fetch;
@@ -279,6 +344,9 @@ async function loadNotFoundDocument(input: {
   } catch {
     console.error(input.failureLog);
   }
+  if (body) {
+    body = ensureDocumentMeta(body, input.documentTitle, input.documentDescription);
+  }
   return {
     status: LINK_MISS_STATUS,
     body: input.method === "HEAD" ? null : body,
@@ -297,6 +365,8 @@ export async function loadLinkMissDocument(input: {
     card: "link",
     fallback: linkMissFallbackHtml(),
     accept: isBrandedLinkMissDocument,
+    documentTitle: LINK_NOT_FOUND_DOCUMENT_TITLE,
+    documentDescription: LINK_NOT_FOUND_DOCUMENT_DESCRIPTION,
     failureLog: "[gcfieldlog] link card render failed",
   });
 }
@@ -313,6 +383,8 @@ export async function loadPageNotFoundDocument(input: {
     card: "page",
     fallback: pageNotFoundFallbackHtml(),
     accept: isBrandedPageNotFoundDocument,
+    documentTitle: PAGE_NOT_FOUND_DOCUMENT_TITLE,
+    documentDescription: PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION,
     failureLog: "[gcfieldlog] page card render failed",
   });
 }

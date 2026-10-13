@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   FIELD_LINK_MISS,
   FIELD_NOT_FOUND_HEADER,
+  LINK_NOT_FOUND_DOCUMENT_DESCRIPTION,
+  LINK_NOT_FOUND_DOCUMENT_TITLE,
   LINK_NOT_FOUND_MESSAGE,
   LINK_NOT_FOUND_TITLE,
   PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION,
@@ -49,9 +51,12 @@ test("the link-miss fallback is the branded card at HTTP 404", () => {
   assert.match(BRANDED, /<h1>Link not found<\/h1>/);
   assert.match(
     BRANDED,
-    /<title>Page not found — GC Field Log<\/title>/,
+    /<title>Link not found — GC Field Log<\/title>/,
   );
-  assert.ok(BRANDED.includes(`content="${PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION}"`));
+  assert.ok(BRANDED.includes(`content="${LINK_NOT_FOUND_DOCUMENT_DESCRIPTION}"`));
+  assert.equal(LINK_NOT_FOUND_DOCUMENT_TITLE, "Link not found — GC Field Log");
+  assert.equal(LINK_NOT_FOUND_DOCUMENT_DESCRIPTION, LINK_NOT_FOUND_MESSAGE);
+  assert.doesNotMatch(BRANDED, /<title>Page not found — GC Field Log<\/title>/);
   assert.equal(PAGE_NOT_FOUND_DOCUMENT_TITLE, "Page not found — GC Field Log");
   assert.doesNotMatch(BRANDED, /__next_error__/);
   assert.equal(isBrandedLinkMissDocument('<html id="__next_error__"></html>'), false);
@@ -247,14 +252,59 @@ test("the page-not-found fallback is the branded page card at HTTP 404", () => {
   assert.equal(isBrandedLinkMissDocument(styledPage), false);
 
   const styledLink =
-    '<html lang="en"><title>Page not found — GC Field Log</title>' +
-    '<meta name="description" content="This page isn&#x27;t here. Go home or open the Maple Point demo.">' +
+    '<html lang="en"><title>Link not found — GC Field Log</title>' +
+    '<meta name="description" content="It may be old.">' +
     '<h1 class="text-2xl font-semibold text-paper">Link not found</h1>' +
     '<p class="mt-2 text-lg leading-snug text-paper">It may be old.</p>' +
     '<a href="/">Home</a><a href="/pack/maple-point">Open Maple Point demo</a>Hear this' +
     '<meta name="robots" content="noindex, nofollow">';
   assert.equal(isBrandedLinkMissDocument(styledLink), true);
   assert.equal(isBrandedPageNotFoundDocument(styledLink), false);
+});
+
+test("a link card render keeps the body and uses the link document title", async () => {
+  const rendered =
+    '<html lang="en"><head><title>Page not found — GC Field Log</title>' +
+    `<meta name="description" content="${PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION}">` +
+    '<meta name="robots" content="noindex, nofollow"></head><body>' +
+    '<h1 class="text-2xl font-semibold text-paper">Link not found</h1>' +
+    '<p class="mt-2 text-lg leading-snug text-paper">It may be old.</p>' +
+    '<a href="/">Home</a><a href="/pack/maple-point">Open Maple Point demo</a>Hear this' +
+    "</body></html>";
+  const result = await loadLinkMissDocument({
+    requestUrl: "https://www.gcfieldlog.com/invite/not-a-real-token",
+    requestHeaders: new Headers(),
+    method: "GET",
+    fetchImpl: async () => new Response(rendered, { status: 200 }),
+  });
+  assert.equal(result.status, 404);
+  assert.match(result.body ?? "", /<h1 class="text-2xl font-semibold text-paper">Link not found<\/h1>/);
+  assert.match(result.body ?? "", /<title>Link not found — GC Field Log<\/title>/);
+  assert.ok((result.body ?? "").includes(`content="${LINK_NOT_FOUND_DOCUMENT_DESCRIPTION}"`));
+  assert.doesNotMatch(result.body ?? "", /<title>Page not found — GC Field Log<\/title>/);
+  assert.match(result.body ?? "", /It may be old/);
+  assert.doesNotMatch(result.body ?? "", /This page isn't here/);
+});
+
+test("a page card render keeps Page not found when the title was the link title", async () => {
+  const rendered = PAGE
+    .replaceAll(PAGE_NOT_FOUND_DOCUMENT_TITLE, LINK_NOT_FOUND_DOCUMENT_TITLE)
+    .replace(
+      `content="${PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION}"`,
+      `content="${LINK_NOT_FOUND_DOCUMENT_DESCRIPTION}"`,
+    );
+  const result = await loadPageNotFoundDocument({
+    requestUrl: "https://www.gcfieldlog.com/nope",
+    requestHeaders: new Headers(),
+    method: "GET",
+    fetchImpl: async () => new Response(rendered, { status: 200 }),
+  });
+  assert.equal(result.status, 404);
+  assert.match(result.body ?? "", /<h1>Page not found<\/h1>/);
+  assert.match(result.body ?? "", /<title>Page not found — GC Field Log<\/title>/);
+  assert.ok((result.body ?? "").includes(`content="${PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION}"`));
+  assert.doesNotMatch(result.body ?? "", /<title>Link not found — GC Field Log<\/title>/);
+  assert.doesNotMatch(result.body ?? "", /<h1>Link not found<\/h1>/);
 });
 
 test("a direct /_not-found render is returned as a finished HTTP 404", async () => {

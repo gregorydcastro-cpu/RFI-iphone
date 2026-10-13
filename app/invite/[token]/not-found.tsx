@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { FieldNotFoundPage } from "@/components/FieldNotFound";
 import {
-  PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION,
-  PAGE_NOT_FOUND_DOCUMENT_TITLE,
+  LINK_NOT_FOUND_DOCUMENT_DESCRIPTION,
+  LINK_NOT_FOUND_DOCUMENT_TITLE,
 } from "@/lib/fieldNotFound";
 
 export const metadata: Metadata = {
-  title: { absolute: PAGE_NOT_FOUND_DOCUMENT_TITLE },
-  description: PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION,
+  title: { absolute: LINK_NOT_FOUND_DOCUMENT_TITLE },
+  description: LINK_NOT_FOUND_DOCUMENT_DESCRIPTION,
   robots: { index: false, follow: false },
 };
 
