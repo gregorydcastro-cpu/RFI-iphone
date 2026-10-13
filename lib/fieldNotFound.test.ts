@@ -6,6 +6,8 @@ import {
   FIELD_NOT_FOUND_TITLE,
   HOME_HREF,
   HOME_LABEL,
+  LINK_NOT_FOUND_DOCUMENT_DESCRIPTION,
+  LINK_NOT_FOUND_DOCUMENT_TITLE,
   LINK_NOT_FOUND_MESSAGE,
   LINK_NOT_FOUND_TITLE,
   MAPLE_POINT_DEMO_HREF,
@@ -246,19 +248,34 @@ test("branded 404 document title names GC Field Log and keeps the card headings"
     PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION,
     "This page isn't here. Go home or open the Maple Point demo.",
   );
+  assert.equal(LINK_NOT_FOUND_DOCUMENT_TITLE, "Link not found — GC Field Log");
+  assert.equal(LINK_NOT_FOUND_DOCUMENT_DESCRIPTION, LINK_NOT_FOUND_MESSAGE);
+  assert.equal(LINK_NOT_FOUND_DOCUMENT_DESCRIPTION, "It may be old.");
   assert.equal(fieldNotFoundCopy("page").title, "Page not found");
   assert.equal(fieldNotFoundCopy("link").title, "Link not found");
+  assert.notEqual(LINK_NOT_FOUND_DOCUMENT_TITLE, PAGE_NOT_FOUND_DOCUMENT_TITLE);
   assert.notEqual(fieldNotFoundCopy("link").title, PAGE_NOT_FOUND_DOCUMENT_TITLE);
 
+  const root = readRepo("app/not-found.tsx");
+  assert.match(root, /PAGE_NOT_FOUND_DOCUMENT_TITLE/);
+  assert.match(root, /PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION/);
+  assert.match(root, /absolute: PAGE_NOT_FOUND_DOCUMENT_TITLE/);
+  assert.match(root, /LINK_NOT_FOUND_DOCUMENT_TITLE/);
+  assert.match(root, /LINK_NOT_FOUND_DOCUMENT_DESCRIPTION/);
+  assert.match(root, /absolute: LINK_NOT_FOUND_DOCUMENT_TITLE/);
+  assert.match(root, /FIELD_LINK_MISS/);
+  assert.match(root, /index:\s*false/);
+  assert.match(root, /follow:\s*false/);
+
   for (const file of [
-    "app/not-found.tsx",
     "app/invite/[token]/not-found.tsx",
     "app/pack/[requestId]/not-found.tsx",
   ]) {
     const text = readRepo(file);
-    assert.match(text, /PAGE_NOT_FOUND_DOCUMENT_TITLE/, file);
-    assert.match(text, /PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION/, file);
-    assert.match(text, /absolute: PAGE_NOT_FOUND_DOCUMENT_TITLE/, file);
+    assert.match(text, /LINK_NOT_FOUND_DOCUMENT_TITLE/, file);
+    assert.match(text, /LINK_NOT_FOUND_DOCUMENT_DESCRIPTION/, file);
+    assert.match(text, /absolute: LINK_NOT_FOUND_DOCUMENT_TITLE/, file);
+    assert.doesNotMatch(text, /PAGE_NOT_FOUND_DOCUMENT_TITLE/, file);
     assert.match(text, /index:\s*false/, file);
     assert.match(text, /follow:\s*false/, file);
   }
