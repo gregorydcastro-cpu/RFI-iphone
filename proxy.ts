@@ -12,6 +12,12 @@ import { FIELD_NOT_FOUND_HEADER } from "@/lib/fieldNotFound";
 import { updateSession } from "@/lib/supabase/proxy";
 import { slashToCanonical } from "@/lib/slashPath";
 import {
+  accountBoardRewrite,
+  sendSignedOutToAccountShell,
+  shouldSendAccountBoardBack,
+  shouldServeAccountBoard,
+} from "@/lib/accountRoute";
+import {
   sendSignedOutToTimeShell,
   shouldSendTimeBoardBack,
   shouldServeTimeBoard,
@@ -39,8 +45,10 @@ function copyCookies(from: NextResponse, to: NextResponse) {
  *
  * The document fetch sets the render header. That internal request is passed
  * through here, so the proxy does not fetch /_not-found again.
- * A signed-in /time request is the one exception: timeBoardRewrite sends
- * it to the clock page so the public /time module stays free of the roster.
+ * A signed-in /time request is rewritten to the clock page so the public
+ * /time module stays free of the roster. A signed-in /account request is
+ * rewritten the same way so the public /account module stays free of the
+ * dashboard.
  */
 function finishedNotFound(
   session: NextResponse,
@@ -93,6 +101,16 @@ export async function proxy(request: NextRequest) {
     }
     if (await shouldServeTimeBoard(request, session)) {
       const rewritten = timeBoardRewrite(request);
+      copyCookies(session, rewritten);
+      return rewritten;
+    }
+    if (await shouldSendAccountBoardBack(request, session)) {
+      const sent = sendSignedOutToAccountShell(request);
+      copyCookies(session, sent);
+      return sent;
+    }
+    if (await shouldServeAccountBoard(request, session)) {
+      const rewritten = accountBoardRewrite(request);
       copyCookies(session, rewritten);
       return rewritten;
     }

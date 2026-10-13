@@ -255,7 +255,7 @@ test("stripe readiness is booleans and env names, never key material", () => {
 test("SubscribeCta treats billing_unconfigured as coming soon, not a host allowlist", () => {
   const cta = readRepo("components/SubscribeCta.tsx");
   const pricing = readRepo("app/pricing/page.tsx");
-  const account = readRepo("app/account/page.tsx");
+  const account = readRepo("app/account/SignedInAccount.tsx");
   assert.match(cta, /BILLING_OPENS_SOON/);
   assert.match(cta, /Checkout stayed closed/);
   assert.match(cta, /case "billing_unconfigured":/);
@@ -284,6 +284,7 @@ test("public pricing HTML hides stripe setup diagnostics when env is missing", (
     "app/pricing/page.tsx",
     "components/SubscribeCta.tsx",
     "app/account/page.tsx",
+    "app/account/SignedInAccount.tsx",
     "lib/billingPublicCopy.ts",
   ]
     .map((file) => readRepo(file))
@@ -424,6 +425,7 @@ test("Stripe helpers and copy stay Maple Point / fictional and invent no keys", 
     readRepo("lib/billingMessages.ts"),
     readRepo("app/pricing/page.tsx"),
     readRepo("app/account/page.tsx"),
+    readRepo("app/account/SignedInAccount.tsx"),
     readRepo("app/api/stripe/checkout/route.ts"),
     readRepo("app/api/stripe/webhook/route.ts"),
     readRepo("app/api/stripe/status/route.ts"),

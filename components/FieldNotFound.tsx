@@ -1,5 +1,5 @@
-import { AppHeader } from "@/components/AppHeader";
 import { ReadAloudButton } from "@/components/ReadAloudButton";
+import { SignedOutBar } from "@/components/SignedOutBar";
 import { getFieldRole } from "@/lib/auth.server";
 import {
   fieldNotFoundCopy,
@@ -23,13 +23,21 @@ export async function FieldNotFoundPage({
   const copy = fieldNotFoundCopy(variant);
   const speak = fieldNotFoundSpeak(variant);
 
-  return (
-    <div data-field-not-found="" className="flex min-h-dvh flex-col">
+  let header = <SignedOutBar />;
+  if (session) {
+    const { AppHeader } = await import("@/components/AppHeader");
+    header = (
       <AppHeader
-        signedIn={Boolean(session)}
-        role={session?.role ?? access.role}
+        signedIn
+        role={session.role}
         procoreLinked={access.procoreLinked}
       />
+    );
+  }
+
+  return (
+    <div data-field-not-found="" className="flex min-h-dvh flex-col">
+      {header}
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center px-4 py-8 sm:px-6">
         <div role="status" className="w-full border border-line bg-ink px-4 py-5">
           <h1 className="text-2xl font-semibold text-paper">{copy.title}</h1>
