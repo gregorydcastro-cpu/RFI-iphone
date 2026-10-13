@@ -3,6 +3,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { JobsNextStep } from "@/components/JobsNextStep";
 import { ProcoreConnectCard } from "@/components/ProcoreConnectCard";
 import { VoiceCommandBar } from "@/components/VoiceCommandBar";
+import { isFieldNoteJob } from "@/lib/fieldNotes";
 import { DEMO_JOBS } from "@/lib/jobs";
 import { TIME_JOB_SLUG } from "@/lib/time";
 import { getProcoreConnectionView, procoreErrorMessage } from "@/lib/procoreStatus";
@@ -122,6 +123,14 @@ export default async function JobsPage({ searchParams }: Props) {
                   className="inline-flex min-h-12 items-center border-t border-line px-4 text-sm font-semibold tracking-wide text-accent uppercase hover:text-cta"
                 >
                   Punch in
+                </Link>
+              ) : null}
+              {isFieldNoteJob(job.slug) ? (
+                <Link
+                  href={`/jobs/${job.slug}/notes`}
+                  className="inline-flex min-h-12 items-center border-t border-line px-4 text-sm font-semibold tracking-wide text-paper uppercase hover:text-cta"
+                >
+                  Notes
                 </Link>
               ) : null}
             </li>

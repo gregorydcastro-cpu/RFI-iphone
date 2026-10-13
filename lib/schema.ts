@@ -27,6 +27,11 @@
  * Bot wake queue: supabase/migrations/20260919120000_procore_bot_requests.sql
  *   public.procore_bot_requests — website enqueue; fleet polls / claims.
  *
+ * Field notes: supabase/migrations/20261009130000_field_notes_severity.sql
+ *   public.field_notes — one feed. severity is routine | priority | safety.
+ *   Safety is not a separate category. Existing rows default severity
+ *   routine and status open. Downgrade from safety needs a reason.
+ *
  * Authenticated RLS matches auth.uid()::text. Service role still writes
  * tokens, webhooks, cron, and bot-wake rows. Anon has no grants on the new tables.
  */
@@ -44,6 +49,7 @@ export const PROFILES_TABLE = "profiles";
 export const PROCORE_CONNECTIONS_TABLE_NAME = "procore_connections";
 export const ROOM_PACKS_TABLE = "room_packs";
 export const PROCORE_BOT_REQUESTS_TABLE = "procore_bot_requests";
+export const FIELD_NOTES_TABLE = "field_notes";
 
 export type ProcoreBotRequestStatus = "queued" | "claimed" | "done" | "error";
 
