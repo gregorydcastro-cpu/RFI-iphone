@@ -117,12 +117,32 @@ export function publicPageMetadata(path: PublicPagePath): Metadata {
   return socialMetadata(copy.title, copy.description, absolutePublicUrl(path));
 }
 
+/** Signed-out room pack shell. Same shape as Account, Time, and Share. */
+export const PACK_SIGNED_OUT_TITLE = `Room pack — ${SITE_NAME}`;
+
+export const PACK_SIGN_IN_DESCRIPTION = "Sign in to open a room pack.";
+
+/**
+ * Browser title for an open pack. A blank or generic name stays on the shell title.
+ */
+export function packDocumentTitle(name?: string | null): string {
+  const trimmed = (name ?? "").replace(/\s+/g, " ").trim();
+  const suffix = ` — ${SITE_NAME}`;
+  if (!trimmed || trimmed === SITE_NAME || trimmed === "Room pack") {
+    return PACK_SIGNED_OUT_TITLE;
+  }
+  if (trimmed.endsWith(suffix)) return trimmed;
+  return `${trimmed}${suffix}`;
+}
+
 /**
  * Room packs stay off the public card. No canonical URL and no sample-job pitch.
+ * The default title is the signed-out shell. A signed-in view can pass the job name.
  */
-export function privatePackMetadata(): Metadata {
-  const title = SITE_NAME;
-  const description = "Sign in to open a room pack.";
+export function privatePackMetadata(
+  title: string = PACK_SIGNED_OUT_TITLE,
+): Metadata {
+  const description = PACK_SIGN_IN_DESCRIPTION;
   return {
     title,
     description,
