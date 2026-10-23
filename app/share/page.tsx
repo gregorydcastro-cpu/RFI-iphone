@@ -1,6 +1,7 @@
 import { AppHeader } from "@/components/AppHeader";
 import { SharePortal } from "@/components/SharePortal";
 import { SHARE_CATALOG } from "@/lib/shareCatalog";
+import { sharePageMetadata } from "@/lib/sharePage";
 import { listSharePortal } from "@/lib/shareStore";
 import { getProcoreConnectionView } from "@/lib/procoreStatus";
 import { readAppSession, supabaseSessionCookiePresent } from "@/lib/session.server";
@@ -9,11 +10,10 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Share — GC Field Log",
-  description:
-    "Create share folders, pin Maple Point disciplines or room packs, and refresh pinned sheets.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const session = await readAppSession();
+  return sharePageMetadata(Boolean(session));
+}
 
 export default async function SharePage() {
   const session = await readAppSession();

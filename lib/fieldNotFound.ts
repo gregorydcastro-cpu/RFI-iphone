@@ -12,7 +12,7 @@ export const FIELD_NOT_FOUND_MESSAGE =
 export const PAGE_NOT_FOUND_TITLE = "Page not found";
 export const PAGE_NOT_FOUND_MESSAGE =
   "This page isn't here. Go home or open the Maple Point demo.";
-/** Browser title for /nope, /_not-found, and a bad invite or pack. */
+/** Browser title for /nope and /_not-found. */
 export const PAGE_NOT_FOUND_DOCUMENT_TITLE = "Page not found — GC Field Log";
 /** Meta description. Matches the page card line. Card headings stay as they are. */
 export const PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION = PAGE_NOT_FOUND_MESSAGE;
@@ -20,6 +20,10 @@ export const MAPLE_POINT_DEMO_LABEL = "Open Maple Point demo";
 export const HOME_LABEL = "Home";
 export const LINK_NOT_FOUND_TITLE = "Link not found";
 export const LINK_NOT_FOUND_MESSAGE = "It may be old.";
+/** Browser title for a bad invite or pack. */
+export const LINK_NOT_FOUND_DOCUMENT_TITLE = "Link not found — GC Field Log";
+/** Meta description. Matches the link card line. */
+export const LINK_NOT_FOUND_DOCUMENT_DESCRIPTION = LINK_NOT_FOUND_MESSAGE;
 
 /**
  * Set by the proxy when a matched invite or pack id does not resolve.
