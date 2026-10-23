@@ -14,6 +14,9 @@ import {
   ROOT_DESCRIPTION,
   isRobotsDisallowedPath,
   ogImageUrl,
+  PACK_SIGNED_OUT_TITLE,
+  PACK_SIGN_IN_DESCRIPTION,
+  packDocumentTitle,
   privatePackMetadata,
   publicPageMetadata,
   publicSitemap,
@@ -136,19 +139,68 @@ test("root card is the product, and a pack card is not a public page", () => {
   assert.equal(social.image.url, `${SITE_ORIGIN}${OG_IMAGE_PATH}`);
 
   const pack = privatePackMetadata();
-  assert.equal(pack.title, SITE_NAME);
-  assert.equal(pack.description, "Sign in to open a room pack.");
+  assert.equal(PACK_SIGNED_OUT_TITLE, "Room pack — GC Field Log");
+  assert.equal(PACK_SIGN_IN_DESCRIPTION, "Sign in to open a room pack.");
+  assert.equal(pack.title, PACK_SIGNED_OUT_TITLE);
+  assert.equal(pack.description, PACK_SIGN_IN_DESCRIPTION);
+  assert.doesNotMatch(String(pack.title), /Maple Point|Cedar Ridge/);
   assert.doesNotMatch(String(pack.description), /Maple Point|Cedar Ridge|public/);
   assert.equal(pack.alternates, undefined);
   const packOg = asRecord(pack.openGraph);
   const packTwitter = asRecord(pack.twitter);
+  assert.equal(packOg.title, PACK_SIGNED_OUT_TITLE);
+  assert.equal(packOg.description, PACK_SIGN_IN_DESCRIPTION);
   assert.equal(packOg.url, undefined);
   assert.equal(packOg.images, undefined);
   assert.equal(packTwitter.card, "summary");
+  assert.equal(packTwitter.title, PACK_SIGNED_OUT_TITLE);
+  assert.equal(packTwitter.description, PACK_SIGN_IN_DESCRIPTION);
   assert.equal(packTwitter.images, undefined);
   const robots = asRecord(pack.robots);
   assert.equal(robots.index, false);
   assert.equal(robots.follow, false);
+});
+
+test("a signed-in pack title uses the job name and keeps the private card", () => {
+  assert.equal(packDocumentTitle(undefined), PACK_SIGNED_OUT_TITLE);
+  assert.equal(packDocumentTitle("  "), PACK_SIGNED_OUT_TITLE);
+  assert.equal(packDocumentTitle(SITE_NAME), PACK_SIGNED_OUT_TITLE);
+  assert.equal(packDocumentTitle("Room pack"), PACK_SIGNED_OUT_TITLE);
+  assert.equal(
+    packDocumentTitle("Maple Point Medical Office"),
+    "Maple Point Medical Office — GC Field Log",
+  );
+  assert.equal(
+    packDocumentTitle("  Maple Point Medical Office  "),
+    "Maple Point Medical Office — GC Field Log",
+  );
+  assert.equal(
+    packDocumentTitle("Maple Point Medical Office — GC Field Log"),
+    "Maple Point Medical Office — GC Field Log",
+  );
+
+  const titled = privatePackMetadata(packDocumentTitle("Maple Point Medical Office"));
+  assert.equal(titled.title, "Maple Point Medical Office — GC Field Log");
+  assert.equal(titled.description, PACK_SIGN_IN_DESCRIPTION);
+  const robots = asRecord(titled.robots);
+  assert.equal(robots.index, false);
+  assert.equal(robots.follow, false);
+  assert.equal(asRecord(titled.openGraph).title, titled.title);
+  assert.equal(asRecord(titled.twitter).title, titled.title);
+
+  const page = readRepo("app/pack/[requestId]/page.tsx");
+  assert.match(page, /export async function generateMetadata/);
+  assert.match(page, /if \(!role\.session\) return privatePackMetadata\(\)/);
+  assert.match(
+    page,
+    /packDocumentTitle\(live\.pack\.project\.name \|\| requestedJob\?\.name\)/,
+  );
+  assert.match(page, /if \(!packPageFound\(\{ requestId, live \}\) \|\| !live\) notFound\(\)/);
+  const metadataFn = page.slice(
+    page.indexOf("export async function generateMetadata"),
+    page.indexOf("export default async function PackPage"),
+  );
+  assert.doesNotMatch(metadataFn, /notFound\(/);
 });
 
 test("sitemap lists only the robots allow list", () => {

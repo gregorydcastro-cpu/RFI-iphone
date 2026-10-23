@@ -83,6 +83,46 @@ function assertSecurityHeaders(pathName, response) {
   }
 }
 
+function documentTitle(html) {
+  const match = html.match(/<title>([^<]*)<\/title>/i);
+  return match ? decode(match[1]) : "";
+}
+
+function assertPackShell(pathName, status, html) {
+  if (status !== 200) {
+    fail(`${pathName} returned ${status}`);
+    return;
+  }
+  const title = "Room pack — GC Field Log";
+  const description = "Sign in to open a room pack.";
+  const tags = metaTags(html);
+  if (documentTitle(html) !== title) {
+    fail(`${pathName} title ${documentTitle(html) || "(none)"}`);
+  }
+  const descriptions = [
+    ...contentFor(tags, "description"),
+    ...contentFor(tags, "og:description"),
+  ];
+  if (!descriptions.includes(description)) {
+    fail(`${pathName} description ${descriptions.join(" | ") || "(none)"}`);
+  }
+  const robots = contentFor(tags, "robots").map((value) => value.replace(/\s+/g, ""));
+  if (!robots.includes("noindex,nofollow")) {
+    fail(`${pathName} robots ${robots.join(" | ") || "(none)"}`);
+  }
+  const ogTitles = contentFor(tags, "og:title");
+  if (!ogTitles.includes(title)) {
+    fail(`${pathName} og:title ${ogTitles.join(" | ") || "(none)"}`);
+  }
+  if (contentFor(tags, "og:url").length > 0) {
+    fail(`${pathName} should not publish og:url ${contentFor(tags, "og:url").join(" | ")}`);
+  }
+  const cards = contentFor(tags, "twitter:card");
+  if (cards.includes("summary_large_image")) {
+    fail(`${pathName} twitter card uses the public large image`);
+  }
+}
+
 function assertPage(pathName, html, status) {
   if (status !== 200) {
     fail(`${pathName} returned ${status}`);
@@ -230,21 +270,15 @@ try {
   assertSecurityHeaders("/icon-512.png", icon);
 
   const pack = await fetchText("/pack/maple-point");
-  if (pack.response.status !== 200) {
-    fail(`/pack/maple-point returned ${pack.response.status}`);
+  assertPackShell("/pack/maple-point", pack.response.status, pack.body);
+
+  const demo = await fetchText("/demo");
+  const demoLocation = demo.response.headers.get("location") ?? "";
+  if (demo.response.status !== 307 || !demoLocation.endsWith("/pack/maple-point")) {
+    fail(`/demo returned ${demo.response.status} location ${demoLocation || "(none)"}`);
   } else {
-    const tags = metaTags(pack.body);
-    const descriptions = contentFor(tags, "og:description");
-    if (!descriptions.includes("Sign in to open a room pack.")) {
-      fail(`pack og:description ${descriptions.join(" | ") || "(none)"}`);
-    }
-    if (contentFor(tags, "og:url").length > 0) {
-      fail(`pack should not publish og:url ${contentFor(tags, "og:url").join(" | ")}`);
-    }
-    const cards = contentFor(tags, "twitter:card");
-    if (cards.includes("summary_large_image")) {
-      fail("pack twitter card uses the public large image");
-    }
+    const followed = await fetchText("/pack/maple-point");
+    assertPackShell("/demo → /pack/maple-point", followed.response.status, followed.body);
   }
 
   if (process.exitCode) {
