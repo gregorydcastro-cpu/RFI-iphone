@@ -9,6 +9,7 @@ import {
   stripFieldNotFoundHeader,
 } from "@/lib/fieldLinkResponse";
 import { FIELD_NOT_FOUND_HEADER } from "@/lib/fieldNotFound";
+import { isPublicHealthPath } from "@/lib/health";
 import { updateSession } from "@/lib/supabase/proxy";
 import { slashToCanonical } from "@/lib/slashPath";
 import {
@@ -65,6 +66,11 @@ function finishedNotFound(
 export async function proxy(request: NextRequest) {
   const canonical = slashToCanonical(request);
   if (canonical) return canonical;
+
+  // Public liveness. A signed-out probe must not wait on the auth client.
+  if (isPublicHealthPath(request.nextUrl.pathname)) {
+    return NextResponse.next({ request });
+  }
 
   const session = await updateSession(request);
 
