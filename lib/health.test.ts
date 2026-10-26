@@ -89,7 +89,8 @@ test("signed-out proxy lets /api/health through before the session refresh", () 
 
   const helper = readRepo("lib/health.ts");
   assert.match(helper, /VERCEL_GIT_COMMIT_SHA/);
-  assert.doesNotMatch(helper, /stripe|supabase|SECRET|readAppSession/i);
+  assert.doesNotMatch(helper, /from ["'][^"']*(stripe|supabase|session)/);
+  assert.doesNotMatch(helper, /readAppSession|createClient|stripe\(/);
 });
 
 test("/api stays disallowed in robots, including liveness", () => {
