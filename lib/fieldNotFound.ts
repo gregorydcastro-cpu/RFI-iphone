@@ -82,12 +82,15 @@ export function fieldNotFoundSpeak(variant: FieldNotFoundVariant): string {
 }
 
 /**
- * Sign-in aliases. Next matches this source without case sensitivity
- * and allows one trailing slash. Query values pass through to `/`.
+ * Sign-in and account-creation aliases. Next matches this source without
+ * case sensitivity and allows one trailing slash. Query values pass
+ * through to `/`. permanent: false is the same temporary 307 as /login.
  */
-export const SIGN_IN_ALIAS_SOURCE = "/:alias(login|signin|sign-in)";
+export const SIGN_IN_ALIAS_SOURCE =
+  "/:alias(login|signin|sign-in|signup|sign-up|register)";
 
-const SIGN_IN_ALIAS_PATH = /^\/(?:login|signin|sign-in)\/?$/i;
+const SIGN_IN_ALIAS_PATH =
+  /^\/(?:login|signin|sign-in|signup|sign-up|register)\/?$/i;
 
 export function signInAliasRedirects(): Array<{
   source: string;
@@ -103,7 +106,7 @@ export function signInAliasRedirects(): Array<{
   ];
 }
 
-/** Where a sign-in alias should land, or null when the path is not an alias. */
+/** Where a sign-in or account-creation alias should land, or null when the path is not an alias. */
 export function signInAliasDestination(pathname: string, search = ""): string | null {
   if (!SIGN_IN_ALIAS_PATH.test(pathname)) return null;
   if (!search || search === "?") return HOME_HREF;
