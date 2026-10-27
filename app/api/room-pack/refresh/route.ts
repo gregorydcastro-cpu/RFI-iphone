@@ -1,4 +1,5 @@
-import { makeRequestId, resolvePullJob } from "@/lib/jobs";
+import { makeRequestId, resolvePullJob, isDemoOrFictionalJob } from "@/lib/jobs";
+import { findOwnedProcoreJob, pullJobFromOwned } from "@/lib/procoreProjects";
 import { restNeedsReconnect } from "@/lib/procoreAuthHealth";
 import { loadLiveRoomPack, refreshLiveRoomPack } from "@/lib/livePack";
 import { stampRoomPack, type RoomPack } from "@/lib/pack";
@@ -99,12 +100,19 @@ export async function POST(request: Request) {
     job: named,
     room,
   });
-  const job = resolvePullJob({
+  let job = resolvePullJob({
     projectSlug,
     projectName,
     requestId: resolvedRequestId,
     pack: incoming ?? cached?.pack ?? null,
   });
+  let ownerAuthorized = false;
+  if (session?.userId && projectSlug && (!job || !isDemoOrFictionalJob(job))) {
+    const owned = await findOwnedProcoreJob(session.userId, projectSlug);
+    const decision = pullJobFromOwned(job, owned);
+    job = decision.job;
+    ownerAuthorized = decision.ownerAuthorized;
+  }
   if (!job) {
     return json({ ok: false, error: "Unknown job" }, 404);
   }
@@ -122,6 +130,7 @@ export async function POST(request: Request) {
     room,
     pack: incoming,
     userId: session?.userId,
+    ignoreAllowlist: ownerAuthorized,
   });
 
   if (!live) {

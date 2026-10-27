@@ -3,9 +3,13 @@ import { AppHeader } from "@/components/AppHeader";
 import { JobsNextStep } from "@/components/JobsNextStep";
 import { ProcoreConnectCard } from "@/components/ProcoreConnectCard";
 import { VoiceCommandBar } from "@/components/VoiceCommandBar";
-import { DEMO_JOBS } from "@/lib/jobs";
 import { TIME_JOB_SLUG } from "@/lib/time";
 import { getProcoreConnectionView, procoreErrorMessage } from "@/lib/procoreStatus";
+import {
+  jobsForSignedInAccount,
+  listProcoreProjectsForUser,
+  NO_PROCORE_PROJECTS_MESSAGE,
+} from "@/lib/procoreProjects";
 import { requireAppSession } from "@/lib/session.server";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +22,10 @@ export default async function JobsPage({ searchParams }: Props) {
   const query = await searchParams;
   const session = await requireAppSession("/jobs");
   const view = await getProcoreConnectionView(session, { probe: true });
+  const listed = view.connected
+    ? await listProcoreProjectsForUser(session.userId)
+    : null;
+  const board = jobsForSignedInAccount({ connected: view.connected, list: listed });
   const error = query.procore === "error" ? procoreErrorMessage(query.reason) : null;
   const canPull = view.role === "puller" && view.connected;
 
@@ -69,7 +77,9 @@ export default async function JobsPage({ searchParams }: Props) {
         </div>
         <JobsNextStep />
         <p className="mt-4 max-w-2xl text-sm text-muted">
-          Fictional demo jobs only.
+          {board.usingProcore
+            ? "Projects from the connected Procore account."
+            : "Fictional demo jobs only."}
           {view.role === "puller"
             ? view.reconnectNeeded
               ? " Procore needs a reconnect before the next live pull."
@@ -94,12 +104,17 @@ export default async function JobsPage({ searchParams }: Props) {
           <ProcoreConnectCard view={view} compact returnPath="/jobs" />
           <VoiceCommandBar
             mode="jobs"
-            jobs={DEMO_JOBS}
+            jobs={board.jobs}
             procoreLinked={canPull}
           />
         </div>
+        {board.emptyProcore ? (
+          <p className="mt-4 max-w-2xl text-sm text-muted" role="status">
+            {NO_PROCORE_PROJECTS_MESSAGE}
+          </p>
+        ) : null}
         <ul id="jobs" className="mt-8 grid scroll-mt-4 grid-cols-1 gap-4 sm:grid-cols-2">
-          {DEMO_JOBS.map((job) => (
+          {board.jobs.map((job) => (
             <li key={job.slug} className="flex flex-col border border-line bg-panel">
               <Link
                 href={`/jobs/${job.slug}`}
@@ -109,7 +124,7 @@ export default async function JobsPage({ searchParams }: Props) {
                   {job.name}
                 </p>
                 <p className="mt-1 text-sm text-muted">
-                  {job.city} · {job.phase}
+                  {[job.city, job.phase].filter(Boolean).join(" · ")}
                 </p>
                 <p className="mt-3 font-mono text-xs text-metal">{job.roomsHint}</p>
                 <p className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold tracking-wide text-paper uppercase">
