@@ -45,3 +45,15 @@ export function projectNameIsAllowed(
 ): boolean {
   return isResolvableProjectName(projectName, allowlist);
 }
+
+/**
+ * Owner-authorized pulls already checked this project against the user's
+ * Procore company list. An empty allowlist still requires an exact name
+ * match on that token. The configured allowlist stays in force otherwise.
+ */
+export function allowlistForRestPull(
+  ignoreAllowlist: boolean | undefined,
+  configured: readonly string[],
+): readonly string[] {
+  return ignoreAllowlist ? [] : configured;
+}

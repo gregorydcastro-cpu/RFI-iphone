@@ -7,9 +7,9 @@
  * Never log client_secret, authorization codes, or tokens.
  */
 
-import { readEnvAlias } from "./env";
-import { classifyProcoreTokenFailure } from "./procoreAuthHealth";
-import { readProcoreId } from "./procoreProjectMatch";
+import { readEnvAlias } from "./env.ts";
+import { classifyProcoreTokenFailure } from "./procoreAuthHealth.ts";
+import { readProcoreId } from "./procoreProjectMatch.ts";
 import {
   isTrustedProcoreRedirectUri,
   oauthCookieDomainFromRequest,
@@ -17,7 +17,7 @@ import {
   readProcoreClientSecret,
   readProcoreRedirectUri,
   resolveProcoreRedirectUriFromRequest,
-} from "./procoreSecrets";
+} from "./procoreSecrets.ts";
 
 export { readProcoreId };
 export {
@@ -37,7 +37,7 @@ export {
   requestOriginForProcore,
   resolveProcoreRedirectUri,
   resolveProcoreRedirectUriFromRequest,
-} from "./procoreSecrets";
+} from "./procoreSecrets.ts";
 
 export const PROCORE_OAUTH_STATE_COOKIE = "gcfieldlog_procore_oauth_state";
 export const PROCORE_OAUTH_REDIRECT_COOKIE = "gcfieldlog_procore_oauth_redirect";
@@ -89,7 +89,7 @@ export function getProcoreOAuthConfig(
   );
   const apiBase = stripSlash(
     readEnvAlias("PROCORE_API_BASE", "procore_api_base") ??
-      defaultApiBase(loginBase),
+      procoreApiBaseForLogin(loginBase),
   );
 
   return {
@@ -288,11 +288,18 @@ export async function fetchProcoreAccount(
   return { lastCompanyId, procoreUserId };
 }
 
-function defaultApiBase(loginBase: string): string {
-  if (loginBase.includes("login-sandbox-monthly")) {
+/**
+ * API host follows the OAuth host unless `PROCORE_API_BASE` is set.
+ * Developer sandbox login → sandbox.procore.com.
+ * Monthly sandbox login → api-monthly.procore.com.
+ * Production / on-demand login → api.procore.com.
+ */
+export function procoreApiBaseForLogin(loginBase: string): string {
+  const base = stripSlash(loginBase);
+  if (base.includes("login-sandbox-monthly")) {
     return "https://api-monthly.procore.com";
   }
-  if (loginBase.includes("login-sandbox")) {
+  if (base.includes("login-sandbox")) {
     return "https://sandbox.procore.com";
   }
   return "https://api.procore.com";

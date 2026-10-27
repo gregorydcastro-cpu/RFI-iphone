@@ -32,7 +32,7 @@ import {
   readProcoreId,
   type ResolvedProcoreProject,
 } from "./procoreProjectMatch";
-import { readProjectAllowlist } from "./procoreAllowlist";
+import { allowlistForRestPull, readProjectAllowlist } from "./procoreAllowlist";
 import {
   procoreApiRequest,
 } from "./procoreOAuth";
@@ -238,6 +238,7 @@ async function resolveProjectAuthed(
   access: ValidProcoreAccess,
   projectName: string,
   deadline: number,
+  allowlist: readonly string[] = readProjectAllowlist(),
 ): Promise<
   | { ok: true; access: ValidProcoreAccess; project: ResolvedProcoreProject }
   | {
@@ -246,7 +247,6 @@ async function resolveProjectAuthed(
       reason: "token_refresh_failed" | "procore_unreachable" | "project_not_found" | "api_error";
     }
 > {
-  const allowlist = readProjectAllowlist();
   if (!isResolvableProjectName(projectName, allowlist)) {
     return { ok: false, access, reason: "project_not_found" };
   }
@@ -309,6 +309,8 @@ export async function pullProcoreRoomPack(input: {
   room: string;
   requestId: string;
   cached?: RoomPack | null;
+  /** Skip PROCORE_PROJECT_ALLOWLIST after a server-side ownership check. */
+  ignoreAllowlist?: boolean;
 }): Promise<ProcoreRestPull> {
   const deadline = Date.now() + PACK_REST_BUDGET_MS;
   const resolvedAccess = await resolveProcoreAccess(input.userId);
@@ -331,6 +333,7 @@ export async function pullProcoreRoomPack(input: {
     resolvedAccess.access,
     input.job.name,
     deadline,
+    allowlistForRestPull(input.ignoreAllowlist, readProjectAllowlist()),
   );
   if (!resolved.ok) {
     return { ok: false, reason: resolved.reason };

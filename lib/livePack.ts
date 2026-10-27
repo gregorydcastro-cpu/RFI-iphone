@@ -114,6 +114,8 @@ export async function refreshLiveRoomPack(input: {
   room: string;
   pack?: RoomPack;
   userId?: string | null;
+  /** Project was verified on this user's Procore list. */
+  ignoreAllowlist?: boolean;
 }): Promise<LivePackLoad | null> {
   const cached = await loadLiveRoomPack({
     requestId: input.requestId,
@@ -129,6 +131,7 @@ export async function refreshLiveRoomPack(input: {
       room: input.room,
       requestId: input.requestId,
       cached: cached?.pack ?? null,
+      ignoreAllowlist: input.ignoreAllowlist,
     });
     if (rest.ok) {
       if (getSupabaseConfig()) {

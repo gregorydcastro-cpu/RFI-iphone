@@ -2,9 +2,9 @@ import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { ProcoreConnectCard } from "@/components/ProcoreConnectCard";
 import { RequestPackForm } from "@/components/RequestPackForm";
-import { getJob } from "@/lib/jobs";
 import { TIME_JOB_SLUG } from "@/lib/time";
 import { getProcoreConnectionView } from "@/lib/procoreStatus";
+import { resolveVisibleJob } from "@/lib/procoreProjects";
 import { requireAppSession } from "@/lib/session.server";
 import { notFound } from "next/navigation";
 
@@ -18,13 +18,16 @@ type Props = {
 export default async function JobPage({ params, searchParams }: Props) {
   const { projectSlug } = await params;
   const query = await searchParams;
-  const job = getJob(projectSlug);
-  if (!job) notFound();
   const next = query.room
     ? `/jobs/${projectSlug}?room=${encodeURIComponent(query.room)}`
     : `/jobs/${projectSlug}`;
   const session = await requireAppSession(next);
   const view = await getProcoreConnectionView(session, { probe: true });
+  const job = await resolveVisibleJob(
+    projectSlug,
+    view.connected ? session.userId : null,
+  );
+  if (!job) notFound();
   const canPull = view.role === "puller" && view.connected;
 
   return (

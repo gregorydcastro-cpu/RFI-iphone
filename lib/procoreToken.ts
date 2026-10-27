@@ -12,17 +12,17 @@ import {
   markProcoreReconnectNeeded,
   upsertProcoreConnection,
   type ProcoreConnectionSecrets,
-} from "./procoreConnections";
+} from "./procoreConnections.ts";
 import {
   expiresAtFromToken,
   getProcoreOAuthConfig,
   refreshAccessToken,
   type ProcoreOAuthConfig,
-} from "./procoreOAuth";
+} from "./procoreOAuth.ts";
 import {
   ACCESS_TOKEN_REFRESH_SKEW_MS,
   accessTokenNeedsRefresh,
-} from "./procoreTokenExpiry";
+} from "./procoreTokenExpiry.ts";
 
 export { ACCESS_TOKEN_REFRESH_SKEW_MS, accessTokenNeedsRefresh };
 
