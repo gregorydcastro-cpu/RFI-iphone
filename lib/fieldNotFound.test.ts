@@ -289,7 +289,11 @@ test("sign-in aliases redirect home and keep the query", () => {
       permanent: false,
     },
   ]);
-  assert.equal(SIGN_IN_ALIAS_SOURCE, "/:alias(login|signin|sign-in)");
+  assert.equal(
+    SIGN_IN_ALIAS_SOURCE,
+    "/:alias(login|signin|sign-in|signup|sign-up|register)",
+  );
+  assert.equal(signInAliasRedirects()[0]?.permanent, false);
 
   const config = readRepo("next.config.ts");
   assert.match(config, /signInAliasRedirects\(\)/);
@@ -303,20 +307,40 @@ test("sign-in aliases redirect home and keep the query", () => {
   assert.equal(signInAliasDestination("/sign-in"), "/");
   assert.equal(signInAliasDestination("/Sign-In/"), "/");
   assert.equal(signInAliasDestination("/sIgN-iN"), "/");
+  assert.equal(signInAliasDestination("/signup"), "/");
+  assert.equal(signInAliasDestination("/signup/"), "/");
+  assert.equal(signInAliasDestination("/SIGNUP"), "/");
+  assert.equal(signInAliasDestination("/sign-up"), "/");
+  assert.equal(signInAliasDestination("/Sign-Up/"), "/");
+  assert.equal(signInAliasDestination("/register"), "/");
+  assert.equal(signInAliasDestination("/REGISTER/"), "/");
 
   const next = "?next=/jobs/cedar-ridge";
   assert.equal(signInAliasDestination("/login", next), `/${next}`);
   assert.equal(signInAliasDestination("/signin", next), `/${next}`);
   assert.equal(signInAliasDestination("/sign-in", next), `/${next}`);
   assert.equal(signInAliasDestination("/SIGN-IN/", next), `/${next}`);
+  assert.equal(signInAliasDestination("/signup", next), `/${next}`);
+  assert.equal(signInAliasDestination("/sign-up", next), `/${next}`);
+  assert.equal(signInAliasDestination("/register/", next), `/${next}`);
   assert.equal(
     signInAliasDestination("/login/", "?next=/jobs/cedar-ridge&room=101"),
     "/?next=/jobs/cedar-ridge&room=101",
   );
+  assert.equal(
+    signInAliasDestination("/sign-up/", "?next=/jobs/cedar-ridge&room=101"),
+    "/?next=/jobs/cedar-ridge&room=101",
+  );
 
   assert.equal(signInAliasDestination("/help"), null);
+  assert.equal(signInAliasDestination("/faq"), null);
   assert.equal(signInAliasDestination("/login/extra"), null);
+  assert.equal(signInAliasDestination("/signup/extra"), null);
+  assert.equal(signInAliasDestination("/sign-up/extra"), null);
+  assert.equal(signInAliasDestination("/register/extra"), null);
   assert.equal(signInAliasDestination("/logins"), null);
+  assert.equal(signInAliasDestination("/signups"), null);
+  assert.equal(signInAliasDestination("/registers"), null);
   assert.equal(signInAliasDestination("/demo"), null);
   assert.equal(signInAliasDestination("/pack/maple-point"), null);
   assert.equal(signInAliasDestination("/share/abc", next), null);
