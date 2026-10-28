@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import { contactRedirects } from "./lib/contactRedirect";
 import { signInAliasRedirects } from "./lib/fieldNotFound";
+import { retiredRedirects } from "./lib/retiredRedirect";
 import { SECURITY_HEADERS } from "./lib/securityHeaders";
 
 const nextConfig: NextConfig = {
@@ -26,6 +27,7 @@ const nextConfig: NextConfig = {
       },
       ...signInAliasRedirects(),
       ...contactRedirects(),
+      ...retiredRedirects(),
     ];
   },
 };
