@@ -281,7 +281,7 @@ test("branded 404 document title names GC Field Log and keeps the card headings"
   }
 });
 
-test("sign-in aliases redirect home and keep the query", () => {
+test("sign-in aliases, /join, and /create-account redirect home and keep the query", () => {
   assert.deepEqual(signInAliasRedirects(), [
     {
       source: SIGN_IN_ALIAS_SOURCE,
@@ -291,7 +291,7 @@ test("sign-in aliases redirect home and keep the query", () => {
   ]);
   assert.equal(
     SIGN_IN_ALIAS_SOURCE,
-    "/:alias(login|log-in|signin|sign-in|signup|sign-up|register)",
+    "/:alias(login|log-in|signin|sign-in|signup|sign-up|register|join|create-account)",
   );
   assert.equal(signInAliasRedirects()[0]?.permanent, false);
 
@@ -318,6 +318,14 @@ test("sign-in aliases redirect home and keep the query", () => {
   assert.equal(signInAliasDestination("/Sign-Up/"), "/");
   assert.equal(signInAliasDestination("/register"), "/");
   assert.equal(signInAliasDestination("/REGISTER/"), "/");
+  assert.equal(signInAliasDestination("/join"), "/");
+  assert.equal(signInAliasDestination("/join/"), "/");
+  assert.equal(signInAliasDestination("/JOIN"), "/");
+  assert.equal(signInAliasDestination("/Join/"), "/");
+  assert.equal(signInAliasDestination("/create-account"), "/");
+  assert.equal(signInAliasDestination("/create-account/"), "/");
+  assert.equal(signInAliasDestination("/CREATE-ACCOUNT"), "/");
+  assert.equal(signInAliasDestination("/Create-Account/"), "/");
 
   const next = "?next=/jobs/cedar-ridge";
   assert.equal(signInAliasDestination("/login", next), `/${next}`);
@@ -329,6 +337,10 @@ test("sign-in aliases redirect home and keep the query", () => {
   assert.equal(signInAliasDestination("/signup", next), `/${next}`);
   assert.equal(signInAliasDestination("/sign-up", next), `/${next}`);
   assert.equal(signInAliasDestination("/register/", next), `/${next}`);
+  assert.equal(signInAliasDestination("/join", next), `/${next}`);
+  assert.equal(signInAliasDestination("/JOIN/", next), `/${next}`);
+  assert.equal(signInAliasDestination("/create-account", next), `/${next}`);
+  assert.equal(signInAliasDestination("/create-account/", next), `/${next}`);
   assert.equal(
     signInAliasDestination("/login/", "?next=/jobs/cedar-ridge&room=101"),
     "/?next=/jobs/cedar-ridge&room=101",
@@ -349,6 +361,11 @@ test("sign-in aliases redirect home and keep the query", () => {
   assert.equal(signInAliasDestination("/log-in/extra"), null);
   assert.equal(signInAliasDestination("/signups"), null);
   assert.equal(signInAliasDestination("/registers"), null);
+  assert.equal(signInAliasDestination("/joins"), null);
+  assert.equal(signInAliasDestination("/join/extra"), null);
+  assert.equal(signInAliasDestination("/create"), null);
+  assert.equal(signInAliasDestination("/create-accounts"), null);
+  assert.equal(signInAliasDestination("/create-account/extra"), null);
   assert.equal(signInAliasDestination("/demo"), null);
   assert.equal(signInAliasDestination("/pack/maple-point"), null);
   assert.equal(signInAliasDestination("/share/abc", next), null);
@@ -360,7 +377,18 @@ test("sign-in aliases redirect home and keep the query", () => {
   assert.match(form, /safeNextPath\(searchParams\.get\("next"\)\)/);
   assert.match(form, /router\.push\(returnPath\)/);
 
-  for (const page of ["app/log-in/page.tsx", "app/log-in/route.ts"]) {
+  for (const page of [
+    "app/log-in/page.tsx",
+    "app/log-in/route.ts",
+    "app/join/page.tsx",
+    "app/join/route.ts",
+    "app/create-account/page.tsx",
+    "app/create-account/route.ts",
+    "public/join",
+    "public/join.html",
+    "public/create-account",
+    "public/create-account.html",
+  ]) {
     assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
   }
 });
