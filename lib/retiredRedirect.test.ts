@@ -8,7 +8,7 @@ function readRepo(path: string): string {
   return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-test("/settings, /dashboard, /forgot-password, /reset-password, and /about permanently move", () => {
+test("/settings, /dashboard, password resets, /about, /home, and /index.html permanently move", () => {
   assert.deepEqual(retiredRedirects(), [
     {
       source: "/settings",
@@ -35,6 +35,16 @@ test("/settings, /dashboard, /forgot-password, /reset-password, and /about perma
       destination: "/",
       permanent: true,
     },
+    {
+      source: "/home",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/index.html",
+      destination: "/",
+      permanent: true,
+    },
   ]);
   for (const redirect of retiredRedirects()) {
     assert.equal(redirect.permanent, true);
@@ -44,13 +54,13 @@ test("/settings, /dashboard, /forgot-password, /reset-password, and /about perma
   assert.match(config, /\.\.\.retiredRedirects\(\)/);
   assert.doesNotMatch(
     config,
-    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/account|\/jobs/,
+    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/account|\/jobs|\/home|\/index\.html/,
   );
 
   const proxy = readRepo("proxy.ts");
   assert.doesNotMatch(
     proxy,
-    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about/,
+    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/home|\/index\.html/,
   );
   assert.doesNotMatch(proxy, /redirect/);
 
@@ -69,6 +79,10 @@ test("/settings, /dashboard, /forgot-password, /reset-password, and /about perma
     "app/reset-password/route.ts",
     "app/about/page.tsx",
     "app/about/route.ts",
+    "app/home/page.tsx",
+    "app/home/route.ts",
+    "app/index.html",
+    "public/index.html",
   ]) {
     assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
   }

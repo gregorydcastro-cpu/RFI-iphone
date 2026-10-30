@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import {
   FIELD_NOT_FOUND_MESSAGE,
@@ -291,7 +291,7 @@ test("sign-in aliases redirect home and keep the query", () => {
   ]);
   assert.equal(
     SIGN_IN_ALIAS_SOURCE,
-    "/:alias(login|signin|sign-in|signup|sign-up|register)",
+    "/:alias(login|log-in|signin|sign-in|signup|sign-up|register)",
   );
   assert.equal(signInAliasRedirects()[0]?.permanent, false);
 
@@ -302,6 +302,10 @@ test("sign-in aliases redirect home and keep the query", () => {
   assert.equal(signInAliasDestination("/login/"), "/");
   assert.equal(signInAliasDestination("/LOGIN"), "/");
   assert.equal(signInAliasDestination("/Login/"), "/");
+  assert.equal(signInAliasDestination("/log-in"), "/");
+  assert.equal(signInAliasDestination("/log-in/"), "/");
+  assert.equal(signInAliasDestination("/LOG-IN"), "/");
+  assert.equal(signInAliasDestination("/Log-In/"), "/");
   assert.equal(signInAliasDestination("/signin"), "/");
   assert.equal(signInAliasDestination("/SIGNIN/"), "/");
   assert.equal(signInAliasDestination("/sign-in"), "/");
@@ -317,6 +321,8 @@ test("sign-in aliases redirect home and keep the query", () => {
 
   const next = "?next=/jobs/cedar-ridge";
   assert.equal(signInAliasDestination("/login", next), `/${next}`);
+  assert.equal(signInAliasDestination("/log-in", next), `/${next}`);
+  assert.equal(signInAliasDestination("/LOG-IN/", next), `/${next}`);
   assert.equal(signInAliasDestination("/signin", next), `/${next}`);
   assert.equal(signInAliasDestination("/sign-in", next), `/${next}`);
   assert.equal(signInAliasDestination("/SIGN-IN/", next), `/${next}`);
@@ -339,6 +345,8 @@ test("sign-in aliases redirect home and keep the query", () => {
   assert.equal(signInAliasDestination("/sign-up/extra"), null);
   assert.equal(signInAliasDestination("/register/extra"), null);
   assert.equal(signInAliasDestination("/logins"), null);
+  assert.equal(signInAliasDestination("/log-ins"), null);
+  assert.equal(signInAliasDestination("/log-in/extra"), null);
   assert.equal(signInAliasDestination("/signups"), null);
   assert.equal(signInAliasDestination("/registers"), null);
   assert.equal(signInAliasDestination("/demo"), null);
@@ -351,6 +359,10 @@ test("sign-in aliases redirect home and keep the query", () => {
   const form = readRepo("components/LoginForm.tsx");
   assert.match(form, /safeNextPath\(searchParams\.get\("next"\)\)/);
   assert.match(form, /router\.push\(returnPath\)/);
+
+  for (const page of ["app/log-in/page.tsx", "app/log-in/route.ts"]) {
+    assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
+  }
 });
 
 test("missing-page hint is console-only and development-only", () => {
