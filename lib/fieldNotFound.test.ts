@@ -281,7 +281,7 @@ test("branded 404 document title names GC Field Log and keeps the card headings"
   }
 });
 
-test("sign-in aliases, /join, and /create-account redirect home and keep the query", () => {
+test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /free-trial, and /onboarding redirect home and keep the query", () => {
   assert.deepEqual(signInAliasRedirects(), [
     {
       source: SIGN_IN_ALIAS_SOURCE,
@@ -291,7 +291,7 @@ test("sign-in aliases, /join, and /create-account redirect home and keep the que
   ]);
   assert.equal(
     SIGN_IN_ALIAS_SOURCE,
-    "/:alias(login|log-in|signin|sign-in|signup|sign-up|register|join|create-account)",
+    "/:alias(login|log-in|signin|sign-in|signup|sign-up|register|join|create-account|get-started|start|trial|free-trial|onboarding)",
   );
   assert.equal(signInAliasRedirects()[0]?.permanent, false);
 
@@ -326,6 +326,26 @@ test("sign-in aliases, /join, and /create-account redirect home and keep the que
   assert.equal(signInAliasDestination("/create-account/"), "/");
   assert.equal(signInAliasDestination("/CREATE-ACCOUNT"), "/");
   assert.equal(signInAliasDestination("/Create-Account/"), "/");
+  assert.equal(signInAliasDestination("/get-started"), "/");
+  assert.equal(signInAliasDestination("/get-started/"), "/");
+  assert.equal(signInAliasDestination("/GET-STARTED"), "/");
+  assert.equal(signInAliasDestination("/Get-Started/"), "/");
+  assert.equal(signInAliasDestination("/start"), "/");
+  assert.equal(signInAliasDestination("/start/"), "/");
+  assert.equal(signInAliasDestination("/START"), "/");
+  assert.equal(signInAliasDestination("/Start/"), "/");
+  assert.equal(signInAliasDestination("/trial"), "/");
+  assert.equal(signInAliasDestination("/trial/"), "/");
+  assert.equal(signInAliasDestination("/TRIAL"), "/");
+  assert.equal(signInAliasDestination("/Trial/"), "/");
+  assert.equal(signInAliasDestination("/free-trial"), "/");
+  assert.equal(signInAliasDestination("/free-trial/"), "/");
+  assert.equal(signInAliasDestination("/FREE-TRIAL"), "/");
+  assert.equal(signInAliasDestination("/Free-Trial/"), "/");
+  assert.equal(signInAliasDestination("/onboarding"), "/");
+  assert.equal(signInAliasDestination("/onboarding/"), "/");
+  assert.equal(signInAliasDestination("/ONBOARDING"), "/");
+  assert.equal(signInAliasDestination("/Onboarding/"), "/");
 
   const next = "?next=/jobs/cedar-ridge";
   assert.equal(signInAliasDestination("/login", next), `/${next}`);
@@ -341,6 +361,16 @@ test("sign-in aliases, /join, and /create-account redirect home and keep the que
   assert.equal(signInAliasDestination("/JOIN/", next), `/${next}`);
   assert.equal(signInAliasDestination("/create-account", next), `/${next}`);
   assert.equal(signInAliasDestination("/create-account/", next), `/${next}`);
+  assert.equal(signInAliasDestination("/get-started", next), `/${next}`);
+  assert.equal(signInAliasDestination("/GET-STARTED/", next), `/${next}`);
+  assert.equal(signInAliasDestination("/start", next), `/${next}`);
+  assert.equal(signInAliasDestination("/START/", next), `/${next}`);
+  assert.equal(signInAliasDestination("/trial", next), `/${next}`);
+  assert.equal(signInAliasDestination("/TRIAL/", next), `/${next}`);
+  assert.equal(signInAliasDestination("/free-trial", next), `/${next}`);
+  assert.equal(signInAliasDestination("/FREE-TRIAL/", next), `/${next}`);
+  assert.equal(signInAliasDestination("/onboarding", next), `/${next}`);
+  assert.equal(signInAliasDestination("/ONBOARDING/", next), `/${next}`);
   assert.equal(
     signInAliasDestination("/login/", "?next=/jobs/cedar-ridge&room=101"),
     "/?next=/jobs/cedar-ridge&room=101",
@@ -366,6 +396,26 @@ test("sign-in aliases, /join, and /create-account redirect home and keep the que
   assert.equal(signInAliasDestination("/create"), null);
   assert.equal(signInAliasDestination("/create-accounts"), null);
   assert.equal(signInAliasDestination("/create-account/extra"), null);
+  assert.equal(signInAliasDestination("/get-starteds"), null);
+  assert.equal(signInAliasDestination("/get-started/extra"), null);
+  assert.equal(signInAliasDestination("/get-start"), null);
+  assert.equal(signInAliasDestination("/starts"), null);
+  assert.equal(signInAliasDestination("/start/extra"), null);
+  assert.equal(signInAliasDestination("/trials"), null);
+  assert.equal(signInAliasDestination("/trial/extra"), null);
+  assert.equal(signInAliasDestination("/free"), null);
+  assert.equal(signInAliasDestination("/free-trials"), null);
+  assert.equal(signInAliasDestination("/free-trial/extra"), null);
+  assert.equal(signInAliasDestination("/onboard"), null);
+  assert.equal(signInAliasDestination("/onboardings"), null);
+  assert.equal(signInAliasDestination("/onboarding/extra"), null);
+  assert.equal(signInAliasDestination("/features"), null);
+  assert.equal(signInAliasDestination("/cookies"), null);
+  assert.equal(signInAliasDestination("/cookie-policy"), null);
+  assert.equal(signInAliasDestination("/eula"), null);
+  assert.equal(signInAliasDestination("/security.txt"), null);
+  assert.equal(signInAliasDestination("/manifest.json"), null);
+  assert.equal(signInAliasDestination("/site.webmanifest"), null);
   assert.equal(signInAliasDestination("/demo"), null);
   assert.equal(signInAliasDestination("/pack/maple-point"), null);
   assert.equal(signInAliasDestination("/share/abc", next), null);
@@ -388,6 +438,26 @@ test("sign-in aliases, /join, and /create-account redirect home and keep the que
     "public/join.html",
     "public/create-account",
     "public/create-account.html",
+    "app/get-started/page.tsx",
+    "app/get-started/route.ts",
+    "app/start/page.tsx",
+    "app/start/route.ts",
+    "app/trial/page.tsx",
+    "app/trial/route.ts",
+    "app/free-trial/page.tsx",
+    "app/free-trial/route.ts",
+    "app/onboarding/page.tsx",
+    "app/onboarding/route.ts",
+    "public/get-started",
+    "public/get-started.html",
+    "public/start",
+    "public/start.html",
+    "public/trial",
+    "public/trial.html",
+    "public/free-trial",
+    "public/free-trial.html",
+    "public/onboarding",
+    "public/onboarding.html",
   ]) {
     assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
   }
