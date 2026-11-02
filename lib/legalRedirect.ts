@@ -1,6 +1,7 @@
 /**
- * Legal aliases have no page. /legal, /tos, and /terms-of-service move
- * to the terms page. /privacy-policy moves to the privacy page.
+ * Legal aliases have no page. /legal, /tos, /terms-of-service, and /eula
+ * move to the terms page. /privacy-policy, /cookies, and /cookie-policy
+ * move to the privacy page. Each points at that page, not at another alias.
  * Next.js treats permanent as HTTP 308.
  */
 
@@ -13,15 +14,15 @@ export function legalRedirects(): Array<{
   permanent: boolean;
 }> {
   return [
-    ...["/legal", "/tos", "/terms-of-service"].map((source) => ({
+    ...["/legal", "/tos", "/terms-of-service", "/eula"].map((source) => ({
       source,
       destination: TERMS_HREF,
       permanent: true,
     })),
-    {
-      source: "/privacy-policy",
+    ...["/privacy-policy", "/cookies", "/cookie-policy"].map((source) => ({
+      source,
       destination: PRIVACY_HREF,
       permanent: true,
-    },
+    })),
   ];
 }
