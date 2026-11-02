@@ -8,7 +8,7 @@ function readRepo(path: string): string {
   return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-test("legal aliases permanently move to /terms or /privacy (308), including /eula, /cookies, and /cookie-policy", () => {
+test("legal aliases permanently move to /terms or /privacy (308), including /eula, /cookies, /cookie-policy, /refund, /refunds, /dmca, /imprint, and /accessibility", () => {
   assert.deepEqual(legalRedirects(), [
     {
       source: "/legal",
@@ -27,6 +27,31 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
     },
     {
       source: "/eula",
+      destination: "/terms",
+      permanent: true,
+    },
+    {
+      source: "/refund",
+      destination: "/terms",
+      permanent: true,
+    },
+    {
+      source: "/refunds",
+      destination: "/terms",
+      permanent: true,
+    },
+    {
+      source: "/dmca",
+      destination: "/terms",
+      permanent: true,
+    },
+    {
+      source: "/imprint",
+      destination: "/terms",
+      permanent: true,
+    },
+    {
+      source: "/accessibility",
       destination: "/terms",
       permanent: true,
     },
@@ -56,6 +81,16 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
   assert.equal(bySource.get("/eula"), bySource.get("/legal"));
   assert.equal(bySource.get("/tos"), bySource.get("/legal"));
   assert.equal(bySource.get("/terms-of-service"), bySource.get("/legal"));
+  assert.equal(bySource.get("/refund"), "/terms");
+  assert.equal(bySource.get("/refunds"), "/terms");
+  assert.equal(bySource.get("/dmca"), "/terms");
+  assert.equal(bySource.get("/imprint"), "/terms");
+  assert.equal(bySource.get("/accessibility"), "/terms");
+  assert.equal(bySource.get("/refund"), bySource.get("/legal"));
+  assert.equal(bySource.get("/refunds"), bySource.get("/legal"));
+  assert.equal(bySource.get("/dmca"), bySource.get("/legal"));
+  assert.equal(bySource.get("/imprint"), bySource.get("/legal"));
+  assert.equal(bySource.get("/accessibility"), bySource.get("/legal"));
   assert.equal(bySource.get("/cookies"), "/privacy");
   assert.equal(bySource.get("/cookie-policy"), "/privacy");
   assert.equal(bySource.get("/cookies"), bySource.get("/privacy-policy"));
@@ -67,12 +102,12 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
   const config = readRepo("next.config.ts");
   assert.match(config, /\.\.\.legalRedirects\(\)/);
   assert.doesNotMatch(config, /["']\/legal["']/);
-  assert.doesNotMatch(config, /\/privacy-policy|\/tos|\/terms-of-service|\/eula|\/cookies|\/cookie-policy/);
+  assert.doesNotMatch(config, /\/privacy-policy|\/tos|\/terms-of-service|\/eula|\/cookies|\/cookie-policy|\/refunds|\/refund|\/dmca|\/imprint|\/accessibility/);
   assert.doesNotMatch(config, /\/terms/);
   assert.doesNotMatch(config, /\/privacy/);
 
   const proxy = readRepo("proxy.ts");
-  assert.doesNotMatch(proxy, /\/legal|\/privacy-policy|\/terms-of-service|\/tos|\/eula|\/cookies|\/cookie-policy/);
+  assert.doesNotMatch(proxy, /\/legal|\/privacy-policy|\/terms-of-service|\/tos|\/eula|\/cookies|\/cookie-policy|\/refunds|\/refund|\/dmca|\/imprint|\/accessibility/);
   assert.doesNotMatch(proxy, /redirect/);
 
   assert.ok(PUBLIC_PAGE_PATHS.includes("/terms"));
@@ -102,6 +137,26 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
     "public/cookies.html",
     "public/cookie-policy",
     "public/cookie-policy.html",
+    "app/refund/page.tsx",
+    "app/refund/route.ts",
+    "app/refunds/page.tsx",
+    "app/refunds/route.ts",
+    "app/dmca/page.tsx",
+    "app/dmca/route.ts",
+    "app/imprint/page.tsx",
+    "app/imprint/route.ts",
+    "app/accessibility/page.tsx",
+    "app/accessibility/route.ts",
+    "public/refund",
+    "public/refund.html",
+    "public/refunds",
+    "public/refunds.html",
+    "public/dmca",
+    "public/dmca.html",
+    "public/imprint",
+    "public/imprint.html",
+    "public/accessibility",
+    "public/accessibility.html",
   ]) {
     assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
   }

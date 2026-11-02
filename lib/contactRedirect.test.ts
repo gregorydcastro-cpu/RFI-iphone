@@ -8,7 +8,7 @@ function readRepo(path: string): string {
   return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-test("/contact, /help, /faq, /contact-us, and /support-center permanently move to /support", () => {
+test("/contact, /help, /faq, /contact-us, /support-center, /docs, and /status permanently move to /support", () => {
   assert.deepEqual(contactRedirects(), [
     {
       source: "/contact",
@@ -35,6 +35,16 @@ test("/contact, /help, /faq, /contact-us, and /support-center permanently move t
       destination: "/support",
       permanent: true,
     },
+    {
+      source: "/docs",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/status",
+      destination: "/support",
+      permanent: true,
+    },
   ]);
   for (const redirect of contactRedirects()) {
     assert.equal(redirect.permanent, true);
@@ -43,10 +53,10 @@ test("/contact, /help, /faq, /contact-us, and /support-center permanently move t
 
   const config = readRepo("next.config.ts");
   assert.match(config, /\.\.\.contactRedirects\(\)/);
-  assert.doesNotMatch(config, /\/privacy|\/terms|\/support|\/help|\/faq/);
+  assert.doesNotMatch(config, /\/privacy|\/terms|\/support|\/help|\/faq|\/docs|\/status/);
 
   const proxy = readRepo("proxy.ts");
-  assert.doesNotMatch(proxy, /\/contact|\/help|\/faq|\/contact-us|\/support-center/);
+  assert.doesNotMatch(proxy, /\/contact|\/help|\/faq|\/contact-us|\/support-center|\/docs|\/status/);
   assert.doesNotMatch(proxy, /redirect/);
 
   assert.ok(PUBLIC_PAGE_PATHS.includes("/support"));
@@ -67,6 +77,14 @@ test("/contact, /help, /faq, /contact-us, and /support-center permanently move t
     "public/contact-us.html",
     "public/support-center",
     "public/support-center.html",
+    "app/docs/page.tsx",
+    "app/docs/route.ts",
+    "app/status/page.tsx",
+    "app/status/route.ts",
+    "public/docs",
+    "public/docs.html",
+    "public/status",
+    "public/status.html",
   ]) {
     assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
   }
