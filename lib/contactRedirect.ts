@@ -1,8 +1,9 @@
 /**
  * /contact, /help, /faq, /contact-us, /support-center, /docs, /status,
- * /blog, /changelog, /news, /press, and /roadmap have no page. Each is a
- * permanent move straight to the public support page, not to another alias.
- * Next.js treats permanent as HTTP 308.
+ * /blog, /changelog, /news, /press, /roadmap, /guides, /resources,
+ * /case-studies, /testimonials, /webinar, and /events have no page. Each
+ * is a permanent move straight to the public support page, not to another
+ * alias. Next.js treats permanent as HTTP 308.
  * Each source is that exact path. A longer path such as /blog/post is not a match.
  */
 
@@ -26,6 +27,12 @@ export function contactRedirects(): Array<{
     "/news",
     "/press",
     "/roadmap",
+    "/guides",
+    "/resources",
+    "/case-studies",
+    "/testimonials",
+    "/webinar",
+    "/events",
   ].map((source) => ({
     source,
     destination: SUPPORT_HREF,
