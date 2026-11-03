@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
+import { contactRedirects } from "./contactRedirect.ts";
+import { signInAliasRedirects } from "./fieldNotFound.ts";
+import { legalRedirects } from "./legalRedirect.ts";
 import { retiredRedirects } from "./retiredRedirect.ts";
 import { PUBLIC_PAGE_PATHS } from "./siteInfo.ts";
 
@@ -8,7 +11,7 @@ function readRepo(path: string): string {
   return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-test("retired aliases permanently move to account, jobs, pricing, home, security.txt, or the web manifest", () => {
+test("retired aliases permanently move to account, jobs, pricing, home, security.txt, or the web manifest, including /integrations, /procore, /careers, /team, /partners, and /customers", () => {
   assert.deepEqual(retiredRedirects(), [
     {
       source: "/settings",
@@ -66,6 +69,16 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
       permanent: true,
     },
     {
+      source: "/integrations",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/procore",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
       source: "/forgot-password",
       destination: "/",
       permanent: true,
@@ -111,6 +124,26 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
       permanent: true,
     },
     {
+      source: "/careers",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/team",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/partners",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/customers",
+      destination: "/",
+      permanent: true,
+    },
+    {
       source: "/security.txt",
       destination: "/.well-known/security.txt",
       permanent: true,
@@ -137,25 +170,82 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
   assert.equal(bySource.get("/about-us"), bySource.get("/about"));
   assert.equal(bySource.get("/features"), "/pricing");
   assert.equal(bySource.get("/features"), bySource.get("/plans"));
+  assert.equal(bySource.get("/integrations"), "/pricing");
+  assert.equal(bySource.get("/integrations"), bySource.get("/plans"));
+  assert.equal(bySource.get("/procore"), "/pricing");
+  assert.equal(bySource.get("/procore"), bySource.get("/plans"));
+  assert.equal(bySource.get("/careers"), "/");
+  assert.equal(bySource.get("/careers"), bySource.get("/about"));
+  assert.equal(bySource.get("/team"), bySource.get("/about"));
+  assert.equal(bySource.get("/partners"), bySource.get("/about"));
+  assert.equal(bySource.get("/customers"), bySource.get("/about"));
+  assert.equal(bySource.has("/api/procore"), false);
+  assert.equal(bySource.has("/api/procore/status"), false);
+  assert.equal(bySource.has("/api/procore/connect"), false);
+  assert.equal(bySource.has("/api/procore/callback"), false);
+  assert.equal(bySource.has("/api/procore/disconnect"), false);
+  assert.equal(bySource.has("/api/procore/projects"), false);
+  assert.equal(bySource.has("/procore/status"), false);
+  assert.equal(bySource.has("/procore/connect"), false);
   assert.equal(bySource.get("/security.txt"), "/.well-known/security.txt");
   assert.equal(bySource.get("/manifest.json"), "/manifest.webmanifest");
   assert.equal(bySource.get("/site.webmanifest"), bySource.get("/manifest.json"));
   const sources = new Set(retiredRedirects().map((redirect) => redirect.source));
   for (const redirect of retiredRedirects()) {
     assert.equal(sources.has(redirect.destination), false, redirect.source);
+    assert.doesNotMatch(redirect.source, /[:*]/, redirect.source);
+    assert.equal(redirect.source.endsWith("/"), false, redirect.source);
+    assert.equal(redirect.source.startsWith("/api"), false, redirect.source);
+  }
+  for (const source of ["/careers", "/team", "/partners", "/customers", "/integrations", "/procore"]) {
+    assert.equal(source.slice(1).includes("/"), false, source);
+  }
+  for (const path of [
+    "/admin",
+    "/api",
+    "/humans.txt",
+    "/zz-nope",
+    "/api/procore",
+    "/api/procore/status",
+    "/api/procore/connect",
+    "/api/procore/callback",
+    "/api/procore/disconnect",
+    "/api/procore/projects",
+  ]) {
+    assert.equal(sources.has(path), false, path);
+  }
+
+  const everySource = new Set([
+    ...contactRedirects().map((redirect) => redirect.source),
+    ...legalRedirects().map((redirect) => redirect.source),
+    ...retiredRedirects().map((redirect) => redirect.source),
+    ...signInAliasRedirects().map((redirect) => redirect.source),
+    "/demo",
+  ]);
+  for (const redirect of [
+    ...contactRedirects(),
+    ...legalRedirects(),
+    ...retiredRedirects(),
+    ...signInAliasRedirects(),
+    { source: "/demo", destination: "/pack/maple-point", permanent: false },
+  ]) {
+    assert.equal(everySource.has(redirect.destination), false, redirect.source);
+  }
+  for (const redirect of contactRedirects()) {
+    assert.equal(sources.has(redirect.source), false, redirect.source);
   }
 
   const config = readRepo("next.config.ts");
   assert.match(config, /\.\.\.retiredRedirects\(\)/);
   assert.doesNotMatch(
     config,
-    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/account|\/jobs|\/home|\/index\.html|\/profile|\/plans|\/pricing|\/projects|\/project|\/forgot|\/password-reset|\/reset|\/about-us|\/me|\/app|\/features|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt/,
+    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/account|\/jobs|\/home|\/index\.html|\/profile|\/plans|\/pricing|\/projects|\/project|\/forgot|\/password-reset|\/reset|\/about-us|\/me|\/app|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt/,
   );
 
   const proxy = readRepo("proxy.ts");
   assert.doesNotMatch(
     proxy,
-    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/home|\/index\.html|\/profile|\/plans|\/projects|\/forgot|\/password-reset|\/about-us|\/features|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt/,
+    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/home|\/index\.html|\/profile|\/plans|\/projects|\/forgot|\/password-reset|\/about-us|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt/,
   );
   assert.doesNotMatch(proxy, /redirect/);
 
@@ -164,6 +254,11 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
   assert.equal(existsSync(new URL("../app/page.tsx", import.meta.url)), true);
   assert.equal(existsSync(new URL("../app/account/page.tsx", import.meta.url)), true);
   assert.equal(existsSync(new URL("../app/jobs/page.tsx", import.meta.url)), true);
+  assert.equal(existsSync(new URL("../app/api/procore/status/route.ts", import.meta.url)), true);
+  assert.equal(existsSync(new URL("../app/api/procore/connect/route.ts", import.meta.url)), true);
+  assert.equal(existsSync(new URL("../app/api/procore/callback/route.ts", import.meta.url)), true);
+  assert.equal(existsSync(new URL("../app/api/procore/disconnect/route.ts", import.meta.url)), true);
+  assert.equal(existsSync(new URL("../app/api/procore/projects/route.ts", import.meta.url)), true);
   assert.equal(existsSync(new URL("../app/.well-known/security.txt/route.ts", import.meta.url)), true);
   assert.equal(existsSync(new URL("../app/manifest.ts", import.meta.url)), true);
   assert.match(readRepo("app/.well-known/security.txt/route.ts"), /status:\s*200/);
@@ -237,8 +332,32 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "app/manifest.json/route.ts",
     "app/site.webmanifest/page.tsx",
     "app/site.webmanifest/route.ts",
+    "app/integrations/page.tsx",
+    "app/integrations/route.ts",
+    "app/procore/page.tsx",
+    "app/procore/route.ts",
+    "app/careers/page.tsx",
+    "app/careers/route.ts",
+    "app/team/page.tsx",
+    "app/team/route.ts",
+    "app/partners/page.tsx",
+    "app/partners/route.ts",
+    "app/customers/page.tsx",
+    "app/customers/route.ts",
     "public/features",
     "public/features.html",
+    "public/integrations",
+    "public/integrations.html",
+    "public/procore",
+    "public/procore.html",
+    "public/careers",
+    "public/careers.html",
+    "public/team",
+    "public/team.html",
+    "public/partners",
+    "public/partners.html",
+    "public/customers",
+    "public/customers.html",
     "public/security.txt",
     "public/manifest.json",
     "public/site.webmanifest",

@@ -8,7 +8,7 @@ function readRepo(path: string): string {
   return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-test("/contact, /help, /faq, /contact-us, /support-center, /docs, and /status permanently move to /support", () => {
+test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog, /changelog, /news, /press, and /roadmap permanently move to /support", () => {
   assert.deepEqual(contactRedirects(), [
     {
       source: "/contact",
@@ -45,18 +45,57 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, and /status pe
       destination: "/support",
       permanent: true,
     },
+    {
+      source: "/blog",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/changelog",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/news",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/press",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/roadmap",
+      destination: "/support",
+      permanent: true,
+    },
   ]);
+  const sources = new Set(contactRedirects().map((redirect) => redirect.source));
   for (const redirect of contactRedirects()) {
     assert.equal(redirect.permanent, true);
     assert.equal(redirect.destination, "/support");
+    assert.equal(sources.has(redirect.destination), false, redirect.source);
+    assert.equal(redirect.source.slice(1).includes("/"), false, redirect.source);
+    assert.doesNotMatch(redirect.source, /[:*]/);
+    assert.equal(redirect.source.endsWith("/"), false, redirect.source);
+  }
+  const bySource = new Map(contactRedirects().map((redirect) => [redirect.source, redirect.destination]));
+  assert.equal(bySource.get("/blog"), "/support");
+  assert.equal(bySource.get("/changelog"), bySource.get("/contact"));
+  assert.equal(bySource.get("/news"), bySource.get("/contact"));
+  assert.equal(bySource.get("/press"), bySource.get("/contact"));
+  assert.equal(bySource.get("/roadmap"), bySource.get("/contact"));
+  for (const path of ["/admin", "/api", "/humans.txt", "/zz-nope", "/blog/post", "/api/procore/status"]) {
+    assert.equal(sources.has(path), false, path);
   }
 
   const config = readRepo("next.config.ts");
   assert.match(config, /\.\.\.contactRedirects\(\)/);
-  assert.doesNotMatch(config, /\/privacy|\/terms|\/support|\/help|\/faq|\/docs|\/status/);
+  assert.doesNotMatch(config, /\/privacy|\/terms|\/support|\/help|\/faq|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap/);
 
   const proxy = readRepo("proxy.ts");
-  assert.doesNotMatch(proxy, /\/contact|\/help|\/faq|\/contact-us|\/support-center|\/docs|\/status/);
+  assert.doesNotMatch(proxy, /\/contact|\/help|\/faq|\/contact-us|\/support-center|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap/);
   assert.doesNotMatch(proxy, /redirect/);
 
   assert.ok(PUBLIC_PAGE_PATHS.includes("/support"));
@@ -85,6 +124,26 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, and /status pe
     "public/docs.html",
     "public/status",
     "public/status.html",
+    "app/blog/page.tsx",
+    "app/blog/route.ts",
+    "app/changelog/page.tsx",
+    "app/changelog/route.ts",
+    "app/news/page.tsx",
+    "app/news/route.ts",
+    "app/press/page.tsx",
+    "app/press/route.ts",
+    "app/roadmap/page.tsx",
+    "app/roadmap/route.ts",
+    "public/blog",
+    "public/blog.html",
+    "public/changelog",
+    "public/changelog.html",
+    "public/news",
+    "public/news.html",
+    "public/press",
+    "public/press.html",
+    "public/roadmap",
+    "public/roadmap.html",
   ]) {
     assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
   }

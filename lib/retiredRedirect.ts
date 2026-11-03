@@ -4,6 +4,9 @@
  * Password-reset aliases share the destination /forgot-password already
  * uses. /about-us shares the destination /about already uses. Both are /.
  * /features shares the destination /plans already uses. That is /pricing.
+ * /integrations and /procore share that same destination. /procore is only
+ * the exact path, so /api/procore and anything under it stay on their routes.
+ * /careers, /team, /partners, and /customers share the destination / already uses.
  * /security.txt moves straight to /.well-known/security.txt.
  * /manifest.json and /site.webmanifest move straight to /manifest.webmanifest.
  */
@@ -31,7 +34,7 @@ export function retiredRedirects(): Array<{
       destination: JOBS_HREF,
       permanent: true,
     })),
-    ...["/plans", "/features"].map((source) => ({
+    ...["/plans", "/features", "/integrations", "/procore"].map((source) => ({
       source,
       destination: PRICING_HREF,
       permanent: true,
@@ -46,6 +49,10 @@ export function retiredRedirects(): Array<{
       "/password-reset",
       "/reset",
       "/about-us",
+      "/careers",
+      "/team",
+      "/partners",
+      "/customers",
     ].map((source) => ({
       source,
       destination: HOME_HREF,
