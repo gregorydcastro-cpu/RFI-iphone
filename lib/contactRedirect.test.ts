@@ -8,7 +8,7 @@ function readRepo(path: string): string {
   return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog, /changelog, /news, /press, and /roadmap permanently move to /support", () => {
+test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog, /changelog, /news, /press, /roadmap, /guides, /resources, /case-studies, /testimonials, /webinar, and /events permanently move to /support", () => {
   assert.deepEqual(contactRedirects(), [
     {
       source: "/contact",
@@ -70,6 +70,36 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
       destination: "/support",
       permanent: true,
     },
+    {
+      source: "/guides",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/resources",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/case-studies",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/testimonials",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/webinar",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/events",
+      destination: "/support",
+      permanent: true,
+    },
   ]);
   const sources = new Set(contactRedirects().map((redirect) => redirect.source));
   for (const redirect of contactRedirects()) {
@@ -86,16 +116,50 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
   assert.equal(bySource.get("/news"), bySource.get("/contact"));
   assert.equal(bySource.get("/press"), bySource.get("/contact"));
   assert.equal(bySource.get("/roadmap"), bySource.get("/contact"));
-  for (const path of ["/admin", "/api", "/humans.txt", "/zz-nope", "/blog/post", "/api/procore/status"]) {
+  assert.equal(bySource.get("/guides"), "/support");
+  assert.equal(bySource.get("/resources"), bySource.get("/contact"));
+  assert.equal(bySource.get("/case-studies"), bySource.get("/contact"));
+  assert.equal(bySource.get("/testimonials"), bySource.get("/contact"));
+  assert.equal(bySource.get("/webinar"), bySource.get("/contact"));
+  assert.equal(bySource.get("/events"), bySource.get("/contact"));
+  assert.equal(bySource.has("/webinar/extra"), false);
+  assert.equal(bySource.has("/guides/post"), false);
+  assert.equal(bySource.has("/web"), false);
+  for (const path of [
+    "/admin",
+    "/api",
+    "/humans.txt",
+    "/zz-nope",
+    "/blog/post",
+    "/api/procore/status",
+    "/api/docs",
+    "/rfi",
+    "/rfis",
+    "/submittals",
+    "/punch",
+    "/daily-log",
+    "/reports",
+    "/photos",
+    "/drawings",
+    "/schedule",
+    "/calendar",
+    "/invite",
+    "/notifications",
+    "/billing",
+    "/subscribe",
+    "/upgrade",
+    "/checkout",
+    "/.well-known/apple-app-site-association",
+  ]) {
     assert.equal(sources.has(path), false, path);
   }
 
   const config = readRepo("next.config.ts");
   assert.match(config, /\.\.\.contactRedirects\(\)/);
-  assert.doesNotMatch(config, /\/privacy|\/terms|\/support|\/help|\/faq|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap/);
+  assert.doesNotMatch(config, /\/privacy|\/terms|\/support|\/help|\/faq|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events/);
 
   const proxy = readRepo("proxy.ts");
-  assert.doesNotMatch(proxy, /\/contact|\/help|\/faq|\/contact-us|\/support-center|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap/);
+  assert.doesNotMatch(proxy, /\/contact|\/help|\/faq|\/contact-us|\/support-center|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events/);
   assert.doesNotMatch(proxy, /redirect/);
 
   assert.ok(PUBLIC_PAGE_PATHS.includes("/support"));
@@ -144,6 +208,30 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
     "public/press.html",
     "public/roadmap",
     "public/roadmap.html",
+    "app/guides/page.tsx",
+    "app/guides/route.ts",
+    "app/resources/page.tsx",
+    "app/resources/route.ts",
+    "app/case-studies/page.tsx",
+    "app/case-studies/route.ts",
+    "app/testimonials/page.tsx",
+    "app/testimonials/route.ts",
+    "app/webinar/page.tsx",
+    "app/webinar/route.ts",
+    "app/events/page.tsx",
+    "app/events/route.ts",
+    "public/guides",
+    "public/guides.html",
+    "public/resources",
+    "public/resources.html",
+    "public/case-studies",
+    "public/case-studies.html",
+    "public/testimonials",
+    "public/testimonials.html",
+    "public/webinar",
+    "public/webinar.html",
+    "public/events",
+    "public/events.html",
   ]) {
     assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
   }

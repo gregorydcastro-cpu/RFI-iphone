@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { contactRedirects } from "./contactRedirect.ts";
-import { signInAliasRedirects } from "./fieldNotFound.ts";
+import { signInAliasDestination, signInAliasRedirects } from "./fieldNotFound.ts";
 import { legalRedirects } from "./legalRedirect.ts";
 import { retiredRedirects } from "./retiredRedirect.ts";
 import { PUBLIC_PAGE_PATHS } from "./siteInfo.ts";
@@ -211,26 +211,131 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/api/procore/callback",
     "/api/procore/disconnect",
     "/api/procore/projects",
+    "/rfi",
+    "/rfis",
+    "/submittals",
+    "/punch",
+    "/daily-log",
+    "/reports",
+    "/photos",
+    "/drawings",
+    "/schedule",
+    "/calendar",
+    "/invite",
+    "/notifications",
+    "/billing",
+    "/subscribe",
+    "/upgrade",
+    "/checkout",
+    "/api/docs",
+    "/.well-known/apple-app-site-association",
   ]) {
     assert.equal(sources.has(path), false, path);
   }
 
-  const everySource = new Set([
-    ...contactRedirects().map((redirect) => redirect.source),
-    ...legalRedirects().map((redirect) => redirect.source),
-    ...retiredRedirects().map((redirect) => redirect.source),
-    ...signInAliasRedirects().map((redirect) => redirect.source),
-    "/demo",
-  ]);
-  for (const redirect of [
+  const everyRedirect = [
     ...contactRedirects(),
     ...legalRedirects(),
     ...retiredRedirects(),
     ...signInAliasRedirects(),
     { source: "/demo", destination: "/pack/maple-point", permanent: false },
-  ]) {
+  ];
+  const everySource = new Set(everyRedirect.map((redirect) => redirect.source));
+  for (const redirect of everyRedirect) {
     assert.equal(everySource.has(redirect.destination), false, redirect.source);
+    assert.equal(redirect.source.startsWith("/api"), false, redirect.source);
   }
+  for (const redirect of [...contactRedirects(), ...legalRedirects(), ...retiredRedirects()]) {
+    assert.doesNotMatch(redirect.source, /[:*]/, redirect.source);
+  }
+  assert.equal(everySource.has("/legal/privacy"), true);
+  assert.equal(everySource.has("/legal/terms"), true);
+  assert.equal(everySource.has("/legal/:path*"), false);
+  assert.equal(everySource.has("/legal/:slug"), false);
+  const stay404 = [
+    "/rfi",
+    "/rfis",
+    "/submittals",
+    "/punch",
+    "/daily-log",
+    "/reports",
+    "/photos",
+    "/drawings",
+    "/schedule",
+    "/calendar",
+    "/invite",
+    "/notifications",
+    "/billing",
+    "/subscribe",
+    "/upgrade",
+    "/checkout",
+    "/api/docs",
+    "/.well-known/apple-app-site-association",
+    "/zz-nope",
+  ];
+  for (const path of stay404) {
+    assert.equal(everySource.has(path), false, path);
+    assert.equal(signInAliasDestination(path), null, path);
+  }
+  assert.equal(signInAliasDestination("/api/docs/extra"), null);
+  assert.equal(existsSync(new URL("../app/invite/[token]/page.tsx", import.meta.url)), true);
+  assert.equal(existsSync(new URL("../app/api/[...slug]/route.ts", import.meta.url)), true);
+  assert.equal(existsSync(new URL("../app/api/stripe/checkout/route.ts", import.meta.url)), true);
+  for (const page of [
+    "app/rfi/page.tsx",
+    "app/rfi/route.ts",
+    "app/rfis/page.tsx",
+    "app/rfis/route.ts",
+    "app/submittals/page.tsx",
+    "app/submittals/route.ts",
+    "app/punch/page.tsx",
+    "app/punch/route.ts",
+    "app/daily-log/page.tsx",
+    "app/daily-log/route.ts",
+    "app/reports/page.tsx",
+    "app/reports/route.ts",
+    "app/photos/page.tsx",
+    "app/photos/route.ts",
+    "app/drawings/page.tsx",
+    "app/drawings/route.ts",
+    "app/schedule/page.tsx",
+    "app/schedule/route.ts",
+    "app/calendar/page.tsx",
+    "app/calendar/route.ts",
+    "app/invite/page.tsx",
+    "app/invite/route.ts",
+    "app/notifications/page.tsx",
+    "app/notifications/route.ts",
+    "app/billing/page.tsx",
+    "app/billing/route.ts",
+    "app/subscribe/page.tsx",
+    "app/subscribe/route.ts",
+    "app/upgrade/page.tsx",
+    "app/upgrade/route.ts",
+    "app/checkout/page.tsx",
+    "app/checkout/route.ts",
+    "app/api/docs/page.tsx",
+    "app/api/docs/route.ts",
+    "app/.well-known/apple-app-site-association/route.ts",
+    "app/.well-known/apple-app-site-association/page.tsx",
+    "public/.well-known/apple-app-site-association",
+    "public/apple-app-site-association",
+    "public/zz-nope",
+    "public/zz-nope.html",
+    "app/zz-nope/page.tsx",
+    "app/zz-nope/route.ts",
+  ]) {
+    assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
+  }
+  assert.equal(everySource.has("/legal"), true);
+  assert.equal(
+    legalRedirects().find((redirect) => redirect.source === "/legal")?.destination,
+    "/terms",
+  );
+  assert.equal(
+    legalRedirects().find((redirect) => redirect.source === "/legal")?.permanent,
+    true,
+  );
   for (const redirect of contactRedirects()) {
     assert.equal(sources.has(redirect.source), false, redirect.source);
   }

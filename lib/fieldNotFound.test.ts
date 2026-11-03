@@ -281,7 +281,7 @@ test("branded 404 document title names GC Field Log and keeps the card headings"
   }
 });
 
-test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /free-trial, /onboarding, /download, /ios, /app-store, and /android redirect home and keep the query", () => {
+test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /free-trial, /onboarding, /download, /ios, /app-store, /android, /how-it-works, /tour, /mobile, and /web redirect home and keep the query", () => {
   assert.deepEqual(signInAliasRedirects(), [
     {
       source: SIGN_IN_ALIAS_SOURCE,
@@ -291,7 +291,7 @@ test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /fr
   ]);
   assert.equal(
     SIGN_IN_ALIAS_SOURCE,
-    "/:alias(login|log-in|signin|sign-in|signup|sign-up|register|join|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android)",
+    "/:alias(login|log-in|signin|sign-in|signup|sign-up|register|join|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android|how-it-works|tour|mobile|web)",
   );
   assert.equal(signInAliasRedirects()[0]?.permanent, false);
 
@@ -362,6 +362,22 @@ test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /fr
   assert.equal(signInAliasDestination("/android/"), "/");
   assert.equal(signInAliasDestination("/ANDROID"), "/");
   assert.equal(signInAliasDestination("/Android/"), "/");
+  assert.equal(signInAliasDestination("/how-it-works"), "/");
+  assert.equal(signInAliasDestination("/how-it-works/"), "/");
+  assert.equal(signInAliasDestination("/HOW-IT-WORKS"), "/");
+  assert.equal(signInAliasDestination("/How-It-Works/"), "/");
+  assert.equal(signInAliasDestination("/tour"), "/");
+  assert.equal(signInAliasDestination("/tour/"), "/");
+  assert.equal(signInAliasDestination("/TOUR"), "/");
+  assert.equal(signInAliasDestination("/Tour/"), "/");
+  assert.equal(signInAliasDestination("/mobile"), "/");
+  assert.equal(signInAliasDestination("/mobile/"), "/");
+  assert.equal(signInAliasDestination("/MOBILE"), "/");
+  assert.equal(signInAliasDestination("/Mobile/"), "/");
+  assert.equal(signInAliasDestination("/web"), "/");
+  assert.equal(signInAliasDestination("/web/"), "/");
+  assert.equal(signInAliasDestination("/WEB"), "/");
+  assert.equal(signInAliasDestination("/Web/"), "/");
 
   const next = "?next=/jobs/cedar-ridge";
   assert.equal(signInAliasDestination("/login", next), `/${next}`);
@@ -395,6 +411,14 @@ test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /fr
   assert.equal(signInAliasDestination("/APP-STORE/", next), `/${next}`);
   assert.equal(signInAliasDestination("/android", next), `/${next}`);
   assert.equal(signInAliasDestination("/ANDROID/", next), `/${next}`);
+  assert.equal(signInAliasDestination("/how-it-works", next), `/${next}`);
+  assert.equal(signInAliasDestination("/HOW-IT-WORKS/", next), `/${next}`);
+  assert.equal(signInAliasDestination("/tour", next), `/${next}`);
+  assert.equal(signInAliasDestination("/TOUR/", next), `/${next}`);
+  assert.equal(signInAliasDestination("/mobile", next), `/${next}`);
+  assert.equal(signInAliasDestination("/MOBILE/", next), `/${next}`);
+  assert.equal(signInAliasDestination("/web", next), `/${next}`);
+  assert.equal(signInAliasDestination("/WEB/", next), `/${next}`);
   assert.equal(
     signInAliasDestination("/login/", "?next=/jobs/cedar-ridge&room=101"),
     "/?next=/jobs/cedar-ridge&room=101",
@@ -443,6 +467,46 @@ test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /fr
   assert.equal(signInAliasDestination("/app-store/extra"), null);
   assert.equal(signInAliasDestination("/androids"), null);
   assert.equal(signInAliasDestination("/android/extra"), null);
+  assert.equal(signInAliasDestination("/how"), null);
+  assert.equal(signInAliasDestination("/how-it-work"), null);
+  assert.equal(signInAliasDestination("/how-it-works/extra"), null);
+  assert.equal(signInAliasDestination("/tours"), null);
+  assert.equal(signInAliasDestination("/tour/extra"), null);
+  assert.equal(signInAliasDestination("/mobiles"), null);
+  assert.equal(signInAliasDestination("/mobile/extra"), null);
+  assert.equal(signInAliasDestination("/webs"), null);
+  assert.equal(signInAliasDestination("/web/extra"), null);
+  assert.equal(signInAliasDestination("/webinar"), null);
+  assert.equal(signInAliasDestination("/security"), null);
+  assert.equal(signInAliasDestination("/trust"), null);
+  assert.equal(signInAliasDestination("/gdpr"), null);
+  assert.equal(signInAliasDestination("/ccpa"), null);
+  assert.equal(signInAliasDestination("/legal/privacy"), null);
+  assert.equal(signInAliasDestination("/legal/terms"), null);
+  assert.equal(signInAliasDestination("/sla"), null);
+  assert.equal(signInAliasDestination("/guides"), null);
+  assert.equal(signInAliasDestination("/resources"), null);
+  assert.equal(signInAliasDestination("/case-studies"), null);
+  assert.equal(signInAliasDestination("/testimonials"), null);
+  assert.equal(signInAliasDestination("/events"), null);
+  assert.equal(signInAliasDestination("/rfi"), null);
+  assert.equal(signInAliasDestination("/rfis"), null);
+  assert.equal(signInAliasDestination("/submittals"), null);
+  assert.equal(signInAliasDestination("/punch"), null);
+  assert.equal(signInAliasDestination("/daily-log"), null);
+  assert.equal(signInAliasDestination("/reports"), null);
+  assert.equal(signInAliasDestination("/photos"), null);
+  assert.equal(signInAliasDestination("/drawings"), null);
+  assert.equal(signInAliasDestination("/schedule"), null);
+  assert.equal(signInAliasDestination("/calendar"), null);
+  assert.equal(signInAliasDestination("/invite"), null);
+  assert.equal(signInAliasDestination("/notifications"), null);
+  assert.equal(signInAliasDestination("/billing"), null);
+  assert.equal(signInAliasDestination("/subscribe"), null);
+  assert.equal(signInAliasDestination("/upgrade"), null);
+  assert.equal(signInAliasDestination("/checkout"), null);
+  assert.equal(signInAliasDestination("/api/docs"), null);
+  assert.equal(signInAliasDestination("/.well-known/apple-app-site-association"), null);
   assert.equal(signInAliasDestination("/refund"), null);
   assert.equal(signInAliasDestination("/refunds"), null);
   assert.equal(signInAliasDestination("/dmca"), null);
@@ -531,6 +595,22 @@ test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /fr
     "public/app-store.html",
     "public/android",
     "public/android.html",
+    "app/how-it-works/page.tsx",
+    "app/how-it-works/route.ts",
+    "app/tour/page.tsx",
+    "app/tour/route.ts",
+    "app/mobile/page.tsx",
+    "app/mobile/route.ts",
+    "app/web/page.tsx",
+    "app/web/route.ts",
+    "public/how-it-works",
+    "public/how-it-works.html",
+    "public/tour",
+    "public/tour.html",
+    "public/mobile",
+    "public/mobile.html",
+    "public/web",
+    "public/web.html",
   ]) {
     assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
   }

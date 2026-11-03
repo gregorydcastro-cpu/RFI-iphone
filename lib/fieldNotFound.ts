@@ -84,16 +84,17 @@ export function fieldNotFoundSpeak(variant: FieldNotFoundVariant): string {
 /**
  * Sign-in and account-creation aliases, including /log-in, /join,
  * /create-account, /get-started, /start, /trial, /free-trial, and
- * /onboarding. /download, /ios, /app-store, and /android use the same
- * temporary redirect. Next matches this source without case sensitivity
- * and allows one trailing slash. Query values pass through to `/`.
- * permanent: false is the same temporary 307 as /login and /signup.
+ * /onboarding. /download, /ios, /app-store, /android, /how-it-works,
+ * /tour, /mobile, and /web use the same temporary redirect. Each name
+ * is one exact path segment. Next matches this source without case
+ * sensitivity and allows one trailing slash. Query values pass through
+ * to `/`. permanent: false is the same temporary 307 as /login and /signup.
  */
 export const SIGN_IN_ALIAS_SOURCE =
-  "/:alias(login|log-in|signin|sign-in|signup|sign-up|register|join|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android)";
+  "/:alias(login|log-in|signin|sign-in|signup|sign-up|register|join|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android|how-it-works|tour|mobile|web)";
 
 const SIGN_IN_ALIAS_PATH =
-  /^\/(?:login|log-in|signin|sign-in|signup|sign-up|register|join|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android)\/?$/i;
+  /^\/(?:login|log-in|signin|sign-in|signup|sign-up|register|join|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android|how-it-works|tour|mobile|web)\/?$/i;
 
 export function signInAliasRedirects(): Array<{
   source: string;
