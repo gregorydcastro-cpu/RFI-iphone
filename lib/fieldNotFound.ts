@@ -85,16 +85,30 @@ export function fieldNotFoundSpeak(variant: FieldNotFoundVariant): string {
  * Sign-in and account-creation aliases, including /log-in, /join,
  * /create-account, /get-started, /start, /trial, /free-trial, and
  * /onboarding. /download, /ios, /app-store, /android, /how-it-works,
- * /tour, /mobile, and /web use the same temporary redirect. Each name
- * is one exact path segment. Next matches this source without case
- * sensitivity and allows one trailing slash. Query values pass through
- * to `/`. permanent: false is the same temporary 307 as /login and /signup.
+ * /tour, /mobile, /web, /apps, /mobile-app, /iphone, /ipad,
+ * /app-store-link, /free, and /sign-up-free use the same temporary
+ * redirect. Each name is one exact path segment. Next matches this
+ * source without case sensitivity and allows one trailing slash. Query
+ * values pass through to `/`. permanent: false is the same temporary
+ * 307 as /login and /signup.
  */
 export const SIGN_IN_ALIAS_SOURCE =
-  "/:alias(login|log-in|signin|sign-in|signup|sign-up|register|join|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android|how-it-works|tour|mobile|web)";
+  "/:alias(login|log-in|signin|sign-in|signup|sign-up|register|join|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone|ipad|app-store-link|free|sign-up-free)";
 
 const SIGN_IN_ALIAS_PATH =
-  /^\/(?:login|log-in|signin|sign-in|signup|sign-up|register|join|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android|how-it-works|tour|mobile|web)\/?$/i;
+  /^\/(?:login|log-in|signin|sign-in|signup|sign-up|register|join|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone|ipad|app-store-link|free|sign-up-free)\/?$/i;
+
+/**
+ * Demo booking aliases have no page. Each name is one exact path segment
+ * and a temporary move straight to the Maple Point pack, not to /demo.
+ * Next matches this source without case sensitivity and allows one
+ * trailing slash. Query values pass through. permanent: false is HTTP 307.
+ */
+export const DEMO_ALIAS_SOURCE =
+  "/:alias(book-demo|request-demo|schedule-demo|get-demo)";
+
+const DEMO_ALIAS_PATH =
+  /^\/(?:book-demo|request-demo|schedule-demo|get-demo)\/?$/i;
 
 export function signInAliasRedirects(): Array<{
   source: string;
@@ -116,6 +130,28 @@ export function signInAliasDestination(pathname: string, search = ""): string | 
   if (!search || search === "?") return HOME_HREF;
   const query = search.startsWith("?") ? search : `?${search}`;
   return `${HOME_HREF}${query}`;
+}
+
+export function demoAliasRedirects(): Array<{
+  source: string;
+  destination: string;
+  permanent: boolean;
+}> {
+  return [
+    {
+      source: DEMO_ALIAS_SOURCE,
+      destination: MAPLE_POINT_DEMO_HREF,
+      permanent: false,
+    },
+  ];
+}
+
+/** Where a demo booking alias should land, or null when the path is not one. */
+export function demoAliasDestination(pathname: string, search = ""): string | null {
+  if (!DEMO_ALIAS_PATH.test(pathname)) return null;
+  if (!search || search === "?") return MAPLE_POINT_DEMO_HREF;
+  const query = search.startsWith("?") ? search : `?${search}`;
+  return `${MAPLE_POINT_DEMO_HREF}${query}`;
 }
 
 export function opensSheetsSection(

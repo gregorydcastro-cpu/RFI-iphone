@@ -8,7 +8,7 @@ function readRepo(path: string): string {
   return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog, /changelog, /news, /press, /roadmap, /guides, /resources, /case-studies, /testimonials, /webinar, and /events permanently move to /support", () => {
+test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog, /changelog, /news, /press, /roadmap, /guides, /resources, /case-studies, /testimonials, /webinar, /events, /contact-sales, /sales, /enterprise, /community, /forum, /developers, and /api-docs permanently move to /support (308)", () => {
   assert.deepEqual(contactRedirects(), [
     {
       source: "/contact",
@@ -100,10 +100,46 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
       destination: "/support",
       permanent: true,
     },
+    {
+      source: "/contact-sales",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/sales",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/enterprise",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/community",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/forum",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/developers",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/api-docs",
+      destination: "/support",
+      permanent: true,
+    },
   ]);
   const sources = new Set(contactRedirects().map((redirect) => redirect.source));
   for (const redirect of contactRedirects()) {
     assert.equal(redirect.permanent, true);
+    assert.equal(redirect.permanent ? 308 : 307, 308);
     assert.equal(redirect.destination, "/support");
     assert.equal(sources.has(redirect.destination), false, redirect.source);
     assert.equal(redirect.source.slice(1).includes("/"), false, redirect.source);
@@ -122,7 +158,20 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
   assert.equal(bySource.get("/testimonials"), bySource.get("/contact"));
   assert.equal(bySource.get("/webinar"), bySource.get("/contact"));
   assert.equal(bySource.get("/events"), bySource.get("/contact"));
+  assert.equal(bySource.get("/contact-sales"), "/support");
+  assert.equal(bySource.get("/sales"), bySource.get("/contact"));
+  assert.equal(bySource.get("/enterprise"), bySource.get("/contact"));
+  assert.equal(bySource.get("/community"), bySource.get("/contact"));
+  assert.equal(bySource.get("/forum"), bySource.get("/contact"));
+  assert.equal(bySource.get("/developers"), bySource.get("/contact"));
+  assert.equal(bySource.get("/api-docs"), "/support");
+  assert.equal(bySource.get("/api-docs"), bySource.get("/contact"));
   assert.equal(bySource.has("/webinar/extra"), false);
+  assert.equal(bySource.has("/contact-sales/extra"), false);
+  assert.equal(bySource.has("/sales/extra"), false);
+  assert.equal(bySource.has("/api-docs/extra"), false);
+  assert.equal(bySource.has("/api/docs"), false);
+  assert.equal(bySource.has("/developers/docs"), false);
   assert.equal(bySource.has("/guides/post"), false);
   assert.equal(bySource.has("/web"), false);
   for (const path of [
@@ -150,16 +199,23 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
     "/upgrade",
     "/checkout",
     "/.well-known/apple-app-site-association",
+    "/search",
+    "/unsubscribe",
+    "/preferences",
+    "/affiliates",
+    "/referral",
+    "/llms.txt",
+    "/ads.txt",
   ]) {
     assert.equal(sources.has(path), false, path);
   }
 
   const config = readRepo("next.config.ts");
   assert.match(config, /\.\.\.contactRedirects\(\)/);
-  assert.doesNotMatch(config, /\/privacy|\/terms|\/support|\/help|\/faq|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events/);
+  assert.doesNotMatch(config, /\/privacy|\/terms|\/support|\/help|\/faq|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events|\/contact-sales|\/sales|\/enterprise|\/community|\/forum|\/developers|\/api-docs/);
 
   const proxy = readRepo("proxy.ts");
-  assert.doesNotMatch(proxy, /\/contact|\/help|\/faq|\/contact-us|\/support-center|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events/);
+  assert.doesNotMatch(proxy, /\/contact|\/help|\/faq|\/contact-us|\/support-center|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events|\/contact-sales|\/sales|\/enterprise|\/community|\/forum|\/developers|\/api-docs/);
   assert.doesNotMatch(proxy, /redirect/);
 
   assert.ok(PUBLIC_PAGE_PATHS.includes("/support"));
@@ -232,6 +288,34 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
     "public/webinar.html",
     "public/events",
     "public/events.html",
+    "app/contact-sales/page.tsx",
+    "app/contact-sales/route.ts",
+    "app/sales/page.tsx",
+    "app/sales/route.ts",
+    "app/enterprise/page.tsx",
+    "app/enterprise/route.ts",
+    "app/community/page.tsx",
+    "app/community/route.ts",
+    "app/forum/page.tsx",
+    "app/forum/route.ts",
+    "app/developers/page.tsx",
+    "app/developers/route.ts",
+    "app/api-docs/page.tsx",
+    "app/api-docs/route.ts",
+    "public/contact-sales",
+    "public/contact-sales.html",
+    "public/sales",
+    "public/sales.html",
+    "public/enterprise",
+    "public/enterprise.html",
+    "public/community",
+    "public/community.html",
+    "public/forum",
+    "public/forum.html",
+    "public/developers",
+    "public/developers.html",
+    "public/api-docs",
+    "public/api-docs.html",
   ]) {
     assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
   }
