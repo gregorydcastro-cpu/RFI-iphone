@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 import { contactRedirects } from "./lib/contactRedirect";
-import { signInAliasRedirects } from "./lib/fieldNotFound";
+import { demoAliasRedirects, signInAliasRedirects } from "./lib/fieldNotFound";
 import { legalRedirects } from "./lib/legalRedirect";
 import { retiredRedirects } from "./lib/retiredRedirect";
 import { SECURITY_HEADERS } from "./lib/securityHeaders";
@@ -26,6 +26,7 @@ const nextConfig: NextConfig = {
         destination: "/pack/maple-point",
         permanent: false,
       },
+      ...demoAliasRedirects(),
       ...signInAliasRedirects(),
       ...contactRedirects(),
       ...legalRedirects(),

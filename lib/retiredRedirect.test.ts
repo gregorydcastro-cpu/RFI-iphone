@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { contactRedirects } from "./contactRedirect.ts";
-import { signInAliasDestination, signInAliasRedirects } from "./fieldNotFound.ts";
+import {
+  demoAliasDestination,
+  demoAliasRedirects,
+  signInAliasDestination,
+  signInAliasRedirects,
+} from "./fieldNotFound.ts";
 import { legalRedirects } from "./legalRedirect.ts";
 import { retiredRedirects } from "./retiredRedirect.ts";
 import { PUBLIC_PAGE_PATHS } from "./siteInfo.ts";
@@ -11,7 +16,7 @@ function readRepo(path: string): string {
   return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-test("retired aliases permanently move to account, jobs, pricing, home, security.txt, or the web manifest, including /integrations, /procore, /careers, /team, /partners, and /customers", () => {
+test("retired aliases permanently move to account, jobs, pricing, home, security.txt, the web manifest, or /sitemap.xml (308), including /integrations, /procore, /careers, /team, /partners, /customers, /company, /product, /sitemap, and /site-map", () => {
   assert.deepEqual(retiredRedirects(), [
     {
       source: "/settings",
@@ -75,6 +80,41 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     },
     {
       source: "/procore",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/product",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/products",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/solutions",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/use-cases",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/why",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/compare",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/alternatives",
       destination: "/pricing",
       permanent: true,
     },
@@ -144,6 +184,11 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
       permanent: true,
     },
     {
+      source: "/company",
+      destination: "/",
+      permanent: true,
+    },
+    {
       source: "/security.txt",
       destination: "/.well-known/security.txt",
       permanent: true,
@@ -158,9 +203,20 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
       destination: "/manifest.webmanifest",
       permanent: true,
     },
+    {
+      source: "/sitemap",
+      destination: "/sitemap.xml",
+      permanent: true,
+    },
+    {
+      source: "/site-map",
+      destination: "/sitemap.xml",
+      permanent: true,
+    },
   ]);
   for (const redirect of retiredRedirects()) {
     assert.equal(redirect.permanent, true);
+    assert.equal(redirect.permanent ? 308 : 307, 308);
   }
 
   const bySource = new Map(retiredRedirects().map((redirect) => [redirect.source, redirect.destination]));
@@ -179,6 +235,31 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
   assert.equal(bySource.get("/team"), bySource.get("/about"));
   assert.equal(bySource.get("/partners"), bySource.get("/about"));
   assert.equal(bySource.get("/customers"), bySource.get("/about"));
+  assert.equal(bySource.get("/company"), "/");
+  assert.equal(bySource.get("/company"), bySource.get("/about"));
+  assert.equal(bySource.get("/product"), "/pricing");
+  assert.equal(bySource.get("/products"), "/pricing");
+  assert.equal(bySource.get("/solutions"), "/pricing");
+  assert.equal(bySource.get("/use-cases"), "/pricing");
+  assert.equal(bySource.get("/why"), "/pricing");
+  assert.equal(bySource.get("/compare"), "/pricing");
+  assert.equal(bySource.get("/alternatives"), "/pricing");
+  assert.equal(bySource.get("/product"), bySource.get("/plans"));
+  assert.equal(bySource.get("/products"), bySource.get("/plans"));
+  assert.equal(bySource.get("/solutions"), bySource.get("/plans"));
+  assert.equal(bySource.get("/use-cases"), bySource.get("/plans"));
+  assert.equal(bySource.get("/why"), bySource.get("/plans"));
+  assert.equal(bySource.get("/compare"), bySource.get("/plans"));
+  assert.equal(bySource.get("/alternatives"), bySource.get("/plans"));
+  assert.equal(bySource.has("/product/extra"), false);
+  assert.equal(bySource.has("/products/extra"), false);
+  assert.equal(bySource.has("/company/extra"), false);
+  assert.equal(bySource.get("/sitemap"), "/sitemap.xml");
+  assert.equal(bySource.get("/site-map"), "/sitemap.xml");
+  assert.equal(bySource.get("/site-map"), bySource.get("/sitemap"));
+  assert.equal(bySource.has("/sitemap.xml"), false);
+  assert.equal(bySource.has("/sitemap/extra"), false);
+  assert.equal(bySource.has("/site-map/extra"), false);
   assert.equal(bySource.has("/api/procore"), false);
   assert.equal(bySource.has("/api/procore/status"), false);
   assert.equal(bySource.has("/api/procore/connect"), false);
@@ -197,7 +278,24 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     assert.equal(redirect.source.endsWith("/"), false, redirect.source);
     assert.equal(redirect.source.startsWith("/api"), false, redirect.source);
   }
-  for (const source of ["/careers", "/team", "/partners", "/customers", "/integrations", "/procore"]) {
+  for (const source of [
+    "/careers",
+    "/team",
+    "/partners",
+    "/customers",
+    "/integrations",
+    "/procore",
+    "/company",
+    "/product",
+    "/products",
+    "/solutions",
+    "/use-cases",
+    "/why",
+    "/compare",
+    "/alternatives",
+    "/sitemap",
+    "/site-map",
+  ]) {
     assert.equal(source.slice(1).includes("/"), false, source);
   }
   for (const path of [
@@ -229,6 +327,13 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/checkout",
     "/api/docs",
     "/.well-known/apple-app-site-association",
+    "/search",
+    "/unsubscribe",
+    "/preferences",
+    "/affiliates",
+    "/referral",
+    "/llms.txt",
+    "/ads.txt",
   ]) {
     assert.equal(sources.has(path), false, path);
   }
@@ -238,13 +343,16 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     ...legalRedirects(),
     ...retiredRedirects(),
     ...signInAliasRedirects(),
+    ...demoAliasRedirects(),
     { source: "/demo", destination: "/pack/maple-point", permanent: false },
   ];
   const everySource = new Set(everyRedirect.map((redirect) => redirect.source));
   for (const redirect of everyRedirect) {
     assert.equal(everySource.has(redirect.destination), false, redirect.source);
-    assert.equal(redirect.source.startsWith("/api"), false, redirect.source);
+    assert.equal(redirect.source === "/api" || redirect.source.startsWith("/api/"), false, redirect.source);
   }
+  assert.equal(everySource.has("/api-docs"), true);
+  assert.equal(everySource.has("/api/docs"), false);
   for (const redirect of [...contactRedirects(), ...legalRedirects(), ...retiredRedirects()]) {
     assert.doesNotMatch(redirect.source, /[:*]/, redirect.source);
   }
@@ -272,10 +380,47 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/api/docs",
     "/.well-known/apple-app-site-association",
     "/zz-nope",
+    "/search",
+    "/unsubscribe",
+    "/preferences",
+    "/affiliates",
+    "/referral",
+    "/llms.txt",
+    "/ads.txt",
   ];
   for (const path of stay404) {
     assert.equal(everySource.has(path), false, path);
     assert.equal(signInAliasDestination(path), null, path);
+    assert.equal(demoAliasDestination(path), null, path);
+  }
+  for (const path of [
+    "/apps",
+    "/mobile-app",
+    "/iphone",
+    "/ipad",
+    "/app-store-link",
+    "/free",
+    "/sign-up-free",
+  ]) {
+    assert.equal(everySource.has(path), false, path);
+    assert.equal(signInAliasDestination(path), "/");
+    assert.equal(demoAliasDestination(path), null, path);
+  }
+  for (const path of ["/book-demo", "/request-demo", "/schedule-demo", "/get-demo"]) {
+    assert.equal(everySource.has(path), false, path);
+    assert.equal(signInAliasDestination(path), null, path);
+    assert.equal(demoAliasDestination(path), "/pack/maple-point");
+    assert.notEqual(demoAliasDestination(path), "/demo");
+  }
+  for (const redirect of demoAliasRedirects()) {
+    assert.equal(redirect.permanent, false);
+    assert.equal(redirect.permanent ? 308 : 307, 307);
+    assert.equal(redirect.destination, "/pack/maple-point");
+  }
+  for (const redirect of signInAliasRedirects()) {
+    assert.equal(redirect.permanent, false);
+    assert.equal(redirect.permanent ? 308 : 307, 307);
+    assert.equal(redirect.destination, "/");
   }
   assert.equal(signInAliasDestination("/api/docs/extra"), null);
   assert.equal(existsSync(new URL("../app/invite/[token]/page.tsx", import.meta.url)), true);
@@ -344,13 +489,13 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
   assert.match(config, /\.\.\.retiredRedirects\(\)/);
   assert.doesNotMatch(
     config,
-    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/account|\/jobs|\/home|\/index\.html|\/profile|\/plans|\/pricing|\/projects|\/project|\/forgot|\/password-reset|\/reset|\/about-us|\/me|\/app|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt/,
+    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/account|\/jobs|\/home|\/index\.html|\/profile|\/plans|\/pricing|\/projects|\/project|\/forgot|\/password-reset|\/reset|\/about-us|\/me|\/app|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt|\/company|\/product|\/products|\/solutions|\/use-cases|\/why|\/compare|\/alternatives|\/sitemap|\/site-map/,
   );
 
   const proxy = readRepo("proxy.ts");
   assert.doesNotMatch(
     proxy,
-    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/home|\/index\.html|\/profile|\/plans|\/projects|\/forgot|\/password-reset|\/about-us|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt/,
+    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/home|\/index\.html|\/profile|\/plans|\/projects|\/forgot|\/password-reset|\/about-us|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt|\/company|\/product|\/products|\/solutions|\/use-cases|\/why|\/compare|\/alternatives|\/sitemap|\/site-map/,
   );
   assert.doesNotMatch(proxy, /redirect/);
 
@@ -366,6 +511,10 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
   assert.equal(existsSync(new URL("../app/api/procore/projects/route.ts", import.meta.url)), true);
   assert.equal(existsSync(new URL("../app/.well-known/security.txt/route.ts", import.meta.url)), true);
   assert.equal(existsSync(new URL("../app/manifest.ts", import.meta.url)), true);
+  assert.equal(existsSync(new URL("../app/sitemap.ts", import.meta.url)), true);
+  assert.equal(existsSync(new URL("../app/sitemap/page.tsx", import.meta.url)), false);
+  assert.equal(existsSync(new URL("../app/sitemap/route.ts", import.meta.url)), false);
+  assert.equal(existsSync(new URL("../public/sitemap.xml", import.meta.url)), false);
   assert.match(readRepo("app/.well-known/security.txt/route.ts"), /status:\s*200/);
   assert.match(readRepo("app/manifest.ts"), /webManifest/);
   const pricing = readRepo("app/pricing/page.tsx");
@@ -468,6 +617,73 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "public/site.webmanifest",
     "public/manifest.webmanifest",
     "public/.well-known/security.txt",
+    "app/company/page.tsx",
+    "app/company/route.ts",
+    "app/product/page.tsx",
+    "app/product/route.ts",
+    "app/products/page.tsx",
+    "app/products/route.ts",
+    "app/solutions/page.tsx",
+    "app/solutions/route.ts",
+    "app/use-cases/page.tsx",
+    "app/use-cases/route.ts",
+    "app/why/page.tsx",
+    "app/why/route.ts",
+    "app/compare/page.tsx",
+    "app/compare/route.ts",
+    "app/alternatives/page.tsx",
+    "app/alternatives/route.ts",
+    "app/sitemap/page.tsx",
+    "app/sitemap/route.ts",
+    "app/site-map/page.tsx",
+    "app/site-map/route.ts",
+    "public/company",
+    "public/company.html",
+    "public/product",
+    "public/product.html",
+    "public/products",
+    "public/products.html",
+    "public/solutions",
+    "public/solutions.html",
+    "public/use-cases",
+    "public/use-cases.html",
+    "public/why",
+    "public/why.html",
+    "public/compare",
+    "public/compare.html",
+    "public/alternatives",
+    "public/alternatives.html",
+    "public/sitemap",
+    "public/sitemap.html",
+    "public/site-map",
+    "public/site-map.html",
+    "public/sitemap.xml",
+    "app/search/page.tsx",
+    "app/search/route.ts",
+    "app/unsubscribe/page.tsx",
+    "app/unsubscribe/route.ts",
+    "app/preferences/page.tsx",
+    "app/preferences/route.ts",
+    "app/affiliates/page.tsx",
+    "app/affiliates/route.ts",
+    "app/referral/page.tsx",
+    "app/referral/route.ts",
+    "app/llms.txt/page.tsx",
+    "app/llms.txt/route.ts",
+    "app/ads.txt/page.tsx",
+    "app/ads.txt/route.ts",
+    "public/search",
+    "public/search.html",
+    "public/unsubscribe",
+    "public/unsubscribe.html",
+    "public/preferences",
+    "public/preferences.html",
+    "public/affiliates",
+    "public/affiliates.html",
+    "public/referral",
+    "public/referral.html",
+    "public/llms.txt",
+    "public/ads.txt",
   ]) {
     assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
   }

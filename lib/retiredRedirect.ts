@@ -2,13 +2,18 @@
  * Retired paths have no page. Each is a permanent move.
  * Next.js treats permanent as HTTP 308.
  * Password-reset aliases share the destination /forgot-password already
- * uses. /about-us shares the destination /about already uses. Both are /.
+ * uses. /about-us and /company share the destination /about already uses.
+ * Both are /.
  * /features shares the destination /plans already uses. That is /pricing.
- * /integrations and /procore share that same destination. /procore is only
- * the exact path, so /api/procore and anything under it stay on their routes.
+ * /integrations, /procore, /product, /products, /solutions, /use-cases,
+ * /why, /compare, and /alternatives share that same destination.
+ * /procore is only the exact path, so /api/procore and anything under it
+ * stay on their routes. /product does not match /products.
  * /careers, /team, /partners, and /customers share the destination / already uses.
  * /security.txt moves straight to /.well-known/security.txt.
  * /manifest.json and /site.webmanifest move straight to /manifest.webmanifest.
+ * /sitemap and /site-map move straight to /sitemap.xml. app/sitemap.ts
+ * serves that path. /sitemap.xml itself is not a source.
  */
 
 const HOME_HREF = "/";
@@ -17,6 +22,7 @@ const JOBS_HREF = "/jobs";
 const PRICING_HREF = "/pricing";
 const SECURITY_TXT_HREF = "/.well-known/security.txt";
 const MANIFEST_HREF = "/manifest.webmanifest";
+const SITEMAP_HREF = "/sitemap.xml";
 
 export function retiredRedirects(): Array<{
   source: string;
@@ -34,7 +40,19 @@ export function retiredRedirects(): Array<{
       destination: JOBS_HREF,
       permanent: true,
     })),
-    ...["/plans", "/features", "/integrations", "/procore"].map((source) => ({
+    ...[
+      "/plans",
+      "/features",
+      "/integrations",
+      "/procore",
+      "/product",
+      "/products",
+      "/solutions",
+      "/use-cases",
+      "/why",
+      "/compare",
+      "/alternatives",
+    ].map((source) => ({
       source,
       destination: PRICING_HREF,
       permanent: true,
@@ -53,6 +71,7 @@ export function retiredRedirects(): Array<{
       "/team",
       "/partners",
       "/customers",
+      "/company",
     ].map((source) => ({
       source,
       destination: HOME_HREF,
@@ -66,6 +85,11 @@ export function retiredRedirects(): Array<{
     ...["/manifest.json", "/site.webmanifest"].map((source) => ({
       source,
       destination: MANIFEST_HREF,
+      permanent: true,
+    })),
+    ...["/sitemap", "/site-map"].map((source) => ({
+      source,
+      destination: SITEMAP_HREF,
       permanent: true,
     })),
   ];
