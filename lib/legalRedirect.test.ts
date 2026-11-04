@@ -8,7 +8,7 @@ function readRepo(path: string): string {
   return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-test("legal aliases permanently move to /terms or /privacy (308), including /eula, /cookies, /cookie-policy, /refund, /refunds, /dmca, /imprint, /accessibility, /security, /trust, /gdpr, /ccpa, /legal/privacy, /legal/terms, /sla, /terms-and-conditions, /acceptable-use, /aup, /copyright, /trademarks, /privacy-notice, /legal/cookies, /subprocessors, and /dpa", () => {
+test("legal aliases permanently move to /terms or /privacy (308), including /eula, /cookies, /cookie-policy, /refund, /refunds, /dmca, /imprint, /accessibility, /security, /trust, /gdpr, /ccpa, /legal/privacy, /legal/terms, /sla, /terms-and-conditions, /acceptable-use, /aup, /copyright, /trademarks, /privacy-notice, /legal/cookies, /subprocessors, /dpa, /legal-notice, /disclaimer, /accessibility-statement, /cookie-settings, /do-not-sell, /privacy-choices, /your-privacy-choices, /security-policy, /responsible-disclosure, /bug-bounty, and /vulnerability-disclosure", () => {
   assert.deepEqual(legalRedirects(), [
     {
       source: "/legal",
@@ -91,6 +91,21 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
       permanent: true,
     },
     {
+      source: "/legal-notice",
+      destination: "/terms",
+      permanent: true,
+    },
+    {
+      source: "/disclaimer",
+      destination: "/terms",
+      permanent: true,
+    },
+    {
+      source: "/accessibility-statement",
+      destination: "/terms",
+      permanent: true,
+    },
+    {
       source: "/privacy-policy",
       destination: "/privacy",
       permanent: true,
@@ -147,6 +162,46 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
     },
     {
       source: "/dpa",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/cookie-settings",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/do-not-sell",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/privacy-choices",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/your-privacy-choices",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/security-policy",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/responsible-disclosure",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/bug-bounty",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/vulnerability-disclosure",
       destination: "/privacy",
       permanent: true,
     },
@@ -215,6 +270,41 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
   assert.equal(bySource.get("/legal/cookies"), bySource.get("/privacy-policy"));
   assert.equal(bySource.get("/subprocessors"), bySource.get("/privacy-policy"));
   assert.equal(bySource.get("/dpa"), bySource.get("/privacy-policy"));
+  for (const source of ["/legal-notice", "/disclaimer", "/accessibility-statement"]) {
+    const redirect = legalRedirects().find((item) => item.source === source);
+    assert.equal(redirect?.destination, "/terms", source);
+    assert.equal(redirect?.permanent, true, source);
+    assert.equal(redirect?.permanent ? 308 : 307, 308, source);
+    assert.equal(bySource.get(source), "/terms", source);
+    assert.equal(bySource.get(source), bySource.get("/legal"), source);
+    assert.equal(bySource.has(`${source}/extra`), false, source);
+  }
+  for (const source of [
+    "/cookie-settings",
+    "/do-not-sell",
+    "/privacy-choices",
+    "/your-privacy-choices",
+    "/security-policy",
+    "/responsible-disclosure",
+    "/bug-bounty",
+    "/vulnerability-disclosure",
+  ]) {
+    const redirect = legalRedirects().find((item) => item.source === source);
+    assert.equal(redirect?.destination, "/privacy", source);
+    assert.equal(redirect?.permanent, true, source);
+    assert.equal(redirect?.permanent ? 308 : 307, 308, source);
+    assert.equal(bySource.get(source), "/privacy", source);
+    assert.equal(bySource.get(source), bySource.get("/privacy-policy"), source);
+    assert.equal(bySource.has(`${source}/extra`), false, source);
+  }
+  assert.equal(bySource.get("/legal-notice"), bySource.get("/legal"));
+  assert.notEqual(bySource.get("/legal-notice"), bySource.get("/legal/privacy"));
+  assert.equal(bySource.get("/accessibility-statement"), bySource.get("/accessibility"));
+  assert.equal(bySource.get("/cookie-settings"), bySource.get("/cookies"));
+  assert.equal(bySource.get("/security-policy"), bySource.get("/security"));
+  assert.notEqual(bySource.get("/privacy-choices"), undefined);
+  assert.equal(bySource.get("/privacy-choices"), bySource.get("/your-privacy-choices"));
+  assert.equal(bySource.has("/security.txt"), false);
   assert.notEqual(bySource.get("/legal"), bySource.get("/legal/privacy"));
   assert.notEqual(bySource.get("/legal"), bySource.get("/legal/cookies"));
   assert.equal(bySource.has("/legal/privacy/extra"), false);
@@ -234,12 +324,12 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
   const config = readRepo("next.config.ts");
   assert.match(config, /\.\.\.legalRedirects\(\)/);
   assert.doesNotMatch(config, /["']\/legal["']/);
-  assert.doesNotMatch(config, /\/privacy-policy|\/tos|\/terms-of-service|\/eula|\/cookies|\/cookie-policy|\/refunds|\/refund|\/dmca|\/imprint|\/accessibility|\/trust|\/gdpr|\/ccpa|\/sla|\/legal\/privacy|\/legal\/terms|\/security(?!Headers)|\/terms-and-conditions|\/acceptable-use|\/aup|\/copyright|\/trademarks|\/privacy-notice|\/legal\/cookies|\/subprocessors|\/dpa/);
+  assert.doesNotMatch(config, /\/privacy-policy|\/tos|\/terms-of-service|\/eula|\/cookies|\/cookie-policy|\/refunds|\/refund|\/dmca|\/imprint|\/accessibility|\/trust|\/gdpr|\/ccpa|\/sla|\/legal\/privacy|\/legal\/terms|\/security(?!Headers)|\/terms-and-conditions|\/acceptable-use|\/aup|\/copyright|\/trademarks|\/privacy-notice|\/legal\/cookies|\/subprocessors|\/dpa|\/legal-notice|\/disclaimer|\/accessibility-statement|\/cookie-settings|\/do-not-sell|\/your-privacy-choices|\/privacy-choices|\/security-policy|\/responsible-disclosure|\/bug-bounty|\/vulnerability-disclosure/);
   assert.doesNotMatch(config, /\/terms/);
   assert.doesNotMatch(config, /\/privacy/);
 
   const proxy = readRepo("proxy.ts");
-  assert.doesNotMatch(proxy, /\/legal|\/privacy-policy|\/terms-of-service|\/tos|\/eula|\/cookies|\/cookie-policy|\/refunds|\/refund|\/dmca|\/imprint|\/accessibility|\/security(?![\w.])|\/trust(?![\w])|\/gdpr(?![\w])|\/ccpa(?![\w])|\/sla(?![\w])|\/terms-and-conditions|\/acceptable-use|\/aup(?![\w])|\/copyright|\/trademarks|\/privacy-notice|\/subprocessors|\/dpa(?![\w])/);
+  assert.doesNotMatch(proxy, /\/legal|\/privacy-policy|\/terms-of-service|\/tos|\/eula|\/cookies|\/cookie-policy|\/refunds|\/refund|\/dmca|\/imprint|\/accessibility|\/security(?![\w.])|\/trust(?![\w])|\/gdpr(?![\w])|\/ccpa(?![\w])|\/sla(?![\w])|\/terms-and-conditions|\/acceptable-use|\/aup(?![\w])|\/copyright|\/trademarks|\/privacy-notice|\/subprocessors|\/dpa(?![\w])|\/legal-notice|\/disclaimer|\/accessibility-statement|\/cookie-settings|\/do-not-sell|\/your-privacy-choices|\/privacy-choices|\/security-policy|\/responsible-disclosure|\/bug-bounty|\/vulnerability-disclosure/);
   assert.doesNotMatch(proxy, /redirect/);
 
   assert.ok(PUBLIC_PAGE_PATHS.includes("/terms"));
@@ -353,6 +443,50 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
     "public/subprocessors.html",
     "public/dpa",
     "public/dpa.html",
+    "app/legal-notice/page.tsx",
+    "app/legal-notice/route.ts",
+    "app/disclaimer/page.tsx",
+    "app/disclaimer/route.ts",
+    "app/accessibility-statement/page.tsx",
+    "app/accessibility-statement/route.ts",
+    "app/cookie-settings/page.tsx",
+    "app/cookie-settings/route.ts",
+    "app/do-not-sell/page.tsx",
+    "app/do-not-sell/route.ts",
+    "app/privacy-choices/page.tsx",
+    "app/privacy-choices/route.ts",
+    "app/your-privacy-choices/page.tsx",
+    "app/your-privacy-choices/route.ts",
+    "app/security-policy/page.tsx",
+    "app/security-policy/route.ts",
+    "app/responsible-disclosure/page.tsx",
+    "app/responsible-disclosure/route.ts",
+    "app/bug-bounty/page.tsx",
+    "app/bug-bounty/route.ts",
+    "app/vulnerability-disclosure/page.tsx",
+    "app/vulnerability-disclosure/route.ts",
+    "public/legal-notice",
+    "public/legal-notice.html",
+    "public/disclaimer",
+    "public/disclaimer.html",
+    "public/accessibility-statement",
+    "public/accessibility-statement.html",
+    "public/cookie-settings",
+    "public/cookie-settings.html",
+    "public/do-not-sell",
+    "public/do-not-sell.html",
+    "public/privacy-choices",
+    "public/privacy-choices.html",
+    "public/your-privacy-choices",
+    "public/your-privacy-choices.html",
+    "public/security-policy",
+    "public/security-policy.html",
+    "public/responsible-disclosure",
+    "public/responsible-disclosure.html",
+    "public/bug-bounty",
+    "public/bug-bounty.html",
+    "public/vulnerability-disclosure",
+    "public/vulnerability-disclosure.html",
   ]) {
     assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
   }

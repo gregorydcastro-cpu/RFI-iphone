@@ -16,7 +16,7 @@ function readRepo(path: string): string {
   return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-test("retired aliases permanently move to account, jobs, pricing, home, security.txt, the web manifest, or /sitemap.xml (308), including /integrations, /procore, /careers, /team, /partners, /customers, /company, /product, /sitemap, and /site-map", () => {
+test("retired aliases permanently move to account, jobs, pricing, home, security.txt, the web manifest, or /sitemap.xml (308), including /integrations, /procore, /careers, /team, /partners, /customers, /company, /product, /sitemap, /site-map, /pricing-plans, /team-plans, /enterprise-plan, /quote, /get-quote, /estimate, /investors, /jobs-board, and /hiring", () => {
   assert.deepEqual(retiredRedirects(), [
     {
       source: "/settings",
@@ -119,6 +119,36 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
       permanent: true,
     },
     {
+      source: "/pricing-plans",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/team-plans",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/enterprise-plan",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/quote",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/get-quote",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/estimate",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
       source: "/forgot-password",
       destination: "/",
       permanent: true,
@@ -189,6 +219,21 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
       permanent: true,
     },
     {
+      source: "/investors",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/jobs-board",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/hiring",
+      destination: "/",
+      permanent: true,
+    },
+    {
       source: "/security.txt",
       destination: "/.well-known/security.txt",
       permanent: true,
@@ -251,6 +296,39 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
   assert.equal(bySource.get("/why"), bySource.get("/plans"));
   assert.equal(bySource.get("/compare"), bySource.get("/plans"));
   assert.equal(bySource.get("/alternatives"), bySource.get("/plans"));
+  for (const source of [
+    "/pricing-plans",
+    "/team-plans",
+    "/enterprise-plan",
+    "/quote",
+    "/get-quote",
+    "/estimate",
+  ]) {
+    const redirect = retiredRedirects().find((item) => item.source === source);
+    assert.equal(redirect?.destination, "/pricing", source);
+    assert.equal(redirect?.permanent, true, source);
+    assert.equal(redirect?.permanent ? 308 : 307, 308, source);
+    assert.equal(bySource.get(source), "/pricing", source);
+    assert.equal(bySource.get(source), bySource.get("/plans"), source);
+    assert.equal(bySource.has(`${source}/extra`), false, source);
+  }
+  for (const source of ["/investors", "/jobs-board", "/hiring"]) {
+    const redirect = retiredRedirects().find((item) => item.source === source);
+    assert.equal(redirect?.destination, "/", source);
+    assert.equal(redirect?.permanent, true, source);
+    assert.equal(redirect?.permanent ? 308 : 307, 308, source);
+    assert.equal(bySource.get(source), "/", source);
+    assert.equal(bySource.get(source), bySource.get("/about"), source);
+    assert.equal(bySource.has(`${source}/extra`), false, source);
+  }
+  assert.equal(bySource.get("/pricing-plans"), "/pricing");
+  assert.equal(bySource.has("/pricing"), false);
+  assert.equal(bySource.get("/team-plans"), "/pricing");
+  assert.equal(bySource.get("/team"), "/");
+  assert.equal(bySource.get("/enterprise-plan"), "/pricing");
+  assert.equal(bySource.has("/enterprise"), false);
+  assert.equal(bySource.get("/jobs-board"), "/");
+  assert.equal(bySource.has("/jobs"), false);
   assert.equal(bySource.has("/product/extra"), false);
   assert.equal(bySource.has("/products/extra"), false);
   assert.equal(bySource.has("/company/extra"), false);
@@ -295,6 +373,15 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/alternatives",
     "/sitemap",
     "/site-map",
+    "/pricing-plans",
+    "/team-plans",
+    "/enterprise-plan",
+    "/quote",
+    "/get-quote",
+    "/estimate",
+    "/investors",
+    "/jobs-board",
+    "/hiring",
   ]) {
     assert.equal(source.slice(1).includes("/"), false, source);
   }
@@ -387,6 +474,7 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/referral",
     "/llms.txt",
     "/ads.txt",
+    "/admin",
   ];
   for (const path of stay404) {
     assert.equal(everySource.has(path), false, path);
@@ -401,12 +489,14 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/app-store-link",
     "/free",
     "/sign-up-free",
+    "/free-account",
+    "/signup-free",
   ]) {
     assert.equal(everySource.has(path), false, path);
     assert.equal(signInAliasDestination(path), "/");
     assert.equal(demoAliasDestination(path), null, path);
   }
-  for (const path of ["/book-demo", "/request-demo", "/schedule-demo", "/get-demo"]) {
+  for (const path of ["/book-demo", "/request-demo", "/schedule-demo", "/get-demo", "/demo-video"]) {
     assert.equal(everySource.has(path), false, path);
     assert.equal(signInAliasDestination(path), null, path);
     assert.equal(demoAliasDestination(path), "/pack/maple-point");
@@ -489,13 +579,13 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
   assert.match(config, /\.\.\.retiredRedirects\(\)/);
   assert.doesNotMatch(
     config,
-    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/account|\/jobs|\/home|\/index\.html|\/profile|\/plans|\/pricing|\/projects|\/project|\/forgot|\/password-reset|\/reset|\/about-us|\/me|\/app|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt|\/company|\/product|\/products|\/solutions|\/use-cases|\/why|\/compare|\/alternatives|\/sitemap|\/site-map/,
+    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/account|\/jobs|\/home|\/index\.html|\/profile|\/plans|\/pricing|\/projects|\/project|\/forgot|\/password-reset|\/reset|\/about-us|\/me|\/app|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt|\/company|\/product|\/products|\/solutions|\/use-cases|\/why|\/compare|\/alternatives|\/sitemap|\/site-map|\/pricing-plans|\/team-plans|\/enterprise-plan|\/get-quote|\/quote|\/estimate|\/investors|\/jobs-board|\/hiring/,
   );
 
   const proxy = readRepo("proxy.ts");
   assert.doesNotMatch(
     proxy,
-    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/home|\/index\.html|\/profile|\/plans|\/projects|\/forgot|\/password-reset|\/about-us|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt|\/company|\/product|\/products|\/solutions|\/use-cases|\/why|\/compare|\/alternatives|\/sitemap|\/site-map/,
+    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/home|\/index\.html|\/profile|\/plans|\/projects|\/forgot|\/password-reset|\/about-us|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt|\/company|\/product|\/products|\/solutions|\/use-cases|\/why|\/compare|\/alternatives|\/sitemap|\/site-map|\/pricing-plans|\/team-plans|\/enterprise-plan|\/get-quote|\/quote|\/estimate|\/investors|\/jobs-board|\/hiring/,
   );
   assert.doesNotMatch(proxy, /redirect/);
 
@@ -684,6 +774,46 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "public/referral.html",
     "public/llms.txt",
     "public/ads.txt",
+    "app/pricing-plans/page.tsx",
+    "app/pricing-plans/route.ts",
+    "app/team-plans/page.tsx",
+    "app/team-plans/route.ts",
+    "app/enterprise-plan/page.tsx",
+    "app/enterprise-plan/route.ts",
+    "app/quote/page.tsx",
+    "app/quote/route.ts",
+    "app/get-quote/page.tsx",
+    "app/get-quote/route.ts",
+    "app/estimate/page.tsx",
+    "app/estimate/route.ts",
+    "app/investors/page.tsx",
+    "app/investors/route.ts",
+    "app/jobs-board/page.tsx",
+    "app/jobs-board/route.ts",
+    "app/hiring/page.tsx",
+    "app/hiring/route.ts",
+    "app/admin/page.tsx",
+    "app/admin/route.ts",
+    "public/pricing-plans",
+    "public/pricing-plans.html",
+    "public/team-plans",
+    "public/team-plans.html",
+    "public/enterprise-plan",
+    "public/enterprise-plan.html",
+    "public/quote",
+    "public/quote.html",
+    "public/get-quote",
+    "public/get-quote.html",
+    "public/estimate",
+    "public/estimate.html",
+    "public/investors",
+    "public/investors.html",
+    "public/jobs-board",
+    "public/jobs-board.html",
+    "public/hiring",
+    "public/hiring.html",
+    "public/admin",
+    "public/admin.html",
   ]) {
     assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
   }

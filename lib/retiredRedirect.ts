@@ -6,10 +6,16 @@
  * Both are /.
  * /features shares the destination /plans already uses. That is /pricing.
  * /integrations, /procore, /product, /products, /solutions, /use-cases,
- * /why, /compare, and /alternatives share that same destination.
+ * /why, /compare, /alternatives, /pricing-plans, /team-plans,
+ * /enterprise-plan, /quote, /get-quote, and /estimate share that same
+ * destination.
  * /procore is only the exact path, so /api/procore and anything under it
  * stay on their routes. /product does not match /products.
- * /careers, /team, /partners, and /customers share the destination / already uses.
+ * /careers, /team, /partners, /customers, /investors, /jobs-board, and
+ * /hiring share the destination / already uses.
+ * /jobs-board does not match /jobs. /pricing-plans does not match /pricing.
+ * /team-plans does not match /team. /enterprise-plan does not match
+ * /enterprise.
  * /security.txt moves straight to /.well-known/security.txt.
  * /manifest.json and /site.webmanifest move straight to /manifest.webmanifest.
  * /sitemap and /site-map move straight to /sitemap.xml. app/sitemap.ts
@@ -52,6 +58,12 @@ export function retiredRedirects(): Array<{
       "/why",
       "/compare",
       "/alternatives",
+      "/pricing-plans",
+      "/team-plans",
+      "/enterprise-plan",
+      "/quote",
+      "/get-quote",
+      "/estimate",
     ].map((source) => ({
       source,
       destination: PRICING_HREF,
@@ -72,6 +84,9 @@ export function retiredRedirects(): Array<{
       "/partners",
       "/customers",
       "/company",
+      "/investors",
+      "/jobs-board",
+      "/hiring",
     ].map((source) => ({
       source,
       destination: HOME_HREF,
