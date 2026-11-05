@@ -4,8 +4,11 @@
  * /case-studies, /testimonials, /webinar, /events, /contact-sales, /sales,
  * /enterprise, /community, /forum, /developers, /api-docs, /help-center,
  * /knowledge-base, /kb, /tutorials, /academy, /training, /webinars, /video,
- * /videos, /newsletter, /podcast, /media, /media-kit, /press-kit, and /brand
- * have no page.
+ * /videos, /newsletter, /podcast, /media, /media-kit, /press-kit, /brand,
+ * /talk-to-sales, /sales-contact, /helpdesk, /ticket, /submit-ticket,
+ * /feedback, /report-bug, /bug-report, /feature-request, /ideas,
+ * /community-forum, /contact/support, /support/contact, /developer,
+ * /api-reference, /status-page, /uptime, and /system-status have no page.
  * Each is a permanent move straight to the public support page, not to
  * another alias. Next.js treats permanent as HTTP 308.
  * Each source is that exact path. A longer path such as /blog/post is not
@@ -13,6 +16,13 @@
  * /help-center does not match /help. /knowledge-base does not match /kb.
  * /webinars does not match /webinar. /videos does not match /video.
  * /media-kit does not match /media. /press-kit does not match /press.
+ * /contact/support and /support/contact do not match /contact or /support.
+ * /developer does not match /developers. /community-forum does not match
+ * /community. /status-page and /system-status do not match /status.
+ * /sales-contact does not match /sales. /talk-to-sales does not match
+ * /contact-sales. /api-reference does not match /api-docs, /api, or
+ * /api/docs. /bug-report does not match /report-bug. /submit-ticket does
+ * not match /ticket.
  */
 
 const SUPPORT_HREF = "/support";
@@ -63,6 +73,24 @@ export function contactRedirects(): Array<{
     "/media-kit",
     "/press-kit",
     "/brand",
+    "/talk-to-sales",
+    "/sales-contact",
+    "/helpdesk",
+    "/ticket",
+    "/submit-ticket",
+    "/feedback",
+    "/report-bug",
+    "/bug-report",
+    "/feature-request",
+    "/ideas",
+    "/community-forum",
+    "/contact/support",
+    "/support/contact",
+    "/developer",
+    "/api-reference",
+    "/status-page",
+    "/uptime",
+    "/system-status",
   ].map((source) => ({
     source,
     destination: SUPPORT_HREF,

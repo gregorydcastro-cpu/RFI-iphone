@@ -86,18 +86,20 @@ export function fieldNotFoundSpeak(variant: FieldNotFoundVariant): string {
  * /create-account, /get-started, /start, /trial, /free-trial, and
  * /onboarding. /download, /ios, /app-store, /android, /how-it-works,
  * /tour, /mobile, /web, /apps, /mobile-app, /iphone, /ipad,
- * /app-store-link, /free, /sign-up-free, /free-account, and /signup-free
+ * /app-store-link, /free, /sign-up-free, /free-account, /signup-free,
+ * /welcome, /web-app, /beta, /waitlist, and /early-access
  * use the same temporary redirect. Each name is one exact path segment.
  * /free-account does not match /free. /signup-free does not match /signup
- * or /sign-up-free. Next matches this source without case sensitivity and
+ * or /sign-up-free. /web-app does not match /web. /early-access does not
+ * match /early. Next matches this source without case sensitivity and
  * allows one trailing slash. Query values pass through to `/`.
  * permanent: false is the same temporary 307 as /login and /signup.
  */
 export const SIGN_IN_ALIAS_SOURCE =
-  "/:alias(login|log-in|signin|sign-in|signup|sign-up|register|join|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone|ipad|app-store-link|free|sign-up-free|free-account|signup-free)";
+  "/:alias(login|log-in|signin|sign-in|signup|sign-up|register|join|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone|ipad|app-store-link|free|sign-up-free|free-account|signup-free|welcome|web-app|beta|waitlist|early-access)";
 
 const SIGN_IN_ALIAS_PATH =
-  /^\/(?:login|log-in|signin|sign-in|signup|sign-up|register|join|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone|ipad|app-store-link|free|sign-up-free|free-account|signup-free)\/?$/i;
+  /^\/(?:login|log-in|signin|sign-in|signup|sign-up|register|join|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone|ipad|app-store-link|free|sign-up-free|free-account|signup-free|welcome|web-app|beta|waitlist|early-access)\/?$/i;
 
 /**
  * Demo booking aliases have no page. Each name is one exact path segment

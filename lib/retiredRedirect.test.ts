@@ -16,7 +16,7 @@ function readRepo(path: string): string {
   return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-test("retired aliases permanently move to account, jobs, pricing, home, security.txt, the web manifest, or /sitemap.xml (308), including /integrations, /procore, /careers, /team, /partners, /customers, /company, /product, /sitemap, /site-map, /pricing-plans, /team-plans, /enterprise-plan, /quote, /get-quote, /estimate, /investors, /jobs-board, and /hiring", () => {
+test("retired aliases permanently move to account, jobs, pricing, home, security.txt, the web manifest, or /sitemap.xml (308), including /integrations, /procore, /careers, /team, /partners, /customers, /company, /product, /sitemap, /site-map, /pricing-plans, /team-plans, /enterprise-plan, /quote, /get-quote, /estimate, /investors, /jobs-board, /hiring, /about-gc-field-log, /our-story, /mission, /values, /leadership, and /founders", () => {
   assert.deepEqual(retiredRedirects(), [
     {
       source: "/settings",
@@ -234,6 +234,36 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
       permanent: true,
     },
     {
+      source: "/about-gc-field-log",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/our-story",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/mission",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/values",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/leadership",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/founders",
+      destination: "/",
+      permanent: true,
+    },
+    {
       source: "/security.txt",
       destination: "/.well-known/security.txt",
       permanent: true,
@@ -312,7 +342,17 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     assert.equal(bySource.get(source), bySource.get("/plans"), source);
     assert.equal(bySource.has(`${source}/extra`), false, source);
   }
-  for (const source of ["/investors", "/jobs-board", "/hiring"]) {
+  for (const source of [
+    "/investors",
+    "/jobs-board",
+    "/hiring",
+    "/about-gc-field-log",
+    "/our-story",
+    "/mission",
+    "/values",
+    "/leadership",
+    "/founders",
+  ]) {
     const redirect = retiredRedirects().find((item) => item.source === source);
     assert.equal(redirect?.destination, "/", source);
     assert.equal(redirect?.permanent, true, source);
@@ -329,6 +369,10 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
   assert.equal(bySource.has("/enterprise"), false);
   assert.equal(bySource.get("/jobs-board"), "/");
   assert.equal(bySource.has("/jobs"), false);
+  assert.equal(bySource.get("/about-gc-field-log"), "/");
+  assert.equal(bySource.get("/about-gc-field-log"), bySource.get("/about"));
+  assert.equal(bySource.has("/about/gc-field-log"), false);
+  assert.equal(bySource.has("/about-gc-field-log/extra"), false);
   assert.equal(bySource.has("/product/extra"), false);
   assert.equal(bySource.has("/products/extra"), false);
   assert.equal(bySource.has("/company/extra"), false);
@@ -382,6 +426,12 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/investors",
     "/jobs-board",
     "/hiring",
+    "/about-gc-field-log",
+    "/our-story",
+    "/mission",
+    "/values",
+    "/leadership",
+    "/founders",
   ]) {
     assert.equal(source.slice(1).includes("/"), false, source);
   }
@@ -421,6 +471,34 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/referral",
     "/llms.txt",
     "/ads.txt",
+    "/safety",
+    "/punch-list",
+    "/daily-reports",
+    "/field-notes",
+    "/export",
+    "/pdf",
+    "/industries",
+    "/construction",
+    "/contractors",
+    "/twitter",
+    "/x",
+    "/facebook",
+    "/instagram",
+    "/linkedin",
+    "/youtube",
+    "/discord",
+    "/slack",
+    "/mac",
+    "/windows",
+    "/android-app",
+    "/play-store",
+    "/google-play",
+    "/testflight",
+    "/desktop",
+    "/soc2",
+    "/hipaa",
+    "/compliance",
+    "/webhooks",
   ]) {
     assert.equal(sources.has(path), false, path);
   }
@@ -475,6 +553,34 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/llms.txt",
     "/ads.txt",
     "/admin",
+    "/safety",
+    "/punch-list",
+    "/daily-reports",
+    "/field-notes",
+    "/export",
+    "/pdf",
+    "/industries",
+    "/construction",
+    "/contractors",
+    "/twitter",
+    "/x",
+    "/facebook",
+    "/instagram",
+    "/linkedin",
+    "/youtube",
+    "/discord",
+    "/slack",
+    "/mac",
+    "/windows",
+    "/android-app",
+    "/play-store",
+    "/google-play",
+    "/testflight",
+    "/desktop",
+    "/soc2",
+    "/hipaa",
+    "/compliance",
+    "/webhooks",
   ];
   for (const path of stay404) {
     assert.equal(everySource.has(path), false, path);
@@ -491,6 +597,11 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/sign-up-free",
     "/free-account",
     "/signup-free",
+    "/welcome",
+    "/web-app",
+    "/beta",
+    "/waitlist",
+    "/early-access",
   ]) {
     assert.equal(everySource.has(path), false, path);
     assert.equal(signInAliasDestination(path), "/");
@@ -579,13 +690,13 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
   assert.match(config, /\.\.\.retiredRedirects\(\)/);
   assert.doesNotMatch(
     config,
-    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/account|\/jobs|\/home|\/index\.html|\/profile|\/plans|\/pricing|\/projects|\/project|\/forgot|\/password-reset|\/reset|\/about-us|\/me|\/app|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt|\/company|\/product|\/products|\/solutions|\/use-cases|\/why|\/compare|\/alternatives|\/sitemap|\/site-map|\/pricing-plans|\/team-plans|\/enterprise-plan|\/get-quote|\/quote|\/estimate|\/investors|\/jobs-board|\/hiring/,
+    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/account|\/jobs|\/home|\/index\.html|\/profile|\/plans|\/pricing|\/projects|\/project|\/forgot|\/password-reset|\/reset|\/about-us|\/me|\/app|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt|\/company|\/product|\/products|\/solutions|\/use-cases|\/why|\/compare|\/alternatives|\/sitemap|\/site-map|\/pricing-plans|\/team-plans|\/enterprise-plan|\/get-quote|\/quote|\/estimate|\/investors|\/jobs-board|\/hiring|\/about-gc-field-log|\/our-story|\/mission|\/values|\/leadership|\/founders/,
   );
 
   const proxy = readRepo("proxy.ts");
   assert.doesNotMatch(
     proxy,
-    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/home|\/index\.html|\/profile|\/plans|\/projects|\/forgot|\/password-reset|\/about-us|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt|\/company|\/product|\/products|\/solutions|\/use-cases|\/why|\/compare|\/alternatives|\/sitemap|\/site-map|\/pricing-plans|\/team-plans|\/enterprise-plan|\/get-quote|\/quote|\/estimate|\/investors|\/jobs-board|\/hiring/,
+    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/home|\/index\.html|\/profile|\/plans|\/projects|\/forgot|\/password-reset|\/about-us|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt|\/company|\/product|\/products|\/solutions|\/use-cases|\/why|\/compare|\/alternatives|\/sitemap|\/site-map|\/pricing-plans|\/team-plans|\/enterprise-plan|\/get-quote|\/quote|\/estimate|\/investors|\/jobs-board|\/hiring|\/about-gc-field-log|\/our-story|\/mission|\/values|\/leadership|\/founders/,
   );
   assert.doesNotMatch(proxy, /redirect/);
 
@@ -814,6 +925,142 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "public/hiring.html",
     "public/admin",
     "public/admin.html",
+    "app/about-gc-field-log/page.tsx",
+    "app/about-gc-field-log/route.ts",
+    "app/our-story/page.tsx",
+    "app/our-story/route.ts",
+    "app/mission/page.tsx",
+    "app/mission/route.ts",
+    "app/values/page.tsx",
+    "app/values/route.ts",
+    "app/leadership/page.tsx",
+    "app/leadership/route.ts",
+    "app/founders/page.tsx",
+    "app/founders/route.ts",
+    "public/about-gc-field-log",
+    "public/about-gc-field-log.html",
+    "public/our-story",
+    "public/our-story.html",
+    "public/mission",
+    "public/mission.html",
+    "public/values",
+    "public/values.html",
+    "public/leadership",
+    "public/leadership.html",
+    "public/founders",
+    "public/founders.html",
+    "app/safety/page.tsx",
+    "app/safety/route.ts",
+    "app/punch-list/page.tsx",
+    "app/punch-list/route.ts",
+    "app/daily-reports/page.tsx",
+    "app/daily-reports/route.ts",
+    "app/field-notes/page.tsx",
+    "app/field-notes/route.ts",
+    "app/export/page.tsx",
+    "app/export/route.ts",
+    "app/pdf/page.tsx",
+    "app/pdf/route.ts",
+    "app/industries/page.tsx",
+    "app/industries/route.ts",
+    "app/construction/page.tsx",
+    "app/construction/route.ts",
+    "app/contractors/page.tsx",
+    "app/contractors/route.ts",
+    "app/twitter/page.tsx",
+    "app/twitter/route.ts",
+    "app/x/page.tsx",
+    "app/x/route.ts",
+    "app/facebook/page.tsx",
+    "app/facebook/route.ts",
+    "app/instagram/page.tsx",
+    "app/instagram/route.ts",
+    "app/linkedin/page.tsx",
+    "app/linkedin/route.ts",
+    "app/youtube/page.tsx",
+    "app/youtube/route.ts",
+    "app/discord/page.tsx",
+    "app/discord/route.ts",
+    "app/slack/page.tsx",
+    "app/slack/route.ts",
+    "app/mac/page.tsx",
+    "app/mac/route.ts",
+    "app/windows/page.tsx",
+    "app/windows/route.ts",
+    "app/android-app/page.tsx",
+    "app/android-app/route.ts",
+    "app/play-store/page.tsx",
+    "app/play-store/route.ts",
+    "app/google-play/page.tsx",
+    "app/google-play/route.ts",
+    "app/testflight/page.tsx",
+    "app/testflight/route.ts",
+    "app/desktop/page.tsx",
+    "app/desktop/route.ts",
+    "app/soc2/page.tsx",
+    "app/soc2/route.ts",
+    "app/hipaa/page.tsx",
+    "app/hipaa/route.ts",
+    "app/compliance/page.tsx",
+    "app/compliance/route.ts",
+    "app/webhooks/page.tsx",
+    "app/webhooks/route.ts",
+    "public/safety",
+    "public/safety.html",
+    "public/punch-list",
+    "public/punch-list.html",
+    "public/daily-reports",
+    "public/daily-reports.html",
+    "public/field-notes",
+    "public/field-notes.html",
+    "public/export",
+    "public/export.html",
+    "public/pdf",
+    "public/pdf.html",
+    "public/industries",
+    "public/industries.html",
+    "public/construction",
+    "public/construction.html",
+    "public/contractors",
+    "public/contractors.html",
+    "public/twitter",
+    "public/twitter.html",
+    "public/x",
+    "public/x.html",
+    "public/facebook",
+    "public/facebook.html",
+    "public/instagram",
+    "public/instagram.html",
+    "public/linkedin",
+    "public/linkedin.html",
+    "public/youtube",
+    "public/youtube.html",
+    "public/discord",
+    "public/discord.html",
+    "public/slack",
+    "public/slack.html",
+    "public/mac",
+    "public/mac.html",
+    "public/windows",
+    "public/windows.html",
+    "public/android-app",
+    "public/android-app.html",
+    "public/play-store",
+    "public/play-store.html",
+    "public/google-play",
+    "public/google-play.html",
+    "public/testflight",
+    "public/testflight.html",
+    "public/desktop",
+    "public/desktop.html",
+    "public/soc2",
+    "public/soc2.html",
+    "public/hipaa",
+    "public/hipaa.html",
+    "public/compliance",
+    "public/compliance.html",
+    "public/webhooks",
+    "public/webhooks.html",
   ]) {
     assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
   }
