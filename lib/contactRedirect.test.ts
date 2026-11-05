@@ -8,7 +8,7 @@ function readRepo(path: string): string {
   return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog, /changelog, /news, /press, /roadmap, /guides, /resources, /case-studies, /testimonials, /webinar, /events, /contact-sales, /sales, /enterprise, /community, /forum, /developers, /api-docs, /help-center, /knowledge-base, /kb, /tutorials, /academy, /training, /webinars, /video, /videos, /newsletter, /podcast, /media, /media-kit, /press-kit, and /brand permanently move to /support (308)", () => {
+test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog, /changelog, /news, /press, /roadmap, /guides, /resources, /case-studies, /testimonials, /webinar, /events, /contact-sales, /sales, /enterprise, /community, /forum, /developers, /api-docs, /help-center, /knowledge-base, /kb, /tutorials, /academy, /training, /webinars, /video, /videos, /newsletter, /podcast, /media, /media-kit, /press-kit, /brand, /talk-to-sales, /sales-contact, /helpdesk, /ticket, /submit-ticket, /feedback, /report-bug, /bug-report, /feature-request, /ideas, /community-forum, /contact/support, /support/contact, /developer, /api-reference, /status-page, /uptime, and /system-status permanently move to /support (308)", () => {
   assert.deepEqual(contactRedirects(), [
     {
       source: "/contact",
@@ -210,6 +210,96 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
       destination: "/support",
       permanent: true,
     },
+    {
+      source: "/talk-to-sales",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/sales-contact",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/helpdesk",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/ticket",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/submit-ticket",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/feedback",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/report-bug",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/bug-report",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/feature-request",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/ideas",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/community-forum",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/contact/support",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/support/contact",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/developer",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/api-reference",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/status-page",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/uptime",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/system-status",
+      destination: "/support",
+      permanent: true,
+    },
   ]);
   const sources = new Set(contactRedirects().map((redirect) => redirect.source));
   for (const redirect of contactRedirects()) {
@@ -217,7 +307,13 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
     assert.equal(redirect.permanent ? 308 : 307, 308);
     assert.equal(redirect.destination, "/support");
     assert.equal(sources.has(redirect.destination), false, redirect.source);
-    assert.equal(redirect.source.slice(1).includes("/"), false, redirect.source);
+    const nested = redirect.source.slice(1).includes("/");
+    if (nested) {
+      assert.ok(
+        redirect.source === "/contact/support" || redirect.source === "/support/contact",
+        redirect.source,
+      );
+    }
     assert.doesNotMatch(redirect.source, /[:*]/);
     assert.equal(redirect.source.endsWith("/"), false, redirect.source);
   }
@@ -281,6 +377,54 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
   assert.equal(bySource.has("/developers/docs"), false);
   assert.equal(bySource.has("/guides/post"), false);
   assert.equal(bySource.has("/web"), false);
+  for (const source of [
+    "/talk-to-sales",
+    "/sales-contact",
+    "/helpdesk",
+    "/ticket",
+    "/submit-ticket",
+    "/feedback",
+    "/report-bug",
+    "/bug-report",
+    "/feature-request",
+    "/ideas",
+    "/community-forum",
+    "/contact/support",
+    "/support/contact",
+    "/developer",
+    "/api-reference",
+    "/status-page",
+    "/uptime",
+    "/system-status",
+  ]) {
+    const redirect = contactRedirects().find((item) => item.source === source);
+    assert.equal(redirect?.destination, "/support", source);
+    assert.equal(redirect?.permanent, true, source);
+    assert.equal(redirect?.permanent ? 308 : 307, 308, source);
+    assert.equal(bySource.get(source), "/support", source);
+    assert.equal(bySource.get(source), bySource.get("/contact"), source);
+    assert.equal(bySource.has(`${source}/extra`), false, source);
+  }
+  assert.equal(bySource.get("/developer"), bySource.get("/developers"));
+  assert.equal(bySource.has("/developer/extra"), false);
+  assert.equal(bySource.get("/community-forum"), bySource.get("/community"));
+  assert.equal(bySource.has("/community/forum"), false);
+  assert.equal(bySource.get("/status-page"), bySource.get("/status"));
+  assert.equal(bySource.get("/system-status"), bySource.get("/status"));
+  assert.equal(bySource.has("/status/page"), false);
+  assert.equal(bySource.get("/sales-contact"), bySource.get("/sales"));
+  assert.equal(bySource.has("/sales/contact"), false);
+  assert.equal(bySource.get("/talk-to-sales"), bySource.get("/contact-sales"));
+  assert.equal(bySource.get("/api-reference"), bySource.get("/api-docs"));
+  assert.equal(bySource.has("/api/reference"), false);
+  assert.equal(bySource.get("/bug-report"), bySource.get("/report-bug"));
+  assert.equal(bySource.get("/submit-ticket"), bySource.get("/ticket"));
+  assert.equal(bySource.get("/contact/support"), bySource.get("/contact"));
+  assert.equal(bySource.get("/support/contact"), bySource.get("/contact"));
+  assert.equal(bySource.has("/contact"), true);
+  assert.equal(bySource.has("/support"), false);
+  assert.equal(bySource.has("/contact/extra"), false);
+  assert.equal(bySource.has("/support/extra"), false);
   for (const path of [
     "/admin",
     "/api",
@@ -313,16 +457,44 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
     "/referral",
     "/llms.txt",
     "/ads.txt",
+    "/safety",
+    "/punch-list",
+    "/daily-reports",
+    "/field-notes",
+    "/export",
+    "/pdf",
+    "/industries",
+    "/construction",
+    "/contractors",
+    "/twitter",
+    "/x",
+    "/facebook",
+    "/instagram",
+    "/linkedin",
+    "/youtube",
+    "/discord",
+    "/slack",
+    "/mac",
+    "/windows",
+    "/android-app",
+    "/play-store",
+    "/google-play",
+    "/testflight",
+    "/desktop",
+    "/soc2",
+    "/hipaa",
+    "/compliance",
+    "/webhooks",
   ]) {
     assert.equal(sources.has(path), false, path);
   }
 
   const config = readRepo("next.config.ts");
   assert.match(config, /\.\.\.contactRedirects\(\)/);
-  assert.doesNotMatch(config, /\/privacy|\/terms|\/support|\/help|\/faq|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events|\/contact-sales|\/sales|\/enterprise|\/community|\/forum|\/developers|\/api-docs|\/help-center|\/knowledge-base|\/kb|\/tutorials|\/academy|\/training|\/webinars|\/videos|\/video|\/newsletter|\/podcast|\/media-kit|\/media|\/press-kit|\/brand/);
+  assert.doesNotMatch(config, /\/privacy|\/terms|\/support|\/help|\/faq|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events|\/contact-sales|\/sales|\/enterprise|\/community|\/forum|\/developers|\/api-docs|\/help-center|\/knowledge-base|\/kb|\/tutorials|\/academy|\/training|\/webinars|\/videos|\/video|\/newsletter|\/podcast|\/media-kit|\/media|\/press-kit|\/brand|\/talk-to-sales|\/sales-contact|\/helpdesk|\/submit-ticket|\/ticket|\/feedback|\/report-bug|\/bug-report|\/feature-request|\/ideas|\/community-forum|\/contact\/support|\/support\/contact|\/developer|\/api-reference|\/status-page|\/system-status|\/uptime/);
 
   const proxy = readRepo("proxy.ts");
-  assert.doesNotMatch(proxy, /\/contact|\/help|\/faq|\/contact-us|\/support-center|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events|\/contact-sales|\/sales|\/enterprise|\/community|\/forum|\/developers|\/api-docs|\/help-center|\/knowledge-base|\/kb|\/tutorials|\/academy|\/training|\/webinars|\/videos|\/video|\/newsletter|\/podcast|\/media-kit|\/media|\/press-kit|\/brand/);
+  assert.doesNotMatch(proxy, /\/contact|\/help|\/faq|\/contact-us|\/support-center|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events|\/contact-sales|\/sales|\/enterprise|\/community|\/forum|\/developers|\/api-docs|\/help-center|\/knowledge-base|\/kb|\/tutorials|\/academy|\/training|\/webinars|\/videos|\/video|\/newsletter|\/podcast|\/media-kit|\/media|\/press-kit|\/brand|\/talk-to-sales|\/sales-contact|\/helpdesk|\/submit-ticket|\/ticket|\/feedback|\/report-bug|\/bug-report|\/feature-request|\/ideas|\/community-forum|\/contact\/support|\/support\/contact|\/developer|\/api-reference|\/status-page|\/system-status|\/uptime/);
   assert.doesNotMatch(proxy, /redirect/);
 
   assert.ok(PUBLIC_PAGE_PATHS.includes("/support"));
@@ -483,6 +655,78 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
     "public/press-kit.html",
     "public/brand",
     "public/brand.html",
+    "app/talk-to-sales/page.tsx",
+    "app/talk-to-sales/route.ts",
+    "app/sales-contact/page.tsx",
+    "app/sales-contact/route.ts",
+    "app/helpdesk/page.tsx",
+    "app/helpdesk/route.ts",
+    "app/ticket/page.tsx",
+    "app/ticket/route.ts",
+    "app/submit-ticket/page.tsx",
+    "app/submit-ticket/route.ts",
+    "app/feedback/page.tsx",
+    "app/feedback/route.ts",
+    "app/report-bug/page.tsx",
+    "app/report-bug/route.ts",
+    "app/bug-report/page.tsx",
+    "app/bug-report/route.ts",
+    "app/feature-request/page.tsx",
+    "app/feature-request/route.ts",
+    "app/ideas/page.tsx",
+    "app/ideas/route.ts",
+    "app/community-forum/page.tsx",
+    "app/community-forum/route.ts",
+    "app/contact/support/page.tsx",
+    "app/contact/support/route.ts",
+    "app/support/contact/page.tsx",
+    "app/support/contact/route.ts",
+    "app/developer/page.tsx",
+    "app/developer/route.ts",
+    "app/api-reference/page.tsx",
+    "app/api-reference/route.ts",
+    "app/status-page/page.tsx",
+    "app/status-page/route.ts",
+    "app/uptime/page.tsx",
+    "app/uptime/route.ts",
+    "app/system-status/page.tsx",
+    "app/system-status/route.ts",
+    "public/talk-to-sales",
+    "public/talk-to-sales.html",
+    "public/sales-contact",
+    "public/sales-contact.html",
+    "public/helpdesk",
+    "public/helpdesk.html",
+    "public/ticket",
+    "public/ticket.html",
+    "public/submit-ticket",
+    "public/submit-ticket.html",
+    "public/feedback",
+    "public/feedback.html",
+    "public/report-bug",
+    "public/report-bug.html",
+    "public/bug-report",
+    "public/bug-report.html",
+    "public/feature-request",
+    "public/feature-request.html",
+    "public/ideas",
+    "public/ideas.html",
+    "public/community-forum",
+    "public/community-forum.html",
+    "public/contact/support",
+    "public/contact/support.html",
+    "public/support/contact",
+    "public/support/contact.html",
+    "public/developer",
+    "public/developer.html",
+    "public/api-reference",
+    "public/api-reference.html",
+    "public/status-page",
+    "public/status-page.html",
+    "public/uptime",
+    "public/uptime.html",
+    "public/system-status",
+    "public/system-status.html",
   ]) {
     assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
   }

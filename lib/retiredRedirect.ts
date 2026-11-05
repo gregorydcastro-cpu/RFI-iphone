@@ -11,9 +11,11 @@
  * destination.
  * /procore is only the exact path, so /api/procore and anything under it
  * stay on their routes. /product does not match /products.
- * /careers, /team, /partners, /customers, /investors, /jobs-board, and
- * /hiring share the destination / already uses.
- * /jobs-board does not match /jobs. /pricing-plans does not match /pricing.
+ * /careers, /team, /partners, /customers, /investors, /jobs-board,
+ * /hiring, /about-gc-field-log, /our-story, /mission, /values,
+ * /leadership, and /founders share the destination / already uses.
+ * /jobs-board does not match /jobs. /about-gc-field-log does not match
+ * /about. /pricing-plans does not match /pricing.
  * /team-plans does not match /team. /enterprise-plan does not match
  * /enterprise.
  * /security.txt moves straight to /.well-known/security.txt.
@@ -87,6 +89,12 @@ export function retiredRedirects(): Array<{
       "/investors",
       "/jobs-board",
       "/hiring",
+      "/about-gc-field-log",
+      "/our-story",
+      "/mission",
+      "/values",
+      "/leadership",
+      "/founders",
     ].map((source) => ({
       source,
       destination: HOME_HREF,
