@@ -8,7 +8,10 @@
  * /talk-to-sales, /sales-contact, /helpdesk, /ticket, /submit-ticket,
  * /feedback, /report-bug, /bug-report, /feature-request, /ideas,
  * /community-forum, /contact/support, /support/contact, /developer,
- * /api-reference, /status-page, /uptime, and /system-status have no page.
+ * /api-reference, /status-page, /uptime, /system-status, /contactus,
+ * /get-in-touch, /reach-us, /customer-support, /customer-service,
+ * /knowledgebase, /faqs, /how-to, /documentation, /manual, /billing-help,
+ * and /whats-new have no page.
  * Each is a permanent move straight to the public support page, not to
  * another alias. Next.js treats permanent as HTTP 308.
  * Each source is that exact path. A longer path such as /blog/post is not
@@ -23,6 +26,12 @@
  * /contact-sales. /api-reference does not match /api-docs, /api, or
  * /api/docs. /bug-report does not match /report-bug. /submit-ticket does
  * not match /ticket.
+ * /contactus does not match /contact or /contact-us. /faqs does not match
+ * /faq. /knowledgebase does not match /knowledge-base or /kb.
+ * /customer-support does not match /customer-service or /support.
+ * /how-to does not match /how-it-works. /documentation does not match
+ * /docs. /billing-help does not match /billing. /whats-new does not match
+ * /news. /get-in-touch and /reach-us do not match /contact.
  */
 
 const SUPPORT_HREF = "/support";
@@ -91,6 +100,18 @@ export function contactRedirects(): Array<{
     "/status-page",
     "/uptime",
     "/system-status",
+    "/contactus",
+    "/get-in-touch",
+    "/reach-us",
+    "/customer-support",
+    "/customer-service",
+    "/knowledgebase",
+    "/faqs",
+    "/how-to",
+    "/documentation",
+    "/manual",
+    "/billing-help",
+    "/whats-new",
   ].map((source) => ({
     source,
     destination: SUPPORT_HREF,
