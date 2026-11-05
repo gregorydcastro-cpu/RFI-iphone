@@ -16,7 +16,7 @@ function readRepo(path: string): string {
   return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-test("retired aliases permanently move to account, jobs, pricing, home, security.txt, the web manifest, or /sitemap.xml (308), including /integrations, /procore, /careers, /team, /partners, /customers, /company, /product, /sitemap, /site-map, /pricing-plans, /team-plans, /enterprise-plan, /quote, /get-quote, /estimate, /investors, /jobs-board, /hiring, /about-gc-field-log, /our-story, /mission, /values, /leadership, and /founders", () => {
+test("retired aliases permanently move to account, jobs, pricing, home, security.txt, the web manifest, or /sitemap.xml (308), including /integrations, /procore, /careers, /team, /partners, /customers, /company, /product, /sitemap, /site-map, /pricing-plans, /team-plans, /enterprise-plan, /quote, /get-quote, /estimate, /investors, /jobs-board, /hiring, /about-gc-field-log, /our-story, /mission, /values, /leadership, /founders, /aboutus, /company-info, /who-we-are, /our-team, /meet-the-team, /our-company, /plans-pricing, /cost, /costs, /procore-integration, and /contact/sales", () => {
   assert.deepEqual(retiredRedirects(), [
     {
       source: "/settings",
@@ -149,6 +149,31 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
       permanent: true,
     },
     {
+      source: "/plans-pricing",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/cost",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/costs",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/procore-integration",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/contact/sales",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
       source: "/forgot-password",
       destination: "/",
       permanent: true,
@@ -264,6 +289,36 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
       permanent: true,
     },
     {
+      source: "/aboutus",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/company-info",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/who-we-are",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/our-team",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/meet-the-team",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/our-company",
+      destination: "/",
+      permanent: true,
+    },
+    {
       source: "/security.txt",
       destination: "/.well-known/security.txt",
       permanent: true,
@@ -333,6 +388,11 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/quote",
     "/get-quote",
     "/estimate",
+    "/plans-pricing",
+    "/cost",
+    "/costs",
+    "/procore-integration",
+    "/contact/sales",
   ]) {
     const redirect = retiredRedirects().find((item) => item.source === source);
     assert.equal(redirect?.destination, "/pricing", source);
@@ -352,6 +412,12 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/values",
     "/leadership",
     "/founders",
+    "/aboutus",
+    "/company-info",
+    "/who-we-are",
+    "/our-team",
+    "/meet-the-team",
+    "/our-company",
   ]) {
     const redirect = retiredRedirects().find((item) => item.source === source);
     assert.equal(redirect?.destination, "/", source);
@@ -373,6 +439,38 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
   assert.equal(bySource.get("/about-gc-field-log"), bySource.get("/about"));
   assert.equal(bySource.has("/about/gc-field-log"), false);
   assert.equal(bySource.has("/about-gc-field-log/extra"), false);
+  assert.equal(bySource.get("/plans-pricing"), "/pricing");
+  assert.equal(bySource.get("/plans-pricing"), bySource.get("/pricing-plans"));
+  assert.equal(bySource.get("/plans-pricing"), bySource.get("/plans"));
+  assert.equal(bySource.has("/pricing"), false);
+  assert.equal(bySource.has("/plans"), true);
+  assert.equal(bySource.get("/cost"), "/pricing");
+  assert.equal(bySource.get("/costs"), "/pricing");
+  assert.equal(bySource.get("/cost"), bySource.get("/costs"));
+  assert.equal(bySource.has("/cost/extra"), false);
+  assert.equal(bySource.has("/costs/extra"), false);
+  assert.equal(bySource.has("/cost/s"), false);
+  assert.equal(bySource.get("/procore-integration"), bySource.get("/procore"));
+  assert.equal(bySource.get("/procore-integration"), bySource.get("/integrations"));
+  assert.equal(bySource.has("/procore/extra"), false);
+  assert.equal(bySource.has("/procore-integration/extra"), false);
+  assert.equal(bySource.get("/contact/sales"), "/pricing");
+  assert.equal(bySource.has("/contact/sales/extra"), false);
+  assert.equal(bySource.has("/contact"), false);
+  assert.equal(bySource.has("/sales"), false);
+  assert.equal(bySource.has("/contact-sales"), false);
+  assert.equal(bySource.get("/aboutus"), bySource.get("/about"));
+  assert.equal(bySource.get("/aboutus"), bySource.get("/about-us"));
+  assert.equal(bySource.has("/about"), true);
+  assert.equal(bySource.has("/about-us"), true);
+  assert.equal(bySource.get("/company-info"), bySource.get("/company"));
+  assert.equal(bySource.get("/our-company"), bySource.get("/company"));
+  assert.equal(bySource.get("/our-team"), bySource.get("/team"));
+  assert.equal(bySource.get("/meet-the-team"), bySource.get("/team"));
+  assert.equal(bySource.get("/who-we-are"), bySource.get("/about"));
+  assert.equal(bySource.has("/aboutus/extra"), false);
+  assert.equal(bySource.has("/our-team/extra"), false);
+  assert.equal(bySource.has("/meet-the-team/extra"), false);
   assert.equal(bySource.has("/product/extra"), false);
   assert.equal(bySource.has("/products/extra"), false);
   assert.equal(bySource.has("/company/extra"), false);
@@ -432,9 +530,20 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/values",
     "/leadership",
     "/founders",
+    "/aboutus",
+    "/company-info",
+    "/who-we-are",
+    "/our-team",
+    "/meet-the-team",
+    "/our-company",
+    "/plans-pricing",
+    "/cost",
+    "/costs",
+    "/procore-integration",
   ]) {
     assert.equal(source.slice(1).includes("/"), false, source);
   }
+  assert.equal("/contact/sales".slice(1).includes("/"), true);
   for (const path of [
     "/admin",
     "/api",
@@ -460,6 +569,7 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/notifications",
     "/billing",
     "/subscribe",
+    "/subscription",
     "/upgrade",
     "/checkout",
     "/api/docs",
@@ -516,6 +626,7 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     assert.equal(everySource.has(redirect.destination), false, redirect.source);
     assert.equal(redirect.source === "/api" || redirect.source.startsWith("/api/"), false, redirect.source);
   }
+  assert.equal(everySource.size, everyRedirect.length);
   assert.equal(everySource.has("/api-docs"), true);
   assert.equal(everySource.has("/api/docs"), false);
   for (const redirect of [...contactRedirects(), ...legalRedirects(), ...retiredRedirects()]) {
@@ -540,6 +651,7 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/notifications",
     "/billing",
     "/subscribe",
+    "/subscription",
     "/upgrade",
     "/checkout",
     "/api/docs",
@@ -602,12 +714,32 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/beta",
     "/waitlist",
     "/early-access",
+    "/register-now",
+    "/join-now",
+    "/login-page",
+    "/signin-page",
+    "/download-app",
+    "/get-the-app",
+    "/ios-app",
+    "/getting-started",
+    "/start-here",
   ]) {
     assert.equal(everySource.has(path), false, path);
     assert.equal(signInAliasDestination(path), "/");
     assert.equal(demoAliasDestination(path), null, path);
   }
-  for (const path of ["/book-demo", "/request-demo", "/schedule-demo", "/get-demo", "/demo-video"]) {
+  for (const path of [
+    "/book-demo",
+    "/request-demo",
+    "/schedule-demo",
+    "/get-demo",
+    "/demo-video",
+    "/book-a-demo",
+    "/try",
+    "/try-free",
+    "/freetrial",
+    "/request-quote",
+  ]) {
     assert.equal(everySource.has(path), false, path);
     assert.equal(signInAliasDestination(path), null, path);
     assert.equal(demoAliasDestination(path), "/pack/maple-point");
@@ -656,6 +788,8 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "app/billing/route.ts",
     "app/subscribe/page.tsx",
     "app/subscribe/route.ts",
+    "app/subscription/page.tsx",
+    "app/subscription/route.ts",
     "app/upgrade/page.tsx",
     "app/upgrade/route.ts",
     "app/checkout/page.tsx",
@@ -690,13 +824,13 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
   assert.match(config, /\.\.\.retiredRedirects\(\)/);
   assert.doesNotMatch(
     config,
-    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/account|\/jobs|\/home|\/index\.html|\/profile|\/plans|\/pricing|\/projects|\/project|\/forgot|\/password-reset|\/reset|\/about-us|\/me|\/app|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt|\/company|\/product|\/products|\/solutions|\/use-cases|\/why|\/compare|\/alternatives|\/sitemap|\/site-map|\/pricing-plans|\/team-plans|\/enterprise-plan|\/get-quote|\/quote|\/estimate|\/investors|\/jobs-board|\/hiring|\/about-gc-field-log|\/our-story|\/mission|\/values|\/leadership|\/founders/,
+    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/account|\/jobs|\/home|\/index\.html|\/profile|\/plans|\/pricing|\/projects|\/project|\/forgot|\/password-reset|\/reset|\/about-us|\/me|\/app|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt|\/company|\/product|\/products|\/solutions|\/use-cases|\/why|\/compare|\/alternatives|\/sitemap|\/site-map|\/pricing-plans|\/team-plans|\/enterprise-plan|\/get-quote|\/quote|\/estimate|\/investors|\/jobs-board|\/hiring|\/about-gc-field-log|\/our-story|\/mission|\/values|\/leadership|\/founders|\/aboutus|\/company-info|\/who-we-are|\/our-team|\/meet-the-team|\/our-company|\/plans-pricing|\/cost|\/costs|\/procore-integration|\/contact\/sales/,
   );
 
   const proxy = readRepo("proxy.ts");
   assert.doesNotMatch(
     proxy,
-    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/home|\/index\.html|\/profile|\/plans|\/projects|\/forgot|\/password-reset|\/about-us|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt|\/company|\/product|\/products|\/solutions|\/use-cases|\/why|\/compare|\/alternatives|\/sitemap|\/site-map|\/pricing-plans|\/team-plans|\/enterprise-plan|\/get-quote|\/quote|\/estimate|\/investors|\/jobs-board|\/hiring|\/about-gc-field-log|\/our-story|\/mission|\/values|\/leadership|\/founders/,
+    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/home|\/index\.html|\/profile|\/plans|\/projects|\/forgot|\/password-reset|\/about-us|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt|\/company|\/product|\/products|\/solutions|\/use-cases|\/why|\/compare|\/alternatives|\/sitemap|\/site-map|\/pricing-plans|\/team-plans|\/enterprise-plan|\/get-quote|\/quote|\/estimate|\/investors|\/jobs-board|\/hiring|\/about-gc-field-log|\/our-story|\/mission|\/values|\/leadership|\/founders|\/aboutus|\/company-info|\/who-we-are|\/our-team|\/meet-the-team|\/our-company|\/plans-pricing|\/cost|\/costs|\/procore-integration|\/contact\/sales/,
   );
   assert.doesNotMatch(proxy, /redirect/);
 
@@ -949,6 +1083,52 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "public/leadership.html",
     "public/founders",
     "public/founders.html",
+    "app/aboutus/page.tsx",
+    "app/aboutus/route.ts",
+    "app/company-info/page.tsx",
+    "app/company-info/route.ts",
+    "app/who-we-are/page.tsx",
+    "app/who-we-are/route.ts",
+    "app/our-team/page.tsx",
+    "app/our-team/route.ts",
+    "app/meet-the-team/page.tsx",
+    "app/meet-the-team/route.ts",
+    "app/our-company/page.tsx",
+    "app/our-company/route.ts",
+    "app/plans-pricing/page.tsx",
+    "app/plans-pricing/route.ts",
+    "app/cost/page.tsx",
+    "app/cost/route.ts",
+    "app/costs/page.tsx",
+    "app/costs/route.ts",
+    "app/procore-integration/page.tsx",
+    "app/procore-integration/route.ts",
+    "app/contact/sales/page.tsx",
+    "app/contact/sales/route.ts",
+    "public/aboutus",
+    "public/aboutus.html",
+    "public/company-info",
+    "public/company-info.html",
+    "public/who-we-are",
+    "public/who-we-are.html",
+    "public/our-team",
+    "public/our-team.html",
+    "public/meet-the-team",
+    "public/meet-the-team.html",
+    "public/our-company",
+    "public/our-company.html",
+    "public/plans-pricing",
+    "public/plans-pricing.html",
+    "public/cost",
+    "public/cost.html",
+    "public/costs",
+    "public/costs.html",
+    "public/procore-integration",
+    "public/procore-integration.html",
+    "public/contact/sales",
+    "public/contact/sales.html",
+    "public/subscription",
+    "public/subscription.html",
     "app/safety/page.tsx",
     "app/safety/route.ts",
     "app/punch-list/page.tsx",
