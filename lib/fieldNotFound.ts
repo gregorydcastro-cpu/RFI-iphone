@@ -89,7 +89,10 @@ export function fieldNotFoundSpeak(variant: FieldNotFoundVariant): string {
  * /app-store-link, /free, /sign-up-free, /free-account, /signup-free,
  * /welcome, /web-app, /beta, /waitlist, /early-access, /register-now,
  * /join-now, /login-page, /signin-page, /download-app, /get-the-app,
- * /ios-app, /getting-started, and /start-here
+ * /ios-app, /getting-started, /start-here, /sign-in-page, /log-in-page,
+ * /create-an-account, /register-account, /open-account, /new-account,
+ * /start-free, /ios-download, /get-app, /mobile-download, /appstore,
+ * /login-help, /recover, and /account-recovery
  * use the same temporary redirect. Each name is one exact path segment.
  * /free-account does not match /free. /signup-free does not match /signup
  * or /sign-up-free. /web-app does not match /web. /early-access does not
@@ -98,15 +101,24 @@ export function fieldNotFoundSpeak(variant: FieldNotFoundVariant): string {
  * does not match /signin or /sign-in. /download-app does not match
  * /download. /get-the-app does not match /get-started. /ios-app does not
  * match /ios. /getting-started does not match /get-started. /start-here
- * does not match /start. Next matches this source without case sensitivity
- * and allows one trailing slash. Query values pass through to `/`.
- * permanent: false is the same temporary 307 as /login and /signup.
+ * does not match /start. /sign-in-page does not match /sign-in or
+ * /signin-page. /log-in-page does not match /log-in or /login-page.
+ * /create-an-account does not match /create-account. /register-account
+ * does not match /register or /register-now. /open-account and
+ * /new-account do not match /account. /start-free does not match /start
+ * or /free. /ios-download does not match /ios, /ios-app, or /download.
+ * /get-app does not match /get-the-app or /get-started. /mobile-download
+ * does not match /mobile or /download. /appstore does not match
+ * /app-store. /login-help does not match /login. /account-recovery does
+ * not match /recover or /account. Next matches this source without case
+ * sensitivity and allows one trailing slash. Query values pass through
+ * to `/`. permanent: false is the same temporary 307 as /login and /signup.
  */
 export const SIGN_IN_ALIAS_SOURCE =
-  "/:alias(login|log-in|signin|sign-in|signup|sign-up|register|join|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone|ipad|app-store-link|free|sign-up-free|free-account|signup-free|welcome|web-app|beta|waitlist|early-access|register-now|join-now|login-page|signin-page|download-app|get-the-app|ios-app|getting-started|start-here)";
+  "/:alias(login|log-in|signin|sign-in|signup|sign-up|register|join|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone|ipad|app-store-link|free|sign-up-free|free-account|signup-free|welcome|web-app|beta|waitlist|early-access|register-now|join-now|login-page|signin-page|download-app|get-the-app|ios-app|getting-started|start-here|sign-in-page|log-in-page|create-an-account|register-account|open-account|new-account|start-free|ios-download|get-app|mobile-download|appstore|login-help|recover|account-recovery)";
 
 const SIGN_IN_ALIAS_PATH =
-  /^\/(?:login|log-in|signin|sign-in|signup|sign-up|register|join|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone|ipad|app-store-link|free|sign-up-free|free-account|signup-free|welcome|web-app|beta|waitlist|early-access|register-now|join-now|login-page|signin-page|download-app|get-the-app|ios-app|getting-started|start-here)\/?$/i;
+  /^\/(?:login|log-in|signin|sign-in|signup|sign-up|register|join|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone|ipad|app-store-link|free|sign-up-free|free-account|signup-free|welcome|web-app|beta|waitlist|early-access|register-now|join-now|login-page|signin-page|download-app|get-the-app|ios-app|getting-started|start-here|sign-in-page|log-in-page|create-an-account|register-account|open-account|new-account|start-free|ios-download|get-app|mobile-download|appstore|login-help|recover|account-recovery)\/?$/i;
 
 /**
  * Demo booking aliases have no page. Each name is one exact path segment
@@ -117,14 +129,21 @@ const SIGN_IN_ALIAS_PATH =
  * /try-free, /trial, or /freetrial. /try-free does not match /free or
  * /free-trial. /freetrial does not match /free-trial or /free.
  * /request-quote does not match /quote, /get-quote, or /request-demo.
+ * /try-it, /try-it-free, /demo-now, /schedule, /book-demo-now, and
+ * /see-demo use that same hop. /try-it does not match /try. /try-it-free
+ * does not match /try-free, /try-it, or /free. /demo-now does not match
+ * /demo or /demo-video. /schedule does not match /schedule-demo. It is
+ * this exact path only, a temporary move to the Maple Point pack.
+ * /book-demo-now does not match /book-demo or /book-a-demo. /see-demo
+ * does not match /get-demo or /demo.
  * Next matches this source without case sensitivity and allows one
  * trailing slash. Query values pass through. permanent: false is HTTP 307.
  */
 export const DEMO_ALIAS_SOURCE =
-  "/:alias(book-demo|request-demo|schedule-demo|get-demo|demo-video|book-a-demo|try|try-free|freetrial|request-quote)";
+  "/:alias(book-demo|request-demo|schedule-demo|get-demo|demo-video|book-a-demo|try|try-free|freetrial|request-quote|try-it-free|try-it|demo-now|schedule|book-demo-now|see-demo)";
 
 const DEMO_ALIAS_PATH =
-  /^\/(?:book-demo|request-demo|schedule-demo|get-demo|demo-video|book-a-demo|try|try-free|freetrial|request-quote)\/?$/i;
+  /^\/(?:book-demo|request-demo|schedule-demo|get-demo|demo-video|book-a-demo|try|try-free|freetrial|request-quote|try-it-free|try-it|demo-now|schedule|book-demo-now|see-demo)\/?$/i;
 
 export function signInAliasRedirects(): Array<{
   source: string;

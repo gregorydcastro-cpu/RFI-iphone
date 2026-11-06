@@ -32,6 +32,22 @@
  * /how-to does not match /how-it-works. /documentation does not match
  * /docs. /billing-help does not match /billing. /whats-new does not match
  * /news. /get-in-touch and /reach-us do not match /contact.
+ * /contact-form, /contact-us-form, /support-ticket, /help-desk,
+ * /helpdesk-support, /customer-care, /care-center, /ask, /ask-us,
+ * /talk-to-us, /message-us, /write-us, /email-us, /call-us, /knowledge,
+ * /service-desk, /faq-page, /common-questions, /troubleshooting, /fix-it,
+ * /howto, /blog-posts, /press-release, /newsroom, /updates, and
+ * /api-status use that same hop. /contact-form does not match /contact.
+ * /contact-us-form does not match /contact-us. /support-ticket does not
+ * match /ticket or /submit-ticket. /help-desk does not match /help,
+ * /help-center, or /helpdesk. /helpdesk-support does not match /helpdesk.
+ * /customer-care does not match /customer-service or /customer-support.
+ * /ask does not match /ask-us. /knowledge does not match /knowledge-base,
+ * /knowledgebase, or /kb. /faq-page does not match /faq or /faqs.
+ * /howto does not match /how-to. /blog-posts does not match /blog.
+ * /press-release does not match /press. /newsroom does not match /news.
+ * /updates does not match /whats-new. /api-status does not match /status,
+ * /api, /api-docs, or /api/docs.
  */
 
 const SUPPORT_HREF = "/support";
@@ -112,6 +128,32 @@ export function contactRedirects(): Array<{
     "/manual",
     "/billing-help",
     "/whats-new",
+    "/contact-form",
+    "/contact-us-form",
+    "/support-ticket",
+    "/help-desk",
+    "/helpdesk-support",
+    "/customer-care",
+    "/care-center",
+    "/ask",
+    "/ask-us",
+    "/talk-to-us",
+    "/message-us",
+    "/write-us",
+    "/email-us",
+    "/call-us",
+    "/knowledge",
+    "/service-desk",
+    "/faq-page",
+    "/common-questions",
+    "/troubleshooting",
+    "/fix-it",
+    "/howto",
+    "/blog-posts",
+    "/press-release",
+    "/newsroom",
+    "/updates",
+    "/api-status",
   ].map((source) => ({
     source,
     destination: SUPPORT_HREF,

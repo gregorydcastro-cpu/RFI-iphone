@@ -31,6 +31,19 @@
  * not match /cookies. /cookies-settings does not match /cookie-settings
  * or /cookies. /manage-cookies does not match /cookies. /consent does not
  * match /cookies. /privacy-center does not match /privacy.
+ * /terms-conditions, /termsconditions, /user-agreement,
+ * /license-agreement, and /legal-terms move to the terms page.
+ * /privacy-statement, /data-protection, /gdpr-privacy, /cookie-notice,
+ * /cookie-preferences, /opt-out, and /ccpa-opt-out move to the privacy
+ * page. /terms-conditions does not match /terms-and-conditions or /terms.
+ * /termsconditions does not match /termsandconditions or /terms.
+ * /legal-terms does not match /legal or /legal/terms.
+ * /privacy-statement does not match /privacy or /privacy-policy.
+ * /data-protection does not match /data-policy or /data-processing.
+ * /gdpr-privacy does not match /gdpr. /cookie-notice does not match
+ * /cookie or /cookies. /cookie-preferences does not match /cookie-settings
+ * or /cookies. /opt-out does not match /ccpa-opt-out. /ccpa-opt-out does
+ * not match /ccpa.
  * Next.js treats permanent as HTTP 308.
  */
 
@@ -71,6 +84,11 @@ export function legalRedirects(): Array<{
       "/refund-policy",
       "/a11y",
       "/wcag",
+      "/terms-conditions",
+      "/termsconditions",
+      "/user-agreement",
+      "/license-agreement",
+      "/legal-terms",
     ].map((source) => ({
       source,
       destination: TERMS_HREF,
@@ -105,6 +123,13 @@ export function legalRedirects(): Array<{
       "/manage-cookies",
       "/consent",
       "/privacy-center",
+      "/privacy-statement",
+      "/data-protection",
+      "/gdpr-privacy",
+      "/cookie-notice",
+      "/cookie-preferences",
+      "/opt-out",
+      "/ccpa-opt-out",
     ].map((source) => ({
       source,
       destination: PRIVACY_HREF,
