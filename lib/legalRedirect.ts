@@ -44,6 +44,18 @@
  * /cookie or /cookies. /cookie-preferences does not match /cookie-settings
  * or /cookies. /opt-out does not match /ccpa-opt-out. /ccpa-opt-out does
  * not match /ccpa.
+ * /privacy-and-terms, /legal-page, and /terms-page move to the terms
+ * page. /cookie-policy-page, /privacy-request, /privacy-page,
+ * /privacy-policy-page, /security-page, /security-center, and /trust-page
+ * move to the privacy page. /privacy-and-terms does not match /privacy
+ * or /terms. /legal-page does not match /legal. /terms-page does not
+ * match /terms or /tos-page. /cookie-policy-page does not match
+ * /cookie-policy. /privacy-request and /privacy-page do not match
+ * /privacy. /privacy-policy-page does not match /privacy-policy.
+ * /security-page does not match /security or /security-policy.
+ * /security-policy-page stays off this list. /security-center does not
+ * match /security. /trust-page does not match /trust. /trust-center stays
+ * off this list.
  * Next.js treats permanent as HTTP 308.
  */
 
@@ -89,6 +101,9 @@ export function legalRedirects(): Array<{
       "/user-agreement",
       "/license-agreement",
       "/legal-terms",
+      "/privacy-and-terms",
+      "/legal-page",
+      "/terms-page",
     ].map((source) => ({
       source,
       destination: TERMS_HREF,
@@ -130,6 +145,13 @@ export function legalRedirects(): Array<{
       "/cookie-preferences",
       "/opt-out",
       "/ccpa-opt-out",
+      "/cookie-policy-page",
+      "/privacy-request",
+      "/privacy-page",
+      "/privacy-policy-page",
+      "/security-page",
+      "/security-center",
+      "/trust-page",
     ].map((source) => ({
       source,
       destination: PRIVACY_HREF,
