@@ -29,10 +29,28 @@
  * /cost does not match /costs. /procore-integration does not match
  * /procore, /integrations, or /api/procore. /contact/sales is only that
  * exact path, so it does not match /contact, /sales, or /contact-sales.
+ * /price, /prices, /rates, /packages, /business, /pro, /product-tour,
+ * /walkthrough, /product-overview, /overview, /integrations-list, and
+ * /apps-marketplace share the destination /pricing already uses.
+ * /price does not match /prices or /pricing. /pro does not match
+ * /procore, /product, or /products. /product-tour and /product-overview
+ * do not match /product. /overview does not match /product-overview.
+ * /integrations-list does not match /integrations. /business does not
+ * match /enterprise.
+ * /our-mission, /vision, /culture, /leadership-team, /about-company,
+ * /partners-program, /affiliate, /resellers, /home-page, /landing,
+ * /landing-page, /welcome-page, and /front share the destination /
+ * already uses. /our-mission does not match /mission. /leadership-team
+ * does not match /leadership. /about-company does not match /about or
+ * /company. /partners-program does not match /partners. /affiliate does
+ * not match /affiliates. /home-page does not match /home. /landing-page
+ * does not match /landing. /welcome-page does not match /welcome.
  * /security.txt moves straight to /.well-known/security.txt.
  * /manifest.json and /site.webmanifest move straight to /manifest.webmanifest.
- * /sitemap and /site-map move straight to /sitemap.xml. app/sitemap.ts
- * serves that path. /sitemap.xml itself is not a source.
+ * /sitemap, /site-map, /sitemap-xml, /xml-sitemap, and /map move straight
+ * to /sitemap.xml. app/sitemap.ts serves that path. /sitemap.xml itself
+ * is not a source. /sitemap-xml does not match /sitemap. /map does not
+ * match /sitemap or /site-map.
  */
 
 const HOME_HREF = "/";
@@ -82,6 +100,18 @@ export function retiredRedirects(): Array<{
       "/costs",
       "/procore-integration",
       "/contact/sales",
+      "/price",
+      "/prices",
+      "/rates",
+      "/packages",
+      "/business",
+      "/pro",
+      "/product-tour",
+      "/walkthrough",
+      "/product-overview",
+      "/overview",
+      "/integrations-list",
+      "/apps-marketplace",
     ].map((source) => ({
       source,
       destination: PRICING_HREF,
@@ -117,6 +147,19 @@ export function retiredRedirects(): Array<{
       "/our-team",
       "/meet-the-team",
       "/our-company",
+      "/our-mission",
+      "/vision",
+      "/culture",
+      "/leadership-team",
+      "/about-company",
+      "/partners-program",
+      "/affiliate",
+      "/resellers",
+      "/home-page",
+      "/landing",
+      "/landing-page",
+      "/welcome-page",
+      "/front",
     ].map((source) => ({
       source,
       destination: HOME_HREF,
@@ -132,7 +175,7 @@ export function retiredRedirects(): Array<{
       destination: MANIFEST_HREF,
       permanent: true,
     })),
-    ...["/sitemap", "/site-map"].map((source) => ({
+    ...["/sitemap", "/site-map", "/sitemap-xml", "/xml-sitemap", "/map"].map((source) => ({
       source,
       destination: SITEMAP_HREF,
       permanent: true,

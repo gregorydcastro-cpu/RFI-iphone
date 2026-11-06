@@ -174,6 +174,66 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
       permanent: true,
     },
     {
+      source: "/price",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/prices",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/rates",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/packages",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/business",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/pro",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/product-tour",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/walkthrough",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/product-overview",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/overview",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/integrations-list",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/apps-marketplace",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
       source: "/forgot-password",
       destination: "/",
       permanent: true,
@@ -319,6 +379,71 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
       permanent: true,
     },
     {
+      source: "/our-mission",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/vision",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/culture",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/leadership-team",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/about-company",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/partners-program",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/affiliate",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/resellers",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/home-page",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/landing",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/landing-page",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/welcome-page",
+      destination: "/",
+      permanent: true,
+    },
+    {
+      source: "/front",
+      destination: "/",
+      permanent: true,
+    },
+    {
       source: "/security.txt",
       destination: "/.well-known/security.txt",
       permanent: true,
@@ -340,6 +465,21 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     },
     {
       source: "/site-map",
+      destination: "/sitemap.xml",
+      permanent: true,
+    },
+    {
+      source: "/sitemap-xml",
+      destination: "/sitemap.xml",
+      permanent: true,
+    },
+    {
+      source: "/xml-sitemap",
+      destination: "/sitemap.xml",
+      permanent: true,
+    },
+    {
+      source: "/map",
       destination: "/sitemap.xml",
       permanent: true,
     },
@@ -478,6 +618,95 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
   assert.equal(bySource.get("/site-map"), "/sitemap.xml");
   assert.equal(bySource.get("/site-map"), bySource.get("/sitemap"));
   assert.equal(bySource.has("/sitemap.xml"), false);
+  for (const source of [
+    "/price",
+    "/prices",
+    "/rates",
+    "/packages",
+    "/business",
+    "/pro",
+    "/product-tour",
+    "/walkthrough",
+    "/product-overview",
+    "/overview",
+    "/integrations-list",
+    "/apps-marketplace",
+  ]) {
+    const redirect = retiredRedirects().find((item) => item.source === source);
+    assert.equal(redirect?.destination, "/pricing", source);
+    assert.equal(redirect?.permanent, true, source);
+    assert.equal(redirect?.permanent ? 308 : 307, 308, source);
+    assert.equal(bySource.get(source), "/pricing", source);
+    assert.equal(bySource.get(source), bySource.get("/plans"), source);
+    assert.equal(bySource.has(`${source}/extra`), false, source);
+    assert.equal(bySource.has(`${source}/`), false, source);
+    assert.equal(source.slice(1).includes("/"), false, source);
+  }
+  for (const source of [
+    "/our-mission",
+    "/vision",
+    "/culture",
+    "/leadership-team",
+    "/about-company",
+    "/partners-program",
+    "/affiliate",
+    "/resellers",
+    "/home-page",
+    "/landing",
+    "/landing-page",
+    "/welcome-page",
+    "/front",
+  ]) {
+    const redirect = retiredRedirects().find((item) => item.source === source);
+    assert.equal(redirect?.destination, "/", source);
+    assert.equal(redirect?.permanent, true, source);
+    assert.equal(redirect?.permanent ? 308 : 307, 308, source);
+    assert.equal(bySource.get(source), "/", source);
+    assert.equal(bySource.get(source), bySource.get("/about"), source);
+    assert.equal(bySource.has(`${source}/extra`), false, source);
+    assert.equal(bySource.has(`${source}/`), false, source);
+    assert.equal(source.slice(1).includes("/"), false, source);
+  }
+  for (const source of ["/sitemap-xml", "/xml-sitemap", "/map"]) {
+    const redirect = retiredRedirects().find((item) => item.source === source);
+    assert.equal(redirect?.destination, "/sitemap.xml", source);
+    assert.equal(redirect?.permanent, true, source);
+    assert.equal(redirect?.permanent ? 308 : 307, 308, source);
+    assert.equal(bySource.get(source), "/sitemap.xml", source);
+    assert.equal(bySource.get(source), bySource.get("/sitemap"), source);
+    assert.equal(bySource.has(`${source}/extra`), false, source);
+    assert.equal(bySource.has(`${source}/`), false, source);
+    assert.equal(source.slice(1).includes("/"), false, source);
+  }
+  assert.equal(bySource.get("/price"), bySource.get("/prices"));
+  assert.equal(bySource.has("/pricing"), false);
+  assert.equal(bySource.get("/pro"), bySource.get("/procore"));
+  assert.equal(bySource.has("/procore"), true);
+  assert.equal(bySource.get("/product-tour"), bySource.get("/product"));
+  assert.equal(bySource.get("/product-overview"), bySource.get("/product"));
+  assert.equal(bySource.get("/overview"), bySource.get("/product-overview"));
+  assert.equal(bySource.has("/product"), true);
+  assert.equal(bySource.get("/integrations-list"), bySource.get("/integrations"));
+  assert.equal(bySource.has("/enterprise"), false);
+  assert.equal(bySource.get("/business"), "/pricing");
+  assert.equal(bySource.get("/our-mission"), bySource.get("/mission"));
+  assert.equal(bySource.get("/leadership-team"), bySource.get("/leadership"));
+  assert.equal(bySource.get("/about-company"), bySource.get("/about"));
+  assert.equal(bySource.get("/partners-program"), bySource.get("/partners"));
+  assert.equal(bySource.get("/affiliate"), "/");
+  assert.equal(bySource.has("/affiliates"), false);
+  assert.equal(bySource.get("/home-page"), bySource.get("/home"));
+  assert.equal(bySource.get("/landing-page"), bySource.get("/landing"));
+  assert.equal(bySource.get("/welcome-page"), "/");
+  assert.equal(signInAliasDestination("/welcome-page"), null);
+  assert.equal(signInAliasDestination("/welcome"), "/");
+  assert.equal(bySource.has("/schedule"), false);
+  assert.equal(demoAliasDestination("/schedule"), "/pack/maple-point");
+  assert.notEqual(demoAliasDestination("/schedule"), "/demo");
+  assert.equal(signInAliasDestination("/schedule"), null);
+  assert.equal(bySource.get("/sitemap-xml"), "/sitemap.xml");
+  assert.equal(bySource.has("/sitemap.xml"), false);
+  assert.equal(bySource.get("/map"), bySource.get("/sitemap"));
   assert.equal(bySource.has("/sitemap/extra"), false);
   assert.equal(bySource.has("/site-map/extra"), false);
   assert.equal(bySource.has("/api/procore"), false);
@@ -609,6 +838,22 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/hipaa",
     "/compliance",
     "/webhooks",
+    "/pay",
+    "/payment",
+    "/payments",
+    "/invoice",
+    "/invoices",
+    "/field-service",
+    "/general-contractors",
+    "/iso27001",
+    "/trust-center",
+    "/webhook",
+    "/wp-admin",
+    "/debug",
+    "/metrics",
+    "/robots",
+    "/humans",
+    "/security-policy-page",
   ]) {
     assert.equal(sources.has(path), false, path);
   }
@@ -645,7 +890,6 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/reports",
     "/photos",
     "/drawings",
-    "/schedule",
     "/calendar",
     "/invite",
     "/notifications",
@@ -693,6 +937,22 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/hipaa",
     "/compliance",
     "/webhooks",
+    "/pay",
+    "/payment",
+    "/payments",
+    "/invoice",
+    "/invoices",
+    "/field-service",
+    "/general-contractors",
+    "/iso27001",
+    "/trust-center",
+    "/webhook",
+    "/wp-admin",
+    "/debug",
+    "/metrics",
+    "/robots",
+    "/humans",
+    "/security-policy-page",
   ];
   for (const path of stay404) {
     assert.equal(everySource.has(path), false, path);
@@ -723,6 +983,20 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/ios-app",
     "/getting-started",
     "/start-here",
+    "/sign-in-page",
+    "/log-in-page",
+    "/create-an-account",
+    "/register-account",
+    "/open-account",
+    "/new-account",
+    "/start-free",
+    "/ios-download",
+    "/get-app",
+    "/mobile-download",
+    "/appstore",
+    "/login-help",
+    "/recover",
+    "/account-recovery",
   ]) {
     assert.equal(everySource.has(path), false, path);
     assert.equal(signInAliasDestination(path), "/");
@@ -739,6 +1013,12 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/try-free",
     "/freetrial",
     "/request-quote",
+    "/try-it",
+    "/try-it-free",
+    "/demo-now",
+    "/schedule",
+    "/book-demo-now",
+    "/see-demo",
   ]) {
     assert.equal(everySource.has(path), false, path);
     assert.equal(signInAliasDestination(path), null, path);
@@ -824,13 +1104,13 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
   assert.match(config, /\.\.\.retiredRedirects\(\)/);
   assert.doesNotMatch(
     config,
-    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/account|\/jobs|\/home|\/index\.html|\/profile|\/plans|\/pricing|\/projects|\/project|\/forgot|\/password-reset|\/reset|\/about-us|\/me|\/app|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt|\/company|\/product|\/products|\/solutions|\/use-cases|\/why|\/compare|\/alternatives|\/sitemap|\/site-map|\/pricing-plans|\/team-plans|\/enterprise-plan|\/get-quote|\/quote|\/estimate|\/investors|\/jobs-board|\/hiring|\/about-gc-field-log|\/our-story|\/mission|\/values|\/leadership|\/founders|\/aboutus|\/company-info|\/who-we-are|\/our-team|\/meet-the-team|\/our-company|\/plans-pricing|\/cost|\/costs|\/procore-integration|\/contact\/sales/,
+    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/account|\/jobs|\/home|\/index\.html|\/profile|\/plans|\/pricing|\/projects|\/project|\/forgot|\/password-reset|\/reset|\/about-us|\/me|\/app|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt|\/company|\/product|\/products|\/solutions|\/use-cases|\/why|\/compare|\/alternatives|\/sitemap|\/site-map|\/pricing-plans|\/team-plans|\/enterprise-plan|\/get-quote|\/quote|\/estimate|\/investors|\/jobs-board|\/hiring|\/about-gc-field-log|\/our-story|\/mission|\/values|\/leadership|\/founders|\/aboutus|\/company-info|\/who-we-are|\/our-team|\/meet-the-team|\/our-company|\/plans-pricing|\/cost|\/costs|\/procore-integration|\/contact\/sales|\/price(?!s)|\/prices|\/rates|\/packages|\/business|\/pro(?![A-Za-z0-9_-])|\/product-tour|\/walkthrough|\/product-overview|\/overview|\/integrations-list|\/apps-marketplace|\/our-mission|\/vision|\/culture|\/leadership-team|\/about-company|\/partners-program|\/affiliate(?!s)|\/resellers|\/home-page|\/landing-page|\/landing|\/welcome-page|\/front|\/sitemap-xml|\/xml-sitemap|\/map(?![A-Za-z0-9_.-])/,
   );
 
   const proxy = readRepo("proxy.ts");
   assert.doesNotMatch(
     proxy,
-    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/home|\/index\.html|\/profile|\/plans|\/projects|\/forgot|\/password-reset|\/about-us|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt|\/company|\/product|\/products|\/solutions|\/use-cases|\/why|\/compare|\/alternatives|\/sitemap|\/site-map|\/pricing-plans|\/team-plans|\/enterprise-plan|\/get-quote|\/quote|\/estimate|\/investors|\/jobs-board|\/hiring|\/about-gc-field-log|\/our-story|\/mission|\/values|\/leadership|\/founders|\/aboutus|\/company-info|\/who-we-are|\/our-team|\/meet-the-team|\/our-company|\/plans-pricing|\/cost|\/costs|\/procore-integration|\/contact\/sales/,
+    /\/settings|\/dashboard|\/forgot-password|\/reset-password|\/about|\/home|\/index\.html|\/profile|\/plans|\/projects|\/forgot|\/password-reset|\/about-us|\/features|\/integrations|\/procore|\/careers|\/team|\/partners|\/customers|\/security\.txt|\/manifest\.json|\/site\.webmanifest|\/manifest\.webmanifest|\.well-known\/security\.txt|\/company|\/product|\/products|\/solutions|\/use-cases|\/why|\/compare|\/alternatives|\/sitemap|\/site-map|\/pricing-plans|\/team-plans|\/enterprise-plan|\/get-quote|\/quote|\/estimate|\/investors|\/jobs-board|\/hiring|\/about-gc-field-log|\/our-story|\/mission|\/values|\/leadership|\/founders|\/aboutus|\/company-info|\/who-we-are|\/our-team|\/meet-the-team|\/our-company|\/plans-pricing|\/cost|\/costs|\/procore-integration|\/contact\/sales|\/price(?!s)|\/prices|\/rates|\/packages|\/business|\/pro(?![A-Za-z0-9_-])|\/product-tour|\/walkthrough|\/product-overview|\/overview|\/integrations-list|\/apps-marketplace|\/our-mission|\/vision|\/culture|\/leadership-team|\/about-company|\/partners-program|\/affiliate(?!s)|\/resellers|\/home-page|\/landing-page|\/landing|\/welcome-page|\/front|\/sitemap-xml|\/xml-sitemap|\/map(?![A-Za-z0-9_.-])/,
   );
   assert.doesNotMatch(proxy, /redirect/);
 
@@ -1241,6 +1521,183 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "public/compliance.html",
     "public/webhooks",
     "public/webhooks.html",
+    "app/price/page.tsx",
+    "app/price/route.ts",
+    "app/prices/page.tsx",
+    "app/prices/route.ts",
+    "app/rates/page.tsx",
+    "app/rates/route.ts",
+    "app/packages/page.tsx",
+    "app/packages/route.ts",
+    "app/business/page.tsx",
+    "app/business/route.ts",
+    "app/pro/page.tsx",
+    "app/pro/route.ts",
+    "app/product-tour/page.tsx",
+    "app/product-tour/route.ts",
+    "app/walkthrough/page.tsx",
+    "app/walkthrough/route.ts",
+    "app/product-overview/page.tsx",
+    "app/product-overview/route.ts",
+    "app/overview/page.tsx",
+    "app/overview/route.ts",
+    "app/integrations-list/page.tsx",
+    "app/integrations-list/route.ts",
+    "app/apps-marketplace/page.tsx",
+    "app/apps-marketplace/route.ts",
+    "app/our-mission/page.tsx",
+    "app/our-mission/route.ts",
+    "app/vision/page.tsx",
+    "app/vision/route.ts",
+    "app/culture/page.tsx",
+    "app/culture/route.ts",
+    "app/leadership-team/page.tsx",
+    "app/leadership-team/route.ts",
+    "app/about-company/page.tsx",
+    "app/about-company/route.ts",
+    "app/partners-program/page.tsx",
+    "app/partners-program/route.ts",
+    "app/affiliate/page.tsx",
+    "app/affiliate/route.ts",
+    "app/resellers/page.tsx",
+    "app/resellers/route.ts",
+    "app/home-page/page.tsx",
+    "app/home-page/route.ts",
+    "app/landing/page.tsx",
+    "app/landing/route.ts",
+    "app/landing-page/page.tsx",
+    "app/landing-page/route.ts",
+    "app/welcome-page/page.tsx",
+    "app/welcome-page/route.ts",
+    "app/front/page.tsx",
+    "app/front/route.ts",
+    "app/sitemap-xml/page.tsx",
+    "app/sitemap-xml/route.ts",
+    "app/xml-sitemap/page.tsx",
+    "app/xml-sitemap/route.ts",
+    "app/map/page.tsx",
+    "app/map/route.ts",
+    "public/price",
+    "public/price.html",
+    "public/prices",
+    "public/prices.html",
+    "public/rates",
+    "public/rates.html",
+    "public/packages",
+    "public/packages.html",
+    "public/business",
+    "public/business.html",
+    "public/pro",
+    "public/pro.html",
+    "public/product-tour",
+    "public/product-tour.html",
+    "public/walkthrough",
+    "public/walkthrough.html",
+    "public/product-overview",
+    "public/product-overview.html",
+    "public/overview",
+    "public/overview.html",
+    "public/integrations-list",
+    "public/integrations-list.html",
+    "public/apps-marketplace",
+    "public/apps-marketplace.html",
+    "public/our-mission",
+    "public/our-mission.html",
+    "public/vision",
+    "public/vision.html",
+    "public/culture",
+    "public/culture.html",
+    "public/leadership-team",
+    "public/leadership-team.html",
+    "public/about-company",
+    "public/about-company.html",
+    "public/partners-program",
+    "public/partners-program.html",
+    "public/affiliate",
+    "public/affiliate.html",
+    "public/resellers",
+    "public/resellers.html",
+    "public/home-page",
+    "public/home-page.html",
+    "public/landing",
+    "public/landing.html",
+    "public/landing-page",
+    "public/landing-page.html",
+    "public/welcome-page",
+    "public/welcome-page.html",
+    "public/front",
+    "public/front.html",
+    "public/sitemap-xml",
+    "public/sitemap-xml.html",
+    "public/xml-sitemap",
+    "public/xml-sitemap.html",
+    "public/map",
+    "public/map.html",
+    "app/pay/page.tsx",
+    "app/pay/route.ts",
+    "app/payment/page.tsx",
+    "app/payment/route.ts",
+    "app/payments/page.tsx",
+    "app/payments/route.ts",
+    "app/invoice/page.tsx",
+    "app/invoice/route.ts",
+    "app/invoices/page.tsx",
+    "app/invoices/route.ts",
+    "app/field-service/page.tsx",
+    "app/field-service/route.ts",
+    "app/general-contractors/page.tsx",
+    "app/general-contractors/route.ts",
+    "app/iso27001/page.tsx",
+    "app/iso27001/route.ts",
+    "app/trust-center/page.tsx",
+    "app/trust-center/route.ts",
+    "app/webhook/page.tsx",
+    "app/webhook/route.ts",
+    "app/wp-admin/page.tsx",
+    "app/wp-admin/route.ts",
+    "app/debug/page.tsx",
+    "app/debug/route.ts",
+    "app/metrics/page.tsx",
+    "app/metrics/route.ts",
+    "app/robots/page.tsx",
+    "app/robots/route.ts",
+    "app/humans/page.tsx",
+    "app/humans/route.ts",
+    "app/security-policy-page/page.tsx",
+    "app/security-policy-page/route.ts",
+    "public/pay",
+    "public/pay.html",
+    "public/payment",
+    "public/payment.html",
+    "public/payments",
+    "public/payments.html",
+    "public/invoice",
+    "public/invoice.html",
+    "public/invoices",
+    "public/invoices.html",
+    "public/field-service",
+    "public/field-service.html",
+    "public/general-contractors",
+    "public/general-contractors.html",
+    "public/iso27001",
+    "public/iso27001.html",
+    "public/trust-center",
+    "public/trust-center.html",
+    "public/webhook",
+    "public/webhook.html",
+    "public/wp-admin",
+    "public/wp-admin.html",
+    "public/debug",
+    "public/debug.html",
+    "public/metrics",
+    "public/metrics.html",
+    "public/robots",
+    "public/robots.html",
+    "public/humans",
+    "public/humans.html",
+    "public/security-policy-page",
+    "public/security-policy-page.html",
+    "app/affiliates/page.tsx",
   ]) {
     assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
   }

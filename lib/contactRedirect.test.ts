@@ -360,6 +360,136 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
       destination: "/support",
       permanent: true,
     },
+    {
+      source: "/contact-form",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/contact-us-form",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/support-ticket",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/help-desk",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/helpdesk-support",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/customer-care",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/care-center",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/ask",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/ask-us",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/talk-to-us",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/message-us",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/write-us",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/email-us",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/call-us",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/knowledge",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/service-desk",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/faq-page",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/common-questions",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/troubleshooting",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/fix-it",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/howto",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/blog-posts",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/press-release",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/newsroom",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/updates",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/api-status",
+      destination: "/support",
+      permanent: true,
+    },
   ]);
   const sources = new Set(contactRedirects().map((redirect) => redirect.source));
   for (const redirect of contactRedirects()) {
@@ -528,6 +658,65 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
   assert.equal(bySource.has("/subscription"), false);
   assert.equal(bySource.get("/get-in-touch"), bySource.get("/contact"));
   assert.equal(bySource.get("/reach-us"), bySource.get("/contact-us"));
+  for (const source of [
+    "/contact-form",
+    "/contact-us-form",
+    "/support-ticket",
+    "/help-desk",
+    "/helpdesk-support",
+    "/customer-care",
+    "/care-center",
+    "/ask",
+    "/ask-us",
+    "/talk-to-us",
+    "/message-us",
+    "/write-us",
+    "/email-us",
+    "/call-us",
+    "/knowledge",
+    "/service-desk",
+    "/faq-page",
+    "/common-questions",
+    "/troubleshooting",
+    "/fix-it",
+    "/howto",
+    "/blog-posts",
+    "/press-release",
+    "/newsroom",
+    "/updates",
+    "/api-status",
+  ]) {
+    const redirect = contactRedirects().find((item) => item.source === source);
+    assert.equal(redirect?.destination, "/support", source);
+    assert.equal(redirect?.permanent, true, source);
+    assert.equal(redirect?.permanent ? 308 : 307, 308, source);
+    assert.equal(bySource.get(source), "/support", source);
+    assert.equal(bySource.get(source), bySource.get("/contact"), source);
+    assert.equal(bySource.has(`${source}/extra`), false, source);
+    assert.equal(bySource.has(`${source}/`), false, source);
+    assert.equal(source.slice(1).includes("/"), false, source);
+  }
+  assert.equal(bySource.get("/contact-form"), bySource.get("/contact"));
+  assert.equal(bySource.has("/contact"), true);
+  assert.equal(bySource.get("/contact-us-form"), bySource.get("/contact-us"));
+  assert.equal(bySource.get("/support-ticket"), bySource.get("/ticket"));
+  assert.equal(bySource.get("/help-desk"), bySource.get("/help"));
+  assert.equal(bySource.has("/helpdesk"), true);
+  assert.equal(bySource.get("/helpdesk-support"), bySource.get("/helpdesk"));
+  assert.equal(bySource.get("/customer-care"), bySource.get("/customer-service"));
+  assert.equal(bySource.get("/ask"), bySource.get("/ask-us"));
+  assert.equal(bySource.get("/knowledge"), bySource.get("/knowledge-base"));
+  assert.equal(bySource.get("/knowledge"), bySource.get("/kb"));
+  assert.equal(bySource.get("/faq-page"), bySource.get("/faq"));
+  assert.equal(bySource.get("/howto"), bySource.get("/how-to"));
+  assert.equal(bySource.get("/blog-posts"), bySource.get("/blog"));
+  assert.equal(bySource.get("/press-release"), bySource.get("/press"));
+  assert.equal(bySource.get("/newsroom"), bySource.get("/news"));
+  assert.equal(bySource.get("/updates"), bySource.get("/whats-new"));
+  assert.equal(bySource.get("/api-status"), bySource.get("/status"));
+  assert.equal(bySource.has("/api"), false);
+  assert.equal(bySource.has("/api/docs"), false);
+  assert.equal(bySource.has("/api-docs"), true);
   for (const path of [
     "/admin",
     "/api",
@@ -589,16 +778,35 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
     "/hipaa",
     "/compliance",
     "/webhooks",
+    "/pay",
+    "/payment",
+    "/payments",
+    "/invoice",
+    "/invoices",
+    "/field-service",
+    "/general-contractors",
+    "/iso27001",
+    "/trust-center",
+    "/webhook",
+    "/wp-admin",
+    "/debug",
+    "/metrics",
+    "/robots",
+    "/humans",
+    "/security-policy-page",
+    "/affiliates",
   ]) {
     assert.equal(sources.has(path), false, path);
   }
+  assert.equal(sources.has("/schedule"), false);
+  assert.equal(sources.has("/affiliate"), false);
 
   const config = readRepo("next.config.ts");
   assert.match(config, /\.\.\.contactRedirects\(\)/);
-  assert.doesNotMatch(config, /\/privacy|\/terms|\/support|\/help|\/faq|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events|\/contact-sales|\/sales|\/enterprise|\/community|\/forum|\/developers|\/api-docs|\/help-center|\/knowledge-base|\/kb|\/tutorials|\/academy|\/training|\/webinars|\/videos|\/video|\/newsletter|\/podcast|\/media-kit|\/media|\/press-kit|\/brand|\/talk-to-sales|\/sales-contact|\/helpdesk|\/submit-ticket|\/ticket|\/feedback|\/report-bug|\/bug-report|\/feature-request|\/ideas|\/community-forum|\/contact\/support|\/support\/contact|\/developer|\/api-reference|\/status-page|\/system-status|\/uptime|\/contactus|\/get-in-touch|\/reach-us|\/customer-support|\/customer-service|\/knowledgebase|\/faqs|\/how-to|\/documentation|\/manual|\/billing-help|\/whats-new/);
+  assert.doesNotMatch(config, /\/privacy|\/terms|\/support|\/help|\/faq|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events|\/contact-sales|\/sales|\/enterprise|\/community|\/forum|\/developers|\/api-docs|\/help-center|\/knowledge-base|\/kb|\/tutorials|\/academy|\/training|\/webinars|\/videos|\/video|\/newsletter|\/podcast|\/media-kit|\/media|\/press-kit|\/brand|\/talk-to-sales|\/sales-contact|\/helpdesk|\/submit-ticket|\/ticket|\/feedback|\/report-bug|\/bug-report|\/feature-request|\/ideas|\/community-forum|\/contact\/support|\/support\/contact|\/developer|\/api-reference|\/status-page|\/system-status|\/uptime|\/contactus|\/get-in-touch|\/reach-us|\/customer-support|\/customer-service|\/knowledgebase|\/faqs|\/how-to|\/documentation|\/manual|\/billing-help|\/whats-new|\/contact-form|\/contact-us-form|\/support-ticket|\/help-desk|\/helpdesk-support|\/customer-care|\/care-center|\/ask-us|\/ask(?![A-Za-z0-9_-])|\/talk-to-us|\/message-us|\/write-us|\/email-us|\/call-us|\/knowledge(?!-|b)|\/service-desk|\/faq-page|\/common-questions|\/troubleshooting|\/fix-it|\/howto|\/blog-posts|\/press-release|\/newsroom|\/updates|\/api-status/);
 
   const proxy = readRepo("proxy.ts");
-  assert.doesNotMatch(proxy, /\/contact|\/help|\/faq|\/contact-us|\/support-center|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events|\/contact-sales|\/sales|\/enterprise|\/community|\/forum|\/developers|\/api-docs|\/help-center|\/knowledge-base|\/kb|\/tutorials|\/academy|\/training|\/webinars|\/videos|\/video|\/newsletter|\/podcast|\/media-kit|\/media|\/press-kit|\/brand|\/talk-to-sales|\/sales-contact|\/helpdesk|\/submit-ticket|\/ticket|\/feedback|\/report-bug|\/bug-report|\/feature-request|\/ideas|\/community-forum|\/contact\/support|\/support\/contact|\/developer|\/api-reference|\/status-page|\/system-status|\/uptime|\/contactus|\/get-in-touch|\/reach-us|\/customer-support|\/customer-service|\/knowledgebase|\/faqs|\/how-to|\/documentation|\/manual|\/billing-help|\/whats-new/);
+  assert.doesNotMatch(proxy, /\/contact|\/help|\/faq|\/contact-us|\/support-center|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events|\/contact-sales|\/sales|\/enterprise|\/community|\/forum|\/developers|\/api-docs|\/help-center|\/knowledge-base|\/kb|\/tutorials|\/academy|\/training|\/webinars|\/videos|\/video|\/newsletter|\/podcast|\/media-kit|\/media|\/press-kit|\/brand|\/talk-to-sales|\/sales-contact|\/helpdesk|\/submit-ticket|\/ticket|\/feedback|\/report-bug|\/bug-report|\/feature-request|\/ideas|\/community-forum|\/contact\/support|\/support\/contact|\/developer|\/api-reference|\/status-page|\/system-status|\/uptime|\/contactus|\/get-in-touch|\/reach-us|\/customer-support|\/customer-service|\/knowledgebase|\/faqs|\/how-to|\/documentation|\/manual|\/billing-help|\/whats-new|\/contact-form|\/contact-us-form|\/support-ticket|\/help-desk|\/helpdesk-support|\/customer-care|\/care-center|\/ask-us|\/ask(?![A-Za-z0-9_-])|\/talk-to-us|\/message-us|\/write-us|\/email-us|\/call-us|\/knowledge(?!-|b)|\/service-desk|\/faq-page|\/common-questions|\/troubleshooting|\/fix-it|\/howto|\/blog-posts|\/press-release|\/newsroom|\/updates|\/api-status/);
   assert.doesNotMatch(proxy, /redirect/);
 
   assert.ok(PUBLIC_PAGE_PATHS.includes("/support"));
@@ -879,6 +1087,120 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
     "public/billing-help.html",
     "public/whats-new",
     "public/whats-new.html",
+    "app/contact-form/page.tsx",
+    "app/contact-form/route.ts",
+    "app/contact-us-form/page.tsx",
+    "app/contact-us-form/route.ts",
+    "app/support-ticket/page.tsx",
+    "app/support-ticket/route.ts",
+    "app/help-desk/page.tsx",
+    "app/help-desk/route.ts",
+    "app/helpdesk-support/page.tsx",
+    "app/helpdesk-support/route.ts",
+    "app/customer-care/page.tsx",
+    "app/customer-care/route.ts",
+    "app/care-center/page.tsx",
+    "app/care-center/route.ts",
+    "app/ask/page.tsx",
+    "app/ask/route.ts",
+    "app/ask-us/page.tsx",
+    "app/ask-us/route.ts",
+    "app/talk-to-us/page.tsx",
+    "app/talk-to-us/route.ts",
+    "app/message-us/page.tsx",
+    "app/message-us/route.ts",
+    "app/write-us/page.tsx",
+    "app/write-us/route.ts",
+    "app/email-us/page.tsx",
+    "app/email-us/route.ts",
+    "app/call-us/page.tsx",
+    "app/call-us/route.ts",
+    "app/knowledge/page.tsx",
+    "app/knowledge/route.ts",
+    "app/service-desk/page.tsx",
+    "app/service-desk/route.ts",
+    "app/faq-page/page.tsx",
+    "app/faq-page/route.ts",
+    "app/common-questions/page.tsx",
+    "app/common-questions/route.ts",
+    "app/troubleshooting/page.tsx",
+    "app/troubleshooting/route.ts",
+    "app/fix-it/page.tsx",
+    "app/fix-it/route.ts",
+    "app/howto/page.tsx",
+    "app/howto/route.ts",
+    "app/blog-posts/page.tsx",
+    "app/blog-posts/route.ts",
+    "app/press-release/page.tsx",
+    "app/press-release/route.ts",
+    "app/newsroom/page.tsx",
+    "app/newsroom/route.ts",
+    "app/updates/page.tsx",
+    "app/updates/route.ts",
+    "app/api-status/page.tsx",
+    "app/api-status/route.ts",
+    "public/contact-form",
+    "public/contact-form.html",
+    "public/contact-us-form",
+    "public/contact-us-form.html",
+    "public/support-ticket",
+    "public/support-ticket.html",
+    "public/help-desk",
+    "public/help-desk.html",
+    "public/helpdesk-support",
+    "public/helpdesk-support.html",
+    "public/customer-care",
+    "public/customer-care.html",
+    "public/care-center",
+    "public/care-center.html",
+    "public/ask",
+    "public/ask.html",
+    "public/ask-us",
+    "public/ask-us.html",
+    "public/talk-to-us",
+    "public/talk-to-us.html",
+    "public/message-us",
+    "public/message-us.html",
+    "public/write-us",
+    "public/write-us.html",
+    "public/email-us",
+    "public/email-us.html",
+    "public/call-us",
+    "public/call-us.html",
+    "public/knowledge",
+    "public/knowledge.html",
+    "public/service-desk",
+    "public/service-desk.html",
+    "public/faq-page",
+    "public/faq-page.html",
+    "public/common-questions",
+    "public/common-questions.html",
+    "public/troubleshooting",
+    "public/troubleshooting.html",
+    "public/fix-it",
+    "public/fix-it.html",
+    "public/howto",
+    "public/howto.html",
+    "public/blog-posts",
+    "public/blog-posts.html",
+    "public/press-release",
+    "public/press-release.html",
+    "public/newsroom",
+    "public/newsroom.html",
+    "public/updates",
+    "public/updates.html",
+    "public/api-status",
+    "public/api-status.html",
+    "app/pay/page.tsx",
+    "app/pay/route.ts",
+    "app/webhook/page.tsx",
+    "app/webhook/route.ts",
+    "app/wp-admin/page.tsx",
+    "app/wp-admin/route.ts",
+    "public/pay",
+    "public/pay.html",
+    "public/webhook",
+    "public/webhook.html",
     "app/subscription/page.tsx",
     "app/subscription/route.ts",
     "public/subscription",
