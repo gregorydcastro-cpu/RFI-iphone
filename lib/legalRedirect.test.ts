@@ -170,6 +170,22 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
       destination: "/terms",
       permanent: true,
     },
+
+    {
+      source: "/privacy-and-terms",
+      destination: "/terms",
+      permanent: true,
+    },
+    {
+      source: "/legal-page",
+      destination: "/terms",
+      permanent: true,
+    },
+    {
+      source: "/terms-page",
+      destination: "/terms",
+      permanent: true,
+    },
     {
       source: "/privacy-policy",
       destination: "/privacy",
@@ -342,6 +358,42 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
     },
     {
       source: "/ccpa-opt-out",
+      destination: "/privacy",
+      permanent: true,
+    },
+
+    {
+      source: "/cookie-policy-page",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/privacy-request",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/privacy-page",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/privacy-policy-page",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/security-page",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/security-center",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/trust-page",
       destination: "/privacy",
       permanent: true,
     },
@@ -578,6 +630,56 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
   assert.equal(bySource.has("/opt-out"), true);
   assert.equal(bySource.get("/ccpa-opt-out"), bySource.get("/ccpa"));
   assert.equal(bySource.has("/ccpa"), true);
+  for (const source of [
+    "/privacy-and-terms",
+    "/legal-page",
+    "/terms-page"
+  ]) {
+    const redirect = legalRedirects().find((item) => item.source === source);
+    assert.equal(redirect?.destination, "/terms", source);
+    assert.equal(redirect?.permanent, true, source);
+    assert.equal(redirect?.permanent ? 308 : 307, 308, source);
+    assert.equal(bySource.get(source), "/terms", source);
+    assert.equal(bySource.get(source), bySource.get("/legal"), source);
+    assert.equal(bySource.has(`${source}/extra`), false, source);
+    assert.equal(bySource.has(`${source}/`), false, source);
+    assert.equal(source.slice(1).includes("/"), false, source);
+  }
+  for (const source of [
+    "/cookie-policy-page",
+    "/privacy-request",
+    "/privacy-page",
+    "/privacy-policy-page",
+    "/security-page",
+    "/security-center",
+    "/trust-page"
+  ]) {
+    const redirect = legalRedirects().find((item) => item.source === source);
+    assert.equal(redirect?.destination, "/privacy", source);
+    assert.equal(redirect?.permanent, true, source);
+    assert.equal(redirect?.permanent ? 308 : 307, 308, source);
+    assert.equal(bySource.get(source), "/privacy", source);
+    assert.equal(bySource.get(source), bySource.get("/privacy-policy"), source);
+    assert.equal(bySource.has(`${source}/extra`), false, source);
+    assert.equal(bySource.has(`${source}/`), false, source);
+    assert.equal(source.slice(1).includes("/"), false, source);
+  }
+  assert.equal(bySource.get("/privacy-and-terms"), bySource.get("/legal"));
+  assert.equal(bySource.has("/privacy"), false);
+  assert.equal(bySource.has("/terms"), false);
+  assert.equal(bySource.get("/legal-page"), bySource.get("/legal"));
+  assert.equal(bySource.has("/legal"), true);
+  assert.equal(bySource.get("/terms-page"), bySource.get("/tos-page"));
+  assert.equal(bySource.has("/tos-page"), true);
+  assert.equal(bySource.get("/cookie-policy-page"), bySource.get("/cookie-policy"));
+  assert.equal(bySource.get("/privacy-request"), bySource.get("/privacy-policy"));
+  assert.equal(bySource.get("/privacy-page"), bySource.get("/privacy-policy"));
+  assert.equal(bySource.get("/privacy-policy-page"), bySource.get("/privacy-policy"));
+  assert.equal(bySource.get("/security-page"), bySource.get("/security"));
+  assert.equal(bySource.has("/security-policy-page"), false);
+  assert.equal(bySource.get("/security-center"), bySource.get("/security"));
+  assert.equal(bySource.get("/trust-page"), bySource.get("/trust"));
+  assert.equal(bySource.has("/trust-center"), false);
   for (const path of [
     "/unsubscribe",
     "/subscribe",
@@ -610,12 +712,12 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
   const config = readRepo("next.config.ts");
   assert.match(config, /\.\.\.legalRedirects\(\)/);
   assert.doesNotMatch(config, /["']\/legal["']/);
-  assert.doesNotMatch(config, /\/privacy-policy|\/tos|\/terms-of-service|\/eula|\/cookies|\/cookie-policy|\/refunds|\/refund|\/dmca|\/imprint|\/accessibility|\/trust|\/gdpr|\/ccpa|\/sla|\/legal\/privacy|\/legal\/terms|\/security(?!Headers)|\/terms-and-conditions|\/acceptable-use|\/aup|\/copyright|\/trademarks|\/privacy-notice|\/legal\/cookies|\/subprocessors|\/dpa|\/legal-notice|\/disclaimer|\/accessibility-statement|\/terms-of-use|\/cookie-settings|\/do-not-sell|\/your-privacy-choices|\/privacy-choices|\/security-policy|\/responsible-disclosure|\/bug-bounty|\/vulnerability-disclosure|\/data-policy|\/data-processing|\/termsandconditions|\/tos-page|\/eula-page|\/dmca-policy|\/refund-policy|\/a11y|\/wcag|\/privacypolicy|\/cookies-settings|\/manage-cookies|\/consent|\/privacy-center|\/cookie(?!s)|\/terms-conditions|\/termsconditions|\/user-agreement|\/license-agreement|\/legal-terms|\/privacy-statement|\/data-protection|\/gdpr-privacy|\/cookie-notice|\/cookie-preferences|\/ccpa-opt-out|\/opt-out/);
+  assert.doesNotMatch(config, /\/privacy-policy|\/tos|\/terms-of-service|\/eula|\/cookies|\/cookie-policy|\/refunds|\/refund|\/dmca|\/imprint|\/accessibility|\/trust|\/gdpr|\/ccpa|\/sla|\/legal\/privacy|\/legal\/terms|\/security(?!Headers)|\/terms-and-conditions|\/acceptable-use|\/aup|\/copyright|\/trademarks|\/privacy-notice|\/legal\/cookies|\/subprocessors|\/dpa|\/legal-notice|\/disclaimer|\/accessibility-statement|\/terms-of-use|\/cookie-settings|\/do-not-sell|\/your-privacy-choices|\/privacy-choices|\/security-policy|\/responsible-disclosure|\/bug-bounty|\/vulnerability-disclosure|\/data-policy|\/data-processing|\/termsandconditions|\/tos-page|\/eula-page|\/dmca-policy|\/refund-policy|\/a11y|\/wcag|\/privacypolicy|\/cookies-settings|\/manage-cookies|\/consent|\/privacy-center|\/cookie(?!s)|\/terms-conditions|\/termsconditions|\/user-agreement|\/license-agreement|\/legal-terms|\/privacy-statement|\/data-protection|\/gdpr-privacy|\/cookie-notice|\/cookie-preferences|\/ccpa-opt-out|\/opt-out|\/privacy-and-terms|\/legal-page|\/terms-page|\/cookie-policy-page|\/privacy-request|\/privacy-page|\/privacy-policy-page|\/security-page|\/security-center|\/trust-page/);
   assert.doesNotMatch(config, /\/terms/);
   assert.doesNotMatch(config, /\/privacy/);
 
   const proxy = readRepo("proxy.ts");
-  assert.doesNotMatch(proxy, /\/legal|\/privacy-policy|\/terms-of-service|\/tos|\/eula|\/cookies|\/cookie-policy|\/refunds|\/refund|\/dmca|\/imprint|\/accessibility|\/security(?![\w.])|\/trust(?![\w])|\/gdpr(?![\w])|\/ccpa(?![\w])|\/sla(?![\w])|\/terms-and-conditions|\/acceptable-use|\/aup(?![\w])|\/copyright|\/trademarks|\/privacy-notice|\/subprocessors|\/dpa(?![\w])|\/legal-notice|\/disclaimer|\/accessibility-statement|\/terms-of-use|\/cookie-settings|\/do-not-sell|\/your-privacy-choices|\/privacy-choices|\/security-policy|\/responsible-disclosure|\/bug-bounty|\/vulnerability-disclosure|\/data-policy|\/data-processing|\/termsandconditions|\/tos-page|\/eula-page|\/dmca-policy|\/refund-policy|\/a11y|\/wcag|\/privacypolicy|\/cookies-settings|\/manage-cookies|\/consent|\/privacy-center|\/cookie(?!s)|\/terms-conditions|\/termsconditions|\/user-agreement|\/license-agreement|\/legal-terms|\/privacy-statement|\/data-protection|\/gdpr-privacy|\/cookie-notice|\/cookie-preferences|\/ccpa-opt-out|\/opt-out/);
+  assert.doesNotMatch(proxy, /\/legal|\/privacy-policy|\/terms-of-service|\/tos|\/eula|\/cookies|\/cookie-policy|\/refunds|\/refund|\/dmca|\/imprint|\/accessibility|\/security(?![\w.])|\/trust(?![\w])|\/gdpr(?![\w])|\/ccpa(?![\w])|\/sla(?![\w])|\/terms-and-conditions|\/acceptable-use|\/aup(?![\w])|\/copyright|\/trademarks|\/privacy-notice|\/subprocessors|\/dpa(?![\w])|\/legal-notice|\/disclaimer|\/accessibility-statement|\/terms-of-use|\/cookie-settings|\/do-not-sell|\/your-privacy-choices|\/privacy-choices|\/security-policy|\/responsible-disclosure|\/bug-bounty|\/vulnerability-disclosure|\/data-policy|\/data-processing|\/termsandconditions|\/tos-page|\/eula-page|\/dmca-policy|\/refund-policy|\/a11y|\/wcag|\/privacypolicy|\/cookies-settings|\/manage-cookies|\/consent|\/privacy-center|\/cookie(?!s)|\/terms-conditions|\/termsconditions|\/user-agreement|\/license-agreement|\/legal-terms|\/privacy-statement|\/data-protection|\/gdpr-privacy|\/cookie-notice|\/cookie-preferences|\/ccpa-opt-out|\/opt-out|\/privacy-and-terms|\/legal-page|\/terms-page|\/cookie-policy-page|\/privacy-request|\/privacy-page|\/privacy-policy-page|\/security-page|\/security-center|\/trust-page/);
   assert.doesNotMatch(proxy, /redirect/);
 
   assert.ok(PUBLIC_PAGE_PATHS.includes("/terms"));
@@ -891,5 +993,26 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
     "public/security-policy-page.html",
   ]) {
     assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
+  }
+  for (const name of [
+    "privacy-and-terms",
+    "legal-page",
+    "terms-page",
+    "cookie-policy-page",
+    "privacy-request",
+    "privacy-page",
+    "privacy-policy-page",
+    "security-page",
+    "security-center",
+    "trust-page"
+  ]) {
+    for (const page of [
+      `app/${name}/page.tsx`,
+      `app/${name}/route.ts`,
+      `public/${name}`,
+      `public/${name}.html`,
+    ]) {
+      assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
+    }
   }
 });

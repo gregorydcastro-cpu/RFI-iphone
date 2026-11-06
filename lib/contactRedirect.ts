@@ -48,6 +48,22 @@
  * /press-release does not match /press. /newsroom does not match /news.
  * /updates does not match /whats-new. /api-status does not match /status,
  * /api, /api-docs, or /api/docs.
+ * /contact-support, /get-support, /tech-support, /technical-support,
+ * /sales-team, /sales-inquiry, /support-home, /client-support,
+ * /api-docs-page, /developer-docs, /help-center-home, /brand-assets,
+ * /kb-home, /knowledge-base-home, /faq-center, /brand-guidelines, and
+ * /media-assets use that same hop. /contact-support does not match
+ * /contact or /support. /get-support does not match /support.
+ * /tech-support and /technical-support do not match each other or
+ * /support. /sales-team and /sales-inquiry do not match /sales.
+ * /support-home does not match /support. /client-support does not match
+ * /customer-support. /api-docs-page does not match /api-docs, /api, or
+ * /api/docs. /developer-docs does not match /developer, /developers, or
+ * /docs. /help-center-home does not match /help-center or /help.
+ * /brand-assets and /brand-guidelines do not match /brand.
+ * /kb-home does not match /kb. /knowledge-base-home does not match
+ * /knowledge-base. /faq-center does not match /faq. /media-assets does
+ * not match /media.
  */
 
 const SUPPORT_HREF = "/support";
@@ -154,6 +170,23 @@ export function contactRedirects(): Array<{
     "/newsroom",
     "/updates",
     "/api-status",
+    "/contact-support",
+    "/get-support",
+    "/tech-support",
+    "/technical-support",
+    "/sales-team",
+    "/sales-inquiry",
+    "/support-home",
+    "/client-support",
+    "/api-docs-page",
+    "/developer-docs",
+    "/help-center-home",
+    "/brand-assets",
+    "/kb-home",
+    "/knowledge-base-home",
+    "/faq-center",
+    "/brand-guidelines",
+    "/media-assets",
   ].map((source) => ({
     source,
     destination: SUPPORT_HREF,

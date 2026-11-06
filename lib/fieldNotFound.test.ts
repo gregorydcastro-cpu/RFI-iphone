@@ -294,7 +294,7 @@ test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /fr
   ]);
   assert.equal(
     SIGN_IN_ALIAS_SOURCE,
-    "/:alias(login|log-in|signin|sign-in|signup|sign-up|register|join|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone|ipad|app-store-link|free|sign-up-free|free-account|signup-free|welcome|web-app|beta|waitlist|early-access|register-now|join-now|login-page|signin-page|download-app|get-the-app|ios-app|getting-started|start-here|sign-in-page|log-in-page|create-an-account|register-account|open-account|new-account|start-free|ios-download|get-app|mobile-download|appstore|login-help|recover|account-recovery)",
+    "/:alias(login|log-in|signin|sign-in|signup-page|signup|sign-up-page|sign-up|register|join|create-account-page|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone-app|iphone|ipad|app-store-link|free|sign-up-free|free-account|signup-free|welcome|web-app|beta|waitlist|early-access|register-now|join-now|login-page|signin-page|download-app|get-the-app|ios-app|getting-started|start-here|sign-in-page|log-in-page|create-an-account|register-account|open-account|new-account|start-free|ios-download|get-app|mobile-download|appstore|login-help|recover|account-recovery|download-ios|app-download|logon|signon|install-app|install)",
   );
   assert.equal(signInAliasRedirects()[0]?.permanent, false);
   assert.equal(signInAliasRedirects()[0]?.permanent ? 308 : 307, 307);
@@ -302,9 +302,9 @@ test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /fr
 
   const config = readRepo("next.config.ts");
   assert.match(config, /signInAliasRedirects\(\)/);
-  assert.doesNotMatch(config, /\/free-account|\/signup-free|\/welcome(?!-)|\/web-app|\/beta|\/waitlist|\/early-access|\/register-now|\/join-now|\/login-page|\/signin-page|\/download-app|\/get-the-app|\/ios-app|\/getting-started|\/start-here|\/sign-in-page|\/log-in-page|\/create-an-account|\/register-account|\/open-account|\/new-account|\/start-free|\/ios-download|\/get-app|\/mobile-download|\/appstore|\/login-help|\/account-recovery|\/recover(?!-)/);
+  assert.doesNotMatch(config, /\/free-account|\/signup-free|\/welcome(?!-)|\/web-app|\/beta|\/waitlist|\/early-access|\/register-now|\/join-now|\/login-page|\/signin-page|\/download-app|\/get-the-app|\/ios-app|\/getting-started|\/start-here|\/sign-in-page|\/log-in-page|\/create-an-account|\/register-account|\/open-account|\/new-account|\/start-free|\/ios-download|\/get-app|\/mobile-download|\/appstore|\/login-help|\/account-recovery|\/recover(?!-)|\/sign-up-page|\/signup-page|\/create-account-page|\/download-ios|\/app-download|\/logon|\/signon|\/install|\/install-app|\/iphone-app/);
   const proxy = readRepo("proxy.ts");
-  assert.doesNotMatch(proxy, /\/free-account|\/signup-free|\/welcome(?!-)|\/web-app|\/beta|\/waitlist|\/early-access|\/register-now|\/join-now|\/login-page|\/signin-page|\/download-app|\/get-the-app|\/ios-app|\/getting-started|\/start-here|\/sign-in-page|\/log-in-page|\/create-an-account|\/register-account|\/open-account|\/new-account|\/start-free|\/ios-download|\/get-app|\/mobile-download|\/appstore|\/login-help|\/account-recovery|\/recover(?!-)/);
+  assert.doesNotMatch(proxy, /\/free-account|\/signup-free|\/welcome(?!-)|\/web-app|\/beta|\/waitlist|\/early-access|\/register-now|\/join-now|\/login-page|\/signin-page|\/download-app|\/get-the-app|\/ios-app|\/getting-started|\/start-here|\/sign-in-page|\/log-in-page|\/create-an-account|\/register-account|\/open-account|\/new-account|\/start-free|\/ios-download|\/get-app|\/mobile-download|\/appstore|\/login-help|\/account-recovery|\/recover(?!-)|\/sign-up-page|\/signup-page|\/create-account-page|\/download-ios|\/app-download|\/logon|\/signon|\/install|\/install-app|\/iphone-app/);
   assert.doesNotMatch(proxy, /redirect/);
 
   assert.equal(signInAliasDestination("/login"), "/");
@@ -521,6 +521,16 @@ test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /fr
     "/login-help",
     "/recover",
     "/account-recovery",
+    "/sign-up-page",
+    "/signup-page",
+    "/create-account-page",
+    "/download-ios",
+    "/app-download",
+    "/logon",
+    "/signon",
+    "/install",
+    "/install-app",
+    "/iphone-app"
   ]) {
     assert.equal(signInAliasDestination(path), "/", path);
     assert.equal(signInAliasDestination(`${path}/`), "/", path);
@@ -528,8 +538,36 @@ test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /fr
     assert.equal(signInAliasDestination(`${path.toUpperCase()}/`), "/", path);
     assert.equal(signInAliasDestination(path, next), `/${next}`, path);
     assert.equal(signInAliasDestination(`${path}/extra`), null, path);
+    assert.equal(signInAliasDestination(`${path}s`), null, path);
     assert.equal(demoAliasDestination(path), null, path);
   }
+  assert.equal(signInAliasDestination("/sign-up"), "/");
+  assert.equal(signInAliasDestination("/sign-up-page"), "/");
+  assert.equal(signInAliasDestination("/sign-up/page"), null);
+  assert.equal(signInAliasDestination("/signup"), "/");
+  assert.equal(signInAliasDestination("/signup-page"), "/");
+  assert.equal(signInAliasDestination("/signup/page"), null);
+  assert.equal(signInAliasDestination("/create-account"), "/");
+  assert.equal(signInAliasDestination("/create-account-page"), "/");
+  assert.equal(signInAliasDestination("/create-account/page"), null);
+  assert.equal(signInAliasDestination("/ios-download"), "/");
+  assert.equal(signInAliasDestination("/download-ios"), "/");
+  assert.equal(signInAliasDestination("/download/ios"), null);
+  assert.equal(signInAliasDestination("/download-app"), "/");
+  assert.equal(signInAliasDestination("/app-download"), "/");
+  assert.equal(signInAliasDestination("/app/download"), null);
+  assert.equal(signInAliasDestination("/install-app"), "/");
+  assert.equal(signInAliasDestination("/install"), "/");
+  assert.equal(signInAliasDestination("/install/app"), null);
+  assert.equal(signInAliasDestination("/iphone"), "/");
+  assert.equal(signInAliasDestination("/iphone-app"), "/");
+  assert.equal(signInAliasDestination("/iphone/app"), null);
+  assert.equal(signInAliasDestination("/login"), "/");
+  assert.equal(signInAliasDestination("/logon"), "/");
+  assert.equal(signInAliasDestination("/logons"), null);
+  assert.equal(signInAliasDestination("/signin"), "/");
+  assert.equal(signInAliasDestination("/signon"), "/");
+  assert.equal(signInAliasDestination("/signons"), null);
   assert.equal(signInAliasDestination("/sign-in"), "/");
   assert.equal(signInAliasDestination("/signin-page"), "/");
   assert.equal(signInAliasDestination("/sign-in-page"), "/");
@@ -1046,6 +1084,27 @@ test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /fr
   ]) {
     assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
   }
+  for (const name of [
+    "sign-up-page",
+    "signup-page",
+    "create-account-page",
+    "download-ios",
+    "app-download",
+    "logon",
+    "signon",
+    "install",
+    "install-app",
+    "iphone-app"
+  ]) {
+    for (const page of [
+      `app/${name}/page.tsx`,
+      `app/${name}/route.ts`,
+      `public/${name}`,
+      `public/${name}.html`,
+    ]) {
+      assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
+    }
+  }
 });
 
 test("/book-demo, /request-demo, /schedule-demo, /get-demo, /demo-video, /book-a-demo, /try, /try-free, /freetrial, and /request-quote temporarily move straight to /pack/maple-point (307), not via /demo", () => {
@@ -1058,7 +1117,7 @@ test("/book-demo, /request-demo, /schedule-demo, /get-demo, /demo-video, /book-a
   ]);
   assert.equal(
     DEMO_ALIAS_SOURCE,
-    "/:alias(book-demo|request-demo|schedule-demo|get-demo|demo-video|book-a-demo|try|try-free|freetrial|request-quote|try-it-free|try-it|demo-now|schedule|book-demo-now|see-demo)",
+    "/:alias(book-demo|request-demo|schedule-demo|get-demo|demo-video|book-a-demo|try-demo|try|try-free|freetrial|request-quote|try-it-free|try-it|demo-now|schedule-a-demo|schedule|book-demo-now|see-demo|see-it-in-action|product-demo|live-demo|interactive-demo)",
   );
   assert.equal(demoAliasRedirects()[0]?.permanent, false);
   assert.equal(demoAliasRedirects()[0]?.permanent ? 308 : 307, 307);
@@ -1070,10 +1129,10 @@ test("/book-demo, /request-demo, /schedule-demo, /get-demo, /demo-video, /book-a
   assert.match(config, /\.\.\.demoAliasRedirects\(\)/);
   assert.match(config, /source:\s*"\/demo"/);
   assert.match(config, /destination:\s*"\/pack\/maple-point"/);
-  assert.doesNotMatch(config, /\/book-demo|\/request-demo|\/schedule-demo|\/get-demo|\/demo-video|\/book-a-demo|\/try-free|\/freetrial|\/request-quote|\/try(?!-)|\/try-it-free|\/try-it|\/demo-now|\/schedule(?!-)|\/book-demo-now|\/see-demo/);
+  assert.doesNotMatch(config, /\/book-demo|\/request-demo|\/schedule-demo|\/get-demo|\/demo-video|\/book-a-demo|\/try-free|\/freetrial|\/request-quote|\/try(?!-)|\/try-it-free|\/try-it|\/demo-now|\/schedule(?!-)|\/book-demo-now|\/see-demo|\/schedule-a-demo|\/see-it-in-action|\/product-demo|\/live-demo|\/interactive-demo|\/try-demo/);
 
   const proxy = readRepo("proxy.ts");
-  assert.doesNotMatch(proxy, /\/book-demo|\/request-demo|\/schedule-demo|\/get-demo|\/demo-video|\/book-a-demo|\/try-free|\/freetrial|\/request-quote|\/try(?!-)|\/try-it-free|\/try-it|\/demo-now|\/schedule(?!-)|\/book-demo-now|\/see-demo/);
+  assert.doesNotMatch(proxy, /\/book-demo|\/request-demo|\/schedule-demo|\/get-demo|\/demo-video|\/book-a-demo|\/try-free|\/freetrial|\/request-quote|\/try(?!-)|\/try-it-free|\/try-it|\/demo-now|\/schedule(?!-)|\/book-demo-now|\/see-demo|\/schedule-a-demo|\/see-it-in-action|\/product-demo|\/live-demo|\/interactive-demo|\/try-demo/);
   assert.doesNotMatch(proxy, /redirect/);
 
   const next = "?room=101";
@@ -1094,6 +1153,12 @@ test("/book-demo, /request-demo, /schedule-demo, /get-demo, /demo-video, /book-a
     "/schedule",
     "/book-demo-now",
     "/see-demo",
+    "/schedule-a-demo",
+    "/see-it-in-action",
+    "/product-demo",
+    "/live-demo",
+    "/interactive-demo",
+    "/try-demo"
   ]) {
     assert.equal(demoAliasDestination(path), "/pack/maple-point", path);
     assert.equal(demoAliasDestination(`${path}/`), "/pack/maple-point", path);
@@ -1213,6 +1278,26 @@ test("/book-demo, /request-demo, /schedule-demo, /get-demo, /demo-video, /book-a
   assert.equal(demoAliasDestination("/book-demo"), "/pack/maple-point");
   assert.equal(demoAliasDestination("/see-demo"), "/pack/maple-point");
   assert.equal(demoAliasDestination("/get-demo"), "/pack/maple-point");
+  assert.equal(demoAliasDestination("/schedule"), "/pack/maple-point");
+  assert.equal(demoAliasDestination("/schedule-a-demo"), "/pack/maple-point");
+  assert.equal(demoAliasDestination("/schedule-demo"), "/pack/maple-point");
+  assert.equal(demoAliasDestination("/schedule/a-demo"), null);
+  assert.notEqual(demoAliasDestination("/schedule-a-demo"), "/demo");
+  assert.equal(demoAliasDestination("/see-it-in-action"), "/pack/maple-point");
+  assert.equal(demoAliasDestination("/see-it-in-action/extra"), null);
+  assert.equal(demoAliasDestination("/product-demo"), "/pack/maple-point");
+  assert.equal(demoAliasDestination("/product"), null);
+  assert.equal(demoAliasDestination("/demo"), null);
+  assert.notEqual(demoAliasDestination("/product-demo"), "/demo");
+  assert.equal(demoAliasDestination("/live-demo"), "/pack/maple-point");
+  assert.equal(demoAliasDestination("/interactive-demo"), "/pack/maple-point");
+  assert.equal(demoAliasDestination("/try"), "/pack/maple-point");
+  assert.equal(demoAliasDestination("/try-demo"), "/pack/maple-point");
+  assert.equal(demoAliasDestination("/try/demo"), null);
+  assert.notEqual(demoAliasDestination("/try-demo"), "/demo");
+  assert.equal(signInAliasDestination("/schedule-a-demo"), null);
+  assert.equal(signInAliasDestination("/try-demo"), null);
+  assert.equal(signInAliasDestination("/product-demo"), null);
   assert.equal(demoAliasDestination("/affiliates"), null);
   assert.equal(demoAliasDestination("/trying"), null);
   assert.equal(demoAliasDestination("/try/extra"), null);
@@ -1315,6 +1400,24 @@ test("/book-demo, /request-demo, /schedule-demo, /get-demo, /demo-video, /book-a
   ]) {
     assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
   }
+  for (const name of [
+    "schedule-a-demo",
+    "see-it-in-action",
+    "product-demo",
+    "live-demo",
+    "interactive-demo",
+    "try-demo"
+  ]) {
+    for (const page of [
+      `app/${name}/page.tsx`,
+      `app/${name}/route.ts`,
+      `public/${name}`,
+      `public/${name}.html`,
+    ]) {
+      assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
+    }
+  }
+  assert.equal(existsSync(new URL("../app/pack/[requestId]/page.tsx", import.meta.url)), true);
 });
 
 test("missing-page hint is console-only and development-only", () => {

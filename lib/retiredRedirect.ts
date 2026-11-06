@@ -45,12 +45,28 @@
  * /company. /partners-program does not match /partners. /affiliate does
  * not match /affiliates. /home-page does not match /home. /landing-page
  * does not match /landing. /welcome-page does not match /welcome.
+ * /about-us-page, /company-page, /careers-page, /jobs-page,
+ * /join-our-team, /we-are-hiring, /open-roles, and /work-with-us share
+ * the destination / already uses. /about-us-page does not match /about-us
+ * or /about. /company-page does not match /company. /careers-page does
+ * not match /careers. /jobs-page does not match /jobs or /jobs-board.
+ * /join-our-team does not match /join. /we-are-hiring does not match
+ * /hiring. /open-roles and /work-with-us do not match /careers.
+ * /request-pricing, /pricing-page, /compare-plans, /enterprise-pricing,
+ * /plan-comparison, and /pricing-overview share the destination /pricing
+ * already uses. /request-pricing does not match /pricing. /pricing-page
+ * does not match /pricing or /pricing-plans. /compare-plans does not
+ * match /compare. /enterprise-pricing does not match /enterprise-plan
+ * or /enterprise. /plan-comparison does not match /compare.
+ * /pricing-overview does not match /overview or /pricing.
  * /security.txt moves straight to /.well-known/security.txt.
  * /manifest.json and /site.webmanifest move straight to /manifest.webmanifest.
- * /sitemap, /site-map, /sitemap-xml, /xml-sitemap, and /map move straight
- * to /sitemap.xml. app/sitemap.ts serves that path. /sitemap.xml itself
- * is not a source. /sitemap-xml does not match /sitemap. /map does not
- * match /sitemap or /site-map.
+ * /sitemap, /site-map, /sitemap-xml, /xml-sitemap, /map, /html-sitemap,
+ * /xml-map, and /sitemap-html move straight to /sitemap.xml.
+ * app/sitemap.ts serves that path. /sitemap.xml itself is not a source.
+ * /sitemap-xml does not match /sitemap. /map does not match /sitemap or
+ * /site-map. /html-sitemap and /sitemap-html do not match /sitemap.
+ * /xml-map does not match /map or /xml-sitemap.
  */
 
 const HOME_HREF = "/";
@@ -112,6 +128,12 @@ export function retiredRedirects(): Array<{
       "/overview",
       "/integrations-list",
       "/apps-marketplace",
+      "/request-pricing",
+      "/pricing-page",
+      "/compare-plans",
+      "/enterprise-pricing",
+      "/plan-comparison",
+      "/pricing-overview",
     ].map((source) => ({
       source,
       destination: PRICING_HREF,
@@ -160,6 +182,14 @@ export function retiredRedirects(): Array<{
       "/landing-page",
       "/welcome-page",
       "/front",
+      "/about-us-page",
+      "/company-page",
+      "/careers-page",
+      "/jobs-page",
+      "/join-our-team",
+      "/we-are-hiring",
+      "/open-roles",
+      "/work-with-us",
     ].map((source) => ({
       source,
       destination: HOME_HREF,
@@ -175,7 +205,7 @@ export function retiredRedirects(): Array<{
       destination: MANIFEST_HREF,
       permanent: true,
     })),
-    ...["/sitemap", "/site-map", "/sitemap-xml", "/xml-sitemap", "/map"].map((source) => ({
+    ...["/sitemap", "/site-map", "/sitemap-xml", "/xml-sitemap", "/map", "/html-sitemap", "/xml-map", "/sitemap-html"].map((source) => ({
       source,
       destination: SITEMAP_HREF,
       permanent: true,
