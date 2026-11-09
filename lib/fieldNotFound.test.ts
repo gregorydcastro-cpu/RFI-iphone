@@ -294,7 +294,7 @@ test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /fr
   ]);
   assert.equal(
     SIGN_IN_ALIAS_SOURCE,
-    "/:alias(login|log-in|signin|sign-in|signup-page|signup|sign-up-page|sign-up|register|join|create-account-page|create-account|get-started|start|trial|free-trial|onboarding|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone-app|iphone|ipad|app-store-link|free|sign-up-free|free-account|signup-free|welcome|web-app|beta|waitlist|early-access|register-now|join-now|login-page|signin-page|download-app|get-the-app|ios-app|getting-started|start-here|sign-in-page|log-in-page|create-an-account|register-account|open-account|new-account|start-free|ios-download|get-app|mobile-download|appstore|login-help|recover|account-recovery|download-ios|app-download|logon|signon|install-app|install)",
+    "/:alias(login|log-in|signin|sign-in|signup-page|signup|sign-up-page|sign-up|register|join|create-account-page|create-account|get-started|start|trial|free-trial|onboarding|onboard|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone-app|iphone|ipad|app-store-link|free|sign-up-free|free-account|signup-free|welcome-back|welcome|web-app|beta|waitlist|early-access|register-now|join-now|login-page|signin-page|download-app|get-the-app|ios-app|getting-started|start-here|sign-in-page|log-in-page|create-an-account|register-account|open-account|new-account|start-free|ios-download|get-app|mobile-download|appstore|login-help|recover|account-recovery|download-ios|app-download|logon|signon|install-app|install|thank-you|thanks|success|cancel)",
   );
   assert.equal(signInAliasRedirects()[0]?.permanent, false);
   assert.equal(signInAliasRedirects()[0]?.permanent ? 308 : 307, 307);
@@ -302,9 +302,9 @@ test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /fr
 
   const config = readRepo("next.config.ts");
   assert.match(config, /signInAliasRedirects\(\)/);
-  assert.doesNotMatch(config, /\/free-account|\/signup-free|\/welcome(?!-)|\/web-app|\/beta|\/waitlist|\/early-access|\/register-now|\/join-now|\/login-page|\/signin-page|\/download-app|\/get-the-app|\/ios-app|\/getting-started|\/start-here|\/sign-in-page|\/log-in-page|\/create-an-account|\/register-account|\/open-account|\/new-account|\/start-free|\/ios-download|\/get-app|\/mobile-download|\/appstore|\/login-help|\/account-recovery|\/recover(?!-)|\/sign-up-page|\/signup-page|\/create-account-page|\/download-ios|\/app-download|\/logon|\/signon|\/install|\/install-app|\/iphone-app/);
+  assert.doesNotMatch(config, /\/free-account|\/signup-free|\/welcome(?!-)|\/web-app|\/beta|\/waitlist|\/early-access|\/register-now|\/join-now|\/login-page|\/signin-page|\/download-app|\/get-the-app|\/ios-app|\/getting-started|\/start-here|\/sign-in-page|\/log-in-page|\/create-an-account|\/register-account|\/open-account|\/new-account|\/start-free|\/ios-download|\/get-app|\/mobile-download|\/appstore|\/login-help|\/account-recovery|\/recover(?!-)|\/sign-up-page|\/signup-page|\/create-account-page|\/download-ios|\/app-download|\/logon|\/signon|\/install|\/install-app|\/iphone-app|\/onboard(?!ing)|\/welcome-back|\/thank-you|\/thanks|\/success|\/cancel/);
   const proxy = readRepo("proxy.ts");
-  assert.doesNotMatch(proxy, /\/free-account|\/signup-free|\/welcome(?!-)|\/web-app|\/beta|\/waitlist|\/early-access|\/register-now|\/join-now|\/login-page|\/signin-page|\/download-app|\/get-the-app|\/ios-app|\/getting-started|\/start-here|\/sign-in-page|\/log-in-page|\/create-an-account|\/register-account|\/open-account|\/new-account|\/start-free|\/ios-download|\/get-app|\/mobile-download|\/appstore|\/login-help|\/account-recovery|\/recover(?!-)|\/sign-up-page|\/signup-page|\/create-account-page|\/download-ios|\/app-download|\/logon|\/signon|\/install|\/install-app|\/iphone-app/);
+  assert.doesNotMatch(proxy, /\/free-account|\/signup-free|\/welcome(?!-)|\/web-app|\/beta|\/waitlist|\/early-access|\/register-now|\/join-now|\/login-page|\/signin-page|\/download-app|\/get-the-app|\/ios-app|\/getting-started|\/start-here|\/sign-in-page|\/log-in-page|\/create-an-account|\/register-account|\/open-account|\/new-account|\/start-free|\/ios-download|\/get-app|\/mobile-download|\/appstore|\/login-help|\/account-recovery|\/recover(?!-)|\/sign-up-page|\/signup-page|\/create-account-page|\/download-ios|\/app-download|\/logon|\/signon|\/install|\/install-app|\/iphone-app|\/onboard(?!ing)|\/welcome-back|\/thank-you|\/thanks|\/success|\/cancel/);
   assert.doesNotMatch(proxy, /redirect/);
 
   assert.equal(signInAliasDestination("/login"), "/");
@@ -530,7 +530,13 @@ test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /fr
     "/signon",
     "/install",
     "/install-app",
-    "/iphone-app"
+    "/iphone-app",
+    "/onboard",
+    "/welcome-back",
+    "/thank-you",
+    "/thanks",
+    "/success",
+    "/cancel",
   ]) {
     assert.equal(signInAliasDestination(path), "/", path);
     assert.equal(signInAliasDestination(`${path}/`), "/", path);
@@ -605,6 +611,26 @@ test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /fr
   assert.equal(signInAliasDestination("/recover"), "/");
   assert.equal(signInAliasDestination("/account-recovery"), "/");
   assert.equal(signInAliasDestination("/welcome-page"), null);
+  assert.equal(signInAliasDestination("/welcome-back"), "/");
+  assert.equal(signInAliasDestination("/welcome-backs"), null);
+  assert.equal(signInAliasDestination("/welcome-back/extra"), null);
+  assert.equal(signInAliasDestination("/thank-you"), "/");
+  assert.equal(signInAliasDestination("/thanks"), "/");
+  assert.equal(signInAliasDestination("/thank-yous"), null);
+  assert.equal(signInAliasDestination("/thanks/extra"), null);
+  assert.equal(signInAliasDestination("/thank-you/extra"), null);
+  assert.equal(signInAliasDestination("/success"), "/");
+  assert.equal(signInAliasDestination("/cancel"), "/");
+  assert.equal(signInAliasDestination("/success/extra"), null);
+  assert.equal(signInAliasDestination("/cancel/extra"), null);
+  assert.equal(signInAliasDestination("/successs"), null);
+  assert.equal(signInAliasDestination("/cancels"), null);
+  assert.equal(demoAliasDestination("/onboard"), null);
+  assert.equal(demoAliasDestination("/welcome-back"), null);
+  assert.equal(demoAliasDestination("/thank-you"), null);
+  assert.equal(demoAliasDestination("/thanks"), null);
+  assert.equal(demoAliasDestination("/success"), null);
+  assert.equal(demoAliasDestination("/cancel"), null);
   assert.equal(signInAliasRedirects()[0]?.permanent ? 308 : 307, 307);
   assert.equal(signInAliasDestination("/free-account"), "/");
   assert.equal(signInAliasDestination("/signup-free"), "/");
@@ -645,7 +671,12 @@ test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /fr
   assert.equal(signInAliasDestination("/free/extra"), null);
   assert.equal(signInAliasDestination("/free-trials"), null);
   assert.equal(signInAliasDestination("/free-trial/extra"), null);
-  assert.equal(signInAliasDestination("/onboard"), null);
+  assert.equal(signInAliasDestination("/onboard"), "/");
+  assert.equal(signInAliasDestination("/onboard/"), "/");
+  assert.equal(signInAliasDestination("/ONBOARD"), "/");
+  assert.equal(signInAliasDestination("/onboards"), null);
+  assert.equal(signInAliasDestination("/onboard/extra"), null);
+  assert.equal(signInAliasDestination("/onboarding"), "/");
   assert.equal(signInAliasDestination("/onboardings"), null);
   assert.equal(signInAliasDestination("/onboarding/extra"), null);
   assert.equal(signInAliasDestination("/downloads"), null);
@@ -1094,7 +1125,13 @@ test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /fr
     "signon",
     "install",
     "install-app",
-    "iphone-app"
+    "iphone-app",
+    "onboard",
+    "welcome-back",
+    "thank-you",
+    "thanks",
+    "success",
+    "cancel",
   ]) {
     for (const page of [
       `app/${name}/page.tsx`,

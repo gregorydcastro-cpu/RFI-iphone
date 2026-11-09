@@ -59,6 +59,9 @@
  * match /compare. /enterprise-pricing does not match /enterprise-plan
  * or /enterprise. /plan-comparison does not match /compare.
  * /pricing-overview does not match /overview or /pricing.
+ * /account-settings and /team-members share the destination /account
+ * already uses. /account-settings does not match /account,
+ * /account/settings, or /settings. /team-members does not match /team.
  * /security.txt moves straight to /.well-known/security.txt.
  * /manifest.json and /site.webmanifest move straight to /manifest.webmanifest.
  * /sitemap, /site-map, /sitemap-xml, /xml-sitemap, /map, /html-sitemap,
@@ -83,7 +86,7 @@ export function retiredRedirects(): Array<{
   permanent: boolean;
 }> {
   return [
-    ...["/settings", "/profile", "/me", "/account/settings", "/settings/profile"].map((source) => ({
+    ...["/settings", "/profile", "/me", "/account/settings", "/settings/profile", "/account-settings", "/team-members"].map((source) => ({
       source,
       destination: ACCOUNT_HREF,
       permanent: true,

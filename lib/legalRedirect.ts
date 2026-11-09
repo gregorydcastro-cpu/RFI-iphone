@@ -56,6 +56,11 @@
  * /security-policy-page stays off this list. /security-center does not
  * match /security. /trust-page does not match /trust. /trust-center stays
  * off this list.
+ * /tos-privacy, /license, /licenses, and /open-source move to the terms
+ * page. /tos-privacy does not match /tos, /terms, or /privacy.
+ * /license does not match /licenses or /license-agreement.
+ * /licenses does not match /license. /open-source does not match
+ * /license or /licenses.
  * Next.js treats permanent as HTTP 308.
  */
 
@@ -104,6 +109,10 @@ export function legalRedirects(): Array<{
       "/privacy-and-terms",
       "/legal-page",
       "/terms-page",
+      "/tos-privacy",
+      "/license",
+      "/licenses",
+      "/open-source",
     ].map((source) => ({
       source,
       destination: TERMS_HREF,
