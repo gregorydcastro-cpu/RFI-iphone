@@ -64,6 +64,10 @@
  * /kb-home does not match /kb. /knowledge-base-home does not match
  * /knowledge-base. /faq-center does not match /faq. /media-assets does
  * not match /media.
+ * /faq-help, /learn, /feedback-form, and /sdk use that same hop.
+ * /faq-help does not match /faq or /help. /learn does not match
+ * /guides or /how-to. /feedback-form does not match /feedback.
+ * /sdk does not match /docs, /developers, or /api.
  */
 
 const SUPPORT_HREF = "/support";
@@ -187,6 +191,10 @@ export function contactRedirects(): Array<{
     "/faq-center",
     "/brand-guidelines",
     "/media-assets",
+    "/faq-help",
+    "/learn",
+    "/feedback-form",
+    "/sdk",
   ].map((source) => ({
     source,
     destination: SUPPORT_HREF,
