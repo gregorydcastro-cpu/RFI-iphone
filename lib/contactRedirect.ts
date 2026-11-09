@@ -68,6 +68,15 @@
  * /faq-help does not match /faq or /help. /learn does not match
  * /guides or /how-to. /feedback-form does not match /feedback.
  * /sdk does not match /docs, /developers, or /api.
+ * /suport, /hepl, /fqa, /documenation, /knowlege-base, /helpcentre,
+ * /helpcenter, /whatsnew, /frequently-asked-questions, and /release-notes
+ * use that same hop. /suport does not match /support. /hepl does not
+ * match /help. /fqa does not match /faq. /documenation does not match
+ * /documentation. /knowlege-base does not match /knowledge-base or /kb.
+ * /helpcentre and /helpcenter do not match /help-center or /help.
+ * /whatsnew does not match /whats-new or /news.
+ * /frequently-asked-questions does not match /faq or /faqs.
+ * /release-notes does not match /changelog or /news.
  */
 
 const SUPPORT_HREF = "/support";
@@ -195,6 +204,16 @@ export function contactRedirects(): Array<{
     "/learn",
     "/feedback-form",
     "/sdk",
+    "/suport",
+    "/hepl",
+    "/fqa",
+    "/documenation",
+    "/knowlege-base",
+    "/helpcentre",
+    "/helpcenter",
+    "/whatsnew",
+    "/frequently-asked-questions",
+    "/release-notes",
   ].map((source) => ({
     source,
     destination: SUPPORT_HREF,
