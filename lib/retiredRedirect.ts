@@ -70,6 +70,21 @@
  * /sitemap-xml does not match /sitemap. /map does not match /sitemap or
  * /site-map. /html-sitemap and /sitemap-html do not match /sitemap.
  * /xml-map does not match /map or /xml-sitemap.
+ * /my-account and /your-account share the destination /account already
+ * uses. /my-account and /your-account do not match /account.
+ * /plans-and-pricing, /pricing-and-plans, /get-a-quote, and /pricelist
+ * share the destination /pricing already uses. /plans-and-pricing does
+ * not match /plans-pricing or /pricing. /pricing-and-plans does not match
+ * /pricing-plans or /pricing. /get-a-quote does not match /get-quote,
+ * /quote, or /request-quote. /pricelist does not match /prices or /price.
+ * /homepage, /our-values, /our-vision, /meet-our-team, and /now-hiring
+ * share the destination / already uses. /homepage does not match /home
+ * or /home-page. /our-values does not match /values. /our-vision does not
+ * match /vision. /meet-our-team does not match /meet-the-team or /our-team.
+ * /now-hiring does not match /hiring or /we-are-hiring.
+ * /site_map and /sitemap-index move straight to /sitemap.xml.
+ * /site_map does not match /site-map or /sitemap. /sitemap-index does not
+ * match /sitemap. /sitemap.xml itself is not a source.
  */
 
 const HOME_HREF = "/";
@@ -86,7 +101,7 @@ export function retiredRedirects(): Array<{
   permanent: boolean;
 }> {
   return [
-    ...["/settings", "/profile", "/me", "/account/settings", "/settings/profile", "/account-settings", "/team-members"].map((source) => ({
+    ...["/settings", "/profile", "/me", "/account/settings", "/settings/profile", "/account-settings", "/team-members", "/my-account", "/your-account"].map((source) => ({
       source,
       destination: ACCOUNT_HREF,
       permanent: true,
@@ -137,6 +152,10 @@ export function retiredRedirects(): Array<{
       "/enterprise-pricing",
       "/plan-comparison",
       "/pricing-overview",
+      "/plans-and-pricing",
+      "/pricing-and-plans",
+      "/get-a-quote",
+      "/pricelist",
     ].map((source) => ({
       source,
       destination: PRICING_HREF,
@@ -193,6 +212,11 @@ export function retiredRedirects(): Array<{
       "/we-are-hiring",
       "/open-roles",
       "/work-with-us",
+      "/homepage",
+      "/our-values",
+      "/our-vision",
+      "/meet-our-team",
+      "/now-hiring",
     ].map((source) => ({
       source,
       destination: HOME_HREF,
@@ -208,7 +232,7 @@ export function retiredRedirects(): Array<{
       destination: MANIFEST_HREF,
       permanent: true,
     })),
-    ...["/sitemap", "/site-map", "/sitemap-xml", "/xml-sitemap", "/map", "/html-sitemap", "/xml-map", "/sitemap-html"].map((source) => ({
+    ...["/sitemap", "/site-map", "/sitemap-xml", "/xml-sitemap", "/map", "/html-sitemap", "/xml-map", "/sitemap-html", "/site_map", "/sitemap-index"].map((source) => ({
       source,
       destination: SITEMAP_HREF,
       permanent: true,

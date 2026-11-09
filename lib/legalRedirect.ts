@@ -61,6 +61,14 @@
  * /license does not match /licenses or /license-agreement.
  * /licenses does not match /license. /open-source does not match
  * /license or /licenses.
+ * /termsofservice, /termsofuse, /impressum, and /opensource move to the
+ * terms page. /cookiepolicy, /donotsell, /optout, and /privacynotice move
+ * to the privacy page. /termsofservice does not match /terms-of-service
+ * or /terms. /termsofuse does not match /terms-of-use or /terms.
+ * /impressum does not match /imprint. /opensource does not match
+ * /open-source. /cookiepolicy does not match /cookie-policy or /cookie.
+ * /donotsell does not match /do-not-sell. /optout does not match /opt-out.
+ * /privacynotice does not match /privacy-notice or /privacy.
  * Next.js treats permanent as HTTP 308.
  */
 
@@ -113,6 +121,10 @@ export function legalRedirects(): Array<{
       "/license",
       "/licenses",
       "/open-source",
+      "/termsofservice",
+      "/termsofuse",
+      "/impressum",
+      "/opensource",
     ].map((source) => ({
       source,
       destination: TERMS_HREF,
@@ -161,6 +173,10 @@ export function legalRedirects(): Array<{
       "/security-page",
       "/security-center",
       "/trust-page",
+      "/cookiepolicy",
+      "/donotsell",
+      "/optout",
+      "/privacynotice",
     ].map((source) => ({
       source,
       destination: PRIVACY_HREF,
