@@ -575,17 +575,7 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
       permanent: true,
     },
     {
-      source: "/gdpr.html",
-      destination: "/privacy",
-      permanent: true,
-    },
-    {
       source: "/privacypolicy.html",
-      destination: "/privacy",
-      permanent: true,
-    },
-    {
-      source: "/data-privacy",
       destination: "/privacy",
       permanent: true,
     },
@@ -973,9 +963,7 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
     "/privacy-policy.html",
     "/cookie-policy.html",
     "/cookies.html",
-    "/gdpr.html",
     "/privacypolicy.html",
-    "/data-privacy",
     "/your-privacy-rights",
   ]) {
     const redirect = legalRedirects().find((item) => item.source === source);
@@ -1008,6 +996,8 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
   assert.equal(bySource.get("/do-not-sell-my-info"), bySource.get("/do-not-sell"));
   assert.equal(bySource.get("/privacy.html"), bySource.get("/privacy-policy"));
   assert.equal(bySource.get("/privacy-settings"), bySource.get("/cookie-settings"));
+  assert.equal(bySource.has("/gdpr.html"), false);
+  assert.equal(bySource.has("/data-privacy"), false);
   assert.equal(bySource.has("/gdpr-notice"), false);
   assert.equal(bySource.has("/cpra"), false);
   assert.equal(bySource.has("/report-vulnerability"), false);
@@ -1029,6 +1019,8 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
     "/schedule",
     "/affiliates",
     "/security-policy-page",
+    "/gdpr.html",
+    "/data-privacy",
     "/gdpr-notice",
     "/cpra",
     "/report-vulnerability",
@@ -1377,9 +1369,7 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
     "privacy-policy.html",
     "cookie-policy.html",
     "cookies.html",
-    "gdpr.html",
     "privacypolicy.html",
-    "data-privacy",
     "your-privacy-rights",
   ]) {
     for (const page of [

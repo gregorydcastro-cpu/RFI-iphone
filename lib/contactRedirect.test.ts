@@ -1298,6 +1298,8 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
     "/security-policy-page",
     "/affiliates",
     "/statuspage",
+    "/gdpr.html",
+    "/data-privacy",
   ]) {
     assert.equal(sources.has(path), false, path);
   }

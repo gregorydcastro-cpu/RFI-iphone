@@ -86,8 +86,8 @@
  * /cookie-settings. /legal.html, /tos.html, /eula.html,
  * /terms-of-service.html, /acceptableuse, /end-user-license-agreement,
  * and /terms-of-services move to the terms page. /privacy-policy.html,
- * /cookie-policy.html, /cookies.html, /gdpr.html, /privacypolicy.html,
- * /data-privacy, and /your-privacy-rights move to the privacy page.
+ * /cookie-policy.html, /cookies.html, /privacypolicy.html, and
+ * /your-privacy-rights move to the privacy page.
  * /legal.html does not match /legal. /tos.html does not match /tos.
  * /eula.html does not match /eula. /terms-of-service.html does not match
  * /terms-of-service or /terms.html. /acceptableuse does not match
@@ -95,11 +95,12 @@
  * /license-agreement. /terms-of-services does not match /terms-of-service
  * or /terms. /privacy-policy.html does not match /privacy-policy or
  * /privacy.html. /cookie-policy.html does not match /cookie-policy.
- * /cookies.html does not match /cookies. /gdpr.html does not match /gdpr.
- * /privacypolicy.html does not match /privacypolicy. /data-privacy does
- * not match /data-policy or /privacy. /your-privacy-rights does not match
- * /your-privacy-choices or /privacy. /gdpr-notice, /cpra, and
- * /report-vulnerability stay off this list.
+ * /cookies.html does not match /cookies.
+ * /privacypolicy.html does not match /privacypolicy.
+ * /your-privacy-rights does not match /your-privacy-choices or /privacy.
+ * /gdpr.html, /data-privacy, /gdpr-notice, /cpra, and
+ * /report-vulnerability stay off this list. /gdpr.html does not match
+ * /gdpr. /data-privacy does not match /data-policy or /privacy.
  * Next.js treats permanent as HTTP 308.
  */
 
@@ -231,9 +232,7 @@ export function legalRedirects(): Array<{
       "/privacy-policy.html",
       "/cookie-policy.html",
       "/cookies.html",
-      "/gdpr.html",
       "/privacypolicy.html",
-      "/data-privacy",
       "/your-privacy-rights",
     ].map((source) => ({
       source,

@@ -940,6 +940,8 @@ test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /fr
     "/robots",
     "/humans",
     "/security-policy-page",
+    "/gdpr.html",
+    "/data-privacy",
   ]) {
     assert.equal(signInAliasDestination(path), null, path);
     assert.equal(signInAliasDestination(`${path}/`), null, path);
@@ -1401,6 +1403,8 @@ test("/book-demo, /request-demo, /schedule-demo, /get-demo, /demo-video, /book-a
     "/terms-of-use",
     "/data-policy",
     "/about-gc-field-log",
+    "/gdpr.html",
+    "/data-privacy",
   ]) {
     assert.equal(demoAliasDestination(path), null, path);
   }

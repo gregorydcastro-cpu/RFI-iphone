@@ -1585,6 +1585,8 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/robots",
     "/humans",
     "/security-policy-page",
+    "/gdpr.html",
+    "/data-privacy",
   ]) {
     assert.equal(sources.has(path), false, path);
   }
@@ -1700,6 +1702,8 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/download-the-app",
     "/iphone-download",
     "/ipad-app",
+    "/gdpr.html",
+    "/data-privacy",
     "/gdpr-notice",
     "/cpra",
     "/report-vulnerability",
