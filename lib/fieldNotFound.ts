@@ -138,15 +138,22 @@ export function fieldNotFoundSpeak(variant: FieldNotFoundVariant): string {
  * /create-your-account does not match /create-account or
  * /create-an-account. /login-form does not match /login or /login-page.
  * /sign-up-form does not match /sign-up or /sign-up-page.
+ * /login.html, /signin.html, /signup.html, /singin, /sign_in,
+ * /sign-up-now, and /gettingstarted use that same hop. /login.html does
+ * not match /login. /signin.html does not match /signin. /signup.html
+ * does not match /signup. /singin does not match /signin. /sign_in does
+ * not match /sign-in or /signin. /sign-up-now does not match /sign-up,
+ * /signup-now, or /sign-up-form. /gettingstarted does not match
+ * /getting-started or /getstarted.
  * Next matches this source without case
  * sensitivity and allows one trailing slash. Query values pass through
  * to `/`. permanent: false is the same temporary 307 as /login and /signup.
  */
 export const SIGN_IN_ALIAS_SOURCE =
-  "/:alias(login|log-in|signin|sign-in-now|sign-in|signup-page|signup-now|signup|sign-up-page|sign-up|register|join|create-account-page|create-account|createaccount|get-started-free|get-started|getstarted|start|trial|free-trial|onboarding|onboard|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone-app|iphone|ipad|app-store-link|free|sign-up-free|free-account|signup-free|welcome-back|welcome|web-app|beta|waitlist|early-access|register-now|join-now|login-page|signin-page|download-app|get-the-app|ios-app|getting-started|start-here|sign-in-page|log-in-page|create-an-account|register-account|open-account|new-account|start-free|ios-download|get-app|mobile-download|appstore|login-help|recover|account-recovery|download-ios|app-download|logon|signon|install-app|install|thank-you|thanks|success|cancel|registration|create-your-account|login-form|sign-up-form)";
+  "/:alias(login\\.html|login|log-in|signin\\.html|signin|singin|sign-in-now|sign_in|sign-in|signup\\.html|signup-page|signup-now|signup|sign-up-page|sign-up-now|sign-up|register|join|create-account-page|create-account|createaccount|get-started-free|get-started|gettingstarted|getstarted|start|trial|free-trial|onboarding|onboard|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone-app|iphone|ipad|app-store-link|free|sign-up-free|free-account|signup-free|welcome-back|welcome|web-app|beta|waitlist|early-access|register-now|join-now|login-page|signin-page|download-app|get-the-app|ios-app|getting-started|start-here|sign-in-page|log-in-page|create-an-account|register-account|open-account|new-account|start-free|ios-download|get-app|mobile-download|appstore|login-help|recover|account-recovery|download-ios|app-download|logon|signon|install-app|install|thank-you|thanks|success|cancel|registration|create-your-account|login-form|sign-up-form)";
 
 const SIGN_IN_ALIAS_PATH =
-  /^\/(?:login|log-in|signin|sign-in-now|sign-in|signup-page|signup-now|signup|sign-up-page|sign-up|register|join|create-account-page|create-account|createaccount|get-started-free|get-started|getstarted|start|trial|free-trial|onboarding|onboard|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone-app|iphone|ipad|app-store-link|free|sign-up-free|free-account|signup-free|welcome-back|welcome|web-app|beta|waitlist|early-access|register-now|join-now|login-page|signin-page|download-app|get-the-app|ios-app|getting-started|start-here|sign-in-page|log-in-page|create-an-account|register-account|open-account|new-account|start-free|ios-download|get-app|mobile-download|appstore|login-help|recover|account-recovery|download-ios|app-download|logon|signon|install-app|install|thank-you|thanks|success|cancel|registration|create-your-account|login-form|sign-up-form)\/?$/i;
+  /^\/(?:login\.html|login|log-in|signin\.html|signin|singin|sign-in-now|sign_in|sign-in|signup\.html|signup-page|signup-now|signup|sign-up-page|sign-up-now|sign-up|register|join|create-account-page|create-account|createaccount|get-started-free|get-started|gettingstarted|getstarted|start|trial|free-trial|onboarding|onboard|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone-app|iphone|ipad|app-store-link|free|sign-up-free|free-account|signup-free|welcome-back|welcome|web-app|beta|waitlist|early-access|register-now|join-now|login-page|signin-page|download-app|get-the-app|ios-app|getting-started|start-here|sign-in-page|log-in-page|create-an-account|register-account|open-account|new-account|start-free|ios-download|get-app|mobile-download|appstore|login-help|recover|account-recovery|download-ios|app-download|logon|signon|install-app|install|thank-you|thanks|success|cancel|registration|create-your-account|login-form|sign-up-form)\/?$/i;
 
 /**
  * Demo booking aliases have no page. Each name is one exact path segment
@@ -179,14 +186,19 @@ const SIGN_IN_ALIAS_PATH =
  * /free-demo does not match /free, /try-free, or /demo. /try-now does not
  * match /try or /demo-now. /demo-request does not match /request-demo
  * or /demo.
+ * /demo.html, /demos, /bookdemo, /watch-a-demo, and /maple-point-demo
+ * use that same hop. /demo.html does not match /demo. /demos does not
+ * match /demo or /demo.html. /bookdemo does not match /book-demo.
+ * /watch-a-demo does not match /watch-demo. /maple-point-demo does not
+ * match /demo or /pack/maple-point.
  * Next matches this source without case sensitivity and allows one
  * trailing slash. Query values pass through. permanent: false is HTTP 307.
  */
 export const DEMO_ALIAS_SOURCE =
-  "/:alias(book-demo|request-a-demo|request-demo|schedule-demo|get-a-demo|get-demo|demo-video|watch-demo|book-a-demo|try-demo|try|try-free|freetrial|request-quote|try-it-free|try-it|demo-now|schedule-a-demo|schedule|book-demo-now|see-a-demo|see-demo|see-it-in-action|product-demo|live-demo|interactive-demo|book-your-demo|free-demo|try-now|demo-request)";
+  "/:alias(bookdemo|book-demo|request-a-demo|request-demo|schedule-demo|get-a-demo|get-demo|demo\\.html|demos|maple-point-demo|demo-video|watch-a-demo|watch-demo|book-a-demo|try-demo|try|try-free|freetrial|request-quote|try-it-free|try-it|demo-now|schedule-a-demo|schedule|book-demo-now|see-a-demo|see-demo|see-it-in-action|product-demo|live-demo|interactive-demo|book-your-demo|free-demo|try-now|demo-request)";
 
 const DEMO_ALIAS_PATH =
-  /^\/(?:book-demo|request-a-demo|request-demo|schedule-demo|get-a-demo|get-demo|demo-video|watch-demo|book-a-demo|try-demo|try|try-free|freetrial|request-quote|try-it-free|try-it|demo-now|schedule-a-demo|schedule|book-demo-now|see-a-demo|see-demo|see-it-in-action|product-demo|live-demo|interactive-demo|book-your-demo|free-demo|try-now|demo-request)\/?$/i;
+  /^\/(?:bookdemo|book-demo|request-a-demo|request-demo|schedule-demo|get-a-demo|get-demo|demo\.html|demos|maple-point-demo|demo-video|watch-a-demo|watch-demo|book-a-demo|try-demo|try|try-free|freetrial|request-quote|try-it-free|try-it|demo-now|schedule-a-demo|schedule|book-demo-now|see-a-demo|see-demo|see-it-in-action|product-demo|live-demo|interactive-demo|book-your-demo|free-demo|try-now|demo-request)\/?$/i;
 
 export function signInAliasRedirects(): Array<{
   source: string;

@@ -83,8 +83,24 @@
  * /cookie-consent does not match /consent or /cookie.
  * /do-not-sell-my-info does not match /do-not-sell. /privacy.html does
  * not match /privacy. /privacy-settings does not match /privacy or
- * /cookie-settings. /gdpr-notice, /cpra, and /report-vulnerability stay
- * off this list.
+ * /cookie-settings. /legal.html, /tos.html, /eula.html,
+ * /terms-of-service.html, /acceptableuse, /end-user-license-agreement,
+ * and /terms-of-services move to the terms page. /privacy-policy.html,
+ * /cookie-policy.html, /cookies.html, /privacypolicy.html, and
+ * /your-privacy-rights move to the privacy page.
+ * /legal.html does not match /legal. /tos.html does not match /tos.
+ * /eula.html does not match /eula. /terms-of-service.html does not match
+ * /terms-of-service or /terms.html. /acceptableuse does not match
+ * /acceptable-use. /end-user-license-agreement does not match /eula or
+ * /license-agreement. /terms-of-services does not match /terms-of-service
+ * or /terms. /privacy-policy.html does not match /privacy-policy or
+ * /privacy.html. /cookie-policy.html does not match /cookie-policy.
+ * /cookies.html does not match /cookies.
+ * /privacypolicy.html does not match /privacypolicy.
+ * /your-privacy-rights does not match /your-privacy-choices or /privacy.
+ * /gdpr.html, /data-privacy, /gdpr-notice, /cpra, and
+ * /report-vulnerability stay off this list. /gdpr.html does not match
+ * /gdpr. /data-privacy does not match /data-policy or /privacy.
  * Next.js treats permanent as HTTP 308.
  */
 
@@ -149,6 +165,13 @@ export function legalRedirects(): Array<{
       "/copyright-notice",
       "/trademark",
       "/terms.html",
+      "/legal.html",
+      "/tos.html",
+      "/eula.html",
+      "/terms-of-service.html",
+      "/acceptableuse",
+      "/end-user-license-agreement",
+      "/terms-of-services",
     ].map((source) => ({
       source,
       destination: TERMS_HREF,
@@ -206,6 +229,11 @@ export function legalRedirects(): Array<{
       "/do-not-sell-my-info",
       "/privacy.html",
       "/privacy-settings",
+      "/privacy-policy.html",
+      "/cookie-policy.html",
+      "/cookies.html",
+      "/privacypolicy.html",
+      "/your-privacy-rights",
     ].map((source) => ({
       source,
       destination: PRIVACY_HREF,
