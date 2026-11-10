@@ -77,6 +77,27 @@
  * /whatsnew does not match /whats-new or /news.
  * /frequently-asked-questions does not match /faq or /faqs.
  * /release-notes does not match /changelog or /news.
+ * /get-help, /user-guide, /user-manual, /support-page, /contact-page,
+ * /help-page, /docs-page, /knowledge-center, /press-room, /brand-kit,
+ * /forums, /feature-requests, /podcasts, /case-study, /troubleshoot,
+ * /reach-out, /api-documentation, /changelog-page, /blog-page, /faq-home,
+ * /report-issue, and /testimonials-page use that same hop.
+ * /get-help does not match /help or /get-support. /user-guide does not
+ * match /guides. /user-manual does not match /manual. /support-page does
+ * not match /support-home or /support-center. /contact-page does not
+ * match /contact. /help-page does not match /help. /docs-page does not
+ * match /docs. /knowledge-center does not match /knowledge-base or /kb.
+ * /press-room does not match /press or /newsroom. /brand-kit does not
+ * match /brand, /press-kit, or /media-kit. /forums does not match /forum.
+ * /feature-requests does not match /feature-request. /podcasts does not
+ * match /podcast. /case-study does not match /case-studies.
+ * /troubleshoot does not match /troubleshooting. /reach-out does not
+ * match /reach-us. /api-documentation does not match /api-docs,
+ * /documentation, /api, or /api/docs. /changelog-page does not match
+ * /changelog. /blog-page does not match /blog. /faq-home does not match
+ * /faq, /faq-center, or /kb-home. /report-issue does not match
+ * /report-bug. /testimonials-page does not match /testimonials.
+ * /statuspage stays off this list.
  */
 
 const SUPPORT_HREF = "/support";
@@ -214,6 +235,28 @@ export function contactRedirects(): Array<{
     "/whatsnew",
     "/frequently-asked-questions",
     "/release-notes",
+    "/get-help",
+    "/user-guide",
+    "/user-manual",
+    "/support-page",
+    "/contact-page",
+    "/help-page",
+    "/docs-page",
+    "/knowledge-center",
+    "/press-room",
+    "/brand-kit",
+    "/forums",
+    "/feature-requests",
+    "/podcasts",
+    "/case-study",
+    "/troubleshoot",
+    "/reach-out",
+    "/api-documentation",
+    "/changelog-page",
+    "/blog-page",
+    "/faq-home",
+    "/report-issue",
+    "/testimonials-page",
   ].map((source) => ({
     source,
     destination: SUPPORT_HREF,

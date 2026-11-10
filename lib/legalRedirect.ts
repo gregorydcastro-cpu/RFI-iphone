@@ -69,6 +69,22 @@
  * /open-source. /cookiepolicy does not match /cookie-policy or /cookie.
  * /donotsell does not match /do-not-sell. /optout does not match /opt-out.
  * /privacynotice does not match /privacy-notice or /privacy.
+ * /acceptable-use-policy, /eula-agreement, /copyright-policy,
+ * /disclaimer-page, /license-page, /copyright-notice, /trademark, and
+ * /terms.html move to the terms page. /cookies-policy, /cookie-consent,
+ * /do-not-sell-my-info, /privacy.html, and /privacy-settings move to the
+ * privacy page. /acceptable-use-policy does not match /acceptable-use.
+ * /eula-agreement does not match /eula or /license-agreement.
+ * /copyright-policy does not match /copyright. /disclaimer-page does not
+ * match /disclaimer. /license-page does not match /license.
+ * /copyright-notice does not match /copyright or /legal-notice.
+ * /trademark does not match /trademarks. /terms.html does not match
+ * /terms. /cookies-policy does not match /cookie-policy or /cookies.
+ * /cookie-consent does not match /consent or /cookie.
+ * /do-not-sell-my-info does not match /do-not-sell. /privacy.html does
+ * not match /privacy. /privacy-settings does not match /privacy or
+ * /cookie-settings. /gdpr-notice, /cpra, and /report-vulnerability stay
+ * off this list.
  * Next.js treats permanent as HTTP 308.
  */
 
@@ -125,6 +141,14 @@ export function legalRedirects(): Array<{
       "/termsofuse",
       "/impressum",
       "/opensource",
+      "/acceptable-use-policy",
+      "/eula-agreement",
+      "/copyright-policy",
+      "/disclaimer-page",
+      "/license-page",
+      "/copyright-notice",
+      "/trademark",
+      "/terms.html",
     ].map((source) => ({
       source,
       destination: TERMS_HREF,
@@ -177,6 +201,11 @@ export function legalRedirects(): Array<{
       "/donotsell",
       "/optout",
       "/privacynotice",
+      "/cookies-policy",
+      "/cookie-consent",
+      "/do-not-sell-my-info",
+      "/privacy.html",
+      "/privacy-settings",
     ].map((source) => ({
       source,
       destination: PRIVACY_HREF,
