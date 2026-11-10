@@ -268,6 +268,41 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
       permanent: true,
     },
     {
+      source: "/legal.html",
+      destination: "/terms",
+      permanent: true,
+    },
+    {
+      source: "/tos.html",
+      destination: "/terms",
+      permanent: true,
+    },
+    {
+      source: "/eula.html",
+      destination: "/terms",
+      permanent: true,
+    },
+    {
+      source: "/terms-of-service.html",
+      destination: "/terms",
+      permanent: true,
+    },
+    {
+      source: "/acceptableuse",
+      destination: "/terms",
+      permanent: true,
+    },
+    {
+      source: "/end-user-license-agreement",
+      destination: "/terms",
+      permanent: true,
+    },
+    {
+      source: "/terms-of-services",
+      destination: "/terms",
+      permanent: true,
+    },
+    {
       source: "/privacy-policy",
       destination: "/privacy",
       permanent: true,
@@ -521,6 +556,41 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
     },
     {
       source: "/privacy-settings",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/privacy-policy.html",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/cookie-policy.html",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/cookies.html",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/gdpr.html",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/privacypolicy.html",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/data-privacy",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/your-privacy-rights",
       destination: "/privacy",
       permanent: true,
     },
@@ -875,7 +945,14 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
     "/license-page",
     "/copyright-notice",
     "/trademark",
-    "/terms.html"
+    "/terms.html",
+    "/legal.html",
+    "/tos.html",
+    "/eula.html",
+    "/terms-of-service.html",
+    "/acceptableuse",
+    "/end-user-license-agreement",
+    "/terms-of-services",
   ]) {
     const redirect = legalRedirects().find((item) => item.source === source);
     assert.equal(redirect?.destination, "/terms", source);
@@ -892,7 +969,14 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
     "/cookie-consent",
     "/do-not-sell-my-info",
     "/privacy.html",
-    "/privacy-settings"
+    "/privacy-settings",
+    "/privacy-policy.html",
+    "/cookie-policy.html",
+    "/cookies.html",
+    "/gdpr.html",
+    "/privacypolicy.html",
+    "/data-privacy",
+    "/your-privacy-rights",
   ]) {
     const redirect = legalRedirects().find((item) => item.source === source);
     assert.equal(redirect?.destination, "/privacy", source);
@@ -965,12 +1049,12 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
   const config = readRepo("next.config.ts");
   assert.match(config, /\.\.\.legalRedirects\(\)/);
   assert.doesNotMatch(config, /["']\/legal["']/);
-  assert.doesNotMatch(config, /\/privacy-policy|\/tos|\/terms-of-service|\/eula|\/cookies|\/cookie-policy|\/refunds|\/refund|\/dmca|\/imprint|\/accessibility|\/trust|\/gdpr|\/ccpa|\/sla|\/legal\/privacy|\/legal\/terms|\/security(?!Headers)|\/terms-and-conditions|\/acceptable-use|\/aup|\/copyright|\/trademarks|\/privacy-notice|\/legal\/cookies|\/subprocessors|\/dpa|\/legal-notice|\/disclaimer|\/accessibility-statement|\/terms-of-use|\/cookie-settings|\/do-not-sell|\/your-privacy-choices|\/privacy-choices|\/security-policy|\/responsible-disclosure|\/bug-bounty|\/vulnerability-disclosure|\/data-policy|\/data-processing|\/termsandconditions|\/tos-page|\/eula-page|\/dmca-policy|\/refund-policy|\/a11y|\/wcag|\/privacypolicy|\/cookies-settings|\/manage-cookies|\/consent|\/privacy-center|\/cookie(?!s)|\/terms-conditions|\/termsconditions|\/user-agreement|\/license-agreement|\/legal-terms|\/privacy-statement|\/data-protection|\/gdpr-privacy|\/cookie-notice|\/cookie-preferences|\/ccpa-opt-out|\/opt-out|\/privacy-and-terms|\/legal-page|\/terms-page|\/cookie-policy-page|\/privacy-request|\/privacy-page|\/privacy-policy-page|\/security-page|\/security-center|\/trust-page|\/tos-privacy|\/license|\/licenses|\/open-source|\/termsofservice|\/termsofuse|\/impressum|\/opensource|\/cookiepolicy|\/donotsell|\/optout|\/privacynotice|\/acceptable-use-policy|\/eula-agreement|\/copyright-policy|\/disclaimer-page|\/license-page|\/copyright-notice|\/trademark|\/terms\.html|\/cookies-policy|\/cookie-consent|\/do-not-sell-my-info|\/privacy\.html|\/privacy-settings/);
+  assert.doesNotMatch(config, /\/privacy-policy|\/tos|\/terms-of-service|\/eula|\/cookies|\/cookie-policy|\/refunds|\/refund|\/dmca|\/imprint|\/accessibility|\/trust|\/gdpr|\/ccpa|\/sla|\/legal\/privacy|\/legal\/terms|\/security(?!Headers)|\/terms-and-conditions|\/acceptable-use|\/aup|\/copyright|\/trademarks|\/privacy-notice|\/legal\/cookies|\/subprocessors|\/dpa|\/legal-notice|\/disclaimer|\/accessibility-statement|\/terms-of-use|\/cookie-settings|\/do-not-sell|\/your-privacy-choices|\/privacy-choices|\/security-policy|\/responsible-disclosure|\/bug-bounty|\/vulnerability-disclosure|\/data-policy|\/data-processing|\/termsandconditions|\/tos-page|\/eula-page|\/dmca-policy|\/refund-policy|\/a11y|\/wcag|\/privacypolicy|\/cookies-settings|\/manage-cookies|\/consent|\/privacy-center|\/cookie(?!s)|\/terms-conditions|\/termsconditions|\/user-agreement|\/license-agreement|\/legal-terms|\/privacy-statement|\/data-protection|\/gdpr-privacy|\/cookie-notice|\/cookie-preferences|\/ccpa-opt-out|\/opt-out|\/privacy-and-terms|\/legal-page|\/terms-page|\/cookie-policy-page|\/privacy-request|\/privacy-page|\/privacy-policy-page|\/security-page|\/security-center|\/trust-page|\/tos-privacy|\/license|\/licenses|\/open-source|\/termsofservice|\/termsofuse|\/impressum|\/opensource|\/cookiepolicy|\/donotsell|\/optout|\/privacynotice|\/acceptable-use-policy|\/eula-agreement|\/copyright-policy|\/disclaimer-page|\/license-page|\/copyright-notice|\/trademark|\/terms\.html|\/cookies-policy|\/cookie-consent|\/do-not-sell-my-info|\/privacy\.html|\/privacy-settings|\/legal\.html|\/tos\.html|\/eula\.html|\/terms-of-service\.html|\/acceptableuse|\/end-user-license-agreement|\/terms-of-services|\/privacy-policy\.html|\/cookie-policy\.html|\/cookies\.html|\/gdpr\.html|\/privacypolicy\.html|\/data-privacy|\/your-privacy-rights/);
   assert.doesNotMatch(config, /\/terms/);
   assert.doesNotMatch(config, /\/privacy/);
 
   const proxy = readRepo("proxy.ts");
-  assert.doesNotMatch(proxy, /\/legal|\/privacy-policy|\/terms-of-service|\/tos|\/eula|\/cookies|\/cookie-policy|\/refunds|\/refund|\/dmca|\/imprint|\/accessibility|\/security(?![\w.])|\/trust(?![\w])|\/gdpr(?![\w])|\/ccpa(?![\w])|\/sla(?![\w])|\/terms-and-conditions|\/acceptable-use|\/aup(?![\w])|\/copyright|\/trademarks|\/privacy-notice|\/subprocessors|\/dpa(?![\w])|\/legal-notice|\/disclaimer|\/accessibility-statement|\/terms-of-use|\/cookie-settings|\/do-not-sell|\/your-privacy-choices|\/privacy-choices|\/security-policy|\/responsible-disclosure|\/bug-bounty|\/vulnerability-disclosure|\/data-policy|\/data-processing|\/termsandconditions|\/tos-page|\/eula-page|\/dmca-policy|\/refund-policy|\/a11y|\/wcag|\/privacypolicy|\/cookies-settings|\/manage-cookies|\/consent|\/privacy-center|\/cookie(?!s)|\/terms-conditions|\/termsconditions|\/user-agreement|\/license-agreement|\/legal-terms|\/privacy-statement|\/data-protection|\/gdpr-privacy|\/cookie-notice|\/cookie-preferences|\/ccpa-opt-out|\/opt-out|\/privacy-and-terms|\/legal-page|\/terms-page|\/cookie-policy-page|\/privacy-request|\/privacy-page|\/privacy-policy-page|\/security-page|\/security-center|\/trust-page|\/tos-privacy|\/license|\/licenses|\/open-source|\/termsofservice|\/termsofuse|\/impressum|\/opensource|\/cookiepolicy|\/donotsell|\/optout|\/privacynotice|\/acceptable-use-policy|\/eula-agreement|\/copyright-policy|\/disclaimer-page|\/license-page|\/copyright-notice|\/trademark|\/terms\.html|\/cookies-policy|\/cookie-consent|\/do-not-sell-my-info|\/privacy\.html|\/privacy-settings/);
+  assert.doesNotMatch(proxy, /\/legal|\/privacy-policy|\/terms-of-service|\/tos|\/eula|\/cookies|\/cookie-policy|\/refunds|\/refund|\/dmca|\/imprint|\/accessibility|\/security(?![\w.])|\/trust(?![\w])|\/gdpr(?![\w])|\/ccpa(?![\w])|\/sla(?![\w])|\/terms-and-conditions|\/acceptable-use|\/aup(?![\w])|\/copyright|\/trademarks|\/privacy-notice|\/subprocessors|\/dpa(?![\w])|\/legal-notice|\/disclaimer|\/accessibility-statement|\/terms-of-use|\/cookie-settings|\/do-not-sell|\/your-privacy-choices|\/privacy-choices|\/security-policy|\/responsible-disclosure|\/bug-bounty|\/vulnerability-disclosure|\/data-policy|\/data-processing|\/termsandconditions|\/tos-page|\/eula-page|\/dmca-policy|\/refund-policy|\/a11y|\/wcag|\/privacypolicy|\/cookies-settings|\/manage-cookies|\/consent|\/privacy-center|\/cookie(?!s)|\/terms-conditions|\/termsconditions|\/user-agreement|\/license-agreement|\/legal-terms|\/privacy-statement|\/data-protection|\/gdpr-privacy|\/cookie-notice|\/cookie-preferences|\/ccpa-opt-out|\/opt-out|\/privacy-and-terms|\/legal-page|\/terms-page|\/cookie-policy-page|\/privacy-request|\/privacy-page|\/privacy-policy-page|\/security-page|\/security-center|\/trust-page|\/tos-privacy|\/license|\/licenses|\/open-source|\/termsofservice|\/termsofuse|\/impressum|\/opensource|\/cookiepolicy|\/donotsell|\/optout|\/privacynotice|\/acceptable-use-policy|\/eula-agreement|\/copyright-policy|\/disclaimer-page|\/license-page|\/copyright-notice|\/trademark|\/terms\.html|\/cookies-policy|\/cookie-consent|\/do-not-sell-my-info|\/privacy\.html|\/privacy-settings|\/legal\.html|\/tos\.html|\/eula\.html|\/terms-of-service\.html|\/acceptableuse|\/end-user-license-agreement|\/terms-of-services|\/privacy-policy\.html|\/cookie-policy\.html|\/cookies\.html|\/gdpr\.html|\/privacypolicy\.html|\/data-privacy|\/your-privacy-rights/);
   assert.doesNotMatch(proxy, /redirect/);
 
   assert.ok(PUBLIC_PAGE_PATHS.includes("/terms"));
@@ -1283,6 +1367,20 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
     "do-not-sell-my-info",
     "privacy.html",
     "privacy-settings",
+    "legal.html",
+    "tos.html",
+    "eula.html",
+    "terms-of-service.html",
+    "acceptableuse",
+    "end-user-license-agreement",
+    "terms-of-services",
+    "privacy-policy.html",
+    "cookie-policy.html",
+    "cookies.html",
+    "gdpr.html",
+    "privacypolicy.html",
+    "data-privacy",
+    "your-privacy-rights",
   ]) {
     for (const page of [
       `app/${name}/page.tsx`,

@@ -97,6 +97,16 @@
  * /changelog. /blog-page does not match /blog. /faq-home does not match
  * /faq, /faq-center, or /kb-home. /report-issue does not match
  * /report-bug. /testimonials-page does not match /testimonials.
+ * /support.html, /help.html, /faq.html, /contact.html, /suppport,
+ * /help-centre, /frequentlyaskedquestions, /getting-help, and
+ * /help-and-support use that same hop. /support.html does not match
+ * /support. /help.html does not match /help. /faq.html does not match
+ * /faq. /contact.html does not match /contact. /suppport does not match
+ * /support or /suport. /help-centre does not match /helpcentre,
+ * /help-center, or /help. /frequentlyaskedquestions does not match
+ * /frequently-asked-questions, /faq, or /faqs. /getting-help does not
+ * match /get-help or /help. /help-and-support does not match /help or
+ * /support.
  * /statuspage stays off this list.
  */
 
@@ -257,6 +267,15 @@ export function contactRedirects(): Array<{
     "/faq-home",
     "/report-issue",
     "/testimonials-page",
+    "/support.html",
+    "/help.html",
+    "/faq.html",
+    "/contact.html",
+    "/suppport",
+    "/help-centre",
+    "/frequentlyaskedquestions",
+    "/getting-help",
+    "/help-and-support",
   ].map((source) => ({
     source,
     destination: SUPPORT_HREF,
