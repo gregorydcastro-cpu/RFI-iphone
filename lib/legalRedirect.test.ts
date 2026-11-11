@@ -303,16 +303,6 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
       permanent: true,
     },
     {
-      source: "/refund.html",
-      destination: "/terms",
-      permanent: true,
-    },
-    {
-      source: "/accessibility.html",
-      destination: "/terms",
-      permanent: true,
-    },
-    {
       source: "/terms.htm",
       destination: "/terms",
       permanent: true,
@@ -611,11 +601,6 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
     },
     {
       source: "/cookie.html",
-      destination: "/privacy",
-      permanent: true,
-    },
-    {
-      source: "/security.html",
       destination: "/privacy",
       permanent: true,
     },
@@ -1044,7 +1029,7 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
   assert.equal(bySource.has("/security-policy-page"), false);
   assert.equal(bySource.has("/acceptable-use-policy/extra"), false);
   assert.equal(bySource.has("/privacy.html/extra"), false);
-  for (const source of ["/refund.html", "/accessibility.html", "/terms.htm", "/tos.htm"]) {
+  for (const source of ["/terms.htm", "/tos.htm"]) {
     const redirect = legalRedirects().find((item) => item.source === source);
     assert.equal(redirect?.destination, "/terms", source);
     assert.equal(redirect?.permanent, true, source);
@@ -1055,7 +1040,7 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
     assert.equal(bySource.has(`${source}/`), false, source);
     assert.equal(source.slice(1).includes("/"), false, source);
   }
-  for (const source of ["/privacy.htm", "/cookie.html", "/security.html", "/privcy"]) {
+  for (const source of ["/privacy.htm", "/cookie.html", "/privcy"]) {
     const redirect = legalRedirects().find((item) => item.source === source);
     assert.equal(redirect?.destination, "/privacy", source);
     assert.equal(redirect?.permanent, true, source);
@@ -1068,9 +1053,11 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
   }
   assert.equal(bySource.has("/terms"), false);
   assert.equal(bySource.has("/privacy"), false);
-  assert.equal(bySource.get("/refund.html"), bySource.get("/refund"));
+  assert.equal(bySource.has("/refund.html"), false);
+  assert.equal(bySource.has("/refund"), true);
   assert.equal(bySource.has("/refunds"), true);
-  assert.equal(bySource.get("/accessibility.html"), bySource.get("/accessibility"));
+  assert.equal(bySource.has("/accessibility.html"), false);
+  assert.equal(bySource.has("/accessibility"), true);
   assert.equal(bySource.get("/terms.htm"), bySource.get("/terms.html"));
   assert.equal(bySource.has("/terms.html"), true);
   assert.equal(bySource.get("/tos.htm"), bySource.get("/tos"));
@@ -1080,8 +1067,10 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
   assert.equal(bySource.get("/cookie.html"), bySource.get("/cookie"));
   assert.equal(bySource.has("/cookies.html"), true);
   assert.equal(bySource.has("/cookies"), true);
-  assert.equal(bySource.get("/security.html"), bySource.get("/security"));
+  assert.equal(bySource.has("/security.html"), false);
+  assert.equal(bySource.has("/security"), true);
   assert.equal(bySource.has("/security-policy"), true);
+  assert.equal(bySource.has("/security-policy-page"), false);
   assert.equal(bySource.has("/security.txt"), false);
   assert.equal(bySource.get("/privcy"), bySource.get("/privacy.htm"));
   assert.equal(bySource.has("/gdpr.html"), false);
@@ -1102,6 +1091,13 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
     "/security-policy-page",
     "/gdpr.html",
     "/data-privacy",
+    "/security.html",
+    "/accessibility.html",
+    "/refund.html",
+    "/try.html",
+    "/status.html",
+    "/blog.html",
+    "/integrations.html",
     "/gdpr-notice",
     "/cpra",
     "/report-vulnerability",

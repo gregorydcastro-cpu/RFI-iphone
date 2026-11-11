@@ -808,16 +808,6 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
       permanent: true,
     },
     {
-      source: "/blog.html",
-      destination: "/support",
-      permanent: true,
-    },
-    {
-      source: "/status.html",
-      destination: "/support",
-      permanent: true,
-    },
-    {
       source: "/guides.html",
       destination: "/support",
       permanent: true,
@@ -1270,8 +1260,6 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
   assert.equal(bySource.has("/testimonials-page/extra"), false);
   for (const source of [
     "/docs.html",
-    "/blog.html",
-    "/status.html",
     "/guides.html",
     "/documentation.html",
     "/help-center.html",
@@ -1292,8 +1280,10 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
   }
   assert.equal(bySource.get("/docs.html"), bySource.get("/docs"));
   assert.equal(bySource.has("/docs"), true);
-  assert.equal(bySource.get("/blog.html"), bySource.get("/blog"));
-  assert.equal(bySource.get("/status.html"), bySource.get("/status"));
+  assert.equal(bySource.has("/blog.html"), false);
+  assert.equal(bySource.has("/blog"), true);
+  assert.equal(bySource.has("/status.html"), false);
+  assert.equal(bySource.has("/status"), true);
   assert.equal(bySource.get("/guides.html"), bySource.get("/guides"));
   assert.equal(bySource.get("/documentation.html"), bySource.get("/documentation"));
   assert.equal(bySource.has("/docs.html"), true);
@@ -1390,6 +1380,13 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
     "/statuspage",
     "/gdpr.html",
     "/data-privacy",
+    "/security.html",
+    "/accessibility.html",
+    "/refund.html",
+    "/try.html",
+    "/status.html",
+    "/blog.html",
+    "/integrations.html",
   ]) {
     assert.equal(sources.has(path), false, path);
   }

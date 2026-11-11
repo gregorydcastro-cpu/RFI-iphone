@@ -427,11 +427,6 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
       permanent: true,
     },
     {
-      source: "/integrations.html",
-      destination: "/pricing",
-      permanent: true,
-    },
-    {
       source: "/product.html",
       destination: "/pricing",
       permanent: true,
@@ -1514,7 +1509,6 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
   assert.equal(bySource.get("/google-sitemap"), bySource.get("/sitemap"));
   for (const source of [
     "/features.html",
-    "/integrations.html",
     "/product.html",
     "/solutions.html",
     "/feautures",
@@ -1536,7 +1530,8 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
   assert.equal(bySource.has("/pricing"), false);
   assert.equal(bySource.get("/features.html"), bySource.get("/features"));
   assert.equal(bySource.has("/features"), true);
-  assert.equal(bySource.get("/integrations.html"), bySource.get("/integrations"));
+  assert.equal(bySource.has("/integrations.html"), false);
+  assert.equal(bySource.has("/integrations"), true);
   assert.equal(bySource.get("/product.html"), bySource.get("/product"));
   assert.equal(bySource.has("/products"), true);
   assert.equal(bySource.get("/solutions.html"), bySource.get("/solutions"));
@@ -1795,6 +1790,13 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/security-policy-page",
     "/gdpr.html",
     "/data-privacy",
+    "/security.html",
+    "/accessibility.html",
+    "/refund.html",
+    "/try.html",
+    "/status.html",
+    "/blog.html",
+    "/integrations.html",
   ]) {
     assert.equal(sources.has(path), false, path);
   }
@@ -1912,6 +1914,13 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/ipad-app",
     "/gdpr.html",
     "/data-privacy",
+    "/security.html",
+    "/accessibility.html",
+    "/refund.html",
+    "/try.html",
+    "/status.html",
+    "/blog.html",
+    "/integrations.html",
     "/gdpr-notice",
     "/cpra",
     "/report-vulnerability",

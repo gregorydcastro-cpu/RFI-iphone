@@ -130,12 +130,12 @@
  * /sitemap-index.xml or /sitemap-index. /sitemap.xml.gz does not match
  * /sitemap.xml. /google-sitemap does not match /sitemap.
  * /sitemap.xml itself is not a source.
- * /features.html, /integrations.html, /product.html, /solutions.html,
- * /feautures, /pricng, and /priceing share the destination /pricing already
- * uses. /features.html does not match /features. /integrations.html does
- * not match /integrations. /product.html does not match /product or
- * /products. /solutions.html does not match /solutions. /feautures does
- * not match /features. /pricng does not match /pricing or /prcing.
+ * /features.html, /product.html, /solutions.html, /feautures, /pricng, and
+ * /priceing share the destination /pricing already uses. /features.html
+ * does not match /features. /integrations.html stays off this list.
+ * /product.html does not match /product or /products. /solutions.html
+ * does not match /solutions. /feautures does not match /features.
+ * /pricng does not match /pricing or /prcing.
  * /priceing does not match /pricing or /price.
  * /careers.html, /aboutus.html, /compnay, /index.htm, and /ourstory share
  * the destination / already uses. /careers.html does not match /careers.
@@ -233,7 +233,6 @@ export function retiredRedirects(): Array<{
       "/prcing",
       "/our-pricing",
       "/features.html",
-      "/integrations.html",
       "/product.html",
       "/solutions.html",
       "/feautures",

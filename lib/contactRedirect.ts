@@ -107,16 +107,17 @@
  * /frequently-asked-questions, /faq, or /faqs. /getting-help does not
  * match /get-help or /help. /help-and-support does not match /help or
  * /support.
- * /docs.html, /blog.html, /status.html, /guides.html, /documentation.html,
- * /help-center.html, /contact-us.html, /support-centre, /contct, and /docss
- * use that same hop. /docs.html does not match /docs. /blog.html does not
- * match /blog. /status.html does not match /status. /guides.html does not
- * match /guides. /documentation.html does not match /documentation or
- * /docs.html. /help-center.html does not match /help-center or /help.html.
+ * /docs.html, /guides.html, /documentation.html, /help-center.html,
+ * /contact-us.html, /support-centre, /contct, and /docss use that same hop.
+ * /docs.html does not match /docs. /guides.html does not match /guides.
+ * /documentation.html does not match /documentation or /docs.html.
+ * /help-center.html does not match /help-center or /help.html.
  * /contact-us.html does not match /contact-us or /contact.html.
  * /support-centre does not match /support, /help-centre, or /support-center.
  * /contct does not match /contact. /docss does not match /docs or /docs.html.
- * /statuspage stays off this list.
+ * /blog.html and /status.html stay off this list. /blog.html does not
+ * match /blog. /status.html does not match /status. /statuspage stays off
+ * this list.
  */
 
 const SUPPORT_HREF = "/support";
@@ -286,8 +287,6 @@ export function contactRedirects(): Array<{
     "/getting-help",
     "/help-and-support",
     "/docs.html",
-    "/blog.html",
-    "/status.html",
     "/guides.html",
     "/documentation.html",
     "/help-center.html",

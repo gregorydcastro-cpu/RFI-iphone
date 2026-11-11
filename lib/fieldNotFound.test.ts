@@ -987,6 +987,13 @@ test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /fr
     "/security-policy-page",
     "/gdpr.html",
     "/data-privacy",
+    "/security.html",
+    "/accessibility.html",
+    "/refund.html",
+    "/try.html",
+    "/status.html",
+    "/blog.html",
+    "/integrations.html",
   ]) {
     assert.equal(signInAliasDestination(path), null, path);
     assert.equal(signInAliasDestination(`${path}/`), null, path);
@@ -1304,7 +1311,7 @@ test("/book-demo, /request-demo, /schedule-demo, /get-demo, /demo-video, /book-a
   ]);
   assert.equal(
     DEMO_ALIAS_SOURCE,
-    "/:alias(bookdemo\\.html|bookdemo|book-demo\\.html|book-demo|request-a-demo|request-demo\\.html|request-demo|schedule-demo|get-a-demo|get-demo|demo\\.html|demos|maple-point-demo|demo-video|watch-a-demo|watch-demo|book-a-demo|try-demo|try\\.html|try|try-free|freetrial|request-quote|try-it-free|try-it|demo-now|schedule-a-demo|schedule|book-demo-now|see-a-demo|see-demo|see-it-in-action|product-demo|live-demo|interactive-demo|book-your-demo|free-demo|try-now|demo-request|book_demo)",
+    "/:alias(bookdemo\\.html|bookdemo|book-demo\\.html|book-demo|request-a-demo|request-demo\\.html|request-demo|schedule-demo|get-a-demo|get-demo|demo\\.html|demos|maple-point-demo|demo-video|watch-a-demo|watch-demo|book-a-demo|try-demo|try|try-free|freetrial|request-quote|try-it-free|try-it|demo-now|schedule-a-demo|schedule|book-demo-now|see-a-demo|see-demo|see-it-in-action|product-demo|live-demo|interactive-demo|book-your-demo|free-demo|try-now|demo-request|book_demo)",
   );
   assert.equal(demoAliasRedirects()[0]?.permanent, false);
   assert.equal(demoAliasRedirects()[0]?.permanent ? 308 : 307, 307);
@@ -1362,7 +1369,6 @@ test("/book-demo, /request-demo, /schedule-demo, /get-demo, /demo-video, /book-a
     "/bookdemo.html",
     "/book-demo.html",
     "/request-demo.html",
-    "/try.html",
     "/book_demo",
   ]) {
     assert.equal(demoAliasDestination(path), "/pack/maple-point", path);
@@ -1463,6 +1469,13 @@ test("/book-demo, /request-demo, /schedule-demo, /get-demo, /demo-video, /book-a
     "/about-gc-field-log",
     "/gdpr.html",
     "/data-privacy",
+    "/security.html",
+    "/accessibility.html",
+    "/refund.html",
+    "/try.html",
+    "/status.html",
+    "/blog.html",
+    "/integrations.html",
   ]) {
     assert.equal(demoAliasDestination(path), null, path);
   }
@@ -1604,20 +1617,24 @@ test("/book-demo, /request-demo, /schedule-demo, /get-demo, /demo-video, /book-a
   assert.equal(demoAliasDestination("/book/demo"), null);
   assert.equal(demoAliasDestination("/request-demo.html"), "/pack/maple-point");
   assert.equal(demoAliasDestination("/request-demo"), "/pack/maple-point");
-  assert.equal(demoAliasDestination("/try.html"), "/pack/maple-point");
-  assert.equal(demoAliasDestination("/try"), "/pack/maple-point");
-  assert.equal(demoAliasDestination("/TRY.HTML/"), "/pack/maple-point");
-  assert.equal(demoAliasDestination("/try.html", "?room=101"), "/pack/maple-point?room=101");
+  assert.equal(demoAliasDestination("/try.html"), null);
+  assert.equal(demoAliasDestination("/try.html/"), null);
+  assert.equal(demoAliasDestination("/TRY.HTML/"), null);
+  assert.equal(demoAliasDestination("/try.html", "?room=101"), null);
   assert.equal(demoAliasDestination("/try.html/extra"), null);
+  assert.equal(demoAliasDestination("/try"), "/pack/maple-point");
+  assert.equal(demoAliasDestination("/TRY/"), "/pack/maple-point");
   assert.equal(demoAliasDestination("/tryXhtml"), null);
   assert.equal(signInAliasDestination("/try"), null);
   assert.equal(signInAliasDestination("/try.html"), null);
+  assert.equal(signInAliasDestination("/try.html/"), null);
   assert.equal(signInAliasDestination("/book-demo.html"), null);
   assert.equal(signInAliasDestination("/bookdemo.html"), null);
   assert.equal(signInAliasDestination("/book_demo"), null);
   assert.equal(signInAliasDestination("/request-demo.html"), null);
   assert.notEqual(demoAliasDestination("/book-demo.html"), "/demo");
-  assert.notEqual(demoAliasDestination("/try.html"), "/demo");
+  assert.equal(demoAliasDestination("/try.html"), null);
+  assert.notEqual(demoAliasDestination("/try"), "/demo");
   assert.equal(demoAliasRedirects()[0]?.permanent ? 308 : 307, 307);
   for (const path of [
     "/docs.html",
@@ -1660,6 +1677,13 @@ test("/book-demo, /request-demo, /schedule-demo, /get-demo, /demo-video, /book-a
     "/site_map.html",
     "/gdpr.html",
     "/data-privacy",
+    "/security.html",
+    "/accessibility.html",
+    "/refund.html",
+    "/try.html",
+    "/status.html",
+    "/blog.html",
+    "/integrations.html",
   ]) {
     assert.equal(demoAliasDestination(path), null, path);
     assert.equal(signInAliasDestination(path), null, path);

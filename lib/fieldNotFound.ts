@@ -200,20 +200,20 @@ const SIGN_IN_ALIAS_PATH =
  * match /demo or /demo.html. /bookdemo does not match /book-demo.
  * /watch-a-demo does not match /watch-demo. /maple-point-demo does not
  * match /demo or /pack/maple-point.
- * /bookdemo.html, /book-demo.html, /request-demo.html, /try.html, and
- * /book_demo use that same hop. /bookdemo.html does not match /bookdemo
- * or /book-demo.html. /book-demo.html does not match /book-demo.
- * /request-demo.html does not match /request-demo. /try.html does not
- * match /try, /try-free, or /free-trial. /book_demo does not match
- * /book-demo or /bookdemo.
+ * /bookdemo.html, /book-demo.html, /request-demo.html, and /book_demo use
+ * that same hop. /bookdemo.html does not match /bookdemo or
+ * /book-demo.html. /book-demo.html does not match /book-demo.
+ * /request-demo.html does not match /request-demo. /book_demo does not
+ * match /book-demo or /bookdemo. /try.html stays off this list. /try.html
+ * does not match /try, /try-free, or /free-trial.
  * Next matches this source without case sensitivity and allows one
  * trailing slash. Query values pass through. permanent: false is HTTP 307.
  */
 export const DEMO_ALIAS_SOURCE =
-  "/:alias(bookdemo\\.html|bookdemo|book-demo\\.html|book-demo|request-a-demo|request-demo\\.html|request-demo|schedule-demo|get-a-demo|get-demo|demo\\.html|demos|maple-point-demo|demo-video|watch-a-demo|watch-demo|book-a-demo|try-demo|try\\.html|try|try-free|freetrial|request-quote|try-it-free|try-it|demo-now|schedule-a-demo|schedule|book-demo-now|see-a-demo|see-demo|see-it-in-action|product-demo|live-demo|interactive-demo|book-your-demo|free-demo|try-now|demo-request|book_demo)";
+  "/:alias(bookdemo\\.html|bookdemo|book-demo\\.html|book-demo|request-a-demo|request-demo\\.html|request-demo|schedule-demo|get-a-demo|get-demo|demo\\.html|demos|maple-point-demo|demo-video|watch-a-demo|watch-demo|book-a-demo|try-demo|try|try-free|freetrial|request-quote|try-it-free|try-it|demo-now|schedule-a-demo|schedule|book-demo-now|see-a-demo|see-demo|see-it-in-action|product-demo|live-demo|interactive-demo|book-your-demo|free-demo|try-now|demo-request|book_demo)";
 
 const DEMO_ALIAS_PATH =
-  /^\/(?:bookdemo\.html|bookdemo|book-demo\.html|book-demo|request-a-demo|request-demo\.html|request-demo|schedule-demo|get-a-demo|get-demo|demo\.html|demos|maple-point-demo|demo-video|watch-a-demo|watch-demo|book-a-demo|try-demo|try\.html|try|try-free|freetrial|request-quote|try-it-free|try-it|demo-now|schedule-a-demo|schedule|book-demo-now|see-a-demo|see-demo|see-it-in-action|product-demo|live-demo|interactive-demo|book-your-demo|free-demo|try-now|demo-request|book_demo)\/?$/i;
+  /^\/(?:bookdemo\.html|bookdemo|book-demo\.html|book-demo|request-a-demo|request-demo\.html|request-demo|schedule-demo|get-a-demo|get-demo|demo\.html|demos|maple-point-demo|demo-video|watch-a-demo|watch-demo|book-a-demo|try-demo|try|try-free|freetrial|request-quote|try-it-free|try-it|demo-now|schedule-a-demo|schedule|book-demo-now|see-a-demo|see-demo|see-it-in-action|product-demo|live-demo|interactive-demo|book-your-demo|free-demo|try-now|demo-request|book_demo)\/?$/i;
 
 export function signInAliasRedirects(): Array<{
   source: string;
