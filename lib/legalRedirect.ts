@@ -98,6 +98,15 @@
  * /cookies.html does not match /cookies.
  * /privacypolicy.html does not match /privacypolicy.
  * /your-privacy-rights does not match /your-privacy-choices or /privacy.
+ * /refund.html, /accessibility.html, /terms.htm, and /tos.htm move to the
+ * terms page. /privacy.htm, /cookie.html, /security.html, and /privcy move
+ * to the privacy page. /refund.html does not match /refund or /refunds.
+ * /accessibility.html does not match /accessibility. /terms.htm does not
+ * match /terms or /terms.html. /tos.htm does not match /tos or /tos.html.
+ * /privacy.htm does not match /privacy or /privacy.html. /cookie.html does
+ * not match /cookie, /cookies, or /cookies.html. /security.html does not
+ * match /security, /security-policy, or /security.txt. /privcy does not
+ * match /privacy or /privacy.htm.
  * /gdpr.html, /data-privacy, /gdpr-notice, /cpra, and
  * /report-vulnerability stay off this list. /gdpr.html does not match
  * /gdpr. /data-privacy does not match /data-policy or /privacy.
@@ -172,6 +181,10 @@ export function legalRedirects(): Array<{
       "/acceptableuse",
       "/end-user-license-agreement",
       "/terms-of-services",
+      "/refund.html",
+      "/accessibility.html",
+      "/terms.htm",
+      "/tos.htm",
     ].map((source) => ({
       source,
       destination: TERMS_HREF,
@@ -234,6 +247,10 @@ export function legalRedirects(): Array<{
       "/cookies.html",
       "/privacypolicy.html",
       "/your-privacy-rights",
+      "/privacy.htm",
+      "/cookie.html",
+      "/security.html",
+      "/privcy",
     ].map((source) => ({
       source,
       destination: PRIVACY_HREF,

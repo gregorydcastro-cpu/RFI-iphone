@@ -130,6 +130,28 @@
  * /sitemap-index.xml or /sitemap-index. /sitemap.xml.gz does not match
  * /sitemap.xml. /google-sitemap does not match /sitemap.
  * /sitemap.xml itself is not a source.
+ * /features.html, /integrations.html, /product.html, /solutions.html,
+ * /feautures, /pricng, and /priceing share the destination /pricing already
+ * uses. /features.html does not match /features. /integrations.html does
+ * not match /integrations. /product.html does not match /product or
+ * /products. /solutions.html does not match /solutions. /feautures does
+ * not match /features. /pricng does not match /pricing or /prcing.
+ * /priceing does not match /pricing or /price.
+ * /careers.html, /aboutus.html, /compnay, /index.htm, and /ourstory share
+ * the destination / already uses. /careers.html does not match /careers.
+ * /aboutus.html does not match /aboutus or /about-us.html. /compnay does
+ * not match /company. /index.htm does not match /index.html. /index stays
+ * off this list. /ourstory does not match /our-story.
+ * /acount, /my_account, /setings, and /my-account.html share the
+ * destination /account already uses. /acount does not match /account.
+ * /my_account does not match /my-account or /myaccount. /setings does not
+ * match /settings. /my-account.html does not match /my-account or
+ * /account.html.
+ * /sitemap.htm, /sitemapxml, and /site_map.html move straight to
+ * /sitemap.xml. /sitemap.htm does not match /sitemap or /sitemap.html.
+ * /sitemapxml does not match /sitemap-xml or /sitemap.xml. /site_map.html
+ * does not match /site_map or /site-map.html. /sitemap.xml itself is not
+ * a source.
  */
 
 const HOME_HREF = "/";
@@ -146,7 +168,7 @@ export function retiredRedirects(): Array<{
   permanent: boolean;
 }> {
   return [
-    ...["/settings", "/profile", "/me", "/account/settings", "/settings/profile", "/account-settings", "/team-members", "/my-account", "/your-account", "/account-page", "/my-profile", "/user-profile", "/manage-account", "/account.html", "/profile.html", "/settings.html", "/myaccount", "/user-account", "/account/profile"].map((source) => ({
+    ...["/settings", "/profile", "/me", "/account/settings", "/settings/profile", "/account-settings", "/team-members", "/my-account", "/your-account", "/account-page", "/my-profile", "/user-profile", "/manage-account", "/account.html", "/profile.html", "/settings.html", "/myaccount", "/user-account", "/account/profile", "/acount", "/my_account", "/setings", "/my-account.html"].map((source) => ({
       source,
       destination: ACCOUNT_HREF,
       permanent: true,
@@ -210,6 +232,13 @@ export function retiredRedirects(): Array<{
       "/pricings",
       "/prcing",
       "/our-pricing",
+      "/features.html",
+      "/integrations.html",
+      "/product.html",
+      "/solutions.html",
+      "/feautures",
+      "/pricng",
+      "/priceing",
     ].map((source) => ({
       source,
       destination: PRICING_HREF,
@@ -285,6 +314,11 @@ export function retiredRedirects(): Array<{
       "/default.html",
       "/whoweare",
       "/career",
+      "/careers.html",
+      "/aboutus.html",
+      "/compnay",
+      "/index.htm",
+      "/ourstory",
     ].map((source) => ({
       source,
       destination: HOME_HREF,
@@ -300,7 +334,7 @@ export function retiredRedirects(): Array<{
       destination: MANIFEST_HREF,
       permanent: true,
     })),
-    ...["/sitemap", "/site-map", "/sitemap-xml", "/xml-sitemap", "/map", "/html-sitemap", "/xml-map", "/sitemap-html", "/site_map", "/sitemap-index", "/sitemaps", "/sitemap.txt", "/sitemap-index.xml", "/sitemap.html", "/site-map.html", "/site-map.xml", "/sitemap_index.xml", "/sitemap.xml.gz", "/google-sitemap"].map((source) => ({
+    ...["/sitemap", "/site-map", "/sitemap-xml", "/xml-sitemap", "/map", "/html-sitemap", "/xml-map", "/sitemap-html", "/site_map", "/sitemap-index", "/sitemaps", "/sitemap.txt", "/sitemap-index.xml", "/sitemap.html", "/site-map.html", "/site-map.xml", "/sitemap_index.xml", "/sitemap.xml.gz", "/google-sitemap", "/sitemap.htm", "/sitemapxml", "/site_map.html"].map((source) => ({
       source,
       destination: SITEMAP_HREF,
       permanent: true,
