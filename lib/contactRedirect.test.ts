@@ -842,6 +842,51 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
       destination: "/support",
       permanent: true,
     },
+    {
+      source: "/faqs.html",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/kb.html",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/knowledge-base.html",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/knowlegebase",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/support-center.html",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/supprt",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/hlp",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/contactus.html",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/contatc",
+      destination: "/support",
+      permanent: true,
+    },
   ]);
   const sources = new Set(contactRedirects().map((redirect) => redirect.source));
   for (const redirect of contactRedirects()) {
@@ -1297,6 +1342,50 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
   assert.equal(bySource.get("/contct"), bySource.get("/contact"));
   assert.equal(bySource.get("/docss"), bySource.get("/docs"));
   assert.equal(bySource.has("/docss/extra"), false);
+  for (const source of [
+    "/faqs.html",
+    "/kb.html",
+    "/knowledge-base.html",
+    "/knowlegebase",
+    "/support-center.html",
+    "/supprt",
+    "/hlp",
+    "/contactus.html",
+    "/contatc",
+  ]) {
+    const redirect = contactRedirects().find((item) => item.source === source);
+    assert.equal(redirect?.destination, "/support", source);
+    assert.equal(redirect?.permanent, true, source);
+    assert.equal(redirect?.permanent ? 308 : 307, 308, source);
+    assert.equal(bySource.get(source), "/support", source);
+    assert.equal(bySource.get(source), bySource.get("/contact"), source);
+    assert.equal(bySource.has(`${source}/extra`), false, source);
+    assert.equal(bySource.has(`${source}/`), false, source);
+    assert.equal(source.slice(1).includes("/"), false, source);
+  }
+  assert.equal(bySource.get("/faqs.html"), bySource.get("/faqs"));
+  assert.equal(bySource.has("/faqs"), true);
+  assert.equal(bySource.has("/faq.html"), true);
+  assert.equal(bySource.get("/kb.html"), bySource.get("/kb"));
+  assert.equal(bySource.has("/kb"), true);
+  assert.equal(bySource.get("/knowledge-base.html"), bySource.get("/knowledge-base"));
+  assert.equal(bySource.get("/knowlegebase"), bySource.get("/knowlege-base"));
+  assert.equal(bySource.has("/knowledgebase"), true);
+  assert.equal(bySource.get("/support-center.html"), bySource.get("/support-center"));
+  assert.equal(bySource.has("/help-center.html"), true);
+  assert.equal(bySource.has("/support"), false);
+  assert.equal(bySource.get("/supprt"), bySource.get("/suport"));
+  assert.equal(bySource.has("/suppport"), true);
+  assert.equal(bySource.get("/hlp"), bySource.get("/help"));
+  assert.equal(bySource.has("/hepl"), true);
+  assert.equal(bySource.get("/contactus.html"), bySource.get("/contactus"));
+  assert.equal(bySource.has("/contact-us.html"), true);
+  assert.equal(bySource.get("/contatc"), bySource.get("/contct"));
+  assert.equal(bySource.has("/contact"), true);
+  assert.equal(bySource.has("/supportcentre"), false);
+  assert.equal(bySource.has("/manual.html"), false);
+  assert.equal(bySource.has("/user-guide.html"), false);
+  assert.equal(bySource.has("/tutorials.html"), false);
   assert.equal(bySource.has("/api/docs"), false);
   assert.equal(sources.has("/statuspage"), false);
   for (const path of [
@@ -1387,6 +1476,9 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
     "/status.html",
     "/blog.html",
     "/integrations.html",
+    "/trial.html",
+    "/free-trial.html",
+    "/ccpa.html",
   ]) {
     assert.equal(sources.has(path), false, path);
   }
@@ -1395,10 +1487,10 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
 
   const config = readRepo("next.config.ts");
   assert.match(config, /\.\.\.contactRedirects\(\)/);
-  assert.doesNotMatch(config, /\/privacy|\/terms|\/support|\/help|\/faq|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events|\/contact-sales|\/sales|\/enterprise|\/community|\/forum|\/developers|\/api-docs|\/help-center|\/knowledge-base|\/kb|\/tutorials|\/academy|\/training|\/webinars|\/videos|\/video|\/newsletter|\/podcast|\/media-kit|\/media|\/press-kit|\/brand|\/talk-to-sales|\/sales-contact|\/helpdesk|\/submit-ticket|\/ticket|\/feedback|\/report-bug|\/bug-report|\/feature-request|\/ideas|\/community-forum|\/contact\/support|\/support\/contact|\/developer|\/api-reference|\/status-page|\/system-status|\/uptime|\/contactus|\/get-in-touch|\/reach-us|\/customer-support|\/customer-service|\/knowledgebase|\/faqs|\/how-to|\/documentation|\/manual|\/billing-help|\/whats-new|\/contact-form|\/contact-us-form|\/support-ticket|\/help-desk|\/helpdesk-support|\/customer-care|\/care-center|\/ask-us|\/ask(?![A-Za-z0-9_-])|\/talk-to-us|\/message-us|\/write-us|\/email-us|\/call-us|\/knowledge(?!-|b)|\/service-desk|\/faq-page|\/common-questions|\/troubleshooting|\/fix-it|\/howto|\/blog-posts|\/press-release|\/newsroom|\/updates|\/api-status|\/contact-support|\/get-support|\/tech-support|\/technical-support|\/sales-team|\/sales-inquiry|\/support-home|\/client-support|\/api-docs-page|\/developer-docs|\/help-center-home|\/brand-assets|\/kb-home|\/knowledge-base-home|\/faq-center|\/brand-guidelines|\/media-assets|\/faq-help|\/learn|\/feedback-form|\/sdk|\/suport|\/hepl|\/fqa|\/documenation|\/knowlege-base|\/helpcentre|\/helpcenter|\/whatsnew|\/frequently-asked-questions|\/release-notes|\/get-help|\/user-guide|\/user-manual|\/support-page|\/contact-page|\/help-page|\/docs-page|\/knowledge-center|\/press-room|\/brand-kit|\/forums|\/feature-requests|\/podcasts|\/case-study|\/troubleshoot|\/reach-out|\/api-documentation|\/changelog-page|\/blog-page|\/faq-home|\/report-issue|\/testimonials-page|\/suppport|\/frequentlyaskedquestions|\/getting-help|\/help-and-support|\/help-centre|\/support\.html|\/help\.html|\/faq\.html|\/contact\.html|\/docs\.html|\/blog\.html|\/status\.html|\/guides\.html|\/documentation\.html|\/help-center\.html|\/contact-us\.html|\/support-centre|\/contct|\/docss/);
+  assert.doesNotMatch(config, /\/privacy|\/terms|\/support|\/help|\/faq|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events|\/contact-sales|\/sales|\/enterprise|\/community|\/forum|\/developers|\/api-docs|\/help-center|\/knowledge-base|\/kb|\/tutorials|\/academy|\/training|\/webinars|\/videos|\/video|\/newsletter|\/podcast|\/media-kit|\/media|\/press-kit|\/brand|\/talk-to-sales|\/sales-contact|\/helpdesk|\/submit-ticket|\/ticket|\/feedback|\/report-bug|\/bug-report|\/feature-request|\/ideas|\/community-forum|\/contact\/support|\/support\/contact|\/developer|\/api-reference|\/status-page|\/system-status|\/uptime|\/contactus|\/get-in-touch|\/reach-us|\/customer-support|\/customer-service|\/knowledgebase|\/faqs|\/how-to|\/documentation|\/manual|\/billing-help|\/whats-new|\/contact-form|\/contact-us-form|\/support-ticket|\/help-desk|\/helpdesk-support|\/customer-care|\/care-center|\/ask-us|\/ask(?![A-Za-z0-9_-])|\/talk-to-us|\/message-us|\/write-us|\/email-us|\/call-us|\/knowledge(?!-|b)|\/service-desk|\/faq-page|\/common-questions|\/troubleshooting|\/fix-it|\/howto|\/blog-posts|\/press-release|\/newsroom|\/updates|\/api-status|\/contact-support|\/get-support|\/tech-support|\/technical-support|\/sales-team|\/sales-inquiry|\/support-home|\/client-support|\/api-docs-page|\/developer-docs|\/help-center-home|\/brand-assets|\/kb-home|\/knowledge-base-home|\/faq-center|\/brand-guidelines|\/media-assets|\/faq-help|\/learn|\/feedback-form|\/sdk|\/suport|\/hepl|\/fqa|\/documenation|\/knowlege-base|\/helpcentre|\/helpcenter|\/whatsnew|\/frequently-asked-questions|\/release-notes|\/get-help|\/user-guide|\/user-manual|\/support-page|\/contact-page|\/help-page|\/docs-page|\/knowledge-center|\/press-room|\/brand-kit|\/forums|\/feature-requests|\/podcasts|\/case-study|\/troubleshoot|\/reach-out|\/api-documentation|\/changelog-page|\/blog-page|\/faq-home|\/report-issue|\/testimonials-page|\/suppport|\/frequentlyaskedquestions|\/getting-help|\/help-and-support|\/help-centre|\/support\.html|\/help\.html|\/faq\.html|\/contact\.html|\/docs\.html|\/blog\.html|\/status\.html|\/guides\.html|\/documentation\.html|\/help-center\.html|\/contact-us\.html|\/support-centre|\/contct|\/docss|\/faqs\.html|\/kb\.html|\/knowledge-base\.html|\/knowlegebase|\/support-center\.html|\/supprt|\/hlp|\/contactus\.html|\/contatc/);
 
   const proxy = readRepo("proxy.ts");
-  assert.doesNotMatch(proxy, /\/contact|\/help|\/faq|\/contact-us|\/support-center|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events|\/contact-sales|\/sales|\/enterprise|\/community|\/forum|\/developers|\/api-docs|\/help-center|\/knowledge-base|\/kb|\/tutorials|\/academy|\/training|\/webinars|\/videos|\/video|\/newsletter|\/podcast|\/media-kit|\/media|\/press-kit|\/brand|\/talk-to-sales|\/sales-contact|\/helpdesk|\/submit-ticket|\/ticket|\/feedback|\/report-bug|\/bug-report|\/feature-request|\/ideas|\/community-forum|\/contact\/support|\/support\/contact|\/developer|\/api-reference|\/status-page|\/system-status|\/uptime|\/contactus|\/get-in-touch|\/reach-us|\/customer-support|\/customer-service|\/knowledgebase|\/faqs|\/how-to|\/documentation|\/manual|\/billing-help|\/whats-new|\/contact-form|\/contact-us-form|\/support-ticket|\/help-desk|\/helpdesk-support|\/customer-care|\/care-center|\/ask-us|\/ask(?![A-Za-z0-9_-])|\/talk-to-us|\/message-us|\/write-us|\/email-us|\/call-us|\/knowledge(?!-|b)|\/service-desk|\/faq-page|\/common-questions|\/troubleshooting|\/fix-it|\/howto|\/blog-posts|\/press-release|\/newsroom|\/updates|\/api-status|\/contact-support|\/get-support|\/tech-support|\/technical-support|\/sales-team|\/sales-inquiry|\/support-home|\/client-support|\/api-docs-page|\/developer-docs|\/help-center-home|\/brand-assets|\/kb-home|\/knowledge-base-home|\/faq-center|\/brand-guidelines|\/media-assets|\/faq-help|\/learn|\/feedback-form|\/sdk|\/suport|\/hepl|\/fqa|\/documenation|\/knowlege-base|\/helpcentre|\/helpcenter|\/whatsnew|\/frequently-asked-questions|\/release-notes|\/get-help|\/user-guide|\/user-manual|\/support-page|\/contact-page|\/help-page|\/docs-page|\/knowledge-center|\/press-room|\/brand-kit|\/forums|\/feature-requests|\/podcasts|\/case-study|\/troubleshoot|\/reach-out|\/api-documentation|\/changelog-page|\/blog-page|\/faq-home|\/report-issue|\/testimonials-page|\/suppport|\/frequentlyaskedquestions|\/getting-help|\/help-and-support|\/help-centre|\/support\.html|\/help\.html|\/faq\.html|\/contact\.html|\/docs\.html|\/blog\.html|\/status\.html|\/guides\.html|\/documentation\.html|\/help-center\.html|\/contact-us\.html|\/support-centre|\/contct|\/docss/);
+  assert.doesNotMatch(proxy, /\/contact|\/help|\/faq|\/contact-us|\/support-center|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events|\/contact-sales|\/sales|\/enterprise|\/community|\/forum|\/developers|\/api-docs|\/help-center|\/knowledge-base|\/kb|\/tutorials|\/academy|\/training|\/webinars|\/videos|\/video|\/newsletter|\/podcast|\/media-kit|\/media|\/press-kit|\/brand|\/talk-to-sales|\/sales-contact|\/helpdesk|\/submit-ticket|\/ticket|\/feedback|\/report-bug|\/bug-report|\/feature-request|\/ideas|\/community-forum|\/contact\/support|\/support\/contact|\/developer|\/api-reference|\/status-page|\/system-status|\/uptime|\/contactus|\/get-in-touch|\/reach-us|\/customer-support|\/customer-service|\/knowledgebase|\/faqs|\/how-to|\/documentation|\/manual|\/billing-help|\/whats-new|\/contact-form|\/contact-us-form|\/support-ticket|\/help-desk|\/helpdesk-support|\/customer-care|\/care-center|\/ask-us|\/ask(?![A-Za-z0-9_-])|\/talk-to-us|\/message-us|\/write-us|\/email-us|\/call-us|\/knowledge(?!-|b)|\/service-desk|\/faq-page|\/common-questions|\/troubleshooting|\/fix-it|\/howto|\/blog-posts|\/press-release|\/newsroom|\/updates|\/api-status|\/contact-support|\/get-support|\/tech-support|\/technical-support|\/sales-team|\/sales-inquiry|\/support-home|\/client-support|\/api-docs-page|\/developer-docs|\/help-center-home|\/brand-assets|\/kb-home|\/knowledge-base-home|\/faq-center|\/brand-guidelines|\/media-assets|\/faq-help|\/learn|\/feedback-form|\/sdk|\/suport|\/hepl|\/fqa|\/documenation|\/knowlege-base|\/helpcentre|\/helpcenter|\/whatsnew|\/frequently-asked-questions|\/release-notes|\/get-help|\/user-guide|\/user-manual|\/support-page|\/contact-page|\/help-page|\/docs-page|\/knowledge-center|\/press-room|\/brand-kit|\/forums|\/feature-requests|\/podcasts|\/case-study|\/troubleshoot|\/reach-out|\/api-documentation|\/changelog-page|\/blog-page|\/faq-home|\/report-issue|\/testimonials-page|\/suppport|\/frequentlyaskedquestions|\/getting-help|\/help-and-support|\/help-centre|\/support\.html|\/help\.html|\/faq\.html|\/contact\.html|\/docs\.html|\/blog\.html|\/status\.html|\/guides\.html|\/documentation\.html|\/help-center\.html|\/contact-us\.html|\/support-centre|\/contct|\/docss|\/faqs\.html|\/kb\.html|\/knowledge-base\.html|\/knowlegebase|\/support-center\.html|\/supprt|\/hlp|\/contactus\.html|\/contatc/);
   assert.doesNotMatch(proxy, /redirect/);
 
   assert.ok(PUBLIC_PAGE_PATHS.includes("/support"));
@@ -1873,6 +1965,18 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
     "support-centre",
     "contct",
     "docss",
+    "faqs.html",
+    "kb.html",
+    "knowledge-base.html",
+    "knowlegebase",
+    "support-center.html",
+    "supprt",
+    "hlp",
+    "contactus.html",
+    "contatc",
+    "trial.html",
+    "free-trial.html",
+    "ccpa.html",
   ]) {
     for (const page of [
       `app/${name}/page.tsx`,

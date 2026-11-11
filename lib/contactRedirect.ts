@@ -115,6 +115,16 @@
  * /contact-us.html does not match /contact-us or /contact.html.
  * /support-centre does not match /support, /help-centre, or /support-center.
  * /contct does not match /contact. /docss does not match /docs or /docs.html.
+ * /faqs.html, /kb.html, /knowledge-base.html, /knowlegebase,
+ * /support-center.html, /supprt, /hlp, /contactus.html, and /contatc use
+ * that same hop. /faqs.html does not match /faqs or /faq.html.
+ * /kb.html does not match /kb. /knowledge-base.html does not match
+ * /knowledge-base. /knowlegebase does not match /knowlege-base,
+ * /knowledgebase, or /kb. /support-center.html does not match
+ * /support-center or /help-center.html. /supprt does not match /support,
+ * /suport, or /suppport. /hlp does not match /help or /hepl.
+ * /contactus.html does not match /contactus, /contact-us.html, or
+ * /contact.html. /contatc does not match /contct or /contact.
  * /blog.html and /status.html stay off this list. /blog.html does not
  * match /blog. /status.html does not match /status. /statuspage stays off
  * this list.
@@ -294,6 +304,15 @@ export function contactRedirects(): Array<{
     "/support-centre",
     "/contct",
     "/docss",
+    "/faqs.html",
+    "/kb.html",
+    "/knowledge-base.html",
+    "/knowlegebase",
+    "/support-center.html",
+    "/supprt",
+    "/hlp",
+    "/contactus.html",
+    "/contatc",
   ].map((source) => ({
     source,
     destination: SUPPORT_HREF,
