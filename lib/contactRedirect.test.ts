@@ -802,6 +802,46 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
       destination: "/support",
       permanent: true,
     },
+    {
+      source: "/docs.html",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/guides.html",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/documentation.html",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/help-center.html",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/contact-us.html",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/support-centre",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/contct",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/docss",
+      destination: "/support",
+      permanent: true,
+    },
   ]);
   const sources = new Set(contactRedirects().map((redirect) => redirect.source));
   for (const redirect of contactRedirects()) {
@@ -1218,6 +1258,46 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
   assert.equal(bySource.has("/get-help/extra"), false);
   assert.equal(bySource.has("/api-documentation/extra"), false);
   assert.equal(bySource.has("/testimonials-page/extra"), false);
+  for (const source of [
+    "/docs.html",
+    "/guides.html",
+    "/documentation.html",
+    "/help-center.html",
+    "/contact-us.html",
+    "/support-centre",
+    "/contct",
+    "/docss",
+  ]) {
+    const redirect = contactRedirects().find((item) => item.source === source);
+    assert.equal(redirect?.destination, "/support", source);
+    assert.equal(redirect?.permanent, true, source);
+    assert.equal(redirect?.permanent ? 308 : 307, 308, source);
+    assert.equal(bySource.get(source), "/support", source);
+    assert.equal(bySource.get(source), bySource.get("/contact"), source);
+    assert.equal(bySource.has(`${source}/extra`), false, source);
+    assert.equal(bySource.has(`${source}/`), false, source);
+    assert.equal(source.slice(1).includes("/"), false, source);
+  }
+  assert.equal(bySource.get("/docs.html"), bySource.get("/docs"));
+  assert.equal(bySource.has("/docs"), true);
+  assert.equal(bySource.has("/blog.html"), false);
+  assert.equal(bySource.has("/blog"), true);
+  assert.equal(bySource.has("/status.html"), false);
+  assert.equal(bySource.has("/status"), true);
+  assert.equal(bySource.get("/guides.html"), bySource.get("/guides"));
+  assert.equal(bySource.get("/documentation.html"), bySource.get("/documentation"));
+  assert.equal(bySource.has("/docs.html"), true);
+  assert.equal(bySource.get("/help-center.html"), bySource.get("/help-center"));
+  assert.equal(bySource.has("/help.html"), true);
+  assert.equal(bySource.get("/contact-us.html"), bySource.get("/contact-us"));
+  assert.equal(bySource.has("/contact.html"), true);
+  assert.equal(bySource.get("/support-centre"), bySource.get("/help-centre"));
+  assert.equal(bySource.has("/support"), false);
+  assert.equal(bySource.has("/support-center"), true);
+  assert.equal(bySource.get("/contct"), bySource.get("/contact"));
+  assert.equal(bySource.get("/docss"), bySource.get("/docs"));
+  assert.equal(bySource.has("/docss/extra"), false);
+  assert.equal(bySource.has("/api/docs"), false);
   assert.equal(sources.has("/statuspage"), false);
   for (const path of [
     "/admin",
@@ -1300,6 +1380,13 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
     "/statuspage",
     "/gdpr.html",
     "/data-privacy",
+    "/security.html",
+    "/accessibility.html",
+    "/refund.html",
+    "/try.html",
+    "/status.html",
+    "/blog.html",
+    "/integrations.html",
   ]) {
     assert.equal(sources.has(path), false, path);
   }
@@ -1308,10 +1395,10 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
 
   const config = readRepo("next.config.ts");
   assert.match(config, /\.\.\.contactRedirects\(\)/);
-  assert.doesNotMatch(config, /\/privacy|\/terms|\/support|\/help|\/faq|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events|\/contact-sales|\/sales|\/enterprise|\/community|\/forum|\/developers|\/api-docs|\/help-center|\/knowledge-base|\/kb|\/tutorials|\/academy|\/training|\/webinars|\/videos|\/video|\/newsletter|\/podcast|\/media-kit|\/media|\/press-kit|\/brand|\/talk-to-sales|\/sales-contact|\/helpdesk|\/submit-ticket|\/ticket|\/feedback|\/report-bug|\/bug-report|\/feature-request|\/ideas|\/community-forum|\/contact\/support|\/support\/contact|\/developer|\/api-reference|\/status-page|\/system-status|\/uptime|\/contactus|\/get-in-touch|\/reach-us|\/customer-support|\/customer-service|\/knowledgebase|\/faqs|\/how-to|\/documentation|\/manual|\/billing-help|\/whats-new|\/contact-form|\/contact-us-form|\/support-ticket|\/help-desk|\/helpdesk-support|\/customer-care|\/care-center|\/ask-us|\/ask(?![A-Za-z0-9_-])|\/talk-to-us|\/message-us|\/write-us|\/email-us|\/call-us|\/knowledge(?!-|b)|\/service-desk|\/faq-page|\/common-questions|\/troubleshooting|\/fix-it|\/howto|\/blog-posts|\/press-release|\/newsroom|\/updates|\/api-status|\/contact-support|\/get-support|\/tech-support|\/technical-support|\/sales-team|\/sales-inquiry|\/support-home|\/client-support|\/api-docs-page|\/developer-docs|\/help-center-home|\/brand-assets|\/kb-home|\/knowledge-base-home|\/faq-center|\/brand-guidelines|\/media-assets|\/faq-help|\/learn|\/feedback-form|\/sdk|\/suport|\/hepl|\/fqa|\/documenation|\/knowlege-base|\/helpcentre|\/helpcenter|\/whatsnew|\/frequently-asked-questions|\/release-notes|\/get-help|\/user-guide|\/user-manual|\/support-page|\/contact-page|\/help-page|\/docs-page|\/knowledge-center|\/press-room|\/brand-kit|\/forums|\/feature-requests|\/podcasts|\/case-study|\/troubleshoot|\/reach-out|\/api-documentation|\/changelog-page|\/blog-page|\/faq-home|\/report-issue|\/testimonials-page|\/suppport|\/frequentlyaskedquestions|\/getting-help|\/help-and-support|\/help-centre|\/support\.html|\/help\.html|\/faq\.html|\/contact\.html/);
+  assert.doesNotMatch(config, /\/privacy|\/terms|\/support|\/help|\/faq|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events|\/contact-sales|\/sales|\/enterprise|\/community|\/forum|\/developers|\/api-docs|\/help-center|\/knowledge-base|\/kb|\/tutorials|\/academy|\/training|\/webinars|\/videos|\/video|\/newsletter|\/podcast|\/media-kit|\/media|\/press-kit|\/brand|\/talk-to-sales|\/sales-contact|\/helpdesk|\/submit-ticket|\/ticket|\/feedback|\/report-bug|\/bug-report|\/feature-request|\/ideas|\/community-forum|\/contact\/support|\/support\/contact|\/developer|\/api-reference|\/status-page|\/system-status|\/uptime|\/contactus|\/get-in-touch|\/reach-us|\/customer-support|\/customer-service|\/knowledgebase|\/faqs|\/how-to|\/documentation|\/manual|\/billing-help|\/whats-new|\/contact-form|\/contact-us-form|\/support-ticket|\/help-desk|\/helpdesk-support|\/customer-care|\/care-center|\/ask-us|\/ask(?![A-Za-z0-9_-])|\/talk-to-us|\/message-us|\/write-us|\/email-us|\/call-us|\/knowledge(?!-|b)|\/service-desk|\/faq-page|\/common-questions|\/troubleshooting|\/fix-it|\/howto|\/blog-posts|\/press-release|\/newsroom|\/updates|\/api-status|\/contact-support|\/get-support|\/tech-support|\/technical-support|\/sales-team|\/sales-inquiry|\/support-home|\/client-support|\/api-docs-page|\/developer-docs|\/help-center-home|\/brand-assets|\/kb-home|\/knowledge-base-home|\/faq-center|\/brand-guidelines|\/media-assets|\/faq-help|\/learn|\/feedback-form|\/sdk|\/suport|\/hepl|\/fqa|\/documenation|\/knowlege-base|\/helpcentre|\/helpcenter|\/whatsnew|\/frequently-asked-questions|\/release-notes|\/get-help|\/user-guide|\/user-manual|\/support-page|\/contact-page|\/help-page|\/docs-page|\/knowledge-center|\/press-room|\/brand-kit|\/forums|\/feature-requests|\/podcasts|\/case-study|\/troubleshoot|\/reach-out|\/api-documentation|\/changelog-page|\/blog-page|\/faq-home|\/report-issue|\/testimonials-page|\/suppport|\/frequentlyaskedquestions|\/getting-help|\/help-and-support|\/help-centre|\/support\.html|\/help\.html|\/faq\.html|\/contact\.html|\/docs\.html|\/blog\.html|\/status\.html|\/guides\.html|\/documentation\.html|\/help-center\.html|\/contact-us\.html|\/support-centre|\/contct|\/docss/);
 
   const proxy = readRepo("proxy.ts");
-  assert.doesNotMatch(proxy, /\/contact|\/help|\/faq|\/contact-us|\/support-center|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events|\/contact-sales|\/sales|\/enterprise|\/community|\/forum|\/developers|\/api-docs|\/help-center|\/knowledge-base|\/kb|\/tutorials|\/academy|\/training|\/webinars|\/videos|\/video|\/newsletter|\/podcast|\/media-kit|\/media|\/press-kit|\/brand|\/talk-to-sales|\/sales-contact|\/helpdesk|\/submit-ticket|\/ticket|\/feedback|\/report-bug|\/bug-report|\/feature-request|\/ideas|\/community-forum|\/contact\/support|\/support\/contact|\/developer|\/api-reference|\/status-page|\/system-status|\/uptime|\/contactus|\/get-in-touch|\/reach-us|\/customer-support|\/customer-service|\/knowledgebase|\/faqs|\/how-to|\/documentation|\/manual|\/billing-help|\/whats-new|\/contact-form|\/contact-us-form|\/support-ticket|\/help-desk|\/helpdesk-support|\/customer-care|\/care-center|\/ask-us|\/ask(?![A-Za-z0-9_-])|\/talk-to-us|\/message-us|\/write-us|\/email-us|\/call-us|\/knowledge(?!-|b)|\/service-desk|\/faq-page|\/common-questions|\/troubleshooting|\/fix-it|\/howto|\/blog-posts|\/press-release|\/newsroom|\/updates|\/api-status|\/contact-support|\/get-support|\/tech-support|\/technical-support|\/sales-team|\/sales-inquiry|\/support-home|\/client-support|\/api-docs-page|\/developer-docs|\/help-center-home|\/brand-assets|\/kb-home|\/knowledge-base-home|\/faq-center|\/brand-guidelines|\/media-assets|\/faq-help|\/learn|\/feedback-form|\/sdk|\/suport|\/hepl|\/fqa|\/documenation|\/knowlege-base|\/helpcentre|\/helpcenter|\/whatsnew|\/frequently-asked-questions|\/release-notes|\/get-help|\/user-guide|\/user-manual|\/support-page|\/contact-page|\/help-page|\/docs-page|\/knowledge-center|\/press-room|\/brand-kit|\/forums|\/feature-requests|\/podcasts|\/case-study|\/troubleshoot|\/reach-out|\/api-documentation|\/changelog-page|\/blog-page|\/faq-home|\/report-issue|\/testimonials-page|\/suppport|\/frequentlyaskedquestions|\/getting-help|\/help-and-support|\/help-centre|\/support\.html|\/help\.html|\/faq\.html|\/contact\.html/);
+  assert.doesNotMatch(proxy, /\/contact|\/help|\/faq|\/contact-us|\/support-center|\/docs|\/status|\/blog|\/changelog|\/news|\/press|\/roadmap|\/guides|\/resources|\/case-studies|\/testimonials|\/webinar|\/events|\/contact-sales|\/sales|\/enterprise|\/community|\/forum|\/developers|\/api-docs|\/help-center|\/knowledge-base|\/kb|\/tutorials|\/academy|\/training|\/webinars|\/videos|\/video|\/newsletter|\/podcast|\/media-kit|\/media|\/press-kit|\/brand|\/talk-to-sales|\/sales-contact|\/helpdesk|\/submit-ticket|\/ticket|\/feedback|\/report-bug|\/bug-report|\/feature-request|\/ideas|\/community-forum|\/contact\/support|\/support\/contact|\/developer|\/api-reference|\/status-page|\/system-status|\/uptime|\/contactus|\/get-in-touch|\/reach-us|\/customer-support|\/customer-service|\/knowledgebase|\/faqs|\/how-to|\/documentation|\/manual|\/billing-help|\/whats-new|\/contact-form|\/contact-us-form|\/support-ticket|\/help-desk|\/helpdesk-support|\/customer-care|\/care-center|\/ask-us|\/ask(?![A-Za-z0-9_-])|\/talk-to-us|\/message-us|\/write-us|\/email-us|\/call-us|\/knowledge(?!-|b)|\/service-desk|\/faq-page|\/common-questions|\/troubleshooting|\/fix-it|\/howto|\/blog-posts|\/press-release|\/newsroom|\/updates|\/api-status|\/contact-support|\/get-support|\/tech-support|\/technical-support|\/sales-team|\/sales-inquiry|\/support-home|\/client-support|\/api-docs-page|\/developer-docs|\/help-center-home|\/brand-assets|\/kb-home|\/knowledge-base-home|\/faq-center|\/brand-guidelines|\/media-assets|\/faq-help|\/learn|\/feedback-form|\/sdk|\/suport|\/hepl|\/fqa|\/documenation|\/knowlege-base|\/helpcentre|\/helpcenter|\/whatsnew|\/frequently-asked-questions|\/release-notes|\/get-help|\/user-guide|\/user-manual|\/support-page|\/contact-page|\/help-page|\/docs-page|\/knowledge-center|\/press-room|\/brand-kit|\/forums|\/feature-requests|\/podcasts|\/case-study|\/troubleshoot|\/reach-out|\/api-documentation|\/changelog-page|\/blog-page|\/faq-home|\/report-issue|\/testimonials-page|\/suppport|\/frequentlyaskedquestions|\/getting-help|\/help-and-support|\/help-centre|\/support\.html|\/help\.html|\/faq\.html|\/contact\.html|\/docs\.html|\/blog\.html|\/status\.html|\/guides\.html|\/documentation\.html|\/help-center\.html|\/contact-us\.html|\/support-centre|\/contct|\/docss/);
   assert.doesNotMatch(proxy, /redirect/);
 
   assert.ok(PUBLIC_PAGE_PATHS.includes("/support"));
@@ -1776,6 +1863,16 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
     "frequentlyaskedquestions",
     "getting-help",
     "help-and-support",
+    "docs.html",
+    "blog.html",
+    "status.html",
+    "guides.html",
+    "documentation.html",
+    "help-center.html",
+    "contact-us.html",
+    "support-centre",
+    "contct",
+    "docss",
   ]) {
     for (const page of [
       `app/${name}/page.tsx`,
