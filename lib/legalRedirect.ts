@@ -104,6 +104,21 @@
  * /privacy.htm does not match /privacy or /privacy.html. /cookie.html does
  * not match /cookie, /cookies, or /cookies.html. /privcy does not match
  * /privacy or /privacy.htm.
+ * /termsandconditions.html, /terms-of-use.html, /termss, /legal.htm, and
+ * /eula.htm move to the terms page. /privacy-notice.html, /privacypolcy,
+ * /privacy-policy.htm, /privay, /privecy, and /cookie-policy.htm move to
+ * the privacy page. /termsandconditions.html does not match
+ * /termsandconditions or /terms.html. /terms-of-use.html does not match
+ * /terms-of-use or /terms.html. /termss does not match /terms.
+ * /legal.htm does not match /legal or /legal.html. /eula.htm does not
+ * match /eula or /eula.html. /privacy-notice.html does not match
+ * /privacy-notice or /privacy.html. /privacypolcy does not match
+ * /privacypolicy or /privacy. /privacy-policy.htm does not match
+ * /privacy-policy, /privacy-policy.html, or /privacy.htm. /privay and
+ * /privecy do not match /privacy, /privcy, or each other.
+ * /cookie-policy.htm does not match /cookie-policy, /cookie-policy.html,
+ * or /cookie.html. /ccpa.html stays off this list. /ccpa.html does not
+ * match /ccpa.
  * /refund.html, /accessibility.html, /security.html, /gdpr.html,
  * /data-privacy, /gdpr-notice, /cpra, and /report-vulnerability stay off
  * this list. /refund.html does not match /refund or /refunds.
@@ -183,6 +198,11 @@ export function legalRedirects(): Array<{
       "/terms-of-services",
       "/terms.htm",
       "/tos.htm",
+      "/termsandconditions.html",
+      "/terms-of-use.html",
+      "/termss",
+      "/legal.htm",
+      "/eula.htm",
     ].map((source) => ({
       source,
       destination: TERMS_HREF,
@@ -248,6 +268,12 @@ export function legalRedirects(): Array<{
       "/privacy.htm",
       "/cookie.html",
       "/privcy",
+      "/privacy-notice.html",
+      "/privacypolcy",
+      "/privacy-policy.htm",
+      "/privay",
+      "/privecy",
+      "/cookie-policy.htm",
     ].map((source) => ({
       source,
       destination: PRIVACY_HREF,
