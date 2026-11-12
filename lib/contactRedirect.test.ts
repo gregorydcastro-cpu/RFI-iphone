@@ -937,6 +937,16 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
       destination: "/support",
       permanent: true,
     },
+    {
+      source: "/resource-center",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/docs/getting-started",
+      destination: "/support",
+      permanent: true,
+    },
   ]);
   const sources = new Set(contactRedirects().map((redirect) => redirect.source));
   for (const redirect of contactRedirects()) {
@@ -947,7 +957,9 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
     const nested = redirect.source.slice(1).includes("/");
     if (nested) {
       assert.ok(
-        redirect.source === "/contact/support" || redirect.source === "/support/contact",
+        redirect.source === "/contact/support" ||
+          redirect.source === "/support/contact" ||
+          redirect.source === "/docs/getting-started",
         redirect.source,
       );
     }
@@ -2085,4 +2097,31 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
       assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
     }
   }
+});
+
+test("resource and docs carry-over paths permanently move straight to /support (308)", () => {
+  const bySource = new Map(contactRedirects().map((redirect) => [redirect.source, redirect.destination]));
+  for (const source of ["/resource-center", "/docs/getting-started"]) {
+    const redirect = contactRedirects().find((item) => item.source === source);
+    assert.equal(redirect?.destination, "/support", source);
+    assert.equal(redirect?.permanent, true, source);
+    assert.equal(redirect?.permanent ? 308 : 307, 308, source);
+    assert.equal(bySource.has(`${source}/extra`), false, source);
+    assert.equal(bySource.has(`${source}/`), false, source);
+  }
+  assert.equal(bySource.get("/docs/getting-started"), bySource.get("/docs"));
+  assert.equal(bySource.has("/docs"), true);
+  assert.equal(bySource.has("/docs/extra"), false);
+  assert.equal(bySource.get("/resource-center"), bySource.get("/resources"));
+  assert.equal(bySource.has("/feed"), false);
+  assert.equal(bySource.has("/rss"), false);
+  assert.equal(bySource.has("/rss.xml"), false);
+  assert.equal(bySource.has("/atom.xml"), false);
+  assert.equal(bySource.has("/articles"), false);
+  assert.equal(bySource.has("/product-updates"), false);
+  assert.equal(bySource.has("/customer-stories"), false);
+  assert.equal(bySource.has("/support/faq"), false);
+  assert.equal(bySource.has("/api/docs"), false);
+  const config = readRepo("next.config.ts");
+  assert.doesNotMatch(config, /\/resource-center|\/docs\/getting-started/);
 });

@@ -173,6 +173,17 @@ export function fieldNotFoundSpeak(variant: FieldNotFoundVariant): string {
  * or /signinn. /trial.html and /free-trial.html stay off this list.
  * /trial.html does not match /trial. /free-trial.html does not match
  * /free-trial.
+ * /auth/login, /auth/signin, /auth/sign-in, /auth/signup, /auth/sign-up,
+ * /users/sign_in, /users/sign_up, /users/login, and /account/login use
+ * that same hop as their own exact paths. A slash does not fit the
+ * one-segment alias, so each is its own source. /auth/login does not
+ * match /login, /auth, or /auth/callback. /auth/signin does not match
+ * /signin or /auth/sign-in. /auth/sign-in does not match /sign-in.
+ * /auth/signup does not match /signup or /auth/sign-up. /auth/sign-up
+ * does not match /sign-up. /users/sign_in does not match /sign_in or
+ * /users/login. /users/sign_up does not match /sign_up or /users/sign_in.
+ * /users/login does not match /login. /account/login does not match
+ * /account, /login, or /account/settings.
  * Next matches this source without case
  * sensitivity and allows one trailing slash. Query values pass through
  * to `/`. permanent: false is the same temporary 307 as /login and /signup.
@@ -180,8 +191,21 @@ export function fieldNotFoundSpeak(variant: FieldNotFoundVariant): string {
 export const SIGN_IN_ALIAS_SOURCE =
   "/:alias(login\\.html|login|log-in|signin\\.html|signin|singin|sign-in-now|sign_in|sign-in|signup\\.html|signup-page|signup-now|signup|sign-up-page|sign-up-now|sign-up\\.html|sign-up|register|join|create-account-page|create-account|createaccount|get-started-free|get-started|gettingstarted|getstarted|start|trial|free-trial|onboarding|onboard|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone-app|iphone|ipad|app-store-link|free|sign-up-free|free-account|signup-free|welcome-back|welcome|web-app|beta|waitlist|early-access|register-now|join-now|login-page|signin-page|download-app|get-the-app|ios-app|getting-started|start-here|sign-in-page|log-in-page|create-an-account|register-account|open-account|new-account|start-free|ios-download|get-app|mobile-download|appstore|login-help|recover|account-recovery|download-ios|app-download|logon|signon|install-app|install|thank-you|thanks|success|cancel|registration|create-your-account|login-form|sign-up-form|sign_up\\.html|sign_up|log_in|sigup|singup|create_account|get_started|register\\.html|registration\\.html|regester|create-account\\.html|log-in\\.html|loginn|sign-in\\.html|sing-up|regsiter|creataccount|new-account\\.html|log_in\\.html|sign_in\\.html|signinn|sigin)";
 
+/** Exact auth paths. A slash cannot sit inside the one-segment alias. */
+export const SIGN_IN_EXACT_SOURCES = [
+  "/auth/login",
+  "/auth/signin",
+  "/auth/sign-in",
+  "/auth/signup",
+  "/auth/sign-up",
+  "/users/sign_in",
+  "/users/sign_up",
+  "/users/login",
+  "/account/login",
+] as const;
+
 const SIGN_IN_ALIAS_PATH =
-  /^\/(?:login\.html|login|log-in|signin\.html|signin|singin|sign-in-now|sign_in|sign-in|signup\.html|signup-page|signup-now|signup|sign-up-page|sign-up-now|sign-up\.html|sign-up|register|join|create-account-page|create-account|createaccount|get-started-free|get-started|gettingstarted|getstarted|start|trial|free-trial|onboarding|onboard|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone-app|iphone|ipad|app-store-link|free|sign-up-free|free-account|signup-free|welcome-back|welcome|web-app|beta|waitlist|early-access|register-now|join-now|login-page|signin-page|download-app|get-the-app|ios-app|getting-started|start-here|sign-in-page|log-in-page|create-an-account|register-account|open-account|new-account|start-free|ios-download|get-app|mobile-download|appstore|login-help|recover|account-recovery|download-ios|app-download|logon|signon|install-app|install|thank-you|thanks|success|cancel|registration|create-your-account|login-form|sign-up-form|sign_up\.html|sign_up|log_in|sigup|singup|create_account|get_started|register\.html|registration\.html|regester|create-account\.html|log-in\.html|loginn|sign-in\.html|sing-up|regsiter|creataccount|new-account\.html|log_in\.html|sign_in\.html|signinn|sigin)\/?$/i;
+  /^\/(?:login\.html|login|log-in|signin\.html|signin|singin|sign-in-now|sign_in|sign-in|signup\.html|signup-page|signup-now|signup|sign-up-page|sign-up-now|sign-up\.html|sign-up|register|join|create-account-page|create-account|createaccount|get-started-free|get-started|gettingstarted|getstarted|start|trial|free-trial|onboarding|onboard|download|ios|app-store|android|how-it-works|tour|mobile|web|apps|mobile-app|iphone-app|iphone|ipad|app-store-link|free|sign-up-free|free-account|signup-free|welcome-back|welcome|web-app|beta|waitlist|early-access|register-now|join-now|login-page|signin-page|download-app|get-the-app|ios-app|getting-started|start-here|sign-in-page|log-in-page|create-an-account|register-account|open-account|new-account|start-free|ios-download|get-app|mobile-download|appstore|login-help|recover|account-recovery|download-ios|app-download|logon|signon|install-app|install|thank-you|thanks|success|cancel|registration|create-your-account|login-form|sign-up-form|sign_up\.html|sign_up|log_in|sigup|singup|create_account|get_started|register\.html|registration\.html|regester|create-account\.html|log-in\.html|loginn|sign-in\.html|sing-up|regsiter|creataccount|new-account\.html|log_in\.html|sign_in\.html|signinn|sigin|auth\/login|auth\/signin|auth\/sign-in|auth\/signup|auth\/sign-up|users\/sign_in|users\/sign_up|users\/login|account\/login)\/?$/i;
 
 /**
  * Demo booking aliases have no page. Each name is one exact path segment
@@ -242,6 +266,8 @@ const SIGN_IN_ALIAS_PATH =
  * /live-demo.html does not match /live-demo. /demos.html does not match
  * /demos or /demo.html. /maple_point_demo does not match
  * /maple-point-demo, /maplepoint-demo, or /pack/maple-point.
+ * /maple-point and /maplepoint stay off this list. /maple-point does
+ * not match /maple-point-demo or /pack/maple-point.
  * Next matches this source without case sensitivity and allows one
  * trailing slash. Query values pass through. permanent: false is HTTP 307.
  */
@@ -262,6 +288,11 @@ export function signInAliasRedirects(): Array<{
       destination: HOME_HREF,
       permanent: false,
     },
+    ...SIGN_IN_EXACT_SOURCES.map((source) => ({
+      source,
+      destination: HOME_HREF,
+      permanent: false,
+    })),
   ];
 }
 

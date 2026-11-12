@@ -130,6 +130,13 @@
  * or /cookie.html. /cookeis and /cookes do not match /cookies, /cookie,
  * or each other. /privcy.html does not match /privcy, /privacy.html, or
  * /privacy.
+ * /policies/terms moves to the terms page. /policies/privacy and
+ * /policies/cookies move to the privacy page.
+ * /policies/terms does not match /terms or /legal/terms.
+ * /policies/privacy does not match /privacy, /privacy-policy, or
+ * /legal/privacy. /policies/cookies does not match /cookies, /cookie, or
+ * /legal/cookies. /california-privacy and /policies stay off this list.
+ * /california-privacy does not match /ccpa or /privacy.
  * /refund.html, /accessibility.html, /security.html, /gdpr.html,
  * /data-privacy, /gdpr-notice, /cpra, and /report-vulnerability stay off
  * this list. /refund.html does not match /refund or /refunds.
@@ -216,6 +223,7 @@ export function legalRedirects(): Array<{
       "/eula.htm",
       "/user-agreement.html",
       "/termz",
+      "/policies/terms",
     ].map((source) => ({
       source,
       destination: TERMS_HREF,
@@ -293,6 +301,8 @@ export function legalRedirects(): Array<{
       "/cookeis",
       "/cookes",
       "/privcy.html",
+      "/policies/privacy",
+      "/policies/cookies",
     ].map((source) => ({
       source,
       destination: PRIVACY_HREF,

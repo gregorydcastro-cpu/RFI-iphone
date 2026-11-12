@@ -194,6 +194,20 @@
  * /acount.html does not match /acount or /account.html.
  * /googlesitemap moves straight to /sitemap.xml. /googlesitemap does not
  * match /google-sitemap or /sitemap. /sitemap.xml itself is not a source.
+ * /pricing/plans shares the destination /pricing already uses.
+ * /pricing/plans does not match /pricing, /plans, or /pricing-plans.
+ * /crew-plan stays off this list. /old-home shares the destination /
+ * already uses. /old-home does not match /home or /home-page.
+ * /people, /join-us, /forgotpassword, and /resetpassword stay off this
+ * list. /people does not match /team. /join-us does not match /join.
+ * /forgotpassword does not match /forgot-password. /resetpassword does
+ * not match /reset-password.
+ * /edit-profile shares the destination /account already uses.
+ * /edit-profile does not match /profile or /my-profile.
+ * /wp-sitemap.xml, /page-sitemap.xml, and /post-sitemap.xml move straight
+ * to /sitemap.xml. /wp-sitemap.xml does not match /sitemap or
+ * /sitemap.xml. /page-sitemap.xml and /post-sitemap.xml do not match
+ * /sitemap.xml or each other. /sitemap.xml itself is not a source.
  */
 
 const HOME_HREF = "/";
@@ -210,7 +224,7 @@ export function retiredRedirects(): Array<{
   permanent: boolean;
 }> {
   return [
-    ...["/settings", "/profile", "/me", "/account/settings", "/settings/profile", "/account-settings", "/team-members", "/my-account", "/your-account", "/account-page", "/my-profile", "/user-profile", "/manage-account", "/account.html", "/profile.html", "/settings.html", "/myaccount", "/user-account", "/account/profile", "/acount", "/my_account", "/setings", "/my-account.html", "/acccount", "/accout", "/accountsettings", "/settigns", "/myprofile", "/userprofile", "/proflie", "/user-account.html", "/manage-account.html", "/acount.html"].map((source) => ({
+    ...["/settings", "/profile", "/me", "/account/settings", "/settings/profile", "/account-settings", "/team-members", "/my-account", "/your-account", "/account-page", "/my-profile", "/user-profile", "/manage-account", "/account.html", "/profile.html", "/settings.html", "/myaccount", "/user-account", "/account/profile", "/acount", "/my_account", "/setings", "/my-account.html", "/acccount", "/accout", "/accountsettings", "/settigns", "/myprofile", "/userprofile", "/proflie", "/user-account.html", "/manage-account.html", "/acount.html", "/edit-profile"].map((source) => ({
       source,
       destination: ACCOUNT_HREF,
       permanent: true,
@@ -292,6 +306,7 @@ export function retiredRedirects(): Array<{
       "/solutons",
       "/soulutions",
       "/pricng.html",
+      "/pricing/plans",
     ].map((source) => ({
       source,
       destination: PRICING_HREF,
@@ -382,6 +397,7 @@ export function retiredRedirects(): Array<{
       "/who-we-are.html",
       "/whoweare.html",
       "/our-story.html",
+      "/old-home",
     ].map((source) => ({
       source,
       destination: HOME_HREF,
@@ -397,7 +413,7 @@ export function retiredRedirects(): Array<{
       destination: MANIFEST_HREF,
       permanent: true,
     })),
-    ...["/sitemap", "/site-map", "/sitemap-xml", "/xml-sitemap", "/map", "/html-sitemap", "/xml-map", "/sitemap-html", "/site_map", "/sitemap-index", "/sitemaps", "/sitemap.txt", "/sitemap-index.xml", "/sitemap.html", "/site-map.html", "/site-map.xml", "/sitemap_index.xml", "/sitemap.xml.gz", "/google-sitemap", "/sitemap.htm", "/sitemapxml", "/site_map.html", "/sitemaps.html", "/sitemap_xml", "/xmlsitemap", "/googlesitemap"].map((source) => ({
+    ...["/sitemap", "/site-map", "/sitemap-xml", "/xml-sitemap", "/map", "/html-sitemap", "/xml-map", "/sitemap-html", "/site_map", "/sitemap-index", "/sitemaps", "/sitemap.txt", "/sitemap-index.xml", "/sitemap.html", "/site-map.html", "/site-map.xml", "/sitemap_index.xml", "/sitemap.xml.gz", "/google-sitemap", "/sitemap.htm", "/sitemapxml", "/site_map.html", "/sitemaps.html", "/sitemap_xml", "/xmlsitemap", "/googlesitemap", "/wp-sitemap.xml", "/page-sitemap.xml", "/post-sitemap.xml"].map((source) => ({
       source,
       destination: SITEMAP_HREF,
       permanent: true,

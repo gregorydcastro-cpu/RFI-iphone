@@ -185,6 +185,11 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
       permanent: true,
     },
     {
+      source: "/edit-profile",
+      destination: "/account",
+      permanent: true,
+    },
+    {
       source: "/dashboard",
       destination: "/jobs",
       permanent: true,
@@ -558,6 +563,11 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     },
     {
       source: "/pricng.html",
+      destination: "/pricing",
+      permanent: true,
+    },
+    {
+      source: "/pricing/plans",
       destination: "/pricing",
       permanent: true,
     },
@@ -984,6 +994,11 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
       permanent: true,
     },
     {
+      source: "/old-home",
+      destination: "/",
+      permanent: true,
+    },
+    {
       source: "/security.txt",
       destination: "/.well-known/security.txt",
       permanent: true,
@@ -1127,6 +1142,21 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     },
     {
       source: "/googlesitemap",
+      destination: "/sitemap.xml",
+      permanent: true,
+    },
+    {
+      source: "/wp-sitemap.xml",
+      destination: "/sitemap.xml",
+      permanent: true,
+    },
+    {
+      source: "/page-sitemap.xml",
+      destination: "/sitemap.xml",
+      permanent: true,
+    },
+    {
+      source: "/post-sitemap.xml",
       destination: "/sitemap.xml",
       permanent: true,
     },
@@ -2378,6 +2408,25 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/leadership.html",
     "/founders.html",
     "/index",
+    "/manaul.html",
+    "/guids.html",
+    "/featues.html",
+    "/regsiter.html",
+    "/supportcentre/extra",
+    "/feed",
+    "/rss",
+    "/rss.xml",
+    "/atom.xml",
+    "/articles",
+    "/product-updates",
+    "/customer-stories",
+    "/california-privacy",
+    "/crew-plan",
+    "/people",
+    "/join-us",
+    "/maple-point",
+    "/forgotpassword",
+    "/resetpassword",
   ];
   for (const path of stay404) {
     assert.equal(everySource.has(path), false, path);
@@ -3342,4 +3391,50 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
   }
   assert.equal(existsSync(new URL("../app/jobs/page.tsx", import.meta.url)), true);
   assert.equal(existsSync(new URL("../app/sitemap.ts", import.meta.url)), true);
+});
+
+test("carry-over pricing, home, account, and sitemap paths permanently move in one hop (308)", () => {
+  const bySource = new Map(retiredRedirects().map((redirect) => [redirect.source, redirect.destination]));
+  for (const [source, destination] of [
+    ["/pricing/plans", "/pricing"],
+    ["/old-home", "/"],
+    ["/edit-profile", "/account"],
+    ["/wp-sitemap.xml", "/sitemap.xml"],
+    ["/page-sitemap.xml", "/sitemap.xml"],
+    ["/post-sitemap.xml", "/sitemap.xml"],
+  ] as const) {
+    const redirect = retiredRedirects().find((item) => item.source === source);
+    assert.equal(redirect?.destination, destination, source);
+    assert.equal(redirect?.permanent, true, source);
+    assert.equal(redirect?.permanent ? 308 : 307, 308, source);
+    assert.equal(bySource.has(`${source}/extra`), false, source);
+    assert.equal(signInAliasDestination(source), null, source);
+    assert.equal(demoAliasDestination(source), null, source);
+  }
+  assert.equal(bySource.get("/pricing/plans"), bySource.get("/plans"));
+  assert.equal(bySource.has("/pricing"), false);
+  assert.equal(bySource.has("/plans"), true);
+  assert.equal(bySource.has("/crew-plan"), false);
+  assert.equal(bySource.has("/enterprise-plan"), true);
+  assert.equal(bySource.has("/people"), false);
+  assert.equal(bySource.has("/join-us"), false);
+  assert.equal(bySource.has("/join"), false);
+  assert.equal(bySource.get("/old-home"), bySource.get("/home"));
+  assert.equal(bySource.has("/forgotpassword"), false);
+  assert.equal(bySource.has("/resetpassword"), false);
+  assert.equal(bySource.get("/edit-profile"), bySource.get("/profile"));
+  assert.equal(bySource.has("/account"), false);
+  assert.equal(bySource.get("/wp-sitemap.xml"), bySource.get("/sitemap"));
+  assert.equal(bySource.has("/sitemap.xml"), false);
+  assert.equal(bySource.get("/page-sitemap.xml"), bySource.get("/sitemap"));
+  assert.equal(bySource.get("/post-sitemap.xml"), bySource.get("/sitemap"));
+  assert.equal(signInAliasDestination("/join-us"), null);
+  assert.equal(signInAliasDestination("/join"), "/");
+  assert.equal(signInAliasDestination("/forgotpassword"), null);
+  assert.equal(signInAliasDestination("/resetpassword"), null);
+  const config = readRepo("next.config.ts");
+  assert.doesNotMatch(
+    config,
+    /\/pricing\/plans|\/edit-profile|\/wp-sitemap\.xml|\/page-sitemap\.xml|\/post-sitemap\.xml|\/old-home/,
+  );
 });
