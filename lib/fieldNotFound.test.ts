@@ -1404,7 +1404,7 @@ test("/book-demo, /request-demo, /schedule-demo, /get-demo, /demo-video, /book-a
   ]);
   assert.equal(
     DEMO_ALIAS_SOURCE,
-    "/:alias(bookdemo\\.html|bookdemo|book-demo\\.html|book-demo|request-a-demo|request-demo\\.html|request-demo|schedule-demo|get-a-demo|get-demo|demo\\.html|demos|maple-point-demo|demo-video|watch-a-demo|watch-demo|book-a-demo|try-demo|try|try-free|freetrial|request-quote|try-it-free|try-it|demo-now|schedule-a-demo|schedule|book-demo-now|see-a-demo|see-demo|see-it-in-action|product-demo|live-demo|interactive-demo|book-your-demo|free-demo|try-now|demo-request|book_demo|book-a-demo\\.html|request-a-demo\\.html|request_demo|maplepoint-demo|demo-request\\.html|get-a-demo\\.html|get-demo\\.html|schedule-demo\\.html|watch-a-demo\\.html|watch-demo\\.html|see-demo\\.html|live-demo\\.html|demos\\.html|maple_point_demo|maple-point)",
+    "/:alias(bookdemo\\.html|bookdemo|book-demo\\.html|book-demo|request-a-demo|request-demo\\.html|request-demo|schedule-demo|get-a-demo|get-demo|demo\\.html|demos|maple-point-demo|demo-video|watch-a-demo|watch-demo|book-a-demo|try-demo|try|try-free|freetrial|request-quote|try-it-free|try-it|demo-now|schedule-a-demo|schedule|book-demo-now|see-a-demo|see-demo|see-it-in-action|product-demo|live-demo|interactive-demo|book-your-demo|free-demo|try-now|demo-request|book_demo|book-a-demo\\.html|request-a-demo\\.html|request_demo|maplepoint-demo|demo-request\\.html|get-a-demo\\.html|get-demo\\.html|schedule-demo\\.html|watch-a-demo\\.html|watch-demo\\.html|see-demo\\.html|live-demo\\.html|demos\\.html|maple_point_demo)",
   );
   assert.equal(demoAliasRedirects()[0]?.permanent, false);
   assert.equal(demoAliasRedirects()[0]?.permanent ? 308 : 307, 307);
@@ -1477,7 +1477,6 @@ test("/book-demo, /request-demo, /schedule-demo, /get-demo, /demo-video, /book-a
     "/live-demo.html",
     "/demos.html",
     "/maple_point_demo",
-    "/maple-point",
   ]) {
     assert.equal(demoAliasDestination(path), "/pack/maple-point", path);
     assert.equal(demoAliasDestination(`${path}/`), "/pack/maple-point", path);
@@ -2062,10 +2061,10 @@ test("auth framework paths temporarily move straight home (307) and do not shado
   assert.equal(signInAliasDestination("/account"), null);
   assert.equal(signInAliasDestination("/account/settings"), null);
   assert.equal(demoAliasDestination("/maplepoint"), null);
-  assert.equal(demoAliasDestination("/maple-point"), "/pack/maple-point");
+  assert.equal(demoAliasDestination("/maple-point"), null);
+  assert.equal(demoAliasDestination("/MAPLE-POINT/"), null);
   assert.equal(demoAliasDestination("/maple-point-demo"), "/pack/maple-point");
   assert.equal(demoAliasDestination("/pack/maple-point"), null);
-  assert.equal(demoAliasDestination("/MAPLE-POINT/"), "/pack/maple-point");
 
   const config = readRepo("next.config.ts");
   assert.doesNotMatch(

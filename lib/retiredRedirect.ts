@@ -194,15 +194,14 @@
  * /acount.html does not match /acount or /account.html.
  * /googlesitemap moves straight to /sitemap.xml. /googlesitemap does not
  * match /google-sitemap or /sitemap. /sitemap.xml itself is not a source.
- * /pricing/plans and /crew-plan share the destination /pricing already
- * uses. /pricing/plans does not match /pricing, /plans, or /pricing-plans.
- * /crew-plan does not match /plans, /enterprise-plan, or /team-plans.
- * /people, /join-us, /old-home, /forgotpassword, and /resetpassword share
- * the destination / already uses. /people does not match /team.
- * /join-us does not match /join, /join-our-team, or /join-the-team.
- * /old-home does not match /home or /home-page. /forgotpassword does not
- * match /forgot-password or /forgot. /resetpassword does not match
- * /reset-password or /reset.
+ * /pricing/plans shares the destination /pricing already uses.
+ * /pricing/plans does not match /pricing, /plans, or /pricing-plans.
+ * /crew-plan stays off this list. /old-home shares the destination /
+ * already uses. /old-home does not match /home or /home-page.
+ * /people, /join-us, /forgotpassword, and /resetpassword stay off this
+ * list. /people does not match /team. /join-us does not match /join.
+ * /forgotpassword does not match /forgot-password. /resetpassword does
+ * not match /reset-password.
  * /edit-profile shares the destination /account already uses.
  * /edit-profile does not match /profile or /my-profile.
  * /wp-sitemap.xml, /page-sitemap.xml, and /post-sitemap.xml move straight
@@ -308,7 +307,6 @@ export function retiredRedirects(): Array<{
       "/soulutions",
       "/pricng.html",
       "/pricing/plans",
-      "/crew-plan",
     ].map((source) => ({
       source,
       destination: PRICING_HREF,
@@ -399,11 +397,7 @@ export function retiredRedirects(): Array<{
       "/who-we-are.html",
       "/whoweare.html",
       "/our-story.html",
-      "/people",
-      "/join-us",
       "/old-home",
-      "/forgotpassword",
-      "/resetpassword",
     ].map((source) => ({
       source,
       destination: HOME_HREF,

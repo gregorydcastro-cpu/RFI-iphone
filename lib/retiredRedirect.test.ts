@@ -572,11 +572,6 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
       permanent: true,
     },
     {
-      source: "/crew-plan",
-      destination: "/pricing",
-      permanent: true,
-    },
-    {
       source: "/forgot-password",
       destination: "/",
       permanent: true,
@@ -999,27 +994,7 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
       permanent: true,
     },
     {
-      source: "/people",
-      destination: "/",
-      permanent: true,
-    },
-    {
-      source: "/join-us",
-      destination: "/",
-      permanent: true,
-    },
-    {
       source: "/old-home",
-      destination: "/",
-      permanent: true,
-    },
-    {
-      source: "/forgotpassword",
-      destination: "/",
-      permanent: true,
-    },
-    {
-      source: "/resetpassword",
       destination: "/",
       permanent: true,
     },
@@ -2438,6 +2413,20 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/featues.html",
     "/regsiter.html",
     "/supportcentre/extra",
+    "/feed",
+    "/rss",
+    "/rss.xml",
+    "/atom.xml",
+    "/articles",
+    "/product-updates",
+    "/customer-stories",
+    "/california-privacy",
+    "/crew-plan",
+    "/people",
+    "/join-us",
+    "/maple-point",
+    "/forgotpassword",
+    "/resetpassword",
   ];
   for (const path of stay404) {
     assert.equal(everySource.has(path), false, path);
@@ -2575,7 +2564,6 @@ test("retired aliases permanently move to account, jobs, pricing, home, security
     "/live-demo.html",
     "/demos.html",
     "/maple_point_demo",
-    "/maple-point",
   ]) {
     assert.equal(everySource.has(path), false, path);
     assert.equal(signInAliasDestination(path), null, path);
@@ -3409,12 +3397,7 @@ test("carry-over pricing, home, account, and sitemap paths permanently move in o
   const bySource = new Map(retiredRedirects().map((redirect) => [redirect.source, redirect.destination]));
   for (const [source, destination] of [
     ["/pricing/plans", "/pricing"],
-    ["/crew-plan", "/pricing"],
-    ["/people", "/"],
-    ["/join-us", "/"],
     ["/old-home", "/"],
-    ["/forgotpassword", "/"],
-    ["/resetpassword", "/"],
     ["/edit-profile", "/account"],
     ["/wp-sitemap.xml", "/sitemap.xml"],
     ["/page-sitemap.xml", "/sitemap.xml"],
@@ -3431,14 +3414,14 @@ test("carry-over pricing, home, account, and sitemap paths permanently move in o
   assert.equal(bySource.get("/pricing/plans"), bySource.get("/plans"));
   assert.equal(bySource.has("/pricing"), false);
   assert.equal(bySource.has("/plans"), true);
-  assert.equal(bySource.get("/crew-plan"), bySource.get("/plans"));
+  assert.equal(bySource.has("/crew-plan"), false);
   assert.equal(bySource.has("/enterprise-plan"), true);
-  assert.equal(bySource.get("/people"), bySource.get("/team"));
-  assert.equal(bySource.get("/join-us"), bySource.get("/careers"));
+  assert.equal(bySource.has("/people"), false);
+  assert.equal(bySource.has("/join-us"), false);
   assert.equal(bySource.has("/join"), false);
   assert.equal(bySource.get("/old-home"), bySource.get("/home"));
-  assert.equal(bySource.get("/forgotpassword"), bySource.get("/forgot-password"));
-  assert.equal(bySource.get("/resetpassword"), bySource.get("/reset-password"));
+  assert.equal(bySource.has("/forgotpassword"), false);
+  assert.equal(bySource.has("/resetpassword"), false);
   assert.equal(bySource.get("/edit-profile"), bySource.get("/profile"));
   assert.equal(bySource.has("/account"), false);
   assert.equal(bySource.get("/wp-sitemap.xml"), bySource.get("/sitemap"));
@@ -3447,9 +3430,11 @@ test("carry-over pricing, home, account, and sitemap paths permanently move in o
   assert.equal(bySource.get("/post-sitemap.xml"), bySource.get("/sitemap"));
   assert.equal(signInAliasDestination("/join-us"), null);
   assert.equal(signInAliasDestination("/join"), "/");
+  assert.equal(signInAliasDestination("/forgotpassword"), null);
+  assert.equal(signInAliasDestination("/resetpassword"), null);
   const config = readRepo("next.config.ts");
   assert.doesNotMatch(
     config,
-    /\/pricing\/plans|\/crew-plan|\/forgotpassword|\/resetpassword|\/edit-profile|\/wp-sitemap\.xml|\/page-sitemap\.xml|\/post-sitemap\.xml|\/old-home/,
+    /\/pricing\/plans|\/edit-profile|\/wp-sitemap\.xml|\/page-sitemap\.xml|\/post-sitemap\.xml|\/old-home/,
   );
 });
