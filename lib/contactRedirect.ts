@@ -139,6 +139,15 @@
  * /blog.html and /status.html stay off this list. /blog.html does not
  * match /blog. /status.html does not match /status. /statuspage stays off
  * this list.
+ * /feed, /rss, /rss.xml, /atom.xml, /customer-stories, /articles,
+ * /product-updates, /resource-center, and /docs/getting-started use that
+ * same hop. /feed, /rss, /rss.xml, and /atom.xml do not match /blog or
+ * each other. /customer-stories does not match /case-studies,
+ * /testimonials, or /customers. /articles does not match /blog.
+ * /product-updates does not match /updates, /whats-new, or /news.
+ * /resource-center does not match /resources. /docs/getting-started does
+ * not match /docs, /getting-started, or /guides. /support/faq stays off
+ * this list.
  */
 
 const SUPPORT_HREF = "/support";
@@ -334,6 +343,15 @@ export function contactRedirects(): Array<{
     "/documantation",
     "/documention",
     "/suport.html",
+    "/feed",
+    "/rss",
+    "/rss.xml",
+    "/atom.xml",
+    "/customer-stories",
+    "/articles",
+    "/product-updates",
+    "/resource-center",
+    "/docs/getting-started",
   ].map((source) => ({
     source,
     destination: SUPPORT_HREF,

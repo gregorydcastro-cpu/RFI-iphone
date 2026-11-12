@@ -348,6 +348,11 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
       permanent: true,
     },
     {
+      source: "/policies/terms",
+      destination: "/terms",
+      permanent: true,
+    },
+    {
       source: "/privacy-policy",
       destination: "/privacy",
       permanent: true,
@@ -704,6 +709,21 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
       destination: "/privacy",
       permanent: true,
     },
+    {
+      source: "/policies/privacy",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/policies/cookies",
+      destination: "/privacy",
+      permanent: true,
+    },
+    {
+      source: "/california-privacy",
+      destination: "/privacy",
+      permanent: true,
+    },
   ]);
   for (const redirect of legalRedirects()) {
     assert.equal(redirect.permanent, true);
@@ -716,7 +736,10 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
       assert.ok(
         redirect.source === "/legal/privacy" ||
           redirect.source === "/legal/terms" ||
-          redirect.source === "/legal/cookies",
+          redirect.source === "/legal/cookies" ||
+          redirect.source === "/policies/terms" ||
+          redirect.source === "/policies/privacy" ||
+          redirect.source === "/policies/cookies",
         redirect.source,
       );
     }
@@ -1693,4 +1716,31 @@ test("legal aliases permanently move to /terms or /privacy (308), including /eul
       assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
     }
   }
+});
+
+test("policy carry-over paths permanently move straight to /terms or /privacy (308)", () => {
+  const bySource = new Map(legalRedirects().map((redirect) => [redirect.source, redirect.destination]));
+  for (const [source, destination] of [
+    ["/policies/terms", "/terms"],
+    ["/policies/privacy", "/privacy"],
+    ["/policies/cookies", "/privacy"],
+    ["/california-privacy", "/privacy"],
+  ] as const) {
+    const redirect = legalRedirects().find((item) => item.source === source);
+    assert.equal(redirect?.destination, destination, source);
+    assert.equal(redirect?.permanent, true, source);
+    assert.equal(redirect?.permanent ? 308 : 307, 308, source);
+    assert.equal(bySource.has(`${source}/extra`), false, source);
+  }
+  assert.equal(bySource.get("/policies/terms"), bySource.get("/terms-of-service"));
+  assert.equal(bySource.has("/legal/terms"), true);
+  assert.equal(bySource.get("/policies/privacy"), bySource.get("/privacy-policy"));
+  assert.equal(bySource.has("/legal/privacy"), true);
+  assert.equal(bySource.get("/policies/cookies"), bySource.get("/cookies"));
+  assert.equal(bySource.has("/legal/cookies"), true);
+  assert.equal(bySource.get("/california-privacy"), bySource.get("/ccpa"));
+  assert.equal(bySource.has("/policies"), false);
+  assert.equal(bySource.has("/ccpa.html"), false);
+  const config = readRepo("next.config.ts");
+  assert.doesNotMatch(config, /\/policies\/terms|\/policies\/privacy|\/policies\/cookies|\/california-privacy/);
 });

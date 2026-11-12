@@ -937,6 +937,51 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
       destination: "/support",
       permanent: true,
     },
+    {
+      source: "/feed",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/rss",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/rss.xml",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/atom.xml",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/customer-stories",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/articles",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/product-updates",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/resource-center",
+      destination: "/support",
+      permanent: true,
+    },
+    {
+      source: "/docs/getting-started",
+      destination: "/support",
+      permanent: true,
+    },
   ]);
   const sources = new Set(contactRedirects().map((redirect) => redirect.source));
   for (const redirect of contactRedirects()) {
@@ -947,7 +992,9 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
     const nested = redirect.source.slice(1).includes("/");
     if (nested) {
       assert.ok(
-        redirect.source === "/contact/support" || redirect.source === "/support/contact",
+        redirect.source === "/contact/support" ||
+          redirect.source === "/support/contact" ||
+          redirect.source === "/docs/getting-started",
         redirect.source,
       );
     }
@@ -2085,4 +2132,42 @@ test("/contact, /help, /faq, /contact-us, /support-center, /docs, /status, /blog
       assert.equal(existsSync(new URL(`../${page}`, import.meta.url)), false, page);
     }
   }
+});
+
+test("WordPress and marketing carry-over paths permanently move straight to /support (308)", () => {
+  const bySource = new Map(contactRedirects().map((redirect) => [redirect.source, redirect.destination]));
+  for (const source of [
+    "/feed",
+    "/rss",
+    "/rss.xml",
+    "/atom.xml",
+    "/customer-stories",
+    "/articles",
+    "/product-updates",
+    "/resource-center",
+    "/docs/getting-started",
+  ]) {
+    const redirect = contactRedirects().find((item) => item.source === source);
+    assert.equal(redirect?.destination, "/support", source);
+    assert.equal(redirect?.permanent, true, source);
+    assert.equal(redirect?.permanent ? 308 : 307, 308, source);
+    assert.equal(bySource.has(`${source}/extra`), false, source);
+    assert.equal(bySource.has(`${source}/`), false, source);
+  }
+  assert.equal(bySource.get("/docs/getting-started"), bySource.get("/docs"));
+  assert.equal(bySource.has("/docs"), true);
+  assert.equal(bySource.has("/docs/extra"), false);
+  assert.equal(bySource.get("/feed"), bySource.get("/blog"));
+  assert.equal(bySource.has("/blog"), true);
+  assert.equal(bySource.get("/customer-stories"), bySource.get("/case-studies"));
+  assert.equal(bySource.get("/articles"), bySource.get("/blog"));
+  assert.equal(bySource.get("/product-updates"), bySource.get("/whats-new"));
+  assert.equal(bySource.get("/resource-center"), bySource.get("/resources"));
+  assert.equal(bySource.has("/support/faq"), false);
+  assert.equal(bySource.has("/api/docs"), false);
+  const config = readRepo("next.config.ts");
+  assert.doesNotMatch(
+    config,
+    /\/feed|\/rss\.xml|\/atom\.xml|\/customer-stories|\/product-updates|\/resource-center|\/docs\/getting-started/,
+  );
 });

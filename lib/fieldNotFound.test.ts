@@ -19,6 +19,7 @@ import {
   SHEETS_SECTION,
   DEMO_ALIAS_SOURCE,
   SIGN_IN_ALIAS_SOURCE,
+  SIGN_IN_EXACT_SOURCES,
   demoAliasDestination,
   demoAliasRedirects,
   fieldNotFoundCopy,
@@ -291,6 +292,11 @@ test("sign-in aliases, /join, /create-account, /get-started, /start, /trial, /fr
       destination: "/",
       permanent: false,
     },
+    ...SIGN_IN_EXACT_SOURCES.map((source) => ({
+      source,
+      destination: "/",
+      permanent: false,
+    })),
   ]);
   assert.equal(
     SIGN_IN_ALIAS_SOURCE,
@@ -1398,7 +1404,7 @@ test("/book-demo, /request-demo, /schedule-demo, /get-demo, /demo-video, /book-a
   ]);
   assert.equal(
     DEMO_ALIAS_SOURCE,
-    "/:alias(bookdemo\\.html|bookdemo|book-demo\\.html|book-demo|request-a-demo|request-demo\\.html|request-demo|schedule-demo|get-a-demo|get-demo|demo\\.html|demos|maple-point-demo|demo-video|watch-a-demo|watch-demo|book-a-demo|try-demo|try|try-free|freetrial|request-quote|try-it-free|try-it|demo-now|schedule-a-demo|schedule|book-demo-now|see-a-demo|see-demo|see-it-in-action|product-demo|live-demo|interactive-demo|book-your-demo|free-demo|try-now|demo-request|book_demo|book-a-demo\\.html|request-a-demo\\.html|request_demo|maplepoint-demo|demo-request\\.html|get-a-demo\\.html|get-demo\\.html|schedule-demo\\.html|watch-a-demo\\.html|watch-demo\\.html|see-demo\\.html|live-demo\\.html|demos\\.html|maple_point_demo)",
+    "/:alias(bookdemo\\.html|bookdemo|book-demo\\.html|book-demo|request-a-demo|request-demo\\.html|request-demo|schedule-demo|get-a-demo|get-demo|demo\\.html|demos|maple-point-demo|demo-video|watch-a-demo|watch-demo|book-a-demo|try-demo|try|try-free|freetrial|request-quote|try-it-free|try-it|demo-now|schedule-a-demo|schedule|book-demo-now|see-a-demo|see-demo|see-it-in-action|product-demo|live-demo|interactive-demo|book-your-demo|free-demo|try-now|demo-request|book_demo|book-a-demo\\.html|request-a-demo\\.html|request_demo|maplepoint-demo|demo-request\\.html|get-a-demo\\.html|get-demo\\.html|schedule-demo\\.html|watch-a-demo\\.html|watch-demo\\.html|see-demo\\.html|live-demo\\.html|demos\\.html|maple_point_demo|maple-point)",
   );
   assert.equal(demoAliasRedirects()[0]?.permanent, false);
   assert.equal(demoAliasRedirects()[0]?.permanent ? 308 : 307, 307);
@@ -1471,6 +1477,7 @@ test("/book-demo, /request-demo, /schedule-demo, /get-demo, /demo-video, /book-a
     "/live-demo.html",
     "/demos.html",
     "/maple_point_demo",
+    "/maple-point",
   ]) {
     assert.equal(demoAliasDestination(path), "/pack/maple-point", path);
     assert.equal(demoAliasDestination(`${path}/`), "/pack/maple-point", path);
@@ -2017,6 +2024,7 @@ test("/book-demo, /request-demo, /schedule-demo, /get-demo, /demo-video, /book-a
     "live-demo.html",
     "demos.html",
     "maple_point_demo",
+    "maple-point",
     "ccpa.html",
   ]) {
     for (const page of [
@@ -2029,6 +2037,44 @@ test("/book-demo, /request-demo, /schedule-demo, /get-demo, /demo-video, /book-a
     }
   }
   assert.equal(existsSync(new URL("../app/pack/[requestId]/page.tsx", import.meta.url)), true);
+});
+
+test("auth framework paths temporarily move straight home (307) and do not shadow /auth/callback or /account", () => {
+  const next = "?next=/time";
+  for (const path of SIGN_IN_EXACT_SOURCES) {
+    assert.equal(signInAliasDestination(path), "/", path);
+    assert.equal(signInAliasDestination(`${path}/`), "/", path);
+    assert.equal(signInAliasDestination(path.toUpperCase()), "/", path);
+    assert.equal(signInAliasDestination(`${path.toUpperCase()}/`), "/", path);
+    assert.equal(signInAliasDestination(path, next), `/${next}`, path);
+    assert.equal(signInAliasDestination(`${path}/extra`), null, path);
+    assert.equal(demoAliasDestination(path), null, path);
+    const redirect = signInAliasRedirects().find((item) => item.source === path);
+    assert.equal(redirect?.destination, "/", path);
+    assert.equal(redirect?.permanent, false, path);
+    assert.equal(redirect?.permanent ? 308 : 307, 307, path);
+  }
+  assert.equal(signInAliasDestination("/auth"), null);
+  assert.equal(signInAliasDestination("/auth/"), null);
+  assert.equal(signInAliasDestination("/auth/callback"), null);
+  assert.equal(signInAliasDestination("/auth/login/extra"), null);
+  assert.equal(signInAliasDestination("/users"), null);
+  assert.equal(signInAliasDestination("/account"), null);
+  assert.equal(signInAliasDestination("/account/settings"), null);
+  assert.equal(demoAliasDestination("/maplepoint"), null);
+  assert.equal(demoAliasDestination("/maple-point"), "/pack/maple-point");
+  assert.equal(demoAliasDestination("/maple-point-demo"), "/pack/maple-point");
+  assert.equal(demoAliasDestination("/pack/maple-point"), null);
+  assert.equal(demoAliasDestination("/MAPLE-POINT/"), "/pack/maple-point");
+
+  const config = readRepo("next.config.ts");
+  assert.doesNotMatch(
+    config,
+    /\/auth\/login|\/auth\/signin|\/auth\/sign-in|\/auth\/signup|\/auth\/sign-up|\/users\/sign_in|\/users\/sign_up|\/users\/login|\/account\/login/,
+  );
+  const proxy = readRepo("proxy.ts");
+  assert.doesNotMatch(proxy, /\/auth\/login|\/account\/login/);
+  assert.doesNotMatch(proxy, /redirect/);
 });
 
 test("missing-page hint is console-only and development-only", () => {
