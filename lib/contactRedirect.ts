@@ -125,6 +125,17 @@
  * /suport, or /suppport. /hlp does not match /help or /hepl.
  * /contactus.html does not match /contactus, /contact-us.html, or
  * /contact.html. /contatc does not match /contct or /contact.
+ * /supportcentre, /user-guide.html, /manual.html, /manaul,
+ * /tutorials.html, /tutoral, /guids, /documantation, /documention, and
+ * /suport.html use that same hop. /supportcentre does not match
+ * /support-centre, /support-center, or /support. /user-guide.html does
+ * not match /user-guide. /manual.html does not match /manual.
+ * /manaul does not match /manual or /manual.html. /tutorials.html does
+ * not match /tutorials. /tutoral does not match /tutorials or
+ * /tutorials.html. /guids does not match /guides. /documantation and
+ * /documention do not match /documentation, /documenation, or each
+ * other. /suport.html does not match /suport, /support.html, or
+ * /support.
  * /blog.html and /status.html stay off this list. /blog.html does not
  * match /blog. /status.html does not match /status. /statuspage stays off
  * this list.
@@ -313,6 +324,16 @@ export function contactRedirects(): Array<{
     "/hlp",
     "/contactus.html",
     "/contatc",
+    "/supportcentre",
+    "/user-guide.html",
+    "/manual.html",
+    "/manaul",
+    "/tutorials.html",
+    "/tutoral",
+    "/guids",
+    "/documantation",
+    "/documention",
+    "/suport.html",
   ].map((source) => ({
     source,
     destination: SUPPORT_HREF,
