@@ -1,6 +1,9 @@
+import Link from "next/link";
+
 /**
  * Signed-out top bar. Pricing and Login only.
  * Anchors work with JavaScript off.
+ * Login goes to /, which renders the sign-in form.
  */
 export function SignedOutBar({ homeHref = "/" }: { homeHref?: string }) {
   return (
@@ -23,7 +26,10 @@ export function SignedOutBar({ homeHref = "/" }: { homeHref?: string }) {
           >
             Pricing
           </a>
-          <span className="inline-flex min-h-11 items-center text-cta">Login</span>
+          <Link
+            href="/"
+            className="inline-flex min-h-11 items-center text-cta focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-secondary"
+          >Login</Link>
         </nav>
       </div>
     </header>

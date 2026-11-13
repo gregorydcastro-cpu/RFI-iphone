@@ -160,9 +160,10 @@ export function AppHeader({
               >
                 Pricing
               </Link>
-              <span className="inline-flex min-h-11 items-center text-cta">
-                Login
-              </span>
+              <Link
+                href="/"
+                className="inline-flex min-h-11 items-center text-cta focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-secondary"
+              >Login</Link>
             </>
           )}
         </nav>
