@@ -159,6 +159,27 @@ export function privatePackMetadata(
   };
 }
 
+/**
+ * Missing page and missing link. Social title and description match the
+ * document title and description. The card has no canonical URL.
+ */
+export function notFoundDocumentMetadata(title: string, description: string): Metadata {
+  return {
+    title: { absolute: title },
+    description,
+    robots: { index: false, follow: false },
+    openGraph: {
+      title,
+      description,
+    },
+    twitter: {
+      card: "summary",
+      title,
+      description,
+    },
+  };
+}
+
 export function publicSitemap(): MetadataRoute.Sitemap {
   return ROBOTS_ALLOW.map((path) => ({
     url: absolutePublicUrl(path),

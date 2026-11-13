@@ -263,25 +263,31 @@ test("branded 404 document title names GC Field Log and keeps the card headings"
   const root = readRepo("app/not-found.tsx");
   assert.match(root, /PAGE_NOT_FOUND_DOCUMENT_TITLE/);
   assert.match(root, /PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION/);
-  assert.match(root, /absolute: PAGE_NOT_FOUND_DOCUMENT_TITLE/);
+  assert.match(root, /notFoundDocumentMetadata\(\s*PAGE_NOT_FOUND_DOCUMENT_TITLE/);
   assert.match(root, /LINK_NOT_FOUND_DOCUMENT_TITLE/);
   assert.match(root, /LINK_NOT_FOUND_DOCUMENT_DESCRIPTION/);
-  assert.match(root, /absolute: LINK_NOT_FOUND_DOCUMENT_TITLE/);
+  assert.match(root, /notFoundDocumentMetadata\(\s*LINK_NOT_FOUND_DOCUMENT_TITLE/);
   assert.match(root, /FIELD_LINK_MISS/);
-  assert.match(root, /index:\s*false/);
-  assert.match(root, /follow:\s*false/);
+  assert.doesNotMatch(root, /Crew dashboard/);
+
+  const social = readRepo("lib/siteMetadata.ts");
+  assert.match(social, /export function notFoundDocumentMetadata/);
+  assert.match(social, /title:\s*\{\s*absolute:\s*title\s*\}/);
+  assert.match(social, /index:\s*false/);
+  assert.match(social, /follow:\s*false/);
+  assert.match(social, /openGraph:/);
+  assert.match(social, /card:\s*"summary"/);
 
   for (const file of [
     "app/invite/[token]/not-found.tsx",
     "app/pack/[requestId]/not-found.tsx",
   ]) {
     const text = readRepo(file);
+    assert.match(text, /notFoundDocumentMetadata\(/, file);
     assert.match(text, /LINK_NOT_FOUND_DOCUMENT_TITLE/, file);
     assert.match(text, /LINK_NOT_FOUND_DOCUMENT_DESCRIPTION/, file);
-    assert.match(text, /absolute: LINK_NOT_FOUND_DOCUMENT_TITLE/, file);
     assert.doesNotMatch(text, /PAGE_NOT_FOUND_DOCUMENT_TITLE/, file);
-    assert.match(text, /index:\s*false/, file);
-    assert.match(text, /follow:\s*false/, file);
+    assert.doesNotMatch(text, /Crew dashboard/, file);
   }
 });
 
