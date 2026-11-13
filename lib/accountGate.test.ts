@@ -96,7 +96,7 @@ test("signed-out /account renders a sign-in shell and does not load the dashboar
   assert.doesNotMatch(shell, /AppHeader|procoreAuthHealth|procoreReturnPath/);
   const bar = readRepo("components/SignedOutBar.tsx");
   assert.match(bar, /Pricing/);
-  assert.match(bar, />Login</);
+  assert.match(bar, /<Link\b[^>]*\bhref="\/"[^>]*>Login<\/Link>/);
   assert.doesNotMatch(bar, /AppHeader|Procore|Refresh all|Billing/);
   const header = readRepo("components/AppHeader.tsx");
   assert.match(header, /procoreReturnPath/);
