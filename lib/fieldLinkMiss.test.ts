@@ -64,6 +64,7 @@ test("the proxy renders a missing link as a finished HTTP 404", () => {
   assert.match(lookup, /packPageFound/);
   assert.match(lookup, /loadLiveRoomPack/);
   assert.match(root, /FIELD_NOT_FOUND_HEADER/);
-  assert.match(root, /robots:\s*\{\s*index:\s*false/);
+  assert.match(root, /notFoundDocumentMetadata/);
+  assert.match(readRepo("lib/siteMetadata.ts"), /robots:\s*\{\s*index:\s*false/);
   assert.doesNotMatch(readRepo("app/api/[...slug]/route.ts"), /_not-found|FieldNotFoundPage/);
 });

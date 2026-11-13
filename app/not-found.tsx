@@ -9,21 +9,20 @@ import {
   PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION,
   PAGE_NOT_FOUND_DOCUMENT_TITLE,
 } from "@/lib/fieldNotFound";
+import { notFoundDocumentMetadata } from "@/lib/siteMetadata";
 
 export async function generateMetadata(): Promise<Metadata> {
   const marker = (await headers()).get(FIELD_NOT_FOUND_HEADER);
   if (marker === FIELD_LINK_MISS) {
-    return {
-      title: { absolute: LINK_NOT_FOUND_DOCUMENT_TITLE },
-      description: LINK_NOT_FOUND_DOCUMENT_DESCRIPTION,
-      robots: { index: false, follow: false },
-    };
+    return notFoundDocumentMetadata(
+      LINK_NOT_FOUND_DOCUMENT_TITLE,
+      LINK_NOT_FOUND_DOCUMENT_DESCRIPTION,
+    );
   }
-  return {
-    title: { absolute: PAGE_NOT_FOUND_DOCUMENT_TITLE },
-    description: PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION,
-    robots: { index: false, follow: false },
-  };
+  return notFoundDocumentMetadata(
+    PAGE_NOT_FOUND_DOCUMENT_TITLE,
+    PAGE_NOT_FOUND_DOCUMENT_DESCRIPTION,
+  );
 }
 
 /** Unmatched URLs, and invite or pack misses rendered here by the proxy. */

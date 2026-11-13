@@ -17,6 +17,7 @@ import {
   PACK_SIGNED_OUT_TITLE,
   PACK_SIGN_IN_DESCRIPTION,
   packDocumentTitle,
+  notFoundDocumentMetadata,
   privatePackMetadata,
   publicPageMetadata,
   publicSitemap,
@@ -201,6 +202,40 @@ test("a signed-in pack title uses the job name and keeps the private card", () =
     page.indexOf("export default async function PackPage"),
   );
   assert.doesNotMatch(metadataFn, /notFound\(/);
+});
+
+test("a missing page social card uses the page words, not the homepage pitch", () => {
+  const title = "Page not found — GC Field Log";
+  const description = "This page isn't here. Go home or open the Maple Point demo.";
+  const page = notFoundDocumentMetadata(title, description);
+  assert.deepEqual(page.title, { absolute: title });
+  assert.equal(page.description, description);
+  assert.equal(page.alternates, undefined);
+  const robots = asRecord(page.robots);
+  assert.equal(robots.index, false);
+  assert.equal(robots.follow, false);
+  const openGraph = asRecord(page.openGraph);
+  const twitter = asRecord(page.twitter);
+  assert.equal(openGraph.title, title);
+  assert.equal(openGraph.description, description);
+  assert.equal(openGraph.url, undefined);
+  assert.equal(openGraph.images, undefined);
+  assert.equal(twitter.card, "summary");
+  assert.equal(twitter.title, title);
+  assert.equal(twitter.description, description);
+  assert.equal(twitter.images, undefined);
+  assert.notEqual(openGraph.title, SITE_NAME);
+  assert.notEqual(openGraph.description, ROOT_DESCRIPTION);
+  assert.doesNotMatch(String(openGraph.description), /Crew dashboard/);
+
+  const link = notFoundDocumentMetadata(
+    "Link not found — GC Field Log",
+    "It may be old.",
+  );
+  assert.equal(asRecord(link.openGraph).title, "Link not found — GC Field Log");
+  assert.equal(asRecord(link.openGraph).description, "It may be old.");
+  assert.equal(asRecord(link.twitter).title, "Link not found — GC Field Log");
+  assert.notEqual(asRecord(link.openGraph).description, ROOT_DESCRIPTION);
 });
 
 test("sitemap lists only the robots allow list", () => {
