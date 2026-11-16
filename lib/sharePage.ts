@@ -1,9 +1,11 @@
 /**
  * Share page metadata.
  * Signed-out /share is noindex. Signed-in keeps the same title and description.
+ * The social card uses that description instead of the root pitch.
  */
 
 import type { Metadata } from "next";
+import { pageSocialDescription } from "./siteMetadata.ts";
 
 export const SHARE_PAGE_TITLE = "Share — GC Field Log";
 
@@ -14,6 +16,7 @@ export function sharePageMetadata(signedIn: boolean): Metadata {
   const metadata: Metadata = {
     title: SHARE_PAGE_TITLE,
     description: SHARE_PAGE_DESCRIPTION,
+    ...pageSocialDescription(SHARE_PAGE_DESCRIPTION),
   };
   if (signedIn) return metadata;
   return {

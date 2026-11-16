@@ -112,6 +112,22 @@ export function rootMetadata(): Metadata {
   };
 }
 
+/**
+ * Root social card with one route's own description.
+ * Next replaces openGraph and twitter as a whole, so the other card
+ * fields stay with the root card: site title, image, and no URL.
+ * Title, canonical, and robots stay on the caller.
+ */
+export function pageSocialDescription(
+  description: string,
+): Pick<Metadata, "openGraph" | "twitter"> {
+  const card = socialMetadata(SITE_NAME, description);
+  return {
+    openGraph: card.openGraph,
+    twitter: card.twitter,
+  };
+}
+
 export function publicPageMetadata(path: PublicPagePath): Metadata {
   const copy = PAGE_COPY[path];
   return socialMetadata(copy.title, copy.description, absolutePublicUrl(path));
