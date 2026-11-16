@@ -3,6 +3,13 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import type { Metadata } from "next";
 import { DEFAULT_APP_ORIGIN } from "./stripe.ts";
+import { ACCOUNT_PAGE_TITLE, ACCOUNT_SIGN_IN_COPY } from "./accountGate.ts";
+import {
+  SHARE_PAGE_DESCRIPTION,
+  SHARE_PAGE_TITLE,
+  sharePageMetadata,
+} from "./sharePage.ts";
+import { TIME_CLOCK_SIGN_IN_COPY, TIME_SIGNED_OUT_TITLE } from "./timeGate.ts";
 import {
   OG_IMAGE_ALT,
   OG_IMAGE_HEIGHT,
@@ -18,6 +25,7 @@ import {
   PACK_SIGN_IN_DESCRIPTION,
   packDocumentTitle,
   notFoundDocumentMetadata,
+  pageSocialDescription,
   privatePackMetadata,
   publicPageMetadata,
   publicSitemap,
@@ -284,4 +292,137 @@ test("routes wire the metadata helpers, image size, and sitemap", () => {
   assert.deepEqual([...OG_SAMPLE_JOBS], ["Maple Point", "Cedar Ridge"]);
   assert.equal(OG_TAGLINE, "Punch in. Open a job. Pull a room pack.");
   assert.equal(OG_TAGLINE_LINES.join(" "), OG_TAGLINE);
+});
+
+function socialDescriptions(metadata: Metadata): {
+  description: string;
+  openGraph: string;
+  twitter: string;
+} {
+  assert.equal(typeof metadata.description, "string");
+  const openGraph = asRecord(metadata.openGraph);
+  const twitter = asRecord(metadata.twitter);
+  assert.equal(typeof openGraph.description, "string");
+  assert.equal(typeof twitter.description, "string");
+  return {
+    description: metadata.description,
+    openGraph: openGraph.description,
+    twitter: twitter.description,
+  };
+}
+
+test("time, account, and share descriptions are page-specific", () => {
+  const homeDescription = String(publicPageMetadata("/").description);
+  assert.equal(
+    homeDescription,
+    "Punch in, open a job, and pull a room pack. Sample jobs are Maple Point and Cedar Ridge.",
+  );
+
+  const routes: Array<{
+    path: string;
+    file: string;
+    description: string;
+    expr: string;
+    title: string;
+    titleExpr: string;
+    metadata: Metadata;
+  }> = [
+    {
+      path: "/time",
+      file: "app/time/page.tsx",
+      description: TIME_CLOCK_SIGN_IN_COPY,
+      expr: "TIME_CLOCK_SIGN_IN_COPY",
+      title: TIME_SIGNED_OUT_TITLE,
+      titleExpr: "TIME_SIGNED_OUT_TITLE",
+      metadata: {
+        title: TIME_SIGNED_OUT_TITLE,
+        description: TIME_CLOCK_SIGN_IN_COPY,
+        ...pageSocialDescription(TIME_CLOCK_SIGN_IN_COPY),
+        robots: { index: false, follow: false },
+      },
+    },
+    {
+      path: "/account",
+      file: "app/account/page.tsx",
+      description: ACCOUNT_SIGN_IN_COPY,
+      expr: "ACCOUNT_SIGN_IN_COPY",
+      title: ACCOUNT_PAGE_TITLE,
+      titleExpr: "ACCOUNT_PAGE_TITLE",
+      metadata: {
+        title: ACCOUNT_PAGE_TITLE,
+        description: ACCOUNT_SIGN_IN_COPY,
+        ...pageSocialDescription(ACCOUNT_SIGN_IN_COPY),
+        robots: { index: false, follow: false },
+      },
+    },
+    {
+      path: "/share",
+      file: "lib/sharePage.ts",
+      description: SHARE_PAGE_DESCRIPTION,
+      expr: "SHARE_PAGE_DESCRIPTION",
+      title: SHARE_PAGE_TITLE,
+      titleExpr: "SHARE_PAGE_TITLE",
+      metadata: sharePageMetadata(false),
+    },
+  ];
+
+  const seen = new Set<string>();
+  for (const route of routes) {
+    const tags = socialDescriptions(route.metadata);
+    assert.equal(tags.description, route.description, route.path);
+    assert.equal(tags.openGraph, route.description, route.path);
+    assert.equal(tags.twitter, route.description, route.path);
+    for (const tag of [tags.description, tags.openGraph, tags.twitter]) {
+      assert.notEqual(tag, homeDescription, route.path);
+      assert.notEqual(tag, ROOT_DESCRIPTION, route.path);
+      assert.doesNotMatch(tag, /Punch in, open a job|Crew dashboard/);
+      assert.doesNotMatch(tag, /Brown|Rossi/);
+    }
+    assert.ok(route.description.length < 140, route.description);
+    assert.equal(seen.has(route.description), false, route.path);
+    seen.add(route.description);
+
+    assert.equal(route.metadata.title, route.title, route.path);
+    assert.equal(route.metadata.alternates, undefined, route.path);
+    assert.deepEqual(route.metadata.robots, { index: false, follow: false }, route.path);
+    const openGraph = asRecord(route.metadata.openGraph);
+    const twitter = asRecord(route.metadata.twitter);
+    assert.equal(openGraph.title, SITE_NAME, route.path);
+    assert.equal(twitter.title, SITE_NAME, route.path);
+    assert.equal(openGraph.url, undefined, route.path);
+
+    const source = readRepo(route.file);
+    assert.match(source, new RegExp(`title:\\s*${route.titleExpr}`), route.path);
+    assert.match(source, new RegExp(`description:\\s*${route.expr}`), route.path);
+    assert.match(
+      source,
+      new RegExp(`pageSocialDescription\\(${route.expr}\\)`),
+      route.path,
+    );
+  }
+
+  const signedIn = sharePageMetadata(true);
+  const signedInTags = socialDescriptions(signedIn);
+  assert.equal(signedInTags.description, SHARE_PAGE_DESCRIPTION);
+  assert.equal(signedInTags.openGraph, SHARE_PAGE_DESCRIPTION);
+  assert.equal(signedInTags.twitter, SHARE_PAGE_DESCRIPTION);
+  assert.notEqual(signedInTags.description, homeDescription);
+  assert.notEqual(signedInTags.openGraph, ROOT_DESCRIPTION);
+  assert.equal(signedIn.title, SHARE_PAGE_TITLE);
+  assert.equal(signedIn.alternates, undefined);
+  assert.equal("robots" in signedIn, false);
+
+  const card = pageSocialDescription(TIME_CLOCK_SIGN_IN_COPY);
+  assert.equal("title" in card, false);
+  assert.equal("description" in card, false);
+  assert.equal("robots" in card, false);
+  assert.equal("alternates" in card, false);
+
+  const time = readRepo("app/time/page.tsx");
+  const account = readRepo("app/account/page.tsx");
+  assert.match(time, /robots:\s*\{\s*index:\s*false,\s*follow:\s*false\s*\}/);
+  assert.match(account, /robots:\s*\{\s*index:\s*false,\s*follow:\s*false\s*\}/);
+  assert.doesNotMatch(time, /canonical/);
+  assert.doesNotMatch(account, /canonical/);
+  assert.doesNotMatch(readRepo("lib/sharePage.ts"), /canonical/);
 });
