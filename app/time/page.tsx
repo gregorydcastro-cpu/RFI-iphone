@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: TIME_SIGNED_OUT_TITLE,
   description: TIME_CLOCK_SIGN_IN_COPY,
-  ...pageSocialDescription(TIME_CLOCK_SIGN_IN_COPY),
+  ...pageSocialDescription(TIME_CLOCK_SIGN_IN_COPY, TIME_SIGNED_OUT_TITLE),
   robots: { index: false, follow: false },
 };
 

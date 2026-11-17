@@ -1,7 +1,7 @@
 /**
  * Share page metadata.
  * Signed-out /share is noindex. Signed-in keeps the same title and description.
- * The social card uses that description instead of the root pitch.
+ * The social card uses that title and description instead of the root pitch.
  */
 
 import type { Metadata } from "next";
@@ -16,7 +16,7 @@ export function sharePageMetadata(signedIn: boolean): Metadata {
   const metadata: Metadata = {
     title: SHARE_PAGE_TITLE,
     description: SHARE_PAGE_DESCRIPTION,
-    ...pageSocialDescription(SHARE_PAGE_DESCRIPTION),
+    ...pageSocialDescription(SHARE_PAGE_DESCRIPTION, SHARE_PAGE_TITLE),
   };
   if (signedIn) return metadata;
   return {

@@ -113,15 +113,17 @@ export function rootMetadata(): Metadata {
 }
 
 /**
- * Root social card with one route's own description.
- * Next replaces openGraph and twitter as a whole, so the other card
- * fields stay with the root card: site title, image, and no URL.
- * Title, canonical, and robots stay on the caller.
+ * Root social card with one route's description and social title.
+ * Next replaces openGraph and twitter as a whole, so the image,
+ * site name, and missing URL stay with the root card.
+ * Document title, canonical, and robots stay on the caller.
+ * Pass that document title so og:title and twitter:title match it.
  */
 export function pageSocialDescription(
   description: string,
+  title: string,
 ): Pick<Metadata, "openGraph" | "twitter"> {
-  const card = socialMetadata(SITE_NAME, description);
+  const card = socialMetadata(title, description);
   return {
     openGraph: card.openGraph,
     twitter: card.twitter,
