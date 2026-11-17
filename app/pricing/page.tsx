@@ -1,5 +1,6 @@
 import { AppHeader } from "@/components/AppHeader";
 import { SiteFooter } from "@/components/SiteFooter";
+import { SkipToMainContent } from "@/components/SkipToMainContent";
 import { SubscribeCta } from "@/components/SubscribeCta";
 import { BILLING_OPENS_SOON } from "@/lib/billingPublicCopy";
 import { getProcoreConnectionView } from "@/lib/procoreStatus";
@@ -10,6 +11,7 @@ import {
   stripeReadiness,
 } from "@/lib/stripe";
 import { readAppSession } from "@/lib/session.server";
+import { SKIP_TO_MAIN_ID } from "@/lib/skipToMainContent";
 
 export const metadata = publicPageMetadata("/pricing");
 
@@ -31,13 +33,14 @@ export default async function PricingPage({ searchParams }: Props) {
 
   return (
     <div className="flex min-h-dvh flex-col">
+      <SkipToMainContent />
       <AppHeader
         signedIn={view.signedIn}
         role={view.role}
         procoreConnected={view.connected}
         procoreReconnect={view.reconnectNeeded}
       />
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-8 sm:px-6">
+      <main id={SKIP_TO_MAIN_ID} tabIndex={-1} className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-8 sm:px-6">
         <p className="font-display text-xs tracking-[0.22em] text-accent uppercase">
           Billing
         </p>

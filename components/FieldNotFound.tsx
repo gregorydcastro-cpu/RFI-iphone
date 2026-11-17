@@ -1,5 +1,7 @@
 import { ReadAloudButton } from "@/components/ReadAloudButton";
 import { SignedOutBar } from "@/components/SignedOutBar";
+import { SkipToMainContent } from "@/components/SkipToMainContent";
+import { SKIP_TO_MAIN_ID } from "@/lib/skipToMainContent";
 import { getFieldRole } from "@/lib/auth.server";
 import {
   fieldNotFoundCopy,
@@ -37,8 +39,9 @@ export async function FieldNotFoundPage({
 
   return (
     <div data-field-not-found="" className="flex min-h-dvh flex-col">
+      <SkipToMainContent />
       {header}
-      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center px-4 py-8 sm:px-6">
+      <main id={SKIP_TO_MAIN_ID} tabIndex={-1} className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center px-4 py-8 sm:px-6">
         <div role="status" className="w-full border border-line bg-ink px-4 py-5">
           <h1 className="text-2xl font-semibold text-paper">{copy.title}</h1>
           <p className="mt-2 text-lg leading-snug text-paper">{copy.message}</p>

@@ -3,9 +3,11 @@
 import type { FieldRoleName } from "@/lib/auth";
 import { legalSpeakText, type LegalCopy } from "@/lib/legalCopy";
 import { REVIEW_NOTICE } from "@/lib/siteInfo";
+import { SKIP_TO_MAIN_ID } from "@/lib/skipToMainContent";
 import { AppHeader } from "./AppHeader";
 import { ReadAloudButton } from "./ReadAloudButton";
 import { SiteFooter } from "./SiteFooter";
+import { SkipToMainContent } from "./SkipToMainContent";
 
 type Props = {
   copy: LegalCopy;
@@ -23,8 +25,9 @@ export function LegalDocument({ copy, signedIn = false, role = null }: Props) {
 
   return (
     <div className="flex min-h-dvh flex-col">
+      <SkipToMainContent />
       <AppHeader signedIn={signedIn} role={role} />
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-10 sm:px-6 sm:py-14">
+      <main id={SKIP_TO_MAIN_ID} tabIndex={-1} className="mx-auto w-full max-w-2xl flex-1 px-4 py-10 sm:px-6 sm:py-14">
         <aside
           role="note"
           data-review-notice=""

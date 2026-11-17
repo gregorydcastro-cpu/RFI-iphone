@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { OfflinePackBanner } from "./OfflinePackBanner";
 import type { PackLiveMeta } from "./PackLiveReload";
 import type { OfflinePackSnapshot } from "@/lib/offlinePackCache";
 import { highlightForSheet } from "@/lib/highlight";
+import { SKIP_TO_MAIN_ID } from "@/lib/skipToMainContent";
 import {
   formatPulledAt,
   packActions,
@@ -33,6 +34,7 @@ import { packPullNotice, procoreReconnectHref } from "@/lib/procoreAuthHealth";
 import type { PackPullNotice } from "@/lib/procoreAuthHealth";
 import { ActionPanel } from "./ActionPanel";
 import { AppHeader } from "./AppHeader";
+import { SkipToMainContent } from "./SkipToMainContent";
 import { PackEmptyState } from "./PackFieldBanner";
 import { ProcoreReconnectBanner } from "./ProcoreReconnectBanner";
 import { ReadAloudButton } from "./ReadAloudButton";
@@ -168,6 +170,7 @@ export function RoomPackViewer({
       displayedPack.sheets.length === 0 ? packEmptySpeak() : packNoneSpeak();
     return (
       <div className="flex min-h-dvh flex-col bg-ink text-paper">
+        <SkipToMainContent />
         <AppHeader
           signedIn={signedIn}
           role={role ?? (signedIn ? (readOnly ? "viewer" : "puller") : null)}
@@ -175,6 +178,7 @@ export function RoomPackViewer({
           procoreReconnect={reconnecting}
           procoreReconnectHref={procoreReconnectHref(packReturn)}
         />
+        <PackMain>
         {notice ? (
           <ProcoreReconnectBanner
             notice={notice}
@@ -218,12 +222,14 @@ export function RoomPackViewer({
             onBusy={handleBusy}
           />
         </div>
+        </PackMain>
       </div>
     );
   }
 
   return (
     <div className="flex min-h-dvh flex-col bg-ink text-paper">
+      <SkipToMainContent />
       <AppHeader
         signedIn={signedIn}
         role={role ?? (signedIn ? (readOnly ? "viewer" : "puller") : null)}
@@ -231,6 +237,7 @@ export function RoomPackViewer({
         procoreReconnect={reconnecting}
         procoreReconnectHref={procoreReconnectHref(packReturn)}
       />
+      <PackMain>
       {!signedIn ? (
         <SignedOutPackNote
           requestId={displayedRequest}
@@ -373,7 +380,16 @@ export function RoomPackViewer({
           {toast}
         </div>
       ) : null}
+      </PackMain>
     </div>
+  );
+}
+
+function PackMain({ children }: { children: ReactNode }) {
+  return (
+    <main id={SKIP_TO_MAIN_ID} tabIndex={-1} className="flex min-h-0 flex-1 flex-col">
+      {children}
+    </main>
   );
 }
 
