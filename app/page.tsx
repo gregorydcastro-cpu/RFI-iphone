@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { LoginForm } from "@/components/LoginForm";
 import { SiteFooter } from "@/components/SiteFooter";
+import { SkipToMainContent } from "@/components/SkipToMainContent";
 import { safeNextPath, staleSessionClearPath } from "@/lib/authMessages";
+import { SKIP_TO_MAIN_ID } from "@/lib/skipToMainContent";
 import { publicPageMetadata } from "@/lib/siteMetadata";
 import { readAppSession, supabaseSessionCookiePresent } from "@/lib/session.server";
 import { isSupabaseAuthConfigured } from "@/lib/supabase/config";
@@ -47,8 +49,9 @@ export default async function LoginPage({ searchParams }: Props) {
 
   return (
     <div className="flex min-h-dvh flex-col">
+      <SkipToMainContent />
       <AppHeader />
-      <main className="flex flex-1 flex-col items-center justify-center px-4 py-8 sm:px-6 sm:py-12">
+      <main id={SKIP_TO_MAIN_ID} tabIndex={-1} className="flex flex-1 flex-col items-center justify-center px-4 py-8 sm:px-6 sm:py-12">
         <Suspense
           fallback={
             <div
