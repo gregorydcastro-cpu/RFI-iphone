@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: ACCOUNT_PAGE_TITLE,
   description: ACCOUNT_SIGN_IN_COPY,
-  ...pageSocialDescription(ACCOUNT_SIGN_IN_COPY),
+  ...pageSocialDescription(ACCOUNT_SIGN_IN_COPY, ACCOUNT_PAGE_TITLE),
   robots: { index: false, follow: false },
 };
 

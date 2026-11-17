@@ -311,7 +311,7 @@ function socialDescriptions(metadata: Metadata): {
   };
 }
 
-test("time, account, and share descriptions are page-specific", () => {
+test("time, account, and share social titles match the document title", () => {
   const homeDescription = String(publicPageMetadata("/").description);
   assert.equal(
     homeDescription,
@@ -337,7 +337,7 @@ test("time, account, and share descriptions are page-specific", () => {
       metadata: {
         title: TIME_SIGNED_OUT_TITLE,
         description: TIME_CLOCK_SIGN_IN_COPY,
-        ...pageSocialDescription(TIME_CLOCK_SIGN_IN_COPY),
+        ...pageSocialDescription(TIME_CLOCK_SIGN_IN_COPY, TIME_SIGNED_OUT_TITLE),
         robots: { index: false, follow: false },
       },
     },
@@ -351,7 +351,7 @@ test("time, account, and share descriptions are page-specific", () => {
       metadata: {
         title: ACCOUNT_PAGE_TITLE,
         description: ACCOUNT_SIGN_IN_COPY,
-        ...pageSocialDescription(ACCOUNT_SIGN_IN_COPY),
+        ...pageSocialDescription(ACCOUNT_SIGN_IN_COPY, ACCOUNT_PAGE_TITLE),
         robots: { index: false, follow: false },
       },
     },
@@ -387,8 +387,12 @@ test("time, account, and share descriptions are page-specific", () => {
     assert.deepEqual(route.metadata.robots, { index: false, follow: false }, route.path);
     const openGraph = asRecord(route.metadata.openGraph);
     const twitter = asRecord(route.metadata.twitter);
-    assert.equal(openGraph.title, SITE_NAME, route.path);
-    assert.equal(twitter.title, SITE_NAME, route.path);
+    assert.equal(openGraph.title, route.title, route.path);
+    assert.equal(twitter.title, route.title, route.path);
+    assert.equal(openGraph.title, route.metadata.title, route.path);
+    assert.equal(twitter.title, route.metadata.title, route.path);
+    assert.notEqual(openGraph.title, "GC Field Log", route.path);
+    assert.notEqual(twitter.title, "GC Field Log", route.path);
     assert.equal(openGraph.url, undefined, route.path);
 
     const source = readRepo(route.file);
@@ -396,7 +400,9 @@ test("time, account, and share descriptions are page-specific", () => {
     assert.match(source, new RegExp(`description:\\s*${route.expr}`), route.path);
     assert.match(
       source,
-      new RegExp(`pageSocialDescription\\(${route.expr}\\)`),
+      new RegExp(
+        `pageSocialDescription\\(\\s*${route.expr}\\s*,\\s*${route.titleExpr}\\s*\\)`,
+      ),
       route.path,
     );
   }
@@ -411,12 +417,24 @@ test("time, account, and share descriptions are page-specific", () => {
   assert.equal(signedIn.title, SHARE_PAGE_TITLE);
   assert.equal(signedIn.alternates, undefined);
   assert.equal("robots" in signedIn, false);
+  const signedInOpenGraph = asRecord(signedIn.openGraph);
+  const signedInTwitter = asRecord(signedIn.twitter);
+  assert.equal(signedInOpenGraph.title, SHARE_PAGE_TITLE);
+  assert.equal(signedInTwitter.title, SHARE_PAGE_TITLE);
+  assert.equal(signedInOpenGraph.title, signedIn.title);
+  assert.equal(signedInTwitter.title, signedIn.title);
+  assert.notEqual(signedInOpenGraph.title, "GC Field Log");
+  assert.notEqual(signedInTwitter.title, "GC Field Log");
 
-  const card = pageSocialDescription(TIME_CLOCK_SIGN_IN_COPY);
+  const card = pageSocialDescription(TIME_CLOCK_SIGN_IN_COPY, TIME_SIGNED_OUT_TITLE);
   assert.equal("title" in card, false);
   assert.equal("description" in card, false);
   assert.equal("robots" in card, false);
   assert.equal("alternates" in card, false);
+  assert.equal(asRecord(card.openGraph).title, TIME_SIGNED_OUT_TITLE);
+  assert.equal(asRecord(card.twitter).title, TIME_SIGNED_OUT_TITLE);
+  assert.notEqual(asRecord(card.openGraph).title, "GC Field Log");
+  assert.notEqual(asRecord(card.twitter).title, "GC Field Log");
 
   const time = readRepo("app/time/page.tsx");
   const account = readRepo("app/account/page.tsx");
