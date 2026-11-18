@@ -17,10 +17,16 @@ import {
   type RoomPack,
   type Sheet,
 } from "@/lib/pack";
-import { layoutSheetId, resolveSheetPdf } from "@/lib/packNormalize";
+import { layoutSheetId } from "@/lib/packNormalize";
+import {
+  PACK_FLOOR_PLAN_ID,
+  PACK_RFIS_ID,
+  packDetailSections,
+  packSectionHref,
+  sheetFileHref,
+} from "@/lib/packSections";
 import { sheetKindLabel, splitPackSheets } from "@/lib/sheetOrder";
 import type { FieldRoleName } from "@/lib/auth";
-import { viewerSheetPdfSrc } from "@/lib/sheetPdfUrl";
 import { signInContinuePath } from "@/lib/authMessages";
 import {
   PACK_EMPTY_MESSAGE,
@@ -227,6 +233,12 @@ export function RoomPackViewer({
     );
   }
 
+  const primaryFileHref = sheetFileHref({
+    requestId: displayedRequest,
+    sheet: primary,
+  });
+  const details = packDetailSections(rest);
+
   return (
     <div className="flex min-h-dvh flex-col bg-ink text-paper">
       <SkipToMainContent />
@@ -278,22 +290,19 @@ export function RoomPackViewer({
         onBusy={handleBusy}
       />
       {offlineSnapshot ? <OfflinePackBanner snapshot={offlineSnapshot} /> : null}
-      <JumpNav primary={primary} rest={rest} />
+      <JumpNav primary={primary} details={details} />
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-4 sm:px-4 lg:px-6">
         <div id="sheets" className="flex flex-col gap-5">
-        <section id="floor-plan" className="flex flex-col">
+        <section id={PACK_FLOOR_PLAN_ID} className="flex flex-col">
           <SheetSectionHeader
             kind={sheetKindLabel(primary, true)}
             sheet={primary}
             roomLabel={roomCaption(displayedPack)}
+            fileHref={primaryFileHref}
           />
           <div className="h-[min(64vw,calc(100svh-12.5rem))] min-h-[220px] border border-line md:h-[calc(100svh-12.5rem)]">
             <SheetViewer
-              pdfUrl={viewerSheetPdfSrc({
-                requestId: displayedRequest,
-                sheetId: primary.id,
-                pdfUrl: resolveSheetPdf(primary),
-              })}
+              pdfUrl={primaryFileHref}
               layout={displayedPack.layout}
               sheetId={primary.id}
               sheetRev={primary.rev}
@@ -307,49 +316,52 @@ export function RoomPackViewer({
           </div>
         </section>
 
-        {rest.length > 0 ? (
+        {details.length > 0 ? (
           <section id="detail-sheets" className="grid gap-4 md:grid-cols-2">
-            {rest.map((sheet) => (
-              <article
-                key={`${sheet.id}-${sheet.rev}`}
-                id={`sheet-${cssId(sheet.id)}`}
-                className="flex flex-col"
-              >
-                <SheetSectionHeader
-                  kind={sheetKindLabel(sheet, false)}
-                  sheet={sheet}
-                />
-                <div className="h-[min(56vw,42vh)] min-h-[200px] border border-line sm:h-[42vh] md:h-[48vh]">
-                  <SheetViewer
-                    pdfUrl={viewerSheetPdfSrc({
-                      requestId: displayedRequest,
-                      sheetId: sheet.id,
-                      pdfUrl: resolveSheetPdf(sheet),
-                    })}
-                    layout={displayedPack.layout}
-                    sheetId={sheet.id}
-                    sheetRev={sheet.rev}
-                    primarySheetId={primary.id}
-                    highlight={highlightForSheet(
-                      displayedPack.layout,
-                      sheet.id,
-                      undefined,
-                      { primarySheetId: primary.id },
-                    )}
-                    requestId={displayedRequest}
-                    roomName={displayedPack.room.name}
-                    roomNumber={displayedPack.room.number}
-                    readOnly={readOnly}
+            {details.map(({ sheet, targetId }) => {
+              const fileHref = sheetFileHref({
+                requestId: displayedRequest,
+                sheet,
+              });
+              return (
+                <article
+                  key={`${sheet.id}-${sheet.rev}`}
+                  id={targetId}
+                  className="flex flex-col"
+                >
+                  <SheetSectionHeader
+                    kind={sheetKindLabel(sheet, false)}
+                    sheet={sheet}
+                    fileHref={fileHref}
                   />
-                </div>
-              </article>
-            ))}
+                  <div className="h-[min(56vw,42vh)] min-h-[200px] border border-line sm:h-[42vh] md:h-[48vh]">
+                    <SheetViewer
+                      pdfUrl={fileHref}
+                      layout={displayedPack.layout}
+                      sheetId={sheet.id}
+                      sheetRev={sheet.rev}
+                      primarySheetId={primary.id}
+                      highlight={highlightForSheet(
+                        displayedPack.layout,
+                        sheet.id,
+                        undefined,
+                        { primarySheetId: primary.id },
+                      )}
+                      requestId={displayedRequest}
+                      roomName={displayedPack.room.name}
+                      roomNumber={displayedPack.room.number}
+                      readOnly={readOnly}
+                    />
+                  </div>
+                </article>
+              );
+            })}
           </section>
         ) : null}
         </div>
 
         <div
-          id="rfis"
+          id={PACK_RFIS_ID}
           className="grid gap-5 border-t border-line pt-4 pb-8 lg:grid-cols-2"
         >
           <RfiList
@@ -398,32 +410,28 @@ function roomCaption(pack: RoomPack): string {
   return `Room${number} · ${pack.room.name} · red box around walls`;
 }
 
-function cssId(value: string): string {
-  return value.replace(/[^a-zA-Z0-9_-]/g, "-");
-}
-
 function JumpNav({
   primary,
-  rest,
+  details,
 }: {
   primary: Sheet;
-  rest: Sheet[];
+  details: { sheet: Sheet; targetId: string }[];
 }) {
   return (
     <nav
       aria-label="Pack sections"
       className="flex gap-1 overflow-x-auto border-b border-line bg-primary px-2 py-1 sm:px-4"
     >
-      <JumpLink targetId="floor-plan" label="Floor plan" hint={sheetRevisionLabel(primary)} />
-      {rest.map((sheet) => (
+      <JumpLink targetId={PACK_FLOOR_PLAN_ID} label="Floor plan" hint={sheetRevisionLabel(primary)} />
+      {details.map(({ sheet, targetId }) => (
         <JumpLink
           key={sheet.id}
-          targetId={`sheet-${cssId(sheet.id)}`}
+          targetId={targetId}
           label={sheetKindLabel(sheet, false)}
           hint={sheetRevisionLabel(sheet)}
         />
       ))}
-      <JumpLink targetId="rfis" label="RFIs" />
+      <JumpLink targetId={PACK_RFIS_ID} label="RFIs" />
     </nav>
   );
 }
@@ -438,15 +446,25 @@ function JumpLink({
   hint?: string;
 }) {
   return (
-    <button
-      type="button"
-      onClick={() =>
-        document.getElementById(targetId)?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        })
-      }
-      className="shrink-0 px-3 py-1.5 text-xs font-semibold tracking-wide whitespace-nowrap text-accent-2 uppercase hover:bg-panel-2 hover:text-secondary"
+    <a
+      href={packSectionHref(targetId)}
+      onClick={(event) => {
+        if (
+          event.defaultPrevented ||
+          event.button !== 0 ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey ||
+          event.altKey
+        ) {
+          return;
+        }
+        const node = document.getElementById(targetId);
+        if (!node) return;
+        event.preventDefault();
+        node.scrollIntoView({ behavior: "smooth", block: "start" });
+      }}
+      className="shrink-0 px-3 py-1.5 text-xs font-semibold tracking-wide whitespace-nowrap text-accent-2 uppercase hover:bg-panel-2 hover:text-secondary focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-secondary"
     >
       {label}
       {hint ? (
@@ -454,7 +472,7 @@ function JumpLink({
           {hint}
         </span>
       ) : null}
-    </button>
+    </a>
   );
 }
 
@@ -462,10 +480,12 @@ function SheetSectionHeader({
   kind,
   sheet,
   roomLabel,
+  fileHref,
 }: {
   kind: string;
   sheet: Sheet;
   roomLabel?: string;
+  fileHref: string;
 }) {
   const title = sheetTitle(sheet);
   return (
@@ -481,9 +501,19 @@ function SheetSectionHeader({
           <p className="text-[11px] text-tan">{roomLabel}</p>
         ) : null}
       </div>
-      <span className="border border-cta/50 bg-panel-2 px-2 py-1 font-mono text-xs">
-        {sheetRevisionLabel(sheet)}
-      </span>
+      <div className="flex flex-wrap items-center gap-2">
+        {fileHref ? (
+          <a
+            href={fileHref}
+            className="text-xs font-semibold text-accent underline focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-secondary"
+          >
+            {`Open ${sheetRevisionLabel(sheet)}`}
+          </a>
+        ) : null}
+        <span className="border border-cta/50 bg-panel-2 px-2 py-1 font-mono text-xs">
+          {sheetRevisionLabel(sheet)}
+        </span>
+      </div>
     </div>
   );
 }
