@@ -1,22 +1,21 @@
-import { isDemoOrFictionalJob, type DemoJob } from "./jobs";
+import { isDemoOrFictionalJob, type DemoJob } from "./jobs.ts";
 import {
   stampRoomPack,
   type RoomPack,
-} from "./pack";
-import { loadPack } from "./loadPack";
-import { packMatchesJob } from "./packStatus";
+} from "./pack.ts";
+import { loadPack } from "./loadPack.ts";
+import { packMatchesJob } from "./packStatus.ts";
 import {
   requestProcoreBotRefresh,
   skippedDemoProcoreBotRefresh,
   type ProcoreBotRefreshResult,
-} from "./procoreBot";
-import { pullProcoreRoomPack } from "./procoreRest";
+} from "./procoreBot.ts";
 import {
   fetchLatestRoomPackRow,
   getSupabaseConfig,
   insertRoomPackRow,
   roomPackFromRow,
-} from "./supabaseRoomPack";
+} from "./supabaseRoomPack.ts";
 
 export type LivePackSource = "procore" | "supabase" | "local" | "none";
 export type LivePackPull = "procore" | "bot" | "none";
@@ -32,19 +31,31 @@ export type LivePackLoad = {
   bot?: ProcoreBotRefreshResult;
 };
 
-async function maplePointFallback(
-  requestId: string,
-): Promise<RoomPack | null> {
+function isMaplePointRequest(requestId: string): boolean {
+  return (
+    requestId === "maple-point" || requestId.startsWith("maple-point-")
+  );
+}
+
+/**
+ * Named `public/packs/<id>.json` first (Maple Point, Cedar Ridge, and any
+ * other checked-in fixture). A missing file may still use the Maple Point
+ * sample for a fictional demo request id. Any other id misses.
+ */
+async function localDemoPack(requestId: string): Promise<RoomPack | null> {
   const named = await loadPack(requestId);
   if (named) return stampRoomPack(named);
+  if (!isDemoOrFictionalJob({ requestId })) return null;
   const demo = await loadPack("maple-point");
   return demo ? stampRoomPack(demo) : null;
 }
 
 /**
  * Website live view: read the latest `public.room_packs` row with no store
- * cache. Local Maple Point JSON only when Supabase is unset or has no
- * matching row. Never uses the deleted Procore webhook.
+ * cache. A named static fixture (Maple Point, Cedar Ridge) is used when
+ * Supabase is unset, the read misses, or the database is unreachable.
+ * Maple Point request ids without their own file still use that sample.
+ * Never uses the deleted Procore webhook.
  */
 export async function loadLiveRoomPack(input: {
   requestId: string;
@@ -81,15 +92,13 @@ export async function loadLiveRoomPack(input: {
         };
       }
     }
-    const isMapleDemo =
-      input.requestId === "maple-point" ||
-      input.requestId.startsWith("maple-point-");
-    if (!isMapleDemo) {
+    const named = await loadPack(input.requestId);
+    if (!named && !isMaplePointRequest(input.requestId)) {
       return null;
     }
   }
 
-  const fallback = await maplePointFallback(input.requestId);
+  const fallback = await localDemoPack(input.requestId);
   if (!fallback) return null;
   return {
     pack: fallback,
@@ -125,6 +134,7 @@ export async function refreshLiveRoomPack(input: {
   let restReason: string | undefined;
 
   if (input.userId) {
+    const { pullProcoreRoomPack } = await import("./procoreRest.ts");
     const rest = await pullProcoreRoomPack({
       userId: input.userId,
       job: input.job,

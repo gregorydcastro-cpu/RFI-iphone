@@ -437,6 +437,24 @@ export const PACK_LIVE_LOADING = "Loading latest pack…";
 export const PACK_DEMO_UNSET_LINE =
   "Demo pack (Maple Point). Supabase / Procore path is unset locally.";
 
+/** Maple Point keeps its existing label. Other static demos use their own name. */
+function demoPackLabel(pack?: RoomPack | null): string {
+  const name = pack?.project?.name?.trim() ?? "";
+  const slug = pack?.project?.slug?.trim() ?? "";
+  const requestId = pack?.request_id?.trim() ?? "";
+  if (
+    !name ||
+    name === "Maple Point" ||
+    name === "Maple Point Medical Office" ||
+    slug === "maple-point" ||
+    requestId === "maple-point" ||
+    requestId.startsWith("maple-point-")
+  ) {
+    return "Maple Point";
+  }
+  return name;
+}
+
 export const PACK_VIEW_ONLY_LINE =
   "View only — pulls are disabled for this session.";
 
@@ -471,7 +489,7 @@ export function packLiveStatusLine(data: PackLiveStamp, room?: string): string {
     return `Live (Procore REST)${suffix}`;
   }
   if (data.demoFallback || data.source === "local") {
-    return `Demo pack (Maple Point)${suffix}`;
+    return `Demo pack (${demoPackLabel(data.pack)})${suffix}`;
   }
   if (data.pull === "bot") {
     return `Cached pack (bot fallback)${suffix}`;
@@ -492,7 +510,11 @@ export function packLiveOpeningLine(input: {
   pack?: RoomPack | null;
   room?: string;
 }): string {
-  if (!input.supabaseConfigured) return PACK_DEMO_UNSET_LINE;
+  if (!input.supabaseConfigured) {
+    const label = demoPackLabel(input.pack);
+    if (label === "Maple Point") return PACK_DEMO_UNSET_LINE;
+    return `Demo pack (${label}). Supabase / Procore path is unset locally.`;
+  }
   if (input.pack && packPayloadState(input.pack) === "ready") {
     return packLiveStatusLine(
       {

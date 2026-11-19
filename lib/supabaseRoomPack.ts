@@ -10,10 +10,10 @@
  * local demo is used when these keys are unset.
  */
 
-import { readEnv } from "./env";
-import { stampRoomPack, type RoomPack } from "./pack";
-import { coerceRoomPack } from "./packNormalize";
-import { isRoomPackShape } from "./packStatus";
+import { readEnv } from "./env.ts";
+import { stampRoomPack, type RoomPack } from "./pack.ts";
+import { coerceRoomPack } from "./packNormalize.ts";
+import { isRoomPackShape } from "./packStatus.ts";
 
 export const SUPABASE_URL_KEY = "SUPABASE_URL" as const;
 export const SUPABASE_ANON_KEY_KEY = "SUPABASE_ANON_KEY" as const;
