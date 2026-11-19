@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { stampRoomPack, type RoomPack } from "./pack";
-import { coerceRoomPack } from "./packNormalize";
-import { isRoomPackShape } from "./packStatus";
+import { stampRoomPack, type RoomPack } from "./pack.ts";
+import { coerceRoomPack } from "./packNormalize.ts";
+import { isRoomPackShape } from "./packStatus.ts";
 
 const PACK_ID = /^[a-zA-Z0-9._-]+$/;
 

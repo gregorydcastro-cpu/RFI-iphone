@@ -1,0 +1,128 @@
+{
+  "schema": "gcpullog.room_pack.v1",
+  "status": "ready",
+  "request_id": "cedar-ridge",
+  "pulled_at": "2026-09-18T00:15:17.277Z",
+  "revision_stamp": { "drawing": "A-201", "rev": "B" },
+  "project": {
+    "id": "proj-cedar-ridge",
+    "name": "Cedar Ridge Outpatient",
+    "slug": "cedar-ridge"
+  },
+  "room": {
+    "id": "room-214",
+    "name": "Procedure Room 214",
+    "number": "214"
+  },
+  "sheets": [
+    {
+      "id": "M-201",
+      "rev": "B",
+      "title": "Level 2 Mechanical Plan",
+      "discipline": "mechanical",
+      "pdf": "/packs/cedar-ridge-m201.pdf",
+      "preview": null,
+      "crop": null
+    },
+    {
+      "id": "A-201",
+      "rev": "B",
+      "title": "Level 2 Floor Plan",
+      "discipline": "architectural",
+      "pdf": "/packs/cedar-ridge-a201.pdf",
+      "preview": null,
+      "crop": null
+    },
+    {
+      "id": "E-214",
+      "rev": "B",
+      "title": "Level 2 Power Plan",
+      "discipline": "electrical",
+      "pdf": "/packs/cedar-ridge-e214.pdf",
+      "preview": null,
+      "crop": null
+    }
+  ],
+  "rfis": [
+    {
+      "id": "cr1",
+      "number": "RFI-014",
+      "title": "Overhead duct clearance above Procedure Room 214",
+      "status": "open",
+      "url": null
+    },
+    {
+      "id": "cr2",
+      "number": "RFI-018",
+      "title": "Med-gas zone valve at Nurse Alcove 216",
+      "status": "answered",
+      "url": null
+    },
+    {
+      "id": "cr3",
+      "number": "RFI-022",
+      "title": "Procedure light circuit for Room 214",
+      "status": "closed",
+      "url": null
+    }
+  ],
+  "layout": {
+    "sheet": "A-201",
+    "type": "polygon",
+    "locator": "Procedure Room 214",
+    "points": [
+      [0.18, 0.22],
+      [0.46, 0.22],
+      [0.46, 0.52],
+      [0.18, 0.52]
+    ],
+    "bbox": { "x": 0.18, "y": 0.22, "w": 0.28, "h": 0.3 },
+    "bbox_pdf_pts": { "x": 220.3, "y": 380.2, "w": 342.7, "h": 237.6 },
+    "page_width_pts": 1224,
+    "page_height_pts": 792
+  },
+  "actions": [
+    {
+      "id": "generate-rfi",
+      "label": "Generate RFI",
+      "href": "/pack/cedar-ridge/rfi/new?sheet=A-201",
+      "enabled": true,
+      "note": "Draft to foreman — not a Procore submit"
+    },
+    {
+      "id": "order-materials",
+      "label": "Order materials",
+      "href": "/pack/cedar-ridge/materials",
+      "enabled": true,
+      "note": "Draft to foreman — not a Procore PO"
+    }
+  ],
+  "takeoff": {
+    "project": "Cedar Ridge Outpatient",
+    "scope": "Procedure Room 214 — Level 2 overhead MEP",
+    "sheets": ["A-201", "M-201", "E-214"],
+    "units": "each",
+    "by_room": [
+      {
+        "room": "214",
+        "name": "Procedure Room 214",
+        "sheet": "M-201",
+        "fixtures": [
+          { "type": "Linear slot diffuser 48in", "qty": 2 },
+          { "type": "Med-gas outlet panel", "qty": 1 },
+          { "type": "Procedure light mounting plate", "qty": 1 },
+          { "type": "Nurse call device", "qty": 2 }
+        ]
+      }
+    ],
+    "by_type": [
+      { "type": "Linear slot diffuser 48in", "qty": 2 },
+      { "type": "Med-gas outlet panel", "qty": 1 },
+      { "type": "Procedure light mounting plate", "qty": 1 },
+      { "type": "Nurse call device", "qty": 2 }
+    ],
+    "by_sheet": [{ "sheet": "M-201", "qty": 6 }],
+    "confidence": "demo",
+    "flags": ["fictional-project", "demo-data"]
+  }
+}
